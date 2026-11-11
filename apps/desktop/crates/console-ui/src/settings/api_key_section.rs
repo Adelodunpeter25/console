@@ -211,6 +211,18 @@ impl RenderOnce for ApiKeyProviderSection {
             );
         }
 
+        // A failed credentials fetch renders as "Add key" — indistinguishable
+        // from "no key stored" unless the failure is shown even with the
+        // form closed.
+        if let Some(error) = self.error {
+            row = row.child(
+                div()
+                    .text_size(px(11.5))
+                    .text_color(theme.text_secondary)
+                    .child(error),
+            );
+        }
+
         if self.form_open {
             if let Some(input) = self.key_input.clone() {
                 // Clone for the widget, keep the original for the click
@@ -256,14 +268,6 @@ impl RenderOnce for ApiKeyProviderSection {
                                 (on_submit)(key.trim().to_string(), window, cx);
                             }
                         }),
-                );
-            }
-            if let Some(error) = self.error {
-                row = row.child(
-                    div()
-                        .text_size(px(11.5))
-                        .text_color(theme.text_secondary)
-                        .child(error),
                 );
             }
         }

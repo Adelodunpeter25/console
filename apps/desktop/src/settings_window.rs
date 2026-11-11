@@ -574,6 +574,7 @@ impl Render for SettingsWindow {
                 {
                     app.update(cx, |app_state, cx| {
                         app_state.refresh_github_status(cx);
+                        app_state.refresh_provider_credentials(cx);
                         app_state.refresh_stt_status(cx);
                     });
                 }
