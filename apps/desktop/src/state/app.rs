@@ -456,9 +456,14 @@ impl ConsoleDesktopApp {
                         // submitting so attachments and run state resolve
                         // against the chat this input is mounted in.
                         let context_files = context_files.clone();
-                        this.active_pane_id = Some("pane-main".to_string());
-                        this.selected_session_id = this.active_session_for_pane("pane-main");
                         let pane_id = "pane-main".to_string();
+                        let prompt = this.prompt_with_staged_comments(&pane_id, prompt, cx);
+                        if prompt.trim().is_empty() {
+                            return;
+                        }
+                        this.reveal_chat_for_pane(&pane_id, cx);
+                        this.active_pane_id = Some(pane_id.clone());
+                        this.selected_session_id = this.active_session_for_pane(&pane_id);
                         if this.is_active_session_running_for_pane(&pane_id) {
                             let attachments = (*this.attachments_for_pane(&pane_id)).clone();
                             let annotations = (*this.annotations_for_pane(&pane_id)).clone();
@@ -472,8 +477,8 @@ impl ConsoleDesktopApp {
                             );
                             return;
                         }
-                        let attachments = (*this.attachments_for_pane("pane-main")).clone();
-                        let annotations = (*this.annotations_for_pane("pane-main")).clone();
+                        let attachments = (*this.attachments_for_pane(&pane_id)).clone();
+                        let annotations = (*this.annotations_for_pane(&pane_id)).clone();
                         this.submit_prompt_with_context(
                             prompt.clone(),
                             attachments,
@@ -483,11 +488,13 @@ impl ConsoleDesktopApp {
                         );
                     }
                     ComposerEvent::SubmitSteer(prompt, context_files) => {
-                        this.active_pane_id = Some("pane-main".to_string());
-                        this.selected_session_id = this.active_session_for_pane("pane-main");
+                        let pane_id = "pane-main".to_string();
+                        let prompt = this.prompt_with_staged_comments(&pane_id, prompt, cx);
+                        this.active_pane_id = Some(pane_id.clone());
+                        this.selected_session_id = this.active_session_for_pane(&pane_id);
                         this.submit_steer_for_pane(
-                            "pane-main".to_string(),
-                            prompt.clone(),
+                            pane_id,
+                            prompt,
                             context_files.clone(),
                             cx,
                         );

@@ -578,7 +578,7 @@ impl ConsoleDesktopApp {
         if !keep_draft {
             self.composer_for_pane(&run_pane_id)
                 .update(cx, |input, cx| {
-                    input.set_content("", cx);
+                    input.clear(cx);
                 });
             self.set_attachments_for_pane(&run_pane_id, Vec::new());
             self.set_annotations_for_pane(&run_pane_id, Vec::new());

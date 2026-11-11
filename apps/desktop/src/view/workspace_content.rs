@@ -1154,6 +1154,9 @@ impl ConsoleDesktopApp {
                                 .content()
                                 .to_string();
                             let prompt = this.prompt_with_staged_comments(&pane_id, &prompt, cx);
+                            if prompt.trim().is_empty() {
+                                return;
+                            }
                             let attachments = (*this.attachments_for_pane(&pane_id)).clone();
                             let annotations = (*this.annotations_for_pane(&pane_id)).clone();
                             let context_files =
@@ -1249,6 +1252,9 @@ impl ConsoleDesktopApp {
                             .content()
                             .to_string();
                         let prompt = this.prompt_with_staged_comments(&pane_id, &prompt, cx);
+                        if prompt.trim().is_empty() {
+                            return;
+                        }
                         let attachments = (*this.attachments_for_pane(&pane_id)).clone();
                         let annotations = (*this.annotations_for_pane(&pane_id)).clone();
                         let context_files =
@@ -1422,7 +1428,7 @@ impl ConsoleDesktopApp {
     /// Bring the pane's active chat to the front after a file-tab send so the
     /// streamed answer is visible. A brand-new session is opened by the run
     /// path itself.
-    fn reveal_chat_for_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
+    pub(crate) fn reveal_chat_for_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_for_pane(pane_id) else {
             return;
         };

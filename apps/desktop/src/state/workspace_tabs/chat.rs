@@ -148,6 +148,7 @@ impl ConsoleDesktopApp {
                     if prompt.trim().is_empty() {
                         return;
                     }
+                    this.reveal_chat_for_pane(&submit_pane_id, cx);
                     if this.is_active_session_running_for_pane(&submit_pane_id) {
                         let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
                         let annotations = (*this.annotations_for_pane(&submit_pane_id)).clone();
