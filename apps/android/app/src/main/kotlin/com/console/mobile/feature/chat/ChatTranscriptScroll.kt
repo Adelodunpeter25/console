@@ -103,6 +103,8 @@ internal fun rememberChatTranscriptScroll(
     hasMoreMessages: Boolean,
     loadingOlder: Boolean,
     loadOlder: () -> Boolean,
+    running: Boolean,
+    isStreaming: Boolean,
     onDragStarted: () -> Unit,
 ): ChatTranscriptScroll {
     // Only trust the remembered position when the messages are still loaded;
@@ -150,13 +152,20 @@ internal fun rememberChatTranscriptScroll(
         }
     }
 
+    // Only auto-scroll to the bottom when new items are added, or when the last item
+    // grows while an agent run/stream is actively in progress. This prevents double-tap
+    // text selection or popup appearance on idle messages from slamming the transcript.
+    val isActiveRun by rememberUpdatedState(running || isStreaming)
+    var previousTotalCount by remember(sessionId) { mutableStateOf(0) }
     LaunchedEffect(scroll) {
         snapshotFlow {
             val info = scroll.listState.layoutInfo
             val last = info.visibleItemsInfo.lastOrNull()
             Triple(info.totalItemsCount, last?.index, last?.size)
-        }.collect {
-            if (scroll.following && !scroll.listState.isScrollInProgress) {
+        }.collect { (totalCount, _, _) ->
+            val hasNewItems = totalCount > previousTotalCount
+            previousTotalCount = totalCount
+            if (scroll.following && !scroll.listState.isScrollInProgress && (hasNewItems || isActiveRun)) {
                 try { scroll.listState.scrollToBottom() } catch (_: Exception) {}
             }
         }

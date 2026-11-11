@@ -235,6 +235,8 @@ fun ChatScreen(
         hasMoreMessages = chat.hasMoreMessages,
         loadingOlder = chat.loadingOlder,
         loadOlder = { AppContainer.sessionRepository.loadOlder(sessionId) },
+        running = chat.running,
+        isStreaming = isStreaming,
         onDragStarted = {
             keyboardController?.hide()
             focusManager.clearFocus()
