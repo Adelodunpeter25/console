@@ -698,6 +698,7 @@ impl ConsoleDesktopApp {
                         this.sync_workspace_webviews(cx);
                         this.transcript_for_pane(&target_pane).update(cx, |t, cx| {
                             t.set_messages(Vec::new(), cx);
+                            t.clear_session_changes(cx);
                         });
                         // Adopt the card's selections for this pane so the run
                         // below — and the composer it leaves behind — agree

@@ -292,6 +292,7 @@ impl ConsoleDesktopApp {
                                 }
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
                                     t.set_messages(Vec::new(), cx);
+                                    t.clear_session_changes(cx);
                                 });
                                 cx.notify();
                             });

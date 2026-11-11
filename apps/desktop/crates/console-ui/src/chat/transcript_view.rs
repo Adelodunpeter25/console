@@ -261,6 +261,17 @@ impl TranscriptView {
         cx.notify();
     }
 
+    /// Forget the recorded file changes. Called when the transcript is blanked
+    /// for a different (or brand-new) chat, so the pinned summary pill never
+    /// shows the previous chat's totals. Not part of `set_messages`: a chat
+    /// load starts its changes request before its messages arrive, and
+    /// clearing there could erase the fresh result.
+    pub fn clear_session_changes(&mut self, cx: &mut Context<Self>) {
+        if !self.session_changes.is_empty() {
+            self.set_session_changes(Rc::new(Vec::new()), cx);
+        }
+    }
+
     /// Whole-session change totals for the pinned summary pill above the
     /// composer. `None` when the session has not touched any file.
     pub fn changes_summary(&self) -> Option<ChangesSummary> {

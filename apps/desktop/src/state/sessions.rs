@@ -996,6 +996,7 @@ impl ConsoleDesktopApp {
         self.restore_draft_for_pane(&active_pane_id, Some(&id), cx);
         self.active_transcript_view().update(cx, |t, cx| {
             t.set_messages(Vec::new(), cx);
+            t.clear_session_changes(cx);
         });
         self.load_session_messages(id, cx);
         cx.notify();

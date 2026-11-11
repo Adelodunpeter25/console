@@ -872,6 +872,13 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
+                                // A slow reply for a chat the user already left
+                                // must not overwrite the current chat's list.
+                                if this.active_inspector_target().0.as_deref()
+                                    != Some(session_id.as_str())
+                                {
+                                    return;
+                                }
                                 this.inspector_session_changes = Rc::new(changes);
                                 cx.notify();
                             });
