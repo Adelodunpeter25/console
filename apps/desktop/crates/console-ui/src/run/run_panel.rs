@@ -16,8 +16,8 @@ use crate::common::copy_button;
 use crate::markdown::render::MONO_FAMILY;
 use crate::markdown::render::TranscriptSelection;
 use crate::primitives::icons::{IconName, app_icon};
-use crate::primitives::tooltip::Tooltip;
 use crate::primitives::scrollbar::ScrollbarState;
+use crate::primitives::tooltip::Tooltip;
 use crate::theme::Theme;
 use crate::viewer::LogsViewer;
 

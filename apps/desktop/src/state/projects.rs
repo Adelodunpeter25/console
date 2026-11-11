@@ -192,10 +192,10 @@ impl ConsoleDesktopApp {
             && let Some(session) = Rc::make_mut(&mut self.sessions)
                 .iter_mut()
                 .find(|s| s.id == sid)
-            {
-                session.project_id = Some(project.id.clone());
-                session.cwd = project.path.clone();
-            }
+        {
+            session.project_id = Some(project.id.clone());
+            session.cwd = project.path.clone();
+        }
 
         let path = project.path.clone();
         self.transcript_for_pane(&effective_pane)
@@ -386,7 +386,7 @@ impl ConsoleDesktopApp {
                         provider: None,
                         approval_mode: None,
                         thinking_level: None,
-                            pinned: None,
+                        pinned: None,
                     },
                 )
                 .await
@@ -398,10 +398,12 @@ impl ConsoleDesktopApp {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 this.confirm_project_override(&sid, &header);
-                                this.transcript_for_pane(&pane_for_confirm)
-                                    .update(cx, |transcript, _| {
+                                this.transcript_for_pane(&pane_for_confirm).update(
+                                    cx,
+                                    |transcript, _| {
                                         transcript.set_session_cwd(Some(cwd));
-                                    });
+                                    },
+                                );
                             });
                         }
                     });
@@ -546,14 +548,14 @@ impl ConsoleDesktopApp {
     /// new session row, no duplicate sidebar entry. Once a chat has
     /// messages its cwd is locked, so that case falls back to spawning a
     /// brand-new session rooted in a fresh worktree (server auto-derives
-    /// the branch name) and opens it in this pane, mirroring
-    /// `create_new_chat`.
+    /// the branch name) and opens it in this pane.
     pub fn new_worktree_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
         if !self.session_has_messages(&pane_id)
-            && let Some(session_id) = self.active_session_for_pane(&pane_id) {
-                self.attach_worktree_for_pane(pane_id, session_id, cx);
-                return;
-            }
+            && let Some(session_id) = self.active_session_for_pane(&pane_id)
+        {
+            self.attach_worktree_for_pane(pane_id, session_id, cx);
+            return;
+        }
 
         let Some(path) = self
             .selected_project_for_pane(&pane_id)

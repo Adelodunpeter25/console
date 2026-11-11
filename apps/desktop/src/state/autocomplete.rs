@@ -115,8 +115,7 @@ impl ConsoleDesktopApp {
         let chat_key = format!("{session_key}\u{0}{scope_key}");
         if state.chat_key.as_deref() != Some(chat_key.as_str()) {
             state.chat_key = Some(chat_key);
-            state.chats =
-                chat_ref_candidates(&self.sessions, session_id, chat_scope_project_id);
+            state.chats = chat_ref_candidates(&self.sessions, session_id, chat_scope_project_id);
         }
         let session_for_request = (!session_key.is_empty()).then(|| session_key.clone());
         let command_key = session_key.clone();

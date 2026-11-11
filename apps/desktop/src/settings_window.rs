@@ -243,8 +243,7 @@ impl SettingsWindow {
                 _ => {}
             },
         ));
-        let stt_token_input =
-            cx.new(|cx| ComposerInput::new(window, cx).placeholder("API token"));
+        let stt_token_input = cx.new(|cx| ComposerInput::new(window, cx).placeholder("API token"));
         subscriptions.push(cx.subscribe(
             &stt_token_input,
             |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
@@ -549,38 +548,42 @@ impl Render for SettingsWindow {
             let app_handle = self.app.clone();
             Rc::new(move |tab: SettingsTab, _w: &mut Window, cx: &mut App| {
                 if tab == SettingsTab::Usage
-                    && let Some(app) = app_handle.upgrade() {
-                        app.update(cx, |app_state, cx| {
-                            app_state.fetch_usage(cx);
-                        });
-                    }
+                    && let Some(app) = app_handle.upgrade()
+                {
+                    app.update(cx, |app_state, cx| {
+                        app_state.fetch_usage(cx);
+                    });
+                }
                 if tab == SettingsTab::Mcp {
                     entity.update(cx, |this, cx| {
                         this.fetch_mcp_servers(cx);
                     });
                 }
                 if tab == SettingsTab::Browser
-                    && let Some(app) = app_handle.upgrade() {
-                        app.update(cx, |app_state, cx| {
-                            app_state.fetch_chrome_profiles(cx);
-                        });
-                    }
+                    && let Some(app) = app_handle.upgrade()
+                {
+                    app.update(cx, |app_state, cx| {
+                        app_state.fetch_chrome_profiles(cx);
+                    });
+                }
                 // Sidebar clicks bypass set_tab, and without this the GitHub
                 // row never re-reads: one failed load stuck it on
                 // "Not connected" until the whole window reopened.
                 if tab == SettingsTab::Providers
-                    && let Some(app) = app_handle.upgrade() {
-                        app.update(cx, |app_state, cx| {
-                            app_state.refresh_github_status(cx);
-                            app_state.refresh_stt_status(cx);
-                        });
-                    }
+                    && let Some(app) = app_handle.upgrade()
+                {
+                    app.update(cx, |app_state, cx| {
+                        app_state.refresh_github_status(cx);
+                        app_state.refresh_stt_status(cx);
+                    });
+                }
                 if tab == SettingsTab::Integrations
-                    && let Some(app) = app_handle.upgrade() {
-                        app.update(cx, |app_state, cx| {
-                            app_state.refresh_integrations(cx);
-                        });
-                    }
+                    && let Some(app) = app_handle.upgrade()
+                {
+                    app.update(cx, |app_state, cx| {
+                        app_state.refresh_integrations(cx);
+                    });
+                }
                 entity.update(cx, |this, cx| {
                     this.active_tab = tab;
                     // The modals belong to the servers tab. Leaving it
@@ -594,13 +597,14 @@ impl Render for SettingsWindow {
                     // The rename dialog belongs to the providers tab the
                     // same way.
                     if tab != SettingsTab::Providers
-                        && let Some(app) = app_handle.upgrade() {
-                            app.update(cx, |app_state, cx| {
-                                if app_state.rename_form.take().is_some() {
-                                    cx.notify();
-                                }
-                            });
-                        }
+                        && let Some(app) = app_handle.upgrade()
+                    {
+                        app.update(cx, |app_state, cx| {
+                            if app_state.rename_form.take().is_some() {
+                                cx.notify();
+                            }
+                        });
+                    }
                     cx.notify();
                 });
             })
@@ -1399,11 +1403,7 @@ impl Render for SettingsWindow {
             .upgrade()
             .map(|app| {
                 let app = app.read(cx);
-                (
-                    app.stt_busy,
-                    app.stt_error.clone(),
-                    app.stt_form_open,
-                )
+                (app.stt_busy, app.stt_error.clone(), app.stt_form_open)
             })
             .unwrap_or((false, None, false));
         let show_stt_modal = active_tab == SettingsTab::Providers && stt_open;

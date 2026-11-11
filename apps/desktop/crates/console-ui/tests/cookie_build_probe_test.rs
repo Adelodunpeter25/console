@@ -5,9 +5,7 @@
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
-use objc2_foundation::{
-    ns_string, NSDate, NSDictionary, NSHTTPCookie, NSNumber, NSString,
-};
+use objc2_foundation::{NSDate, NSDictionary, NSHTTPCookie, NSNumber, NSString, ns_string};
 
 /// Deref-coerce typed Foundation objects into the dictionary's `AnyObject`.
 unsafe fn into_any<T: objc2::ClassType>(value: Retained<T>) -> Retained<AnyObject> {
@@ -40,8 +38,7 @@ fn cookie_with_properties_probe() {
         objects.push(date_any);
 
         let ref_rows: Vec<&AnyObject> = objects.iter().map(|o| &**o).collect();
-        let properties =
-            NSDictionary::<NSString, AnyObject>::from_slices(&keys, &ref_rows);
+        let properties = NSDictionary::<NSString, AnyObject>::from_slices(&keys, &ref_rows);
         println!("dictionary count = {}", properties.count());
 
         let built = NSHTTPCookie::cookieWithProperties(&properties);
@@ -50,7 +47,9 @@ fn cookie_with_properties_probe() {
                 "cookieWithProperties -> Some: name={} domain={} expires={:?}",
                 cookie.name().to_string(),
                 cookie.domain().to_string(),
-                cookie.expiresDate().map(|d| d.timeIntervalSince1970() as i64),
+                cookie
+                    .expiresDate()
+                    .map(|d| d.timeIntervalSince1970() as i64),
             ),
             None => println!("cookieWithProperties -> None (property dictionary rejected)"),
         }
@@ -61,8 +60,7 @@ fn cookie_with_properties_probe() {
         ctl_keys.pop();
         let mut ctl_objects = objects;
         let _ = ctl_objects.pop();
-        let ctl_refs: Vec<&AnyObject> =
-            ctl_objects.iter().map(|o| &**o).collect();
+        let ctl_refs: Vec<&AnyObject> = ctl_objects.iter().map(|o| &**o).collect();
         let control = NSDictionary::<NSString, AnyObject>::from_slices(&ctl_keys, &ctl_refs);
         println!("control dictionary count = {}", control.count());
         let built = NSHTTPCookie::cookieWithProperties(&control);
@@ -78,17 +76,26 @@ fn cookie_with_properties_probe() {
         // Read one key back out of the dictionary: proves whether the dict
         // records keys the way Foundation's property lookup expects.
         let looked = properties.objectForKey(ns_string!("NSHTTPCookieName"));
-        println!("objectForKey(NSHTTPCookieName) present = {}", looked.is_some());
+        println!(
+            "objectForKey(NSHTTPCookieName) present = {}",
+            looked.is_some()
+        );
         // Dump the dictionary's description: shows exactly what Foundation
         // sees as keys/values (including any invisible bytes).
-        println!("properties description: {}", properties.description().to_string());
+        println!(
+            "properties description: {}",
+            properties.description().to_string()
+        );
         let name_value = properties
             .objectForKey(ns_string!("NSHTTPCookieName"))
             .map(|a| unsafe { Retained::<AnyObject>::cast::<NSString>(a) });
         if let Some(n) = name_value {
             let s: &NSString = n.as_ref();
-            println!("stored name length = {} content = {:?}",
-                s.length(), s.to_string());
+            println!(
+                "stored name length = {} content = {:?}",
+                s.length(),
+                s.to_string()
+            );
         }
 
         // Same construction with a NSMutableDictionary, the way native code
@@ -169,7 +176,10 @@ fn cookie_with_properties_probe() {
         }
         // Show whether the ns_string! keys carry a trailing NUL byte.
         let ns_key = ns_string!("NSHTTPCookieName");
-        println!("ns_string key length = {} (from_str length = {})",
-            ns_key.length(), "NSHTTPCookieName".len());
+        println!(
+            "ns_string key length = {} (from_str length = {})",
+            ns_key.length(),
+            "NSHTTPCookieName".len()
+        );
     }
 }

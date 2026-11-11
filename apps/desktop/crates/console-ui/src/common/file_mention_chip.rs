@@ -16,6 +16,10 @@ use crate::theme::Theme;
 /// the two stay visually identical.
 pub const FILE_MENTION_ICON_SIZE: f32 = 11.0;
 
+/// Downward nudge for the chip icon. Centering on the line box leaves the icon
+/// visually high against lowercase text, whose x-height sits below that centre.
+pub const FILE_MENTION_ICON_Y_NUDGE: f32 = 1.0;
+
 /// Corner radius for the file-mention pill. Matches the composer's painted quad.
 pub const FILE_MENTION_RADIUS: f32 = 4.0;
 
@@ -92,6 +96,10 @@ pub(crate) fn mention_icon(path: &str, theme: Theme) -> gpui::AnyElement {
 /// Because `\u{00A0}` is a Unicode glue character, it wraps with the filename to new rows
 /// without ever collapsing or protruding into negative coordinates.
 pub const FILE_MENTION_SPACER: &str = "\u{00A0}\u{00A0}\u{00A0}\u{00A0}";
+
+/// Right padding inside the pill, as text so the chip's own wash stops short of
+/// the following space and a visible gap is left before the next word.
+pub const FILE_MENTION_TRAIL: &str = "\u{00A0}";
 
 /// A file mention range in a flat string. The range covers only the visible
 /// filename; the surrounding whitespace remains part of the normal text flow.
@@ -186,7 +194,8 @@ impl Element for InlineFileMentionText {
         sorted_mentions.sort_by_key(|m| m.range.start);
 
         let mut display_text = String::with_capacity(
-            self.text.len() + sorted_mentions.len() * FILE_MENTION_SPACER.len(),
+            self.text.len()
+                + sorted_mentions.len() * (FILE_MENTION_SPACER.len() + FILE_MENTION_TRAIL.len()),
         );
         struct PreparedMention {
             spacer_range: Range<usize>,
@@ -219,6 +228,7 @@ impl Element for InlineFileMentionText {
             .any(|prefix| mention.path.starts_with(prefix));
             let shown_start = mention.range.start + usize::from(has_prefix);
             display_text.push_str(&self.text[shown_start..mention.range.end]);
+            display_text.push_str(FILE_MENTION_TRAIL);
             let chip_end = display_text.len();
             last_idx = mention.range.end;
 
@@ -345,7 +355,9 @@ impl Element for InlineFileMentionText {
             };
             let icon_origin = point(
                 first_rect.origin.x + px(3.0),
-                first_rect.origin.y + (first_rect.size.height - icon_size) / 2.0,
+                first_rect.origin.y
+                    + (first_rect.size.height - icon_size) / 2.0
+                    + px(FILE_MENTION_ICON_Y_NUDGE),
             );
             let child_origin = window.layout_bounds(mention_icon.layout_id).origin;
             let offset = icon_origin - child_origin;
@@ -372,14 +384,9 @@ impl Element for InlineFileMentionText {
 
         for mention_icon in &layout_state.mention_icons {
             let rects = range_rects(&layout, &mention_icon.chip_range, 0.0, 2.0);
-            let num_rects = rects.len();
-            for (index, rect) in rects.into_iter().enumerate() {
-                let mut quad_rect = rect;
-                if index == num_rects - 1 {
-                    quad_rect.size.width += px(4.0);
-                }
+            for rect in rects {
                 window.paint_quad(quad(
-                    quad_rect,
+                    rect,
                     px(FILE_MENTION_RADIUS),
                     mention_bg,
                     px(1.0),

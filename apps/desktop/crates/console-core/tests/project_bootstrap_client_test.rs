@@ -102,7 +102,10 @@ fn repo_task_body_omits_name_when_absent() {
     // URL's last segment when no name is sent; an explicit null would decode
     // as an empty optional and break that derivation.
     let body = console_core::repo_task_body("https://github.com/octocat/hello.git", None);
-    assert_eq!(body, json!({ "url": "https://github.com/octocat/hello.git" }));
+    assert_eq!(
+        body,
+        json!({ "url": "https://github.com/octocat/hello.git" })
+    );
     assert!(body.get("name").is_none());
 }
 

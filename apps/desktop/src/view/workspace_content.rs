@@ -2,10 +2,9 @@ use console_core::types::ChangesScope;
 use console_core::{SelectedModel, SessionHeaderExt, UpdateSessionDto};
 use console_ui::workspace::EmptyChatState;
 use console_ui::{
-    ComposerView, ModelDropdownMenu, PickerTab,
-    QuestionInteractionCard, ShellEntry, ShellsPill, SubagentsPill, TasksPill, Theme,
-    WorkspaceFooter, centered_stripe, composer_pills, error_banner, notice_banner,
-    queued_prompts_stack,
+    ComposerView, ModelDropdownMenu, PickerTab, QuestionInteractionCard, ShellEntry, ShellsPill,
+    SubagentsPill, TasksPill, Theme, WorkspaceFooter, centered_stripe, composer_pills,
+    error_banner, notice_banner, queued_prompts_stack,
 };
 use gpui::{
     App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -116,22 +115,23 @@ impl ConsoleDesktopApp {
                 kind,
                 console_core::FileKind::Markdown | console_core::FileKind::Text
             ) && !self.open_file_contents.contains_key(path)
-                && let Some(message) = self.open_file_errors.get(path).cloned() {
-                    let retry_path = path.clone();
-                    let entity = cx.entity().downgrade();
-                    return console_ui::BlockedFilePanel::new("Couldn't open file", message)
-                        .icon(console_ui::IconName::TriangleAlert)
-                        .on_retry(move |_w, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.open_file_errors.remove(&retry_path);
-                                    this.fetch_file_tab_content(retry_path.clone(), cx);
-                                    cx.notify();
-                                });
-                            }
-                        })
-                        .into_any_element();
-                }
+                && let Some(message) = self.open_file_errors.get(path).cloned()
+            {
+                let retry_path = path.clone();
+                let entity = cx.entity().downgrade();
+                return console_ui::BlockedFilePanel::new("Couldn't open file", message)
+                    .icon(console_ui::IconName::TriangleAlert)
+                    .on_retry(move |_w, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.open_file_errors.remove(&retry_path);
+                                this.fetch_file_tab_content(retry_path.clone(), cx);
+                                cx.notify();
+                            });
+                        }
+                    })
+                    .into_any_element();
+            }
 
             match kind {
                 console_core::FileKind::RasterImage => {
@@ -381,9 +381,12 @@ impl ConsoleDesktopApp {
                                 self.fetch_file_tab_content(path.clone(), cx);
                             }
                             let Some(content) = self.open_file_contents.get(path).cloned() else {
-                                return console_ui::BlockedFilePanel::new("Loading file…", "The file content is still loading.")
-                                    .icon(console_ui::IconName::File)
-                                    .into_any_element();
+                                return console_ui::BlockedFilePanel::new(
+                                    "Loading file…",
+                                    "The file content is still loading.",
+                                )
+                                .icon(console_ui::IconName::File)
+                                .into_any_element();
                             };
 
                             let editor_view =
@@ -465,9 +468,12 @@ impl ConsoleDesktopApp {
                     }
 
                     let Some(content) = self.open_file_contents.get(path).cloned() else {
-                        return console_ui::BlockedFilePanel::new("Loading file…", "The file content is still loading.")
-                            .icon(console_ui::IconName::File)
-                            .into_any_element();
+                        return console_ui::BlockedFilePanel::new(
+                            "Loading file…",
+                            "The file content is still loading.",
+                        )
+                        .icon(console_ui::IconName::File)
+                        .into_any_element();
                     };
 
                     let editor_view = self.get_or_build_editor_view(path, &content, &theme, cx);
@@ -714,298 +720,298 @@ impl ConsoleDesktopApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-        .child(
-            div()
-                .relative()
-                .flex_1()
-                .w_full()
-                .overflow_hidden()
-                // Clicking an image in a message opens the app's
-                // image preview modal with its data URI. The handler is wired
-                // once during app initialization, not mutated from this
-                // render path.
-                .child(pane_transcript)
-                // Status pills float over the transcript's bottom edge rather
-                // than occupying a band of their own; the transcript keeps a
-                // matching bottom inset so the last row can scroll clear.
-                .when_some(composer_pills_row, |el, pills| el.child(pills)),
-        )
-        .when_some(error_message, |el, error| {
-            let entity = entity.clone();
-            el.child(error_banner(
-                error,
-                theme,
-                error_selection.clone(),
-                Some(Rc::new(move |cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.clear_error_for_pane(&error_pane_id, cx));
-                    }
-                })),
-                cx,
-            ))
-        })
-        .when_some(agent_notice, |el, notice| {
-            el.child(notice_banner(notice, theme))
-        })
-        .when(!queued_prompts.is_empty(), |el| {
-            let theme = Theme::current(cx);
-            let entity_edit = entity.clone();
-            let entity_delete = entity.clone();
-            let entity_steer = entity.clone();
-            let pane_for_edit = pane_id.clone();
-            let pane_for_delete = pane_id.clone();
-            let pane_for_steer = pane_id.clone();
-            el.child(queued_prompts_stack(
-                queued_prompts,
-                Some(Rc::new(move |prompt_id, _window, cx| {
-                    if let Some(app) = entity_edit.upgrade() {
-                        let pid = pane_for_edit.clone();
-                        app.update(cx, |this, cx| {
-                            this.edit_queued_prompt_for_pane(pid, prompt_id, cx);
-                        });
-                    }
-                })),
-                Some(Rc::new(move |prompt_id, _window, cx| {
-                    if let Some(app) = entity_delete.upgrade() {
-                        let pid = pane_for_delete.clone();
-                        app.update(cx, |this, cx| {
-                            this.delete_queued_prompt_for_pane(pid, prompt_id, cx);
-                        });
-                    }
-                })),
-                Some(Rc::new(move |prompt_id, _window, cx| {
-                    if let Some(app) = entity_steer.upgrade() {
-                        let pid = pane_for_steer.clone();
-                        app.update(cx, |this, cx| {
-                            this.steer_queued_prompt_for_pane(pid, prompt_id, cx);
-                        });
-                    }
-                })),
-                theme,
-            ))
-        })
-        .when_some(self.pending_question_for_pane(&pane_id), |el, question| {
-            let entity_for_answer = entity.clone();
-            let question_input = self.question_input_for_pane(&pane_id);
-            let selected = self.question_selected_for_pane(&pane_id);
-            let is_multi = question.is_multi_select.unwrap_or(false);
-            let skippable = question.skippable != Some(false);
-            let answer_sid = selected_sid.clone();
-            let skip_sid = selected_sid.clone();
-            let entity_for_skip = entity.clone();
-            let question_card = QuestionInteractionCard::new(
-                question,
-                true,
-                false,
-                move |answer, _window, cx| {
-                    let Some(sid) = answer_sid.clone() else {
-                        return;
-                    };
-                    if let Some(app) = entity_for_answer.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.answer_pending_question_for_session(sid, answer, cx);
-                        });
-                    }
-                },
-            )
-            .custom_input(question_input.clone())
-            .selected(selected);
-            let question_card = if skippable {
-                question_card.on_skip(move |_window, cx| {
-                    let Some(sid) = skip_sid.clone() else {
-                        return;
-                    };
-                    if let Some(app) = entity_for_skip.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.skip_pending_question_for_session(sid, cx);
-                        });
-                    }
-                })
-            } else {
-                question_card
-            };
-            let question_card = question_card
-            .on_select({
-                // Toggle against the session that owns this card, not whichever
-                // pane holds focus at click time.
-                let entity = entity.clone();
-                let answer_sid = selected_sid.clone();
-                move |option, _window, cx| {
-                    let Some(sid) = answer_sid.clone() else {
-                        return;
-                    };
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            if is_multi {
-                                let mut sel = this.question_selected_for_session(&sid);
-                                if !sel.insert(option.clone()) {
-                                    sel.remove(&option);
-                                }
-                                this.set_question_selected_for_session(&sid, sel);
-                            } else {
-                                let mut sel = std::collections::HashSet::new();
-                                sel.insert(option);
-                                this.set_question_selected_for_session(&sid, sel);
-                            }
-                            cx.notify();
-                        });
-                    }
-                }
-            });
-            el.child(centered_stripe(question_card, 8.0))
-        })
-        .when(selected_sid.is_some(), |el| {
-            el.child({
-                let project_pane_id = pane_id.clone();
-                let clear_project_pane_id = pane_id.clone();
-                let branch_pane_id = pane_id.clone();
-                let new_worktree_pane_id = pane_id.clone();
-                // Get current provider from active session
-                let current_provider = self
-                    .active_session_for_pane(&pane_id)
-                    .and_then(|sid| {
-                        self.sessions.iter().find(|s| s.id == sid).map(|s| s.provider.clone())
-                    })
-                    .unwrap_or_else(|| "claude".to_string());
-
-                // Get usage report for current provider
-                let usage_report = self
-                    .usage_reports
-                    .as_ref()
-                    .and_then(|reports| reports.get(&current_provider).cloned().flatten());
-
-                // Estimated context occupancy for the active session
-                let context_snapshot = self
-                    .active_session_for_pane(&pane_id)
-                    .and_then(|sid| self.context_usage.get(&sid).cloned());
-
-                let workspace_footer = WorkspaceFooter::new(
-                    self.projects.clone(),
-                    pane_project_id.clone(),
-                    pane_branches.clone(),
-                    pane_branch_loaded,
-                    pane_is_git_repository,
-                    pane_branch_pending,
-                    pane_project_menu.clone(),
-                    pane_branch_menu.clone(),
-                    pane_usage_menu.clone(),
-                    usage_report,
-                    self.usage_loading,
-                    context_snapshot,
-                    {
-                        let entity = entity.clone();
-                        move |id: String, _w, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                let pane_id = project_pane_id.clone();
-                                app.update(cx, |this, cx| {
-                                    this.select_project_for_pane(pane_id, id, cx)
-                                });
-                            }
-                        }
-                    },
-                    {
-                        let entity = entity.clone();
-                        move |window, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                // Open the ⌘O directory browser palette — it
-                                // works against remote backends, where the
-                                // native dialog can't see the host filesystem.
-                                app.update(cx, |this, cx| this.open_project_browse(window, cx));
-                            }
-                        }
-                    },
-                    {
-                        let entity = entity.clone();
-                        move |_w, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                let pane_id = clear_project_pane_id.clone();
-                                app.update(cx, |this, cx| {
-                                    this.clear_project_for_pane(pane_id, cx)
-                                });
-                            }
-                        }
-                    },
-                    {
-                        let entity = entity.clone();
-                        move |repo: console_core::GithubRepo, _w, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.open_repo_task(repo, cx)
-                                });
-                            }
-                        }
-                    },
-                    {
-                        let entity = entity.clone();
-                        move |_w, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.refresh_github_repos(cx)
-                                });
-                            }
-                        }
-                    },
-                    {
-                        let entity = entity.clone();
-                        move |window, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    // Not open_settings: it toggles, and
-                                    // closing settings the user already had
-                                    // open would be a surprise from a menu
-                                    // row.
-                                    this.open_settings_tab(
-                                        console_ui::settings::SettingsTab::Providers,
-                                        window,
-                                        cx,
-                                    );
-                                });
-                            }
-                        }
-                    },
-                    {
-                        let entity = entity.clone();
-                        move |name: String, _w, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                let pane_id = branch_pane_id.clone();
-                                app.update(cx, |this, cx| {
-                                    this.checkout_branch_for_pane(pane_id, name, cx)
-                                });
-                            }
-                        }
-                    },
-                    {
-                        let entity = entity.clone();
-                        move |_w, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                let pane_id = new_worktree_pane_id.clone();
-                                app.update(cx, |this, cx| {
-                                    this.new_worktree_for_pane(pane_id, cx)
-                                });
-                            }
-                        }
-                    },
-                )
-                .project_locked(self.session_has_messages(&pane_id))
-                .github_section(
-                    self.github_repos.clone(),
-                    self.github_repos_loading,
-                    self.github_repos_error.clone(),
-                )
-                .repo_cloning(self.repo_task_cloning.clone());
-
+            .child(
                 div()
                     .relative()
+                    .flex_1()
                     .w_full()
-                    .bg(theme.chat_canvas)
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .child(pane_composer_element)
-                    .child(workspace_footer)
+                    .overflow_hidden()
+                    // Clicking an image in a message opens the app's
+                    // image preview modal with its data URI. The handler is wired
+                    // once during app initialization, not mutated from this
+                    // render path.
+                    .child(pane_transcript)
+                    // Status pills float over the transcript's bottom edge rather
+                    // than occupying a band of their own; the transcript keeps a
+                    // matching bottom inset so the last row can scroll clear.
+                    .when_some(composer_pills_row, |el, pills| el.child(pills)),
+            )
+            .when_some(error_message, |el, error| {
+                let entity = entity.clone();
+                el.child(error_banner(
+                    error,
+                    theme,
+                    error_selection.clone(),
+                    Some(Rc::new(move |cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.clear_error_for_pane(&error_pane_id, cx)
+                            });
+                        }
+                    })),
+                    cx,
+                ))
             })
-        })
-        .into_any_element()
+            .when_some(agent_notice, |el, notice| {
+                el.child(notice_banner(notice, theme))
+            })
+            .when(!queued_prompts.is_empty(), |el| {
+                let theme = Theme::current(cx);
+                let entity_edit = entity.clone();
+                let entity_delete = entity.clone();
+                let entity_steer = entity.clone();
+                let pane_for_edit = pane_id.clone();
+                let pane_for_delete = pane_id.clone();
+                let pane_for_steer = pane_id.clone();
+                el.child(queued_prompts_stack(
+                    queued_prompts,
+                    Some(Rc::new(move |prompt_id, _window, cx| {
+                        if let Some(app) = entity_edit.upgrade() {
+                            let pid = pane_for_edit.clone();
+                            app.update(cx, |this, cx| {
+                                this.edit_queued_prompt_for_pane(pid, prompt_id, cx);
+                            });
+                        }
+                    })),
+                    Some(Rc::new(move |prompt_id, _window, cx| {
+                        if let Some(app) = entity_delete.upgrade() {
+                            let pid = pane_for_delete.clone();
+                            app.update(cx, |this, cx| {
+                                this.delete_queued_prompt_for_pane(pid, prompt_id, cx);
+                            });
+                        }
+                    })),
+                    Some(Rc::new(move |prompt_id, _window, cx| {
+                        if let Some(app) = entity_steer.upgrade() {
+                            let pid = pane_for_steer.clone();
+                            app.update(cx, |this, cx| {
+                                this.steer_queued_prompt_for_pane(pid, prompt_id, cx);
+                            });
+                        }
+                    })),
+                    theme,
+                ))
+            })
+            .when_some(self.pending_question_for_pane(&pane_id), |el, question| {
+                let entity_for_answer = entity.clone();
+                let question_input = self.question_input_for_pane(&pane_id);
+                let selected = self.question_selected_for_pane(&pane_id);
+                let is_multi = question.is_multi_select.unwrap_or(false);
+                let skippable = question.skippable != Some(false);
+                let answer_sid = selected_sid.clone();
+                let skip_sid = selected_sid.clone();
+                let entity_for_skip = entity.clone();
+                let question_card = QuestionInteractionCard::new(
+                    question,
+                    true,
+                    false,
+                    move |answer, _window, cx| {
+                        let Some(sid) = answer_sid.clone() else {
+                            return;
+                        };
+                        if let Some(app) = entity_for_answer.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.answer_pending_question_for_session(sid, answer, cx);
+                            });
+                        }
+                    },
+                )
+                .custom_input(question_input.clone())
+                .selected(selected);
+                let question_card = if skippable {
+                    question_card.on_skip(move |_window, cx| {
+                        let Some(sid) = skip_sid.clone() else {
+                            return;
+                        };
+                        if let Some(app) = entity_for_skip.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.skip_pending_question_for_session(sid, cx);
+                            });
+                        }
+                    })
+                } else {
+                    question_card
+                };
+                let question_card = question_card.on_select({
+                    // Toggle against the session that owns this card, not whichever
+                    // pane holds focus at click time.
+                    let entity = entity.clone();
+                    let answer_sid = selected_sid.clone();
+                    move |option, _window, cx| {
+                        let Some(sid) = answer_sid.clone() else {
+                            return;
+                        };
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                if is_multi {
+                                    let mut sel = this.question_selected_for_session(&sid);
+                                    if !sel.insert(option.clone()) {
+                                        sel.remove(&option);
+                                    }
+                                    this.set_question_selected_for_session(&sid, sel);
+                                } else {
+                                    let mut sel = std::collections::HashSet::new();
+                                    sel.insert(option);
+                                    this.set_question_selected_for_session(&sid, sel);
+                                }
+                                cx.notify();
+                            });
+                        }
+                    }
+                });
+                el.child(centered_stripe(question_card, 8.0))
+            })
+            .when(selected_sid.is_some(), |el| {
+                el.child({
+                    let project_pane_id = pane_id.clone();
+                    let clear_project_pane_id = pane_id.clone();
+                    let branch_pane_id = pane_id.clone();
+                    let new_worktree_pane_id = pane_id.clone();
+                    // Get current provider from active session
+                    let current_provider = self
+                        .active_session_for_pane(&pane_id)
+                        .and_then(|sid| {
+                            self.sessions
+                                .iter()
+                                .find(|s| s.id == sid)
+                                .map(|s| s.provider.clone())
+                        })
+                        .unwrap_or_else(|| "claude".to_string());
+
+                    // Get usage report for current provider
+                    let usage_report = self
+                        .usage_reports
+                        .as_ref()
+                        .and_then(|reports| reports.get(&current_provider).cloned().flatten());
+
+                    // Estimated context occupancy for the active session
+                    let context_snapshot = self
+                        .active_session_for_pane(&pane_id)
+                        .and_then(|sid| self.context_usage.get(&sid).cloned());
+
+                    let workspace_footer = WorkspaceFooter::new(
+                        self.projects.clone(),
+                        pane_project_id.clone(),
+                        pane_branches.clone(),
+                        pane_branch_loaded,
+                        pane_is_git_repository,
+                        pane_branch_pending,
+                        pane_project_menu.clone(),
+                        pane_branch_menu.clone(),
+                        pane_usage_menu.clone(),
+                        usage_report,
+                        self.usage_loading,
+                        context_snapshot,
+                        {
+                            let entity = entity.clone();
+                            move |id: String, _w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    let pane_id = project_pane_id.clone();
+                                    app.update(cx, |this, cx| {
+                                        this.select_project_for_pane(pane_id, id, cx)
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |window, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    // Open the ⌘O directory browser palette — it
+                                    // works against remote backends, where the
+                                    // native dialog can't see the host filesystem.
+                                    app.update(cx, |this, cx| this.open_project_browse(window, cx));
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |_w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    let pane_id = clear_project_pane_id.clone();
+                                    app.update(cx, |this, cx| {
+                                        this.clear_project_for_pane(pane_id, cx)
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |repo: console_core::GithubRepo, _w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| this.open_repo_task(repo, cx));
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |_w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| this.refresh_github_repos(cx));
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |window, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        // Not open_settings: it toggles, and
+                                        // closing settings the user already had
+                                        // open would be a surprise from a menu
+                                        // row.
+                                        this.open_settings_tab(
+                                            console_ui::settings::SettingsTab::Providers,
+                                            window,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |name: String, _w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    let pane_id = branch_pane_id.clone();
+                                    app.update(cx, |this, cx| {
+                                        this.checkout_branch_for_pane(pane_id, name, cx)
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |_w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    let pane_id = new_worktree_pane_id.clone();
+                                    app.update(cx, |this, cx| {
+                                        this.new_worktree_for_pane(pane_id, cx)
+                                    });
+                                }
+                            }
+                        },
+                    )
+                    .project_locked(self.session_has_messages(&pane_id))
+                    .github_section(
+                        self.github_repos.clone(),
+                        self.github_repos_loading,
+                        self.github_repos_error.clone(),
+                    )
+                    .repo_cloning(self.repo_task_cloning.clone());
+
+                    div()
+                        .relative()
+                        .w_full()
+                        .bg(theme.chat_canvas)
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .child(pane_composer_element)
+                        .child(workspace_footer)
+                })
+            })
+            .into_any_element()
     }
 
     /// The pane's chat composer, used both as the docked footer in chat tabs
@@ -1052,12 +1058,8 @@ impl ConsoleDesktopApp {
         let pane_model_search = self.pane_model_search(pane_id);
         let pane_model_search_query = pane_model_search.read(cx).content().to_owned();
         let pane_session_id = self.active_session_for_pane(pane_id);
-        let autocomplete = self.composer_autocomplete_for_pane(
-            pane_id,
-            pane_session_id.as_deref(),
-            window,
-            cx,
-        );
+        let autocomplete =
+            self.composer_autocomplete_for_pane(pane_id, pane_session_id.as_deref(), window, cx);
         let comments = self.composer_comments_for_pane(pane_id, cx);
         let annotations = self.composer_annotations_for_pane(pane_id, cx);
         let attachments = self.attachments_for_pane(pane_id);
@@ -1145,13 +1147,18 @@ impl ConsoleDesktopApp {
                 move |_w, cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            let prompt = this.composer_for_pane(&pane_id).read(cx).content().to_string();
+                            let prompt = this
+                                .composer_for_pane(&pane_id)
+                                .read(cx)
+                                .content()
+                                .to_string();
                             let prompt = this.prompt_with_staged_comments(&pane_id, &prompt, cx);
                             let attachments = (*this.attachments_for_pane(&pane_id)).clone();
                             let annotations = (*this.annotations_for_pane(&pane_id)).clone();
-                            let context_files = console_shared::composer::mentions::submitted_mention_paths(
-                                this.composer_for_pane(&pane_id).read(cx).mentions(),
-                            );
+                            let context_files =
+                                console_shared::composer::mentions::submitted_mention_paths(
+                                    this.composer_for_pane(&pane_id).read(cx).mentions(),
+                                );
                             if reveal_chat {
                                 this.reveal_chat_for_pane(&pane_id, cx);
                             }
@@ -1195,13 +1202,14 @@ impl ConsoleDesktopApp {
                                 let entity_for_error = entity.clone();
                                 cx.spawn(async move |_entity, cx| {
                                     if let Err(error) = client.runs.abort(&sid_clone).await {
-                                        let message = format!(
-                                            "Unable to stop the agent run: {error}"
-                                        );
+                                        let message =
+                                            format!("Unable to stop the agent run: {error}");
                                         cx.update(|cx| {
                                             if let Some(app) = entity_for_error.upgrade() {
                                                 app.update(cx, |this, cx| {
-                                                    this.set_error_for_session(&sid_clone, message, cx)
+                                                    this.set_error_for_session(
+                                                        &sid_clone, message, cx,
+                                                    )
                                                 });
                                             }
                                         });
@@ -1234,13 +1242,18 @@ impl ConsoleDesktopApp {
             move |_w, cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        let prompt = this.composer_for_pane(&pane_id).read(cx).content().to_string();
+                        let prompt = this
+                            .composer_for_pane(&pane_id)
+                            .read(cx)
+                            .content()
+                            .to_string();
                         let prompt = this.prompt_with_staged_comments(&pane_id, &prompt, cx);
                         let attachments = (*this.attachments_for_pane(&pane_id)).clone();
                         let annotations = (*this.annotations_for_pane(&pane_id)).clone();
-                        let context_files = console_shared::composer::mentions::submitted_mention_paths(
-                            this.composer_for_pane(&pane_id).read(cx).mentions(),
-                        );
+                        let context_files =
+                            console_shared::composer::mentions::submitted_mention_paths(
+                                this.composer_for_pane(&pane_id).read(cx).mentions(),
+                            );
                         if reveal_chat {
                             this.reveal_chat_for_pane(&pane_id, cx);
                         }
@@ -1390,12 +1403,7 @@ impl ConsoleDesktopApp {
                 .right_0()
                 .flex()
                 .justify_center()
-                .child(
-                    div()
-                        .w_full()
-                        .max_w(px(768.0))
-                        .child(composer),
-                )
+                .child(div().w_full().max_w(px(768.0)).child(composer))
                 .into_any_element()
         } else {
             div()
@@ -1425,4 +1433,3 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 }
-

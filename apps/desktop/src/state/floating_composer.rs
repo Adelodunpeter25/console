@@ -2,9 +2,10 @@
 //!
 //! ⌘N opens the card with a snapshot of the current model / thinking defaults;
 //! submitting it creates the session the user described and opens it in the
-//! active pane, exactly like the old direct `create_new_chat` did — the only
-//! difference is that project, branch and model are chosen in the card rather
-//! than inherited from whichever pane happened to be focused.
+//! active pane. Project, branch and model are chosen in the card rather than
+//! inherited from whichever pane happened to be focused. Every New Chat entry
+//! point — ⌘N, the sidebar, the empty state, the palette and the tab bar's `+` —
+//! opens it.
 //!
 //! The card's state lives on `ConsoleDesktopApp` (see
 //! `console_ui::common::FloatingComposerState`) and its element is built in the
@@ -563,8 +564,7 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Create the session the launcher described, then run its prompt. Mirrors
-    /// `create_new_chat`'s post-create bookkeeping.
+    /// Create the session the launcher described, then run its prompt.
     fn create_session_from_floating(
         &mut self,
         submit: FloatingSubmit,
@@ -620,20 +620,21 @@ impl ConsoleDesktopApp {
 
         cx.spawn(async move |entity, cx| {
             if let Some((branch, cwd)) = checkout.as_ref()
-                && let Err(error) = client.git.checkout_branch(Some(cwd), branch).await {
-                    // Keep the card open with the prompt intact; nothing was
-                    // created, and the project folder stays on its branch.
-                    let message = format!("Unable to switch to {branch}: {error}");
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.floating_composer.set_error(Some(message));
-                                cx.notify();
-                            });
-                        }
-                    });
-                    return;
-                }
+                && let Err(error) = client.git.checkout_branch(Some(cwd), branch).await
+            {
+                // Keep the card open with the prompt intact; nothing was
+                // created, and the project folder stays on its branch.
+                let message = format!("Unable to switch to {branch}: {error}");
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.floating_composer.set_error(Some(message));
+                            cx.notify();
+                        });
+                    }
+                });
+                return;
+            }
             let result = client
                 .sessions
                 .create(CreateSessionDto {
@@ -698,6 +699,7 @@ impl ConsoleDesktopApp {
                         this.sync_workspace_webviews(cx);
                         this.transcript_for_pane(&target_pane).update(cx, |t, cx| {
                             t.set_messages(Vec::new(), cx);
+                            t.clear_session_changes(cx);
                         });
                         // Adopt the card's selections for this pane so the run
                         // below — and the composer it leaves behind — agree

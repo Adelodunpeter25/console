@@ -28,7 +28,9 @@ pub struct FsFileWithEtag {
 pub enum FsSaveError {
     /// The file changed on disk since this buffer was loaded. Nothing was
     /// written. `current_etag` is the file's ETag now, when the server sent it.
-    FileChanged { current_etag: Option<String> },
+    FileChanged {
+        current_etag: Option<String>,
+    },
     Other(String),
 }
 

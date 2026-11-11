@@ -69,15 +69,15 @@ pub fn replace_or_open_tab(
     let new_tab_id = new_tab.id();
 
     if let Some(target_id) = replace_tab_id
-        && let Some(pos) = leaf.tabs.iter().position(|t| t.id() == target_id) {
-            let same_kind =
-                std::mem::discriminant(&leaf.tabs[pos]) == std::mem::discriminant(&new_tab);
-            if same_kind {
-                leaf.tabs[pos] = new_tab;
-                leaf.active_tab_id = Some(new_tab_id.clone());
-                return new_tab_id;
-            }
+        && let Some(pos) = leaf.tabs.iter().position(|t| t.id() == target_id)
+    {
+        let same_kind = std::mem::discriminant(&leaf.tabs[pos]) == std::mem::discriminant(&new_tab);
+        if same_kind {
+            leaf.tabs[pos] = new_tab;
+            leaf.active_tab_id = Some(new_tab_id.clone());
+            return new_tab_id;
         }
+    }
 
     if !leaf.tabs.iter().any(|t| t.id() == new_tab_id) {
         leaf.tabs.push(new_tab);
@@ -98,9 +98,10 @@ pub fn move_tab_to_pane(
 
     let tab_id = tab.id();
     if source_pane_id != Some(target_pane_id)
-        && let Some(source_pane_id) = source_pane_id {
-            let _ = close_tab(root, source_pane_id, &tab_id);
-        }
+        && let Some(source_pane_id) = source_pane_id
+    {
+        let _ = close_tab(root, source_pane_id, &tab_id);
+    }
     open_tab(root, target_pane_id, tab);
     Some(target_pane_id.to_string())
 }
@@ -120,6 +121,12 @@ pub fn close_tab(root: &mut WorkspaceNode, pane_id: &str, tab_id: &str) -> Optio
         leaf.active_tab_id = fallback.map(|tab| tab.id());
     }
     leaf.active_tab_id.clone()
+}
+
+/// True when no pane in the workspace holds a tab: the empty state, however
+/// many (empty) panes the layout is split into.
+pub fn is_workspace_empty(root: &WorkspaceNode) -> bool {
+    root.leaves().iter().all(|leaf| leaf.tabs.is_empty())
 }
 
 /// Remove a pane and collapse its parent split into the remaining sibling.
@@ -167,9 +174,10 @@ pub fn close_pane(root: &mut WorkspaceNode, pane_id: &str) -> bool {
 /// Activate a tab in a pane.
 pub fn select_tab(root: &mut WorkspaceNode, pane_id: &str, tab_id: &str) {
     if let Some(leaf) = root.leaf_mut(pane_id)
-        && leaf.tabs.iter().any(|t| t.id() == tab_id) {
-            leaf.active_tab_id = Some(tab_id.to_string());
-        }
+        && leaf.tabs.iter().any(|t| t.id() == tab_id)
+    {
+        leaf.active_tab_id = Some(tab_id.to_string());
+    }
 }
 
 /// Update the stored project of every tab with `tab_id` across the tree.
@@ -319,9 +327,10 @@ pub fn sync_chat_provider(
     for leaf in root.leaves_mut() {
         for tab in &mut leaf.tabs {
             if predicate(tab)
-                && let console_core::WorkspaceTabConfig::Chat { provider: p, .. } = tab {
-                    *p = Some(provider.clone());
-                }
+                && let console_core::WorkspaceTabConfig::Chat { provider: p, .. } = tab
+            {
+                *p = Some(provider.clone());
+            }
         }
     }
 }

@@ -151,9 +151,8 @@ impl BrowserView {
                 .placeholder("Search or enter website address (e.g. localhost:3000)")
         });
 
-        let annotation_input = cx.new(|cx| {
-            ComposerInput::new(window, cx).placeholder("Add a comment for the AI...")
-        });
+        let annotation_input =
+            cx.new(|cx| ComposerInput::new(window, cx).placeholder("Add a comment for the AI..."));
 
         let window_handle = window.window_handle();
         let submit_subscription = cx.subscribe(
@@ -560,11 +559,12 @@ impl BrowserView {
         self.refocus_page_pending = true;
         // Resume inspect so the next pick works.
         if self.inspecting
-            && let Some(host) = &self.host {
-                host.evaluate_script(
+            && let Some(host) = &self.host
+        {
+            host.evaluate_script(
                     "if (typeof window.__consoleSetInspectPaused === 'function') { window.__consoleSetInspectPaused(false); }",
                 );
-            }
+        }
         cx.notify();
     }
 
@@ -581,11 +581,12 @@ impl BrowserView {
             input.clear(cx);
         });
         if self.inspecting
-            && let Some(host) = &self.host {
-                host.evaluate_script(
+            && let Some(host) = &self.host
+        {
+            host.evaluate_script(
                     "if (typeof window.__consoleSetInspectPaused === 'function') { window.__consoleSetInspectPaused(false); }",
                 );
-            }
+        }
         cx.notify();
     }
 
@@ -598,7 +599,9 @@ impl BrowserView {
         let view = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
             for _ in 0..100 {
-                cx.background_executor().timer(std::time::Duration::from_millis(100)).await;
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(100))
+                    .await;
                 let done = slot.lock().unwrap().is_some();
                 if done {
                     let result = slot.lock().unwrap().take();
@@ -616,8 +619,7 @@ impl BrowserView {
                     }
                     if let Some(Ok(captured)) = result {
                         use base64::Engine as _;
-                        let b64 =
-                            base64::engine::general_purpose::STANDARD.encode(&captured.png);
+                        let b64 = base64::engine::general_purpose::STANDARD.encode(&captured.png);
                         cx.update(|cx| {
                             let _ = view.update(cx, |this, cx| {
                                 // Only fill the popover that asked for it.
@@ -640,14 +642,13 @@ impl BrowserView {
                     }
                     break;
                 }
-                let still_open = cx
-                    .update(|cx| {
-                        let mut flag = false;
-                        let _ = view.update(cx, |this, _| {
-                            flag = this.active_inspection.is_some();
-                        });
-                        flag
+                let still_open = cx.update(|cx| {
+                    let mut flag = false;
+                    let _ = view.update(cx, |this, _| {
+                        flag = this.active_inspection.is_some();
                     });
+                    flag
+                });
                 if !still_open {
                     cx.update(|cx| {
                         let _ = view.update(cx, |this, _| {
@@ -700,9 +701,7 @@ impl BrowserView {
 
     /// Start a native PNG snapshot of the visible page. The returned slot
     /// fills once the webview finishes; `None` when there is no live webview.
-    pub fn start_snapshot(
-        &self,
-    ) -> Option<crate::browser::host::SnapshotSlot> {
+    pub fn start_snapshot(&self) -> Option<crate::browser::host::SnapshotSlot> {
         let host = self.host.as_ref()?;
         let slot = crate::browser::host::SnapshotSlot::default();
         host.take_snapshot(slot.clone());
@@ -771,9 +770,10 @@ impl BrowserView {
             return Some(title.to_owned());
         }
         if let Some(url) = self.current_url.as_deref()
-            && !url.is_empty() {
-                return Some(default_browser_title(url));
-            }
+            && !url.is_empty()
+        {
+            return Some(default_browser_title(url));
+        }
         None
     }
 
@@ -1001,7 +1001,9 @@ impl BrowserView {
             let view = cx.entity().downgrade();
             cx.spawn(async move |_, cx| {
                 for _ in 0..30 {
-                    cx.background_executor().timer(std::time::Duration::from_millis(50)).await;
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(50))
+                        .await;
                     if slot.lock().unwrap().is_some() {
                         let result = slot.lock().unwrap().take();
                         if let Some(Ok(bytes)) = result {
@@ -1102,20 +1104,22 @@ impl BrowserView {
         if let Some(url) = self.current_url.clone() {
             self.navigate_to_url(url, cx);
         } else if let Some(host) = &self.host
-            && self.navigation_requested {
-                host.reload();
-                self.loading = true;
-                cx.notify();
-            }
+            && self.navigation_requested
+        {
+            host.reload();
+            self.loading = true;
+            cx.notify();
+        }
     }
 
     pub fn hard_reload(&mut self, cx: &mut Context<Self>) {
         if let Some(host) = &self.host
-            && self.navigation_requested {
-                host.hard_reload();
-                self.loading = true;
-                cx.notify();
-            }
+            && self.navigation_requested
+        {
+            host.hard_reload();
+            self.loading = true;
+            cx.notify();
+        }
     }
 
     pub fn stop_loading(&mut self, cx: &mut Context<Self>) {
@@ -1605,9 +1609,7 @@ impl BrowserView {
             (None, None) => inspection.selector.clone(),
         };
         let thumb = self.annotation_screenshot.as_ref().and_then(|b64| {
-            let bytes = base64::engine::general_purpose::STANDARD
-                .decode(b64)
-                .ok()?;
+            let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
             if bytes.is_empty() {
                 return None;
             }
@@ -1672,14 +1674,11 @@ impl BrowserView {
                             .text_color(theme.text_secondary)
                             .cursor_default()
                             .hover(|s| s.bg(theme.overlay))
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                move |_, _, cx| {
-                                    if let Some(view) = entity.upgrade() {
-                                        view.update(cx, |this, cx| this.cancel_annotation(cx));
-                                    }
-                                },
-                            )
+                            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                                if let Some(view) = entity.upgrade() {
+                                    view.update(cx, |this, cx| this.cancel_annotation(cx));
+                                }
+                            })
                             .child("Esc to Cancel"),
                     )
                     .child(
@@ -1703,21 +1702,15 @@ impl BrowserView {
                                     s
                                 }
                             })
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                move |_, _, cx| {
-                                    if let Some(view) = entity2.upgrade() {
-                                        view.update(cx, |this, cx| {
-                                            let text = this
-                                                .annotation_input
-                                                .read(cx)
-                                                .content()
-                                                .to_string();
-                                            this.commit_annotation(text, cx);
-                                        });
-                                    }
-                                },
-                            )
+                            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                                if let Some(view) = entity2.upgrade() {
+                                    view.update(cx, |this, cx| {
+                                        let text =
+                                            this.annotation_input.read(cx).content().to_string();
+                                        this.commit_annotation(text, cx);
+                                    });
+                                }
+                            })
                             .child(if self.annotation_screenshot.is_some() {
                                 "Attach to Chat"
                             } else if self.annotation_capture_failed {

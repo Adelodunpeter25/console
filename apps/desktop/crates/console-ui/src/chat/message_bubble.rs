@@ -63,9 +63,10 @@ pub(crate) fn find_paste_label(remaining: &str) -> Option<(usize, usize)> {
 /// A pasted upload's context file lives under the server's pastes dir
 /// (`.../pastes/<session>/pasted-<ts>-<rand>.log|.txt`).
 fn is_paste_path(path: &str) -> bool {
-    path.contains("/pastes/") || Path::new(path).file_name().is_some_and(|n| {
-        n.to_str().is_some_and(|name| name.starts_with("pasted-"))
-    })
+    path.contains("/pastes/")
+        || Path::new(path)
+            .file_name()
+            .is_some_and(|n| n.to_str().is_some_and(|name| name.starts_with("pasted-")))
 }
 
 /// Keep the message as one flat string and return the ranges that should be
@@ -267,8 +268,7 @@ const USER_FOLD_CHARS_PER_LINE: usize = 64;
 pub fn estimated_text_lines(text: &str) -> usize {
     text.split('\n')
         .map(|line| {
-            let wrapped =
-                line.chars().count().div_ceil(USER_FOLD_CHARS_PER_LINE);
+            let wrapped = line.chars().count().div_ceil(USER_FOLD_CHARS_PER_LINE);
             wrapped.max(1)
         })
         .sum()
@@ -367,8 +367,7 @@ impl RenderOnce for UserMessageBubble {
         // chips like mentions instead of dumping the raw markup in the bubble.
         let (body_text, file_comments) =
             console_shared::composer::file_comments::split_file_comments(&self.content);
-        let (message_text, mentions) =
-            message_text_with_mentions(&body_text, &self.context_files);
+        let (message_text, mentions) = message_text_with_mentions(&body_text, &self.context_files);
         let has_content = !message_text.is_empty();
         let comment_chips = (!file_comments.is_empty()).then(|| {
             div()
@@ -477,17 +476,27 @@ impl RenderOnce for UserMessageBubble {
                                 .gap(px(8.0))
                                 .children(self.annotations.iter().cloned().enumerate().map(
                                     |(index, ann)| {
-                                        let label = match (&ann.component_name, &ann.source_location) {
-                                            (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
-                                            (Some(c), None) => format!("<{c} />"),
-                                            (None, Some(s)) => s.clone(),
-                                            (None, None) => ann.selector.clone(),
-                                        };
-                                        let thumb = ann.screenshot_base64.as_ref().and_then(|b64| {
-                                            let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
-                                            if bytes.is_empty() { return None; }
-                                            Some(Arc::new(gpui::Image::from_bytes(gpui::ImageFormat::Png, bytes)))
-                                        });
+                                        let label =
+                                            match (&ann.component_name, &ann.source_location) {
+                                                (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
+                                                (Some(c), None) => format!("<{c} />"),
+                                                (None, Some(s)) => s.clone(),
+                                                (None, None) => ann.selector.clone(),
+                                            };
+                                        let thumb =
+                                            ann.screenshot_base64.as_ref().and_then(|b64| {
+                                                let bytes =
+                                                    base64::engine::general_purpose::STANDARD
+                                                        .decode(b64)
+                                                        .ok()?;
+                                                if bytes.is_empty() {
+                                                    return None;
+                                                }
+                                                Some(Arc::new(gpui::Image::from_bytes(
+                                                    gpui::ImageFormat::Png,
+                                                    bytes,
+                                                )))
+                                            });
                                         let on_preview = preview_handler.clone();
                                         div()
                                             .id(ElementId::Name(
@@ -507,7 +516,11 @@ impl RenderOnce for UserMessageBubble {
                                             })
                                             .when(thumb.is_none(), |tile| {
                                                 tile.child(
-                                                    div().p(px(6.0)).text_size(px(10.5)).text_color(theme.text_secondary).child(label.clone()),
+                                                    div()
+                                                        .p(px(6.0))
+                                                        .text_size(px(10.5))
+                                                        .text_color(theme.text_secondary)
+                                                        .child(label.clone()),
                                                 )
                                             })
                                             .when_some(on_preview, |tile, on_preview| {
@@ -823,7 +836,10 @@ impl RenderOnce for AssistantMessageBubble {
                         }
                     }
                 }
-                AssistantContentPart::Text { text, thought_signature } => {
+                AssistantContentPart::Text {
+                    text,
+                    thought_signature,
+                } => {
                     if let Some(existing) = coalesced_parts.iter_mut().find_map(|p| match p {
                         AssistantContentPart::Text { text: t, .. } => Some(t),
                         _ => None,

@@ -1,12 +1,12 @@
 //! Floating Copy + Cite overlay and geometry probes for transcript text selection.
 
-use gpui::{canvas, div, prelude::*, px, Bounds, IntoElement, Pixels};
+use gpui::{Bounds, IntoElement, Pixels, canvas, div, prelude::*, px};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::markdown::render::{self, TranscriptSelection};
 use crate::primitives::tooltip::Tooltip;
-use crate::primitives::{app_icon, IconName};
+use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
 /// Records the transcript container's window-space bounds every frame so the

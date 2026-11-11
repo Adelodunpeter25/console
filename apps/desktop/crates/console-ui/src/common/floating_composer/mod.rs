@@ -119,8 +119,7 @@ pub fn resolve_pending_pastes(
             files.push(path.clone());
             continue;
         }
-        let Some((paste, uploaded)) = resolved.iter().find(|(paste, _)| &paste.path == path)
-        else {
+        let Some((paste, uploaded)) = resolved.iter().find(|(paste, _)| &paste.path == path) else {
             continue;
         };
         let found = prompt[cursor..].find(&paste.label).map(|at| cursor + at);

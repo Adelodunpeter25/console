@@ -1,13 +1,13 @@
 //! Floating scroll pill and prompt jump popup controls for the chat transcript.
 
 use gpui::{
-    div, prelude::*, px, uniform_list, AnyElement, Context, IntoElement, KeyDownEvent,
-    ScrollStrategy, WeakEntity,
+    AnyElement, Context, IntoElement, KeyDownEvent, ScrollStrategy, WeakEntity, div, prelude::*,
+    px, uniform_list,
 };
 
 use crate::chat::transcript_view::TranscriptView;
 use crate::primitives::tooltip::Tooltip;
-use crate::primitives::{app_icon, IconName};
+use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
 pub const PROMPT_ROW_HEIGHT: f32 = 34.0;
@@ -21,7 +21,9 @@ pub fn prompt_row(
     entity: WeakEntity<TranscriptView>,
 ) -> AnyElement {
     div()
-        .id(gpui::ElementId::Name(format!("prompt-jump-{}", prompt.id).into()))
+        .id(gpui::ElementId::Name(
+            format!("prompt-jump-{}", prompt.id).into(),
+        ))
         .w_full()
         .h(px(PROMPT_ROW_HEIGHT))
         .flex()
@@ -75,7 +77,11 @@ pub fn prompt_row(
 impl TranscriptView {
     /// Floating pill at the bottom-right: a prompt list button (opens the jump
     /// popup) and, while scrolled away from the tail, a scroll-to-bottom arrow.
-    pub(crate) fn render_scroll_controls(&self, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn render_scroll_controls(
+        &self,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let has_prompts = !self.messages.is_empty();
         let show_down = !self.list_state.is_following_tail();
         if (!has_prompts && !show_down) || !(self.hovered || self.prompts_open) {
@@ -168,7 +174,9 @@ impl TranscriptView {
                     prompts.len(),
                     move |range, _window, _cx| {
                         range
-                            .map(|ix| prompt_row(&prompts[ix], total - 1 - ix, theme, entity.clone()))
+                            .map(|ix| {
+                                prompt_row(&prompts[ix], total - 1 - ix, theme, entity.clone())
+                            })
                             .collect::<Vec<_>>()
                     },
                 )

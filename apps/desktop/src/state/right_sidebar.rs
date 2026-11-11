@@ -389,12 +389,13 @@ impl ConsoleDesktopApp {
 
     pub fn close_auxiliary_tab(&mut self, tab: AuxiliaryTab, cx: &mut Context<Self>) {
         if tab == AuxiliaryTab::Devices
-            && let Some(device) = self.device_view.take() {
-                device.update(cx, |view, cx| view.close(cx));
-            }
-            // Closing the tab must not power off devices: each device has its
-            // own stop button (device power toolbar button) and they keep
-            // running for other viewers.
+            && let Some(device) = self.device_view.take()
+        {
+            device.update(cx, |view, cx| view.close(cx));
+        }
+        // Closing the tab must not power off devices: each device has its
+        // own stop button (device power toolbar button) and they keep
+        // running for other viewers.
         self.inspector_open_auxiliary_tabs
             .retain(|open| *open != tab);
         if self.inspector_active_tab == InspectorTab::Auxiliary(tab) {
@@ -678,9 +679,10 @@ impl ConsoleDesktopApp {
         // target changed. Dropping the previous task cancels its SSE loop, so
         // repeated refreshes never accumulate duplicate streams.
         if let Some((watched_cwd, _)) = &self.inspector_fs_watch
-            && watched_cwd == &cwd {
-                return;
-            }
+            && watched_cwd == &cwd
+        {
+            return;
+        }
         self.inspector_fs_watch = None;
 
         let client = self.client.clone();
@@ -720,9 +722,10 @@ impl ConsoleDesktopApp {
         // One stream per target: reuse the live watcher unless the inspector
         // target changed (dropping the previous task cancels its SSE loop).
         if let Some((watched_cwd, _)) = &self.inspector_git_watch
-            && watched_cwd == &cwd {
-                return;
-            }
+            && watched_cwd == &cwd
+        {
+            return;
+        }
         self.inspector_git_watch = None;
 
         let client = self.client.clone();
@@ -872,6 +875,13 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
+                                // A slow reply for a chat the user already left
+                                // must not overwrite the current chat's list.
+                                if this.active_inspector_target().0.as_deref()
+                                    != Some(session_id.as_str())
+                                {
+                                    return;
+                                }
                                 this.inspector_session_changes = Rc::new(changes);
                                 cx.notify();
                             });

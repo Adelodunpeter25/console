@@ -3,9 +3,7 @@
 //! They are registered as *global* action handlers (`App::on_action` in
 //! `keybindings::init_handlers`), so they run regardless of keyboard focus.
 
-use std::rc::Rc;
-
-use console_core::{CreateSessionDto, WorkspaceNode, WorkspaceTabConfig};
+use console_core::{WorkspaceNode, WorkspaceTabConfig};
 use console_ui::{IconName, MenuAlign, PaletteEntry, browser, toggle_popover};
 use gpui::{Context, Focusable as _, WeakEntity, Window};
 
@@ -24,9 +22,9 @@ fn command_palette_entries(
     let mut entries = vec![
         PaletteEntry::new("new-chat", "New Chat", {
             let entity = entity.clone();
-            move |_window, cx| {
+            move |window, cx| {
                 if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| this.create_new_chat(cx));
+                    app.update(cx, |this, cx| this.open_floating_composer(window, cx));
                 }
             }
         })
@@ -196,121 +194,6 @@ fn tab_palette_entry(
 }
 
 impl ConsoleDesktopApp {
-    /// Create a chat session for the active pane and open it as its tab.
-    ///
-    /// Shared by the sidebar's New Task row, the empty state's button, the
-    /// command palette, and the ⌘N shortcut.
-    pub fn create_new_chat(&mut self, cx: &mut Context<Self>) {
-        let client = self.client.clone();
-        let pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".to_string());
-        let approval_mode = self.pane_approval_mode(&pane_id);
-        let thinking_level = self.pane_thinking_level(&pane_id);
-        let selected_model = self.pane_selected_model(&pane_id);
-        // The real project id goes to the server; the cwd is the pane's
-        // checkout, so a new chat in a worktree workspace starts in that
-        // worktree instead of the project's main folder.
-        let session_project_id = self.pane_real_project_id(&pane_id).or_else(|| {
-            self.selected_project_id
-                .as_deref()
-                .map(|key| console_core::project_id_of_workspace_key(key).to_owned())
-        });
-        let session_cwd = self
-            .selected_project_for_pane(&pane_id)
-            .map(|project| project.path.clone())
-            .or_else(|| {
-                session_project_id.as_ref().and_then(|pid| {
-                    self.projects
-                        .iter()
-                        .find(|p| &p.id == pid)
-                        .map(|p| p.path.clone())
-                })
-            });
-        cx.spawn(async move |entity, cx| {
-            match client
-                .sessions
-                .create(CreateSessionDto {
-                    cwd: session_cwd,
-                    project_id: session_project_id,
-                    model_id: selected_model.as_ref().map(|model| model.model_id.clone()),
-                    provider: selected_model.as_ref().map(|model| model.provider.clone()),
-                    title: Some("New Chat".into()),
-                    approval_mode: Some(approval_mode.value().to_string()),
-                    thinking_level,
-                    worktree: None,
-                })
-                .await
-            {
-                Ok(new_session) => {
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.save_transcript_scroll_position(cx);
-                                this.apply_session_header_for_pane(&pane_id, &new_session, cx);
-                                this.clear_error_for_pane(&pane_id, cx);
-                                if this.active_pane_id.as_deref() == Some(pane_id.as_str()) {
-                                    this.selected_session_id = Some(new_session.id.clone());
-                                }
-                                Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
-                                this.open_chat_tab_in_pane(
-                                    &pane_id,
-                                    new_session.id.clone(),
-                                    "New Chat",
-                                );
-                                this.sync_workspace_webviews(cx);
-                                let new_chat_draft = this.get_draft_with_mentions(None);
-                                let new_chat_ctx_files = this.get_draft_context_files(None);
-                                this.composer_for_pane(&pane_id).update(cx, |input, cx| {
-                                    input.set_prompt_history(Vec::new(), cx);
-                                    if let Some((draft_text, mentions)) = &new_chat_draft {
-                                        input.set_content_with_mentions(
-                                            draft_text.clone(),
-                                            mentions.clone(),
-                                            cx,
-                                        );
-                                    } else {
-                                        input.clear(cx);
-                                    }
-                                    input.set_context_files(new_chat_ctx_files.clone());
-                                    cx.notify();
-                                });
-                                if let Some((draft_text, mentions)) = new_chat_draft {
-                                    let new_chat_attachments = this.attachments_for_pane(&pane_id);
-                                    let new_chat_annotations = this.annotations_for_pane(&pane_id);
-                                    this.save_draft_for_session_with_context(
-                                        Some(&new_session.id),
-                                        &draft_text,
-                                        &mentions,
-                                        &new_chat_ctx_files,
-                                        &new_chat_attachments,
-                                        &new_chat_annotations,
-                                        cx,
-                                    );
-                                    this.clear_draft_for_session(None, cx);
-                                }
-                                this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
-                                    t.set_messages(Vec::new(), cx);
-                                });
-                                cx.notify();
-                            });
-                        }
-                    });
-                }
-                Err(error) => {
-                    let message = format!("Unable to create a session: {error}");
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| this.set_error(message, cx));
-                        }
-                    });
-                }
-            }
-        })
-        .detach();
-    }
-
     /// ⌘W — close the active tab, then point the pane at whatever tab became
     /// active (mirroring the tab bar's close button). A dirty file buffer
     /// prompts save / discard / cancel first.

@@ -128,6 +128,18 @@ class ChatRepository(
         scheduleDraftPush(sessionId)
     }
 
+    /** Append a quoted reply to the draft. Reads the current input here, so callers need not capture it. */
+    fun appendQuote(sessionId: String, quote: String) {
+        val current = chats.get(sessionId).input
+        val next = if (current.isBlank()) {
+            quote
+        } else {
+            val separator = if (current.endsWith("\n")) "\n" else "\n\n"
+            "$current$separator$quote"
+        }
+        setInput(sessionId, next)
+    }
+
     // --- Synced drafts -----------------------------------------------------
     // Text only on this slice. The server keeps one draft per chat and
     // replaces it whole, so the file comments another device staged are held

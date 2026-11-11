@@ -42,7 +42,8 @@ impl ConsoleDesktopApp {
                             }
                             Err(error) => {
                                 log::warn!("Failed to fetch Chrome profiles: {error}");
-                                this.chrome_status = Some(format!("Could not load profiles: {error}"));
+                                this.chrome_status =
+                                    Some(format!("Could not load profiles: {error}"));
                             }
                         }
                         cx.notify();
@@ -65,8 +66,12 @@ impl ConsoleDesktopApp {
         if self.chrome_importing {
             return;
         }
-        let Some(index) = self.chrome_selected_profile else { return };
-        let Some(profile) = self.chrome_profiles.get(index) else { return };
+        let Some(index) = self.chrome_selected_profile else {
+            return;
+        };
+        let Some(profile) = self.chrome_profiles.get(index) else {
+            return;
+        };
         let profile_id = profile.id.clone();
         let profile_name = profile.name.clone();
 
@@ -138,12 +143,18 @@ pub(crate) fn install(
 ) -> (usize, Option<String>) {
     console_ui::browser::browser_state::merge_history(history);
     if cookies.is_empty() {
-        log::warn!("chrome import: server returned no cookies (history entries: {})", history.len());
+        log::warn!(
+            "chrome import: server returned no cookies (history entries: {})",
+            history.len()
+        );
         return (0, None);
     }
     match console_ui::browser::browser_state::inject_cookies(cookies) {
         Ok(count) => {
-            log::info!("chrome import: injected {count} cookies (history entries: {})", history.len());
+            log::info!(
+                "chrome import: injected {count} cookies (history entries: {})",
+                history.len()
+            );
             (count, None)
         }
         Err(error) => (0, Some(error)),

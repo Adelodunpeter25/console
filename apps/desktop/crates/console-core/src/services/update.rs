@@ -103,7 +103,10 @@ pub fn install_and_relaunch(zip: &Path) -> Result<()> {
         .ok_or_else(|| anyhow!("not running from an app bundle"))?
         .to_path_buf();
     let dir = unpack_dir()?;
-    run(std::process::Command::new("ditto").args(["-x", "-k"]).arg(zip).arg(&dir))?;
+    run(std::process::Command::new("ditto")
+        .args(["-x", "-k"])
+        .arg(zip)
+        .arg(&dir))?;
     let fresh = std::fs::read_dir(&dir)?
         .filter_map(|e| e.ok().map(|e| e.path()))
         .find(|p| p.extension().is_some_and(|e| e == "app"))
@@ -122,13 +125,14 @@ pub fn install_and_relaunch(zip: &Path) -> Result<()> {
 pub fn install_and_relaunch(zip: &Path) -> Result<()> {
     let exe = std::env::current_exe()?;
     let dir = unpack_dir()?;
-    run(std::process::Command::new("powershell").args([
-        "-NoProfile",
-        "-Command",
-        "Expand-Archive -Force -LiteralPath $args[0] -DestinationPath $args[1]",
-    ])
-    .arg(zip)
-    .arg(&dir))?;
+    run(std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            "Expand-Archive -Force -LiteralPath $args[0] -DestinationPath $args[1]",
+        ])
+        .arg(zip)
+        .arg(&dir))?;
     let installer = dir.join("Console-Setup-x64.exe");
     // The installer overwrites console.exe, so it has to wait for us to exit;
     // it reuses the existing install directory from the registry.

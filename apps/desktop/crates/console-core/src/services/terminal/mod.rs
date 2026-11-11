@@ -31,13 +31,17 @@ fn is_benign_ws_disconnect(e: &WsError) -> bool {
     match e {
         WsError::ConnectionClosed | WsError::AlreadyClosed => true,
         WsError::Protocol(ProtocolError::ResetWithoutClosingHandshake) => true,
-        WsError::Io(io) if matches!(
-            io.kind(),
-            std::io::ErrorKind::UnexpectedEof
-                | std::io::ErrorKind::ConnectionReset
-                | std::io::ErrorKind::ConnectionAborted
-                | std::io::ErrorKind::BrokenPipe
-        ) => true,
+        WsError::Io(io)
+            if matches!(
+                io.kind(),
+                std::io::ErrorKind::UnexpectedEof
+                    | std::io::ErrorKind::ConnectionReset
+                    | std::io::ErrorKind::ConnectionAborted
+                    | std::io::ErrorKind::BrokenPipe
+            ) =>
+        {
+            true
+        }
         _ => {
             let m = e.to_string().to_lowercase();
             m.contains("unexpected eof")
@@ -134,9 +138,10 @@ impl TerminalService {
             return None;
         }
         if let Some(c) = cwd
-            && let Some(exact) = candidates.iter().find(|r| r.cwd.as_deref() == Some(c)) {
-                return Some(exact);
-            }
+            && let Some(exact) = candidates.iter().find(|r| r.cwd.as_deref() == Some(c))
+        {
+            return Some(exact);
+        }
         candidates.into_iter().next()
     }
 }

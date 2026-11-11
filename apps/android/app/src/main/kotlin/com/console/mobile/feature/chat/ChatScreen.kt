@@ -150,7 +150,12 @@ fun ChatScreen(
     }
 
     val messages = chat.messages
-    val displayMessages = visibleMessages(messages)
+    // Stable across input changes: capturing the draft here would hand every
+    // message bubble a new callback per keystroke and recompose the transcript.
+    val onReply = remember(sessionId) {
+        { quote: String -> AppContainer.chatRepository.appendQuote(sessionId, quote) }
+    }
+    val displayMessages = remember(messages) { visibleMessages(messages) }
     val runs = remember(messages, chat.runs) {
         if (chat.runs.isNotEmpty()) chat.runs else reconstructRuns(messages)
     }
@@ -295,16 +300,7 @@ fun ChatScreen(
                             }
                         }
                     },
-                    onReply = { quote ->
-                        val current = chat.input
-                        val next = if (current.isBlank()) {
-                            quote
-                        } else {
-                            val prefix = if (current.endsWith("\n")) "\n" else "\n\n"
-                            "$current$prefix$quote"
-                        }
-                        AppContainer.chatRepository.setInput(sessionId, next)
-                    },
+                    onReply = onReply,
                 )
                 ScrollThumb(
                     state = transcriptScroll.listState,

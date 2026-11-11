@@ -1,7 +1,7 @@
 //! Grouping and lookup of per-turn file changes and diffs across a session transcript.
 
-use console_core::types::SessionFileChange;
 use console_core::AgentMessage;
+use console_core::types::SessionFileChange;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -57,9 +57,7 @@ pub fn turn_changes_for_assistant(
     let closes_turn = messages[index + 1..]
         .iter()
         .take_while(|message| !matches!(message, AgentMessage::User { .. }))
-        .all(|message| {
-            !matches!(message, AgentMessage::Assistant { .. }) || is_hidden(message)
-        });
+        .all(|message| !matches!(message, AgentMessage::Assistant { .. }) || is_hidden(message));
     if !closes_turn {
         return None;
     }
@@ -81,7 +79,9 @@ pub fn rows_with_turn_changes(
     is_hidden: impl Fn(&AgentMessage) -> bool,
 ) -> Vec<usize> {
     (0..messages.len())
-        .filter(|&index| turn_changes_for_assistant(messages, turn_changes, index, &is_hidden).is_some())
+        .filter(|&index| {
+            turn_changes_for_assistant(messages, turn_changes, index, &is_hidden).is_some()
+        })
         .collect()
 }
 

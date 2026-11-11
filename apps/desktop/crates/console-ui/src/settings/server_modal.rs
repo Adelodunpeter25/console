@@ -10,8 +10,8 @@ use crate::input::ComposerInput;
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    RenderOnce, StatefulInteractiveElement, Styled, Window, div, img, px,
+    App, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window, div, img, px,
 };
 use std::rc::Rc;
 use std::sync::Arc;

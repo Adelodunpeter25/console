@@ -45,9 +45,10 @@ fn decodes_unconfigured_fixture() {
 fn absent_configured_reads_as_not_configured() {
     // A response missing `configured` entirely must not be treated as
     // configured; callers compare against Some(true).
-    let msg: SttStatus =
-        serde_json::from_str(r#"{"model":"@cf/openai/whisper-large-v3-turbo","maxAudioBytes":4194304}"#)
-            .expect("decode status without configured");
+    let msg: SttStatus = serde_json::from_str(
+        r#"{"model":"@cf/openai/whisper-large-v3-turbo","maxAudioBytes":4194304}"#,
+    )
+    .expect("decode status without configured");
     assert_eq!(msg.configured, None);
     assert_ne!(msg.configured, Some(true));
 }
@@ -63,7 +64,10 @@ fn decodes_set_config_response() {
     assert!(!msg.removed);
     let status = msg.status.expect("status present");
     assert_eq!(status.configured, Some(true));
-    assert_eq!(status.account_id.as_deref(), Some("e32ab932dec1b35e0df9c0ec56ab6c8f"));
+    assert_eq!(
+        status.account_id.as_deref(),
+        Some("e32ab932dec1b35e0df9c0ec56ab6c8f")
+    );
 }
 
 #[test]

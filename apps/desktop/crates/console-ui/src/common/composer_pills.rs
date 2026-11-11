@@ -9,8 +9,8 @@ use std::rc::Rc;
 
 use console_core::{SubagentInfo, TodoItem};
 use gpui::{
-    App, Div, ElementId, FontWeight, ParentElement, Stateful,
-    StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
+    App, Div, ElementId, FontWeight, ParentElement, Stateful, StatefulInteractiveElement, Styled,
+    Window, div, prelude::*, px,
 };
 
 use crate::chat::change_chips::ChangesSummary;

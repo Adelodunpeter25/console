@@ -32,9 +32,10 @@ impl ConsoleDesktopApp {
                 if let Some(session) = Rc::make_mut(&mut self.sessions)
                     .iter_mut()
                     .find(|s| s.id == session_id)
-                    && session.status == "working" {
-                        session.status = "idle".to_string();
-                    }
+                    && session.status == "working"
+                {
+                    session.status = "idle".to_string();
+                }
             }
         }
     }

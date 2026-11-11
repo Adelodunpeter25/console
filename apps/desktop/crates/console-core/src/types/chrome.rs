@@ -11,7 +11,6 @@ pub struct ChromeProfile {
     pub name: String,
 }
 
-
 /// One decrypted cookie from the server, ready for webview injection.
 /// Values never touch disk here.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,4 +26,3 @@ pub struct ChromeCookie {
     pub secure: bool,
     pub http_only: bool,
 }
-

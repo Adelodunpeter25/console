@@ -1,7 +1,7 @@
 //! Row assembly and message bubble rendering for the transcript list.
 
 use console_core::{ActivityEvent, AgentMessage, ApprovalMode, AssistantContentPart};
-use gpui::{div, prelude::*, px, AnyElement, App, IntoElement, WeakEntity};
+use gpui::{AnyElement, App, IntoElement, WeakEntity, div, prelude::*, px};
 
 use crate::chat::message_bubble::{AssistantMessageBubble, UserMessageBubble};
 use crate::chat::toolcalls::ToolCalls;
@@ -249,7 +249,11 @@ pub fn empty_state(theme: Theme) -> impl IntoElement {
         .items_center()
         .justify_center()
         .gap(px(8.0))
-        .child(crate::primitives::app_icon(crate::primitives::IconName::Bot, 32.0, theme.text_ghost))
+        .child(crate::primitives::app_icon(
+            crate::primitives::IconName::Bot,
+            32.0,
+            theme.text_ghost,
+        ))
         .child(
             div()
                 .text_size(px(14.0))

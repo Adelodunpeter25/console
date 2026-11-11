@@ -23,9 +23,8 @@ impl ConsoleDesktopApp {
                 let Some(app) = this.upgrade() else {
                     return;
                 };
-                let queued = cx.update(|cx| {
-                    app.update(cx, |this, _cx| this.begin_file_save(&request.path))
-                });
+                let queued =
+                    cx.update(|cx| app.update(cx, |this, _cx| this.begin_file_save(&request.path)));
                 // A save is already running for this path: it is marked pending
                 // and re-read from the editor when it finishes, so this request
                 // is deliberately dropped (its text is stale by definition).
@@ -98,7 +97,8 @@ impl ConsoleDesktopApp {
         }
         // A tab waiting on this save closes only once the write landed; a
         // failed save leaves it open and dirty so the edits are not lost.
-        if let Some((pane_id, tab_id)) = self.file_closes_awaiting_save.get(&request.path).cloned() {
+        if let Some((pane_id, tab_id)) = self.file_closes_awaiting_save.get(&request.path).cloned()
+        {
             let saved = !self
                 .viewer_editor_views
                 .get(&request.path)
@@ -126,10 +126,7 @@ impl ConsoleDesktopApp {
 
     /// Paths whose file buffer has unsaved edits. Drives the modified dot on
     /// the tab strip.
-    pub(crate) fn dirty_file_paths(
-        &self,
-        cx: &gpui::App,
-    ) -> std::collections::HashSet<String> {
+    pub(crate) fn dirty_file_paths(&self, cx: &gpui::App) -> std::collections::HashSet<String> {
         self.viewer_editor_views
             .iter()
             .filter(|(_, (_, _, state, _))| state.read(cx).is_dirty())
@@ -149,10 +146,12 @@ impl ConsoleDesktopApp {
         tab_id: &str,
         cx: &mut Context<Self>,
     ) {
-        let path = console_ui::workspace::ops::find_tab(&self.workspace_root, tab_id)
-            .and_then(|tab| match tab {
-                console_core::WorkspaceTabConfig::File { path, .. } => Some(path),
-                _ => None,
+        let path =
+            console_ui::workspace::ops::find_tab(&self.workspace_root, tab_id).and_then(|tab| {
+                match tab {
+                    console_core::WorkspaceTabConfig::File { path, .. } => Some(path),
+                    _ => None,
+                }
             });
         let Some(path) = path else {
             self.close_tab_and_sync_pane(pane_id, tab_id, cx);
@@ -236,10 +235,8 @@ impl ConsoleDesktopApp {
             self.close_tab_and_sync_pane(pane_id, tab_id, cx);
             return true;
         }
-        self.file_closes_awaiting_save.insert(
-            path.to_string(),
-            (pane_id.to_string(), tab_id.to_string()),
-        );
+        self.file_closes_awaiting_save
+            .insert(path.to_string(), (pane_id.to_string(), tab_id.to_string()));
         let started = state.update(cx, |state, cx| state.save(cx));
         if !started {
             self.file_closes_awaiting_save.remove(path);

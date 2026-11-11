@@ -25,9 +25,10 @@ pub fn to_relative_path(path: &str, cwd: Option<&str>) -> String {
     };
     let cwd = cwd.trim_end_matches('/');
     if !cwd.is_empty()
-        && let Some(rest) = path.strip_prefix(cwd) {
-            return rest.trim_start_matches('/').to_owned();
-        }
+        && let Some(rest) = path.strip_prefix(cwd)
+    {
+        return rest.trim_start_matches('/').to_owned();
+    }
     path
 }
 
@@ -164,7 +165,10 @@ pub fn script_calls(root: &str, code: &str) -> Option<String> {
             _ => {}
         }
         let at_boundary = i == 0 || !is_ident_byte(bytes[i - 1]) && bytes[i - 1] != b'.';
-        if at_boundary && bytes[i..].starts_with(root_b) && bytes.get(i + root_b.len()) == Some(&b'.') {
+        if at_boundary
+            && bytes[i..].starts_with(root_b)
+            && bytes.get(i + root_b.len()) == Some(&b'.')
+        {
             let mut j = i + root_b.len() + 1;
             let start = j;
             while j < bytes.len() && (is_ident_byte(bytes[j]) || bytes[j] == b'.') {

@@ -146,7 +146,9 @@ impl ConsoleDesktopApp {
     /// Fetch the full prompt list (every user prompt, including ones not paged
     /// in yet) for the session shown in `pane_id` and hand it to the popup.
     pub fn load_prompts_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
-        let Some(session_id) = self.active_session_for_pane(&pane_id).map(|s| s.to_string())
+        let Some(session_id) = self
+            .active_session_for_pane(&pane_id)
+            .map(|s| s.to_string())
         else {
             return;
         };
@@ -181,7 +183,9 @@ impl ConsoleDesktopApp {
         from_end: usize,
         cx: &mut Context<Self>,
     ) {
-        let Some(session_id) = self.active_session_for_pane(&pane_id).map(|s| s.to_string())
+        let Some(session_id) = self
+            .active_session_for_pane(&pane_id)
+            .map(|s| s.to_string())
         else {
             return;
         };
@@ -227,11 +231,15 @@ impl ConsoleDesktopApp {
                         };
                         let transcript = this.transcript_for_pane(&pane_id);
                         transcript.update(cx, |t, cx| {
-                            t.prepend_messages(detail.messages, state.has_more, state.next_cursor, cx);
+                            t.prepend_messages(
+                                detail.messages,
+                                state.has_more,
+                                state.next_cursor,
+                                cx,
+                            );
                         });
                         this.set_pagination_for_session(&session_id, state, cx);
-                        let found =
-                            transcript.update(cx, |t, cx| t.jump_to_prompt(from_end, cx));
+                        let found = transcript.update(cx, |t, cx| t.jump_to_prompt(from_end, cx));
                         // Keep paging only while the prompt is still missing.
                         (!found).then_some(state.next_cursor).flatten()
                     })

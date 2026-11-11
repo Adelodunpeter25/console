@@ -5,8 +5,8 @@
 //! desktop app registers its top-level menus during startup.
 
 use crate::keybindings::{
-    AddProject, NewBrowser, NewChat, NewProject, NewTerminal, NewWindow, OpenSettings, CheckForUpdates,
-    QuickOpenFile, ToggleLeftSidebar, ToggleRightSidebar,
+    AddProject, CheckForUpdates, NewBrowser, NewChat, NewProject, NewTerminal, NewWindow,
+    OpenSettings, QuickOpenFile, ToggleLeftSidebar, ToggleRightSidebar,
 };
 use gpui::{App, KeyBinding, Menu, MenuItem, OsAction, SystemMenuType, actions};
 
@@ -108,14 +108,16 @@ pub fn init(cx: &mut App) {
     cx.on_action(|_: &HideOthers, _| {
         #[cfg(target_os = "macos")]
         with_ns_app(|app| unsafe {
-            let _: () = objc2::msg_send![app, hideOtherApplications: None::<&objc2::runtime::AnyObject>];
+            let _: () =
+                objc2::msg_send![app, hideOtherApplications: None::<&objc2::runtime::AnyObject>];
         });
     });
 
     cx.on_action(|_: &UnhideAll, _| {
         #[cfg(target_os = "macos")]
         with_ns_app(|app| unsafe {
-            let _: () = objc2::msg_send![app, unhideAllApplications: None::<&objc2::runtime::AnyObject>];
+            let _: () =
+                objc2::msg_send![app, unhideAllApplications: None::<&objc2::runtime::AnyObject>];
         });
     });
 
@@ -143,7 +145,8 @@ pub fn init(cx: &mut App) {
     cx.on_action(|_: &ShowPreviousTab, _| {
         #[cfg(target_os = "macos")]
         with_key_window(|window| unsafe {
-            let _: () = objc2::msg_send![window, selectPreviousTab: None::<&objc2::runtime::AnyObject>];
+            let _: () =
+                objc2::msg_send![window, selectPreviousTab: None::<&objc2::runtime::AnyObject>];
         });
     });
 
@@ -157,14 +160,16 @@ pub fn init(cx: &mut App) {
     cx.on_action(|_: &MoveTabToNewWindow, _| {
         #[cfg(target_os = "macos")]
         with_key_window(|window| unsafe {
-            let _: () = objc2::msg_send![window, moveTabToNewWindow: None::<&objc2::runtime::AnyObject>];
+            let _: () =
+                objc2::msg_send![window, moveTabToNewWindow: None::<&objc2::runtime::AnyObject>];
         });
     });
 
     cx.on_action(|_: &MergeAllWindows, _| {
         #[cfg(target_os = "macos")]
         with_key_window(|window| unsafe {
-            let _: () = objc2::msg_send![window, mergeAllWindows: None::<&objc2::runtime::AnyObject>];
+            let _: () =
+                objc2::msg_send![window, mergeAllWindows: None::<&objc2::runtime::AnyObject>];
         });
     });
 

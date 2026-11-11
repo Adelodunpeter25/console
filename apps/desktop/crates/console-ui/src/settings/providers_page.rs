@@ -64,9 +64,10 @@ fn account_display(account: &ProviderAccount) -> String {
     }
     if let Some(email) = account.email.clone().filter(|e| !e.is_empty())
         && let Some(local) = email.split('@').next()
-            && !local.is_empty() {
-                return local.to_string();
-            }
+        && !local.is_empty()
+    {
+        return local.to_string();
+    }
     account.id.clone()
 }
 

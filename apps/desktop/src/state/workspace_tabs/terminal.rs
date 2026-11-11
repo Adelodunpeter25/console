@@ -19,7 +19,7 @@ impl ConsoleDesktopApp {
             .selected_project_for_pane(&pane_id)
             .map(|project| project.path.clone())
         else {
-            self.set_error("Select a project before opening a terminal.", cx);
+            self.set_project_required_error("Select a project before opening a terminal.", cx);
             return;
         };
         self.open_terminal_tab_in_pane(&pane_id, cwd, window, cx);
@@ -68,9 +68,8 @@ impl ConsoleDesktopApp {
             return view.clone();
         }
 
-        let view = cx.new(|cx| {
-            TerminalView::with_cwd(cwd, self.client.clone(), self.transport, window, cx)
-        });
+        let view = cx
+            .new(|cx| TerminalView::with_cwd(cwd, self.client.clone(), self.transport, window, cx));
 
         let tid = terminal_id.to_string();
         let sub = cx.observe(&view, move |this, view, cx| {
@@ -93,10 +92,11 @@ impl ConsoleDesktopApp {
                         ..
                     } = tab
                         && id == &tid
-                            && *title != new_title {
-                                *title = new_title.clone();
-                                changed = true;
-                            }
+                        && *title != new_title
+                    {
+                        *title = new_title.clone();
+                        changed = true;
+                    }
                 }
             }
             for root in this.project_workspace_roots.values_mut() {
@@ -108,10 +108,11 @@ impl ConsoleDesktopApp {
                             ..
                         } = tab
                             && id == &tid
-                                && *title != new_title {
-                                    *title = new_title.clone();
-                                    changed = true;
-                                }
+                            && *title != new_title
+                        {
+                            *title = new_title.clone();
+                            changed = true;
+                        }
                     }
                 }
             }

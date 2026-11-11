@@ -61,7 +61,11 @@ impl Recorder {
                 device.build_input_stream(
                     &config.into(),
                     move |data: &[i16], _| {
-                        push_mono(&samples, data.iter().map(|&s| f32::from(s) / 32768.0), channels)
+                        push_mono(
+                            &samples,
+                            data.iter().map(|&s| f32::from(s) / 32768.0),
+                            channels,
+                        )
                     },
                     move |err| *error.lock().unwrap() = Some(err.to_string()),
                     None,
@@ -73,7 +77,11 @@ impl Recorder {
                 device.build_input_stream(
                     &config.into(),
                     move |data: &[u16], _| {
-                        push_mono(&samples, data.iter().map(|&s| f32::from(s) / 32768.0 - 1.0), channels)
+                        push_mono(
+                            &samples,
+                            data.iter().map(|&s| f32::from(s) / 32768.0 - 1.0),
+                            channels,
+                        )
                     },
                     move |err| *error.lock().unwrap() = Some(err.to_string()),
                     None,
@@ -110,11 +118,7 @@ impl Recorder {
 /// Downmix interleaved frames to mono in the capture callback. The callback
 /// runs on the capture thread, so this must stay allocation-free apart from
 /// the push.
-fn push_mono(
-    samples: &Arc<Mutex<Vec<f32>>>,
-    frames: impl Iterator<Item = f32>,
-    channels: u16,
-) {
+fn push_mono(samples: &Arc<Mutex<Vec<f32>>>, frames: impl Iterator<Item = f32>, channels: u16) {
     let channels = channels.max(1) as usize;
     let mut buf = samples.lock().unwrap();
     for (i, s) in frames.enumerate() {

@@ -1,12 +1,9 @@
-use gpui::{
-    App, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
-};
+use gpui::{App, ElementId, IntoElement, ParentElement, StatefulInteractiveElement, Window};
 use std::rc::Rc;
 
-use crate::primitives::{IconName, app_icon, draft_context_menu};
+use super::item_row::{row_container, status_slot, title_label};
+use crate::primitives::draft_context_menu;
 use crate::theme::Theme;
-use crate::utils::format_time_ago;
 
 #[derive(Clone, Debug)]
 pub struct DraftSummary {
@@ -40,90 +37,26 @@ pub fn render_sidebar_draft_item(
         }
     };
 
-    let folder_name = draft
-        .project_name
-        .clone()
-        .unwrap_or_else(|| "Workspace".to_string());
-
     let delete_key = draft
         .session_id
         .clone()
         .unwrap_or_else(|| "new_chat".to_string());
     let on_delete = on_delete_draft.clone();
 
-    let row = div()
-        .id(ElementId::Name(
+    let row = row_container(
+        ElementId::Name(
             format!(
                 "draft-row-{}",
                 draft.session_id.as_deref().unwrap_or("new-chat")
             )
             .into(),
-        ))
-        .w_full()
-        .h(px(55.0))
-        .px(px(8.0))
-        .py(px(6.0))
-        .rounded(px(8.0))
-        .cursor_default()
-        .group("sidebar-draft-card")
-        .when(is_active, |s| s.bg(theme.sidebar_item_background))
-        .when(!is_active, |s| {
-            s.hover(|h| h.bg(theme.sidebar_item_background))
-        })
-        .on_click(move |_, window, cx| on_click(window, cx))
-        .flex()
-        .flex_col()
-        .justify_between()
-        .child(
-            div()
-                .w_full()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_x(px(6.0))
-                .child(
-                    div().flex_1().min_w_0().child(
-                        div()
-                            .truncate()
-                            .text_size(px(13.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme.text)
-                            .child(draft.title.clone()),
-                    ),
-                ),
-        )
-        .child(
-            div()
-                .w_full()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_x(px(5.0))
-                .text_size(px(11.5))
-                .line_height(px(15.0))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .items_center()
-                        .gap_x(px(4.0))
-                        .child(app_icon(IconName::Folder, 11.0, theme.text_tertiary))
-                        .child(
-                            div()
-                                .flex_1()
-                                .truncate()
-                                .text_color(theme.text_tertiary)
-                                .child(folder_name),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex_none()
-                        .text_color(theme.text_ghost)
-                        .child(format_time_ago(draft.updated_at)),
-                ),
-        );
+        ),
+        is_active,
+        theme,
+    )
+    .on_click(move |_, window, cx| on_click(window, cx))
+    .child(status_slot())
+    .child(title_label(is_active, theme).child(draft.title.clone()));
 
     draft_context_menu(row, move |window, cx| {
         on_delete(delete_key.clone(), window, cx);

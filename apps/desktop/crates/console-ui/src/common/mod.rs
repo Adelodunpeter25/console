@@ -33,8 +33,8 @@ pub use autocomplete::{
     init as init_autocomplete_keybindings, slugify_chat_title,
 };
 pub use composer_pills::{ShellEntry, ShellsPill, SubagentsPill, TasksPill, composer_pills};
-pub use composer_view::{ComposerAnnotation, ComposerComment, ComposerView};
 pub(crate) use composer_view::plan_mode_stripes;
+pub use composer_view::{ComposerAnnotation, ComposerComment, ComposerView};
 pub use copy_button::{copy_button, copy_button_with_action};
 pub use error_banner::error_banner;
 pub use file_browser::FileBrowser;
@@ -46,9 +46,8 @@ pub(crate) use file_mention_chip::{InlineFileMention, InlineFileMentionText};
 /// surface's keys.
 pub use floating_composer::init as init_floating_composer_keybindings;
 pub use floating_composer::{
-    PendingPaste, resolve_pending_pastes,
     BranchChoice, FloatingComposerData, FloatingComposerState, FloatingComposerView,
-    FloatingSnapshot, FloatingSubmit,
+    FloatingSnapshot, FloatingSubmit, PendingPaste, resolve_pending_pastes,
 };
 pub use github_menu::github_menu_section;
 pub use global_search_panel::GlobalSearchPanel;

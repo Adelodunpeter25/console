@@ -5,8 +5,8 @@
 
 use console_core::{
     ApprovalMode, AskQuestionRequest, ConsoleClient, GitBranchInfo, ImageAttachment, Model,
-    ProjectInfo, ProviderCatalogEntry, QueuedPrompt, SelectedModel,
-    SessionHeader, ThinkingLevel, TodoItem, WorkspaceNode,
+    ProjectInfo, ProviderCatalogEntry, QueuedPrompt, SelectedModel, SessionHeader, ThinkingLevel,
+    TodoItem, WorkspaceNode,
 };
 use console_ui::markdown::render::TranscriptSelection;
 use console_ui::terminal::TerminalView;

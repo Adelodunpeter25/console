@@ -276,9 +276,11 @@ impl ToolCalls {
         cx: &mut App,
     ) -> Vec<EditorDiff> {
         if let Some((cached_args, cached)) = self.state.borrow().editor_diffs.get(call_id)
-            && cached_args == arguments && cached.len() == diffs.len() {
-                return cached.clone();
-            }
+            && cached_args == arguments
+            && cached.len() == diffs.len()
+        {
+            return cached.clone();
+        }
         let built: Vec<EditorDiff> = diffs
             .iter()
             .map(|file_diff| {
@@ -372,19 +374,23 @@ impl ToolCalls {
                             );
                         }
                     })
-                    .child(if let Some(path) = file_path.as_deref().filter(|_| entry.call.is_file_target()) {
-                        // File-targeting calls show the file's real type icon
-                        // (multicolor, like mobile) instead of the generic
-                        // monochrome tool glyph.
-                        file_type_icon(path, 13.0).into_any_element()
-                    } else {
-                        icon(
-                            activity_icon_for_call(&entry.call),
-                            13.0,
-                            theme.text_tertiary,
-                        )
-                        .into_any_element()
-                    })
+                    .child(
+                        if let Some(path) =
+                            file_path.as_deref().filter(|_| entry.call.is_file_target())
+                        {
+                            // File-targeting calls show the file's real type icon
+                            // (multicolor, like mobile) instead of the generic
+                            // monochrome tool glyph.
+                            file_type_icon(path, 13.0).into_any_element()
+                        } else {
+                            icon(
+                                activity_icon_for_call(&entry.call),
+                                13.0,
+                                theme.text_tertiary,
+                            )
+                            .into_any_element()
+                        },
+                    )
                     .child(
                         div()
                             .flex_none()

@@ -190,7 +190,11 @@ pub fn is_large_paste(text: &str) -> bool {
 pub fn thousands(n: usize) -> String {
     let raw = n.to_string();
     let mut out = String::with_capacity(raw.len() + raw.len() / 3);
-    let first = if raw.len().is_multiple_of(3) { 3 } else { raw.len() % 3 };
+    let first = if raw.len().is_multiple_of(3) {
+        3
+    } else {
+        raw.len() % 3
+    };
     let (head, rest) = raw.split_at(first);
     out.push_str(head);
     for chunk in rest.as_bytes().chunks(3) {
@@ -637,12 +641,7 @@ impl ComposerInput {
 
     /// Insert an accepted chat reference as an inline chip. The buffer keeps
     /// the plain `$slug` text, which is what the server parses.
-    pub fn insert_chat_mention(
-        &mut self,
-        range: Range<usize>,
-        slug: &str,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn insert_chat_mention(&mut self, range: Range<usize>, slug: &str, cx: &mut Context<Self>) {
         let chip = ComposerMention::chat(0..0, slug);
         self.insert_mention_chip(range, chip.label, chip.path, cx);
     }
@@ -696,7 +695,9 @@ impl ComposerInput {
         } else {
             "      "
         };
-        let insert_text = format!("{prefix}{label} ");
+        // The pill's wash overhangs the label on the right, so one trailing
+        // space leaves no visible gap before the next word; two do.
+        let insert_text = format!("{prefix}{label}  ");
         let lead = prefix.len();
         let mention_len = label.len();
         self.replace_range(range, &insert_text, cx);

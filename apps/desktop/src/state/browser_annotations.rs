@@ -10,10 +10,7 @@ use gpui::Context;
 use super::ConsoleDesktopApp;
 
 impl ConsoleDesktopApp {
-    pub(crate) fn annotations_for_pane(
-        &self,
-        pane_id: &str,
-    ) -> Rc<Vec<BrowserElementAnnotation>> {
+    pub(crate) fn annotations_for_pane(&self, pane_id: &str) -> Rc<Vec<BrowserElementAnnotation>> {
         self.browser_annotations
             .get(pane_id)
             .cloned()
@@ -50,19 +47,24 @@ impl ConsoleDesktopApp {
         }
     }
 
-    pub(crate) fn remove_annotation(&mut self, pane_id: &str, index: usize, cx: &mut Context<Self>) {
+    pub(crate) fn remove_annotation(
+        &mut self,
+        pane_id: &str,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(staged) = self.browser_annotations.get_mut(pane_id)
-            && index < staged.len() {
-                let removed = Rc::make_mut(staged).remove(index);
-                let _ = removed;
-                if staged.is_empty() {
-                    self.browser_annotations.remove(pane_id);
-                }
-                self.schedule_drafts_save(cx);
-                cx.notify();
+            && index < staged.len()
+        {
+            let removed = Rc::make_mut(staged).remove(index);
+            let _ = removed;
+            if staged.is_empty() {
+                self.browser_annotations.remove(pane_id);
             }
+            self.schedule_drafts_save(cx);
+            cx.notify();
+        }
     }
-
 
     /// Which pane currently shows `browser_id`, preferring the focused pane.
     /// Used to route an annotation from a workspace browser tab to the
@@ -71,20 +73,17 @@ impl ConsoleDesktopApp {
         let leaves = self.workspace_root.leaves();
         let hosts = |leaf: &&console_core::LeafPaneNode| {
             leaf.tabs.iter().any(|tab| match tab {
-                console_core::WorkspaceTabConfig::Browser {
-                    browser_id: id,
-                    ..
-                } => id == browser_id,
+                console_core::WorkspaceTabConfig::Browser { browser_id: id, .. } => {
+                    id == browser_id
+                }
                 _ => false,
             })
         };
         if let Some(active) = &self.active_pane_id
-            && leaves
-                .iter()
-                .any(|leaf| &leaf.id == active && hosts(leaf))
-            {
-                return Some(active.clone());
-            }
+            && leaves.iter().any(|leaf| &leaf.id == active && hosts(leaf))
+        {
+            return Some(active.clone());
+        }
         leaves
             .iter()
             .find(|leaf| hosts(leaf))

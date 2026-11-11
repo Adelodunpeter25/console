@@ -149,8 +149,7 @@ pub struct CroppedSnapshot {
     pub full_png: Vec<u8>,
 }
 
-pub type CroppedSlot =
-    std::sync::Arc<std::sync::Mutex<Option<Result<CroppedSnapshot, String>>>>;
+pub type CroppedSlot = std::sync::Arc<std::sync::Mutex<Option<Result<CroppedSnapshot, String>>>>;
 
 #[cfg(target_os = "macos")]
 mod macos_host {
@@ -441,10 +440,7 @@ mod macos_host {
 
         /// Capture the visible page as PNG. The completion handler fires on
         /// the main thread and writes into `slot`, which the caller polls.
-        pub fn take_snapshot(
-            &self,
-            slot: super::SnapshotSlot,
-        ) {
+        pub fn take_snapshot(&self, slot: super::SnapshotSlot) {
             use block2::RcBlock;
             use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
             use objc2_foundation::{NSDictionary, NSError};
@@ -492,11 +488,7 @@ mod macos_host {
         /// origin, so no Y-flip applies here. Falls back to the full PNG
         /// on any error or an empty rect. `setRect:` native cropping was
         /// removed earlier (selector crash + point-vs-pixel offset).
-        pub fn take_snapshot_cropped(
-            &self,
-            rect: (f64, f64, f64, f64),
-            slot: super::CroppedSlot,
-        ) {
+        pub fn take_snapshot_cropped(&self, rect: (f64, f64, f64, f64), slot: super::CroppedSlot) {
             use block2::RcBlock;
             use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
             use objc2_foundation::{NSDictionary, NSError};
@@ -542,12 +534,23 @@ mod macos_host {
                                     };
                                     let cx0 = (x * scale).round().clamp(0.0, pw as f64) as u32;
                                     let cy0 = (y * scale).round().clamp(0.0, ph as f64) as u32;
-                                    let cw = (w * scale).round().max(1.0).min((pw.saturating_sub(cx0)) as f64) as u32;
-                                    let ch = (h * scale).round().max(1.0).min((ph.saturating_sub(cy0)) as f64) as u32;
+                                    let cw = (w * scale)
+                                        .round()
+                                        .max(1.0)
+                                        .min((pw.saturating_sub(cx0)) as f64)
+                                        as u32;
+                                    let ch = (h * scale)
+                                        .round()
+                                        .max(1.0)
+                                        .min((ph.saturating_sub(cy0)) as f64)
+                                        as u32;
                                     if cw > 0 && ch > 0 {
                                         let cropped = img.crop_imm(cx0, cy0, cw, ch);
                                         let mut buf = Vec::new();
-                                        match cropped.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png) {
+                                        match cropped.write_to(
+                                            &mut std::io::Cursor::new(&mut buf),
+                                            image::ImageFormat::Png,
+                                        ) {
                                             Ok(()) => buf,
                                             Err(_) => full_png,
                                         }
@@ -788,9 +791,8 @@ pub fn download_destination(
     suggested: std::path::PathBuf,
     base_dir: Option<std::path::PathBuf>,
 ) -> Option<std::path::PathBuf> {
-    let base = base_dir.or_else(|| {
-        console_shared::path::home_dir().map(|h| h.join("Downloads"))
-    })?;
+    let base =
+        base_dir.or_else(|| console_shared::path::home_dir().map(|h| h.join("Downloads")))?;
 
     let name = suggested
         .file_name()

@@ -328,11 +328,12 @@ pub fn build_tree_from_entries(entries: &[FsTreeEntry]) -> Vec<FileTreeNode> {
     ) -> FileTreeNode {
         let mut children = Vec::new();
         if entry.is_dir
-            && let Some(child_entries) = children_by_parent.get(&entry.path) {
-                for child in child_entries {
-                    children.push(assemble(child.clone(), children_by_parent));
-                }
+            && let Some(child_entries) = children_by_parent.get(&entry.path)
+        {
+            for child in child_entries {
+                children.push(assemble(child.clone(), children_by_parent));
             }
+        }
         FileTreeNode {
             name: entry.name,
             path: entry.path,

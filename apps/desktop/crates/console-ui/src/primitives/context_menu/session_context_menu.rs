@@ -63,14 +63,13 @@ where
                     .on_click(move |_, window, cx| on_rename(window, cx)),
             )
             .item(
-                entry(settle_label, settle_icon, false)
-                    .on_click(move |_, window, cx| {
-                        if settled {
-                            on_unsettle(window, cx)
-                        } else {
-                            on_settle(window, cx)
-                        }
-                    }),
+                entry(settle_label, settle_icon, false).on_click(move |_, window, cx| {
+                    if settled {
+                        on_unsettle(window, cx)
+                    } else {
+                        on_settle(window, cx)
+                    }
+                }),
             )
             .separator()
             .item(

@@ -364,3 +364,36 @@ fn test_settings_tabs_are_dropped_from_a_restored_workspace() {
     // The chat is the active tab again, not the settings that were.
     assert_eq!(leaves[0].active_tab_id.as_deref(), Some("chat:session-123"));
 }
+
+#[test]
+fn test_workspace_is_empty_only_when_every_pane_is_empty() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    assert!(ops::is_workspace_empty(&root));
+
+    let right = ops::split_pane(
+        &mut root,
+        "pane-main",
+        console_core::SplitDirection::Vertical,
+    )
+    .expect("split");
+    assert!(
+        ops::is_workspace_empty(&root),
+        "two empty panes are still an empty workspace"
+    );
+
+    let chat = WorkspaceTabConfig::Chat {
+        session_id: "session-1".into(),
+        title: "Chat".into(),
+        provider: None,
+        project_id: Some("proj-a".into()),
+        last_active_at_ms: None,
+    };
+    ops::open_tab(&mut root, &right, chat);
+    assert!(
+        !ops::is_workspace_empty(&root),
+        "a tab in the second pane keeps the workspace non-empty"
+    );
+
+    ops::close_tab(&mut root, &right, "chat:session-1");
+    assert!(ops::is_workspace_empty(&root));
+}

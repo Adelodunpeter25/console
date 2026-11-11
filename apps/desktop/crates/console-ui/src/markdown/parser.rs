@@ -845,12 +845,12 @@ fn push_file_path_segment(text: &str, style: &InlineStyle, pieces: &mut Vec<Inli
 fn is_bare_file_path_match(text: &str, start: usize, matched: &str) -> bool {
     if (matched.starts_with('/') || matched.starts_with("~/") || matched.starts_with('.'))
         && start > 0
-            && let Some(prev) = text[..start].chars().next_back()
-                && !prev.is_whitespace()
-                    && !matches!(prev, '(' | '[' | '{' | '<' | '"' | '\'' | '`')
-                {
-                    return false;
-                }
+        && let Some(prev) = text[..start].chars().next_back()
+        && !prev.is_whitespace()
+        && !matches!(prev, '(' | '[' | '{' | '<' | '"' | '\'' | '`')
+    {
+        return false;
+    }
     super::file_links::is_file_link(matched)
 }
 

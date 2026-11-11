@@ -163,7 +163,11 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         let key = session_id.unwrap_or("new_chat").to_string();
-        if text.trim().is_empty() && context_files.is_empty() && attachments.is_empty() && annotations.is_empty() {
+        if text.trim().is_empty()
+            && context_files.is_empty()
+            && attachments.is_empty()
+            && annotations.is_empty()
+        {
             if self.drafts.remove(&key).is_some() {
                 self.schedule_drafts_save(cx);
             }

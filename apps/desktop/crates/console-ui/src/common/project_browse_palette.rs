@@ -154,12 +154,13 @@ impl Render for ProjectBrowsePalette {
 fn short_path(path: &str) -> String {
     if let Some(home) =
         console_shared::path::home_dir().and_then(|h| h.into_os_string().into_string().ok())
-        && let Some(rest) = path.strip_prefix(&home) {
-            if rest.is_empty() {
-                return "~".into();
-            }
-            return format!("~{rest}");
+        && let Some(rest) = path.strip_prefix(&home)
+    {
+        if rest.is_empty() {
+            return "~".into();
         }
+        return format!("~{rest}");
+    }
     path.to_string()
 }
 

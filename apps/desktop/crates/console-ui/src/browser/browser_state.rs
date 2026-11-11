@@ -157,7 +157,9 @@ pub mod cookies {
                         cookie_obj.path(),
                         cookie_obj.isSecure(),
                         cookie_obj.isHTTPOnly(),
-                        cookie_obj.expiresDate().map(|d| d.timeIntervalSince1970() as i64),
+                        cookie_obj
+                            .expiresDate()
+                            .map(|d| d.timeIntervalSince1970() as i64),
                     );
                 }
                 let name = cookie.name.clone();
@@ -191,8 +193,8 @@ pub mod cookies {
     /// split shows which survived.
     pub fn log_cookie_jar() {
         use block2::RcBlock;
-        use std::ptr::NonNull;
         use objc2_foundation::NSArray;
+        use std::ptr::NonNull;
 
         let Some(mtm) = MainThreadMarker::new() else {
             return;
@@ -208,9 +210,15 @@ pub mod cookies {
                 }
                 let mut top: Vec<(String, usize)> = by_domain.into_iter().collect();
                 top.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-                let top: Vec<String> =
-                    top.iter().take(8).map(|(d, n)| format!("{d}x{n}")).collect();
-                log::info!("chrome cookies: jar holds {total} cookies; top: {}", top.join(", "));
+                let top: Vec<String> = top
+                    .iter()
+                    .take(8)
+                    .map(|(d, n)| format!("{d}x{n}"))
+                    .collect();
+                log::info!(
+                    "chrome cookies: jar holds {total} cookies; top: {}",
+                    top.join(", ")
+                );
             });
             store.getAllCookies(&read);
         }
@@ -237,7 +245,11 @@ pub mod cookies {
         let name = NSString::from_str(&cookie.name);
         let value = NSString::from_str(&cookie.value);
         let domain = NSString::from_str(&cookie.domain);
-        let path = NSString::from_str(if cookie.path.is_empty() { "/" } else { cookie.path.as_str() });
+        let path = NSString::from_str(if cookie.path.is_empty() {
+            "/"
+        } else {
+            cookie.path.as_str()
+        });
         let mut objects: Vec<Retained<AnyObject>> = vec![
             // SAFETY: NSString/NSDate widen to AnyObject, no data moved.
             unsafe { into_any(name.clone()) },
@@ -274,5 +286,4 @@ pub mod cookies {
     unsafe fn into_any<T: objc2::ClassType>(value: Retained<T>) -> Retained<AnyObject> {
         unsafe { Retained::cast_unchecked::<AnyObject>(value) }
     }
-
 }

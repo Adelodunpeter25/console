@@ -13,6 +13,10 @@ use super::ConsoleDesktopApp;
 pub struct BannerError {
     pub message: String,
     pub(crate) generation: u64,
+    /// The error only holds while the pane has no project ("Select a project
+    /// first"). It stops showing the moment one is selected instead of waiting
+    /// out the auto-dismiss timer.
+    pub(crate) needs_project: bool,
 }
 
 impl ConsoleDesktopApp {
@@ -20,10 +24,25 @@ impl ConsoleDesktopApp {
     /// actions — anything not tied to one chat). It renders in every pane and
     /// auto-dismisses after five seconds.
     pub fn set_error(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
+        self.set_app_error(message.into(), false, cx);
+    }
+
+    /// An app-level error that is only true while no project is selected, such
+    /// as opening a terminal without one.
+    pub(crate) fn set_project_required_error(
+        &mut self,
+        message: impl Into<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_app_error(message.into(), true, cx);
+    }
+
+    fn set_app_error(&mut self, message: String, needs_project: bool, cx: &mut Context<Self>) {
         self.error_generation = self.error_generation.wrapping_add(1);
         self.error_message = Some(BannerError {
-            message: message.into(),
+            message,
             generation: self.error_generation,
+            needs_project,
         });
         self.schedule_dismissal(None, self.error_generation, cx);
         cx.notify();
@@ -45,6 +64,7 @@ impl ConsoleDesktopApp {
             BannerError {
                 message: message.into(),
                 generation: self.error_generation,
+                needs_project: false,
             },
         );
         self.schedule_dismissal(Some(session_id.to_string()), self.error_generation, cx);
@@ -103,7 +123,11 @@ impl ConsoleDesktopApp {
     pub(crate) fn error_for_pane(&self, pane_id: &str) -> Option<&BannerError> {
         self.active_session_for_pane(pane_id)
             .and_then(|session_id| self.session_errors.get(&session_id))
-            .or(self.error_message.as_ref())
+            .or_else(|| {
+                self.error_message.as_ref().filter(|error| {
+                    !(error.needs_project && self.pane_project_id(pane_id).is_some())
+                })
+            })
     }
 
     pub(crate) fn clear_error_for_session(&mut self, session_id: &str, cx: &mut Context<Self>) {
@@ -116,10 +140,11 @@ impl ConsoleDesktopApp {
     /// Clear whichever banner `pane_id` is currently showing.
     pub(crate) fn clear_error_for_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
         if let Some(session_id) = self.active_session_for_pane(pane_id)
-            && self.session_errors.contains_key(&session_id) {
-                self.clear_error_for_session(&session_id, cx);
-                return;
-            }
+            && self.session_errors.contains_key(&session_id)
+        {
+            self.clear_error_for_session(&session_id, cx);
+            return;
+        }
         self.clear_error(cx);
     }
 

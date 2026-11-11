@@ -162,12 +162,20 @@ pub fn parse_pairing_url(raw: &str) -> Result<PairingUrl, String> {
             return Err("That pairing URL has an invalid iroh node id.".to_string());
         }
     } else if scheme != "http" && scheme != "https" {
-        return Err("A pairing URL must start with http://, https:// or console-iroh://.".to_string());
+        return Err(
+            "A pairing URL must start with http://, https:// or console-iroh://.".to_string(),
+        );
     }
     // The path ends in /console/pair; what precedes it is where the server
     // lives (a relay's /<name>), and is kept.
     let host = address_of(&authority);
-    if authority.split('/').next().unwrap_or_default().trim().is_empty() {
+    if authority
+        .split('/')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .is_empty()
+    {
         return Err("A pairing URL must name a server.".to_string());
     }
 

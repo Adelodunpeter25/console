@@ -81,7 +81,10 @@ pub fn storage_directory() -> PathBuf {
 
     #[cfg(target_os = "macos")]
     if let Some(home) = home_dir() {
-        return home.join("Library").join("Application Support").join(folder);
+        return home
+            .join("Library")
+            .join("Application Support")
+            .join(folder);
     }
 
     #[cfg(target_os = "windows")]
@@ -105,11 +108,7 @@ pub fn storage_directory() -> PathBuf {
 /// and prod stop sharing one file and Linux stops getting `~/Library/Logs`.
 pub fn log_directory() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
-    return home_dir().map(|home| {
-        home.join("Library")
-            .join("Logs")
-            .join(app_folder_name())
-    });
+    return home_dir().map(|home| home.join("Library").join("Logs").join(app_folder_name()));
 
     #[cfg(target_os = "windows")]
     return std::env::var_os("LOCALAPPDATA")

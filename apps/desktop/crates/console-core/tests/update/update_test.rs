@@ -10,8 +10,14 @@ fn only_a_strictly_higher_build_is_an_update() {
 
 #[test]
 fn asset_matches_the_published_zips() {
-    assert_eq!(asset_name("macos", "aarch64"), Some("Console-macos-arm64.zip"));
+    assert_eq!(
+        asset_name("macos", "aarch64"),
+        Some("Console-macos-arm64.zip")
+    );
     assert_eq!(asset_name("macos", "x86_64"), Some("Console-macos-x64.zip"));
-    assert_eq!(asset_name("windows", "x86_64"), Some("Console-windows-x64.zip"));
+    assert_eq!(
+        asset_name("windows", "x86_64"),
+        Some("Console-windows-x64.zip")
+    );
     assert_eq!(asset_name("linux", "x86_64"), None);
 }

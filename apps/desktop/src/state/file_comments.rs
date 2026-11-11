@@ -9,9 +9,7 @@
 //! composer's input.
 
 use console_ui::input::ComposerEvent;
-use console_ui::{
-    ComposerComment, FileCommentCard, FileCommentCardState, FileCommentOverlay,
-};
+use console_ui::{ComposerComment, FileCommentCard, FileCommentCardState, FileCommentOverlay};
 use gpui::{App, AppContext as _, Context, Window};
 use std::rc::Rc;
 
@@ -36,9 +34,7 @@ impl ConsoleDesktopApp {
                     };
                     let _ = handle.update(cx, |_, window, cx| {
                         if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.open_file_comment(request, window, cx)
-                            });
+                            app.update(cx, |this, cx| this.open_file_comment(request, window, cx));
                         }
                     });
                 });
@@ -59,9 +55,9 @@ impl ConsoleDesktopApp {
             && leaves
                 .iter()
                 .any(|leaf| &leaf.id == active && shows_path(leaf))
-            {
-                return active.clone();
-            }
+        {
+            return active.clone();
+        }
         leaves
             .iter()
             .find(|leaf| shows_path(leaf))
@@ -123,22 +119,22 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) -> (gpui::Entity<console_ui::ComposerInput>, gpui::Subscription) {
         let input = cx.new(|cx| {
-            console_ui::ComposerInput::new(window, cx)
-                .placeholder("Add a comment for the AI...")
+            console_ui::ComposerInput::new(window, cx).placeholder("Add a comment for the AI...")
         });
         let submit_pane = pane_id.to_string();
-        let subscription = cx.subscribe(
-            &input,
-            move |this, _input, event: &ComposerEvent, cx| match event {
-                // `submit()` clears the field right after emitting, and the event
-                // is delivered after that, so the text must come from the event.
-                ComposerEvent::Submit(text, _) => {
-                    this.commit_file_comment_text(&submit_pane, id, text.clone(), cx)
-                }
-                ComposerEvent::Edited | ComposerEvent::Focus => cx.notify(),
-                _ => {}
-            },
-        );
+        let subscription =
+            cx.subscribe(
+                &input,
+                move |this, _input, event: &ComposerEvent, cx| match event {
+                    // `submit()` clears the field right after emitting, and the event
+                    // is delivered after that, so the text must come from the event.
+                    ComposerEvent::Submit(text, _) => {
+                        this.commit_file_comment_text(&submit_pane, id, text.clone(), cx)
+                    }
+                    ComposerEvent::Edited | ComposerEvent::Focus => cx.notify(),
+                    _ => {}
+                },
+            );
         (input, subscription)
     }
 
@@ -195,9 +191,10 @@ impl ConsoleDesktopApp {
 
         self.sync_comment_selections(&pane_id, &request.path, cx);
         if let Some((_, old_path)) = stale_draft
-            && old_path != request.path {
-                self.sync_comment_selections(&pane_id, &old_path, cx);
-            }
+            && old_path != request.path
+        {
+            self.sync_comment_selections(&pane_id, &old_path, cx);
+        }
         cx.notify();
     }
 
@@ -288,16 +285,12 @@ impl ConsoleDesktopApp {
         comment_id: u64,
         cx: &mut Context<Self>,
     ) {
-        let Some(path) = self
-            .workspace_pane_states
-            .get(pane_id)
-            .and_then(|pane| {
-                pane.file_comments
-                    .iter()
-                    .find(|comment| comment.id == comment_id)
-                    .map(|comment| comment.path.clone())
-            })
-        else {
+        let Some(path) = self.workspace_pane_states.get(pane_id).and_then(|pane| {
+            pane.file_comments
+                .iter()
+                .find(|comment| comment.id == comment_id)
+                .map(|comment| comment.path.clone())
+        }) else {
             return;
         };
         // A chip in the chat composer has no inline card to focus; bring the
@@ -353,7 +346,12 @@ impl ConsoleDesktopApp {
     /// Mirror the pane's comment ranges into the editor's persistent
     /// highlight. The editor also records the range on mouse-up; this keeps
     /// cancel/remove and reopened tabs in sync.
-    pub(super) fn sync_comment_selections(&mut self, pane_id: &str, path: &str, cx: &mut Context<Self>) {
+    pub(super) fn sync_comment_selections(
+        &mut self,
+        pane_id: &str,
+        path: &str,
+        cx: &mut Context<Self>,
+    ) {
         let ranges = self
             .workspace_pane_states
             .get(pane_id)
@@ -393,9 +391,9 @@ impl ConsoleDesktopApp {
             }
             let path = self.comment_display_path(pane_id, &comment.path);
             let lines = Self::comment_lines(comment.start_line, comment.end_line);
-            blocks.push(console_shared::composer::file_comments::format_file_comment(
-                &path, &lines, text,
-            ));
+            blocks.push(
+                console_shared::composer::file_comments::format_file_comment(&path, &lines, text),
+            );
         }
         blocks.join("\n\n")
     }
@@ -528,9 +526,7 @@ impl ConsoleDesktopApp {
                 let pane_id = pane_id.to_string();
                 move |_window: &mut Window, cx: &mut App| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.commit_file_comment(&pane_id, id, cx)
-                        });
+                        app.update(cx, |this, cx| this.commit_file_comment(&pane_id, id, cx));
                     }
                 }
             };
@@ -539,9 +535,7 @@ impl ConsoleDesktopApp {
                 let pane_id = pane_id.to_string();
                 move |_window: &mut Window, cx: &mut App| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.cancel_file_comment(&pane_id, id, cx)
-                        });
+                        app.update(cx, |this, cx| this.cancel_file_comment(&pane_id, id, cx));
                     }
                 }
             };
@@ -559,9 +553,7 @@ impl ConsoleDesktopApp {
                 let pane_id = pane_id.to_string();
                 move |_window: &mut Window, cx: &mut App| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.remove_file_comment(&pane_id, id, cx)
-                        });
+                        app.update(cx, |this, cx| this.remove_file_comment(&pane_id, id, cx));
                     }
                 }
             };

@@ -222,9 +222,10 @@ impl DeviceViewer {
                         match result {
                             Ok(devices) => {
                                 if let Some(selected) = &this.selected_id
-                                    && !devices.iter().any(|d| &d.id == selected) {
-                                        this.selected_id = None;
-                                    }
+                                    && !devices.iter().any(|d| &d.id == selected)
+                                {
+                                    this.selected_id = None;
+                                }
                                 this.devices = Rc::new(devices);
                                 if this.selected_id.is_some() {
                                     this.start_selected_stream(cx);
@@ -368,20 +369,21 @@ impl DeviceViewer {
 
     fn player_event(&mut self, body: String, cx: &mut Context<Self>) {
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body)
-            && value.get("type").and_then(|t| t.as_str()) == Some("status") {
-                let status = value
-                    .get("status")
-                    .and_then(|s| s.as_str())
-                    .map(|s| s.to_string());
-                // Any post-start status proves the start script executed
-                // ("ready" is the page's own boot report), so the retry
-                // loop can stop.
-                if status.as_deref().is_some_and(|s| s != "ready") {
-                    self.start_reported = Some(self.start_generation);
-                }
-                self.stream_status = status;
-                cx.notify();
+            && value.get("type").and_then(|t| t.as_str()) == Some("status")
+        {
+            let status = value
+                .get("status")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+            // Any post-start status proves the start script executed
+            // ("ready" is the page's own boot report), so the retry
+            // loop can stop.
+            if status.as_deref().is_some_and(|s| s != "ready") {
+                self.start_reported = Some(self.start_generation);
             }
+            self.stream_status = status;
+            cx.notify();
+        }
     }
 
     fn send_action(&mut self, action: &str, cx: &mut Context<Self>) {
@@ -389,11 +391,13 @@ impl DeviceViewer {
             return;
         };
         // Hardware buttons ride the live stream socket when it is up.
-        if action != "appearance" && self.stream_status.as_deref() == Some("streaming")
-            && let Some(host) = self.host.clone() {
-                host.evaluate_script(&PlayerConfig::button_script(&action.replace('_', "-")));
-                return;
-            }
+        if action != "appearance"
+            && self.stream_status.as_deref() == Some("streaming")
+            && let Some(host) = self.host.clone()
+        {
+            host.evaluate_script(&PlayerConfig::button_script(&action.replace('_', "-")));
+            return;
+        }
         let client = self.client.clone();
         let view = cx.entity().downgrade();
         let platform = device_platform(&device).as_str().to_string();
@@ -505,9 +509,10 @@ impl DeviceViewer {
                         });
                         let finished = target.is_none() || booted.is_some();
                         if let Some(device) = booted
-                            && this.selected_id == target {
-                                this.selected_id = Some(device.id.clone());
-                            }
+                            && this.selected_id == target
+                        {
+                            this.selected_id = Some(device.id.clone());
+                        }
                         this.devices = Rc::new(devices);
                         if finished {
                             this.booting_id = None;

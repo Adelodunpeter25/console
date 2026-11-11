@@ -1,17 +1,17 @@
 use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
 use gpui::{
-    App, AppContext, ElementId, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, actions, div,
-    prelude::FluentBuilder, px,
+    App, AppContext, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window, actions, div, prelude::FluentBuilder, px,
 };
 use std::rc::Rc;
 
+use super::item_row::{draft_badge, row_container, status_slot, title_label};
 use crate::input::ComposerInput;
 use crate::layout::sidebar_loading::{self as sidebar, SidebarLoadingState};
+use crate::primitives::motion;
 use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon, session_context_menu};
 use crate::theme::Theme;
-use crate::utils::format_time_ago;
 use crate::workspace::{WorkspaceDrag, WorkspaceDragPreview};
 
 actions!(
@@ -63,6 +63,7 @@ pub struct SidebarSessionItem {
     session: SessionHeader,
     /// The project this session belongs to, when the app knows it. Falls back
     /// to the session's working-directory name in the UI.
+    #[allow(dead_code)]
     project_name: Option<String>,
     is_active: bool,
     loading_state: Option<SidebarLoadingState>,
@@ -140,14 +141,6 @@ impl RenderOnce for SidebarSessionItem {
         let is_renaming = self.is_renaming;
         let rename_input = self.rename_input;
 
-        let folder_name = if self.session.project_id.is_none() {
-            "General".to_string()
-        } else {
-            self.project_name
-                .clone()
-                .unwrap_or_else(|| crate::utils::format_folder_display_name(&session.cwd))
-        };
-
         let title_pending = sidebar::title_is_pending(session, loading_state);
         let display_title = if title_pending {
             "Generating title…".to_string()
@@ -166,18 +159,50 @@ impl RenderOnce for SidebarSessionItem {
         );
 
         let group_name = format!("sidebar-session-{}", session.id);
-        // The hover button settles an active chat and un-settles a settled
-        // one; delete lives in the context menu only.
-        let toggle_settle_action = if settled {
-            self.on_unsettle.clone()
-        } else {
-            self.on_settle.clone()
+        let is_running = matches!(loading_state, Some(SidebarLoadingState::Working { .. }))
+            || session.status == "working"
+            || session.status == "running";
+        let needs_attention = matches!(loading_state, Some(SidebarLoadingState::Waiting))
+            || session.status == "needs_attention"
+            || session.status == "waiting";
+        let is_done = session.status == "done" || session.status == "completed";
+
+        // Colour marks status only on the focused row; the rest go monochrome so
+        // the list stays calm and the selected chat stands out.
+        let tint = |colored| {
+            if is_active {
+                colored
+            } else {
+                theme.text_tertiary
+            }
         };
-        let (settle_icon, settle_tooltip) = if settled {
-            (IconName::ArrowUp, settle_tooltip_label(true))
+        let status_id = || ElementId::Name(format!("status-{}", session.id).into());
+        let status_indicator = if is_running {
+            status_slot()
+                .id(status_id())
+                .tooltip(Tooltip::text("Running"))
+                .child(motion::spin_slow(app_icon(
+                    IconName::LoaderCircle,
+                    15.0,
+                    tint(theme.accent),
+                )))
+                .into_any_element()
+        } else if needs_attention {
+            status_slot()
+                .id(status_id())
+                .tooltip(Tooltip::text("Needs attention"))
+                .child(app_icon(IconName::Alert, 15.0, tint(theme.warning)))
+                .into_any_element()
+        } else if is_done {
+            status_slot()
+                .id(status_id())
+                .tooltip(Tooltip::text("Done"))
+                .child(app_icon(IconName::CircleCheck, 15.0, tint(theme.success)))
+                .into_any_element()
         } else {
-            (IconName::Check, settle_tooltip_label(false))
+            status_slot().into_any_element()
         };
+
         let title = if let Some(rename_input) = rename_input {
             let on_commit = on_commit_rename.clone();
             let on_cancel = on_cancel_rename.clone();
@@ -210,52 +235,19 @@ impl RenderOnce for SidebarSessionItem {
                 .child(rename_input)
                 .into_any_element()
         } else {
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_size(px(13.5))
-                .font_weight(if is_active {
-                    FontWeight::SEMIBOLD
-                } else {
-                    FontWeight::MEDIUM
-                })
+            title_label(is_active, theme)
                 .when(title_pending, |s| {
                     s.italic().text_color(theme.text_tertiary)
-                })
-                .when(!title_pending, |s| {
-                    s.text_color(if is_active {
-                        theme.text
-                    } else {
-                        theme.text_secondary
-                    })
                 })
                 .child(display_title.clone())
                 .into_any_element()
         };
 
-        let row = div()
-            .id(ElementId::Name(session.id.clone().into()))
-            .relative()
-            .w_full()
-            .min_w_0()
-            .h(px(53.0))
-            .px(px(12.0))
-            .py(px(7.0))
-            .rounded(px(7.0))
-            .cursor_default()
+        let row = row_container(ElementId::Name(session.id.clone().into()), is_active, theme)
             .on_drag(drag, |drag, _, _, cx| {
                 cx.new(|_| WorkspaceDragPreview::new(drag.tab.title()))
             })
-            .flex()
-            .flex_col()
-            .gap_y(px(6.0))
-            .justify_between()
-            .group(group_name.clone())
-            .when(is_active, |s| s.bg(theme.sidebar_item_background))
-            .when(!is_active, |s| {
-                s.hover(|h| h.bg(theme.sidebar_item_background))
-            })
+            .group(group_name)
             // Settled chats read as archived: slightly dimmed everywhere.
             .when(settled, |s| s.opacity(0.7))
             .when(!is_renaming, |element| {
@@ -263,112 +255,16 @@ impl RenderOnce for SidebarSessionItem {
                     (on_click)(w, cx);
                 })
             })
-            // Top Row: Title + Status Icon + Hover Delete
             .child(
                 div()
-                    .w_full()
+                    .flex_1()
+                    .min_w_0()
                     .flex()
                     .items_center()
-                    .justify_between()
                     .gap_x(px(6.0))
-                    .overflow_hidden()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .items_center()
-                            .gap_x(px(6.0))
-                            .child(title)
-                            .when(self.has_draft, |el| {
-                                el.child(
-                                    div()
-                                        .flex_none()
-                                        .px(px(4.0))
-                                        .py(px(0.5))
-                                        .rounded(px(3.0))
-                                        .bg(theme.accent.opacity(0.15))
-                                        .text_color(theme.accent)
-                                        .text_size(px(10.0))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .child("Draft"),
-                                )
-                            })
-                            .when_some(
-                                loading_state
-                                    .and_then(|state| sidebar::status_indicator(state, theme)),
-                                |el, indicator| el.child(indicator),
-                            ),
-                    )
-                    // Settle/Unsettle Button: hidden until hover, then
-                    // reveals on the right side of the card. Replaces the
-                    // old hover delete; Delete lives in the context menu.
-                    .child(
-                        div()
-                            .id(ElementId::Name(format!("settle-{}", session.id).into()))
-                            .p(px(4.0))
-                            .rounded(px(5.0))
-                            .cursor_default()
-                            .invisible()
-                            .group_hover(group_name.clone(), |el| el.visible())
-                            .hover(|s| s.bg(theme.overlay))
-                            .tooltip(Tooltip::text(settle_tooltip))
-                            .on_click(move |_, w, cx| {
-                                cx.stop_propagation();
-                                (toggle_settle_action)(w, cx);
-                            })
-                            .child(app_icon(settle_icon, 14.0, theme.text)),
-                    ),
-            )
-            // Bottom Row: Folder icon + Working Dir Name + Time
-            .child(
-                div()
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_x(px(5.0))
-                    .text_size(px(11.5))
-                    .line_height(px(15.0))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .items_center()
-                            .gap_x(px(4.0))
-                            .child(app_icon(IconName::Folder, 11.0, theme.text_tertiary))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .truncate()
-                                    .text_color(theme.text_tertiary)
-                                    .child(folder_name),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_color(if loading_state.is_some() {
-                                theme.text_tertiary
-                            } else {
-                                theme.text_ghost
-                            })
-                            .child(
-                                loading_state
-                                    .and_then(|state| {
-                                        sidebar::working_label(
-                                            state,
-                                            chrono::Utc::now().timestamp(),
-                                        )
-                                    })
-                                    .unwrap_or_else(|| {
-                                        SharedString::from(format_time_ago(
-                                            session.sort_timestamp(),
-                                        ))
-                                    }),
-                            ),
-                    ),
+                    .child(status_indicator)
+                    .child(title)
+                    .when(self.has_draft, |el| el.child(draft_badge(theme))),
             );
 
         if is_renaming {

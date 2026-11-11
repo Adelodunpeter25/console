@@ -9,8 +9,8 @@ use gpui::{
 };
 
 use crate::primitives::file_icon;
-use crate::primitives::tooltip::Tooltip;
 use crate::primitives::file_icons::file_icon_for_name;
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon, provider_app_icon};
 use crate::theme::{TABBAR_HEIGHT, Theme};
 

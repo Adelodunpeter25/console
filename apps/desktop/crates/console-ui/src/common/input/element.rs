@@ -7,7 +7,9 @@ use gpui::{
 
 use super::text_runs::{SearchPaint, input_text_runs};
 use super::{ComposerInput, FieldMode};
-use crate::common::file_mention_chip::{FILE_MENTION_RADIUS, file_mention_colors};
+use crate::common::file_mention_chip::{
+    FILE_MENTION_ICON_Y_NUDGE, FILE_MENTION_RADIUS, file_mention_colors,
+};
 use crate::theme::Theme;
 
 pub(crate) fn visual_row_count(layout: &TextLayout) -> usize {
@@ -499,7 +501,9 @@ impl Element for InputElement {
             if let Some(first_rect) = rects.first() {
                 let icon_origin = point(
                     first_rect.origin.x - extra_left + px(2.0),
-                    first_rect.origin.y + (first_rect.size.height - icon_size) / 2.0,
+                    first_rect.origin.y
+                        + (first_rect.size.height - icon_size) / 2.0
+                        + px(FILE_MENTION_ICON_Y_NUDGE),
                 );
                 let child_origin = window.layout_bounds(mention_icon._layout_id).origin;
                 let offset = icon_origin - child_origin;

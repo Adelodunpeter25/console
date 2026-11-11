@@ -1,5 +1,6 @@
 pub mod draft_item;
 pub mod group_header;
+mod item_row;
 pub mod session_item;
 
 pub use draft_item::{DraftSummary, render_sidebar_draft_item};
@@ -294,7 +295,9 @@ impl RenderOnce for SidebarView {
         let is_pinned = |index: usize| sessions[index].pinned_at.is_some();
         let pinned_positions: Vec<usize> = (0..sessions.len())
             .filter(|&idx| {
-                is_pinned(idx) && !draft_sessions.contains(&sessions[idx].id) && active.contains(&idx)
+                is_pinned(idx)
+                    && !draft_sessions.contains(&sessions[idx].id)
+                    && active.contains(&idx)
             })
             .collect();
         let grouped: Vec<(SessionDateGroup, Vec<usize>)> =
@@ -577,9 +580,10 @@ impl RenderOnce for SidebarView {
             } else {
                 let mut sections_iter = sections.into_iter();
                 if let Some((group, positions)) = sections_iter.next()
-                    && !collapsed_groups.contains(&group) {
-                        list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                    }
+                    && !collapsed_groups.contains(&group)
+                {
+                    list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                }
                 for (group, positions) in sections_iter {
                     let collapsed = collapsed_groups.contains(&group);
                     list_rows.push(SidebarRow::GroupHeader { group, collapsed });
@@ -601,12 +605,11 @@ impl RenderOnce for SidebarView {
                     }
                 }
             }
-        } else if has_drafts
-            && !self.drafts_collapsed {
-                for i in 0..draft_summaries.len() {
-                    list_rows.push(SidebarRow::Draft(i));
-                }
+        } else if has_drafts && !self.drafts_collapsed {
+            for i in 0..draft_summaries.len() {
+                list_rows.push(SidebarRow::Draft(i));
             }
+        }
         match sort_mode {
             SidebarSortMode::Date => {
                 push_section_rows(&mut list_rows, grouped, render_all_headers);
@@ -631,9 +634,10 @@ impl RenderOnce for SidebarView {
                 } else {
                     let mut sections_iter = sections.into_iter();
                     if let Some((key, _name, positions)) = sections_iter.next()
-                        && !collapsed_projects.contains(&key) {
-                            list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                        }
+                        && !collapsed_projects.contains(&key)
+                    {
+                        list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                    }
                     for (key, name, positions) in sections_iter {
                         let collapsed = collapsed_projects.contains(&key);
                         list_rows.push(SidebarRow::ProjectHeader {
@@ -958,7 +962,7 @@ impl RenderOnce for SidebarView {
                                 (on_open_settings)(window, cx);
                             })
                             .tooltip(Tooltip::text("Settings"))
-                            .child(app_icon(IconName::Settings, 14.0, theme.text_tertiary))
+                            .child(app_icon(IconName::Settings, 15.0, theme.text_tertiary))
                     })
                     .child({
                         let server_chip = div()
@@ -974,7 +978,7 @@ impl RenderOnce for SidebarView {
                             .hover(|s| s.bg(theme.overlay))
                             .active(|s| s.bg(theme.overlay_strong))
                             .tooltip(Tooltip::text("Servers"))
-                            .child(app_icon(IconName::Server, 14.0, theme.text_tertiary));
+                            .child(app_icon(IconName::Server, 15.0, theme.text_tertiary));
 
                         let on_open_server_settings = on_open_server_settings.clone();
                         dropdown_menu(

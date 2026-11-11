@@ -78,9 +78,10 @@ impl ConsoleDesktopApp {
             // older build must not come back as one.
             console_ui::workspace::ops::retain_non_settings_tabs(&mut root);
             if let Some(pane_id) = ws.active_pane_id
-                && root.leaves().iter().any(|leaf| leaf.id == pane_id) {
-                    project_active_panes.insert(ws.project_id.clone(), pane_id);
-                }
+                && root.leaves().iter().any(|leaf| leaf.id == pane_id)
+            {
+                project_active_panes.insert(ws.project_id.clone(), pane_id);
+            }
             project_workspace_roots.insert(ws.project_id, root);
             if let Some(cwd) = ws.cwd {
                 if let (Some(count), Some(active_idx)) =
@@ -301,47 +302,44 @@ impl ConsoleDesktopApp {
         let project_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
             move |open, _window, cx| {
-                if open
-                    && let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.ensure_github_repos(cx));
-                        cx.defer(move |cx| {
-                            if let Some(window) = cx.active_window() {
-                                let _ = window.update(cx, |_, window, cx| {
-                                    app.update(cx, |this, cx| this.branch_menu.close(window, cx));
-                                });
-                            }
-                        });
-                    }
+                if open && let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.ensure_github_repos(cx));
+                    cx.defer(move |cx| {
+                        if let Some(window) = cx.active_window() {
+                            let _ = window.update(cx, |_, window, cx| {
+                                app.update(cx, |this, cx| this.branch_menu.close(window, cx));
+                            });
+                        }
+                    });
+                }
             }
         });
         let branch_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
             move |open, _window, cx| {
-                if open
-                    && let Some(app) = entity.upgrade() {
-                        cx.defer(move |cx| {
-                            if let Some(window) = cx.active_window() {
-                                let _ = window.update(cx, |_, window, cx| {
-                                    app.update(cx, |this, cx| this.project_menu.close(window, cx));
-                                });
-                            }
-                        });
-                    }
+                if open && let Some(app) = entity.upgrade() {
+                    cx.defer(move |cx| {
+                        if let Some(window) = cx.active_window() {
+                            let _ = window.update(cx, |_, window, cx| {
+                                app.update(cx, |this, cx| this.project_menu.close(window, cx));
+                            });
+                        }
+                    });
+                }
             }
         });
         let usage_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
             move |open, _window, cx| {
-                if open
-                    && let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            let session_id = this
-                                .active_session_for_pane("pane-main")
-                                .unwrap_or_default();
-                            this.maybe_fetch_usage(&session_id, cx);
-                            this.fetch_context_usage(&session_id, cx);
-                        });
-                    }
+                if open && let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        let session_id = this
+                            .active_session_for_pane("pane-main")
+                            .unwrap_or_default();
+                        this.maybe_fetch_usage(&session_id, cx);
+                        this.fetch_context_usage(&session_id, cx);
+                    });
+                }
             }
         });
 
@@ -396,29 +394,30 @@ impl ConsoleDesktopApp {
             });
         let initial_draft_key = initial_main_session.as_deref().unwrap_or("new_chat");
         if let Some(initial_draft) = drafts.get(initial_draft_key)
-            && (!initial_draft.prompt.trim().is_empty() || !initial_draft.context_files.is_empty()) {
-                let mentions = initial_draft
-                    .mentions
-                    .iter()
-                    .map(|mention| console_ui::ComposerMention {
-                        range: mention.start..mention.end,
-                        path: mention.path.clone(),
-                        label: mention.label.clone().unwrap_or_else(|| {
-                            std::path::Path::new(&mention.path)
-                                .file_name()
-                                .and_then(|n| n.to_str())
-                                .unwrap_or(&mention.path)
-                                .to_string()
-                        }),
-                    })
-                    .collect();
-                let context_files = initial_draft.context_files.clone();
-                composer_input.update(cx, |input, cx| {
-                    input.set_content_with_mentions(initial_draft.prompt.clone(), mentions, cx);
-                    input.set_context_files(context_files);
-                    cx.notify();
-                });
-            }
+            && (!initial_draft.prompt.trim().is_empty() || !initial_draft.context_files.is_empty())
+        {
+            let mentions = initial_draft
+                .mentions
+                .iter()
+                .map(|mention| console_ui::ComposerMention {
+                    range: mention.start..mention.end,
+                    path: mention.path.clone(),
+                    label: mention.label.clone().unwrap_or_else(|| {
+                        std::path::Path::new(&mention.path)
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or(&mention.path)
+                            .to_string()
+                    }),
+                })
+                .collect();
+            let context_files = initial_draft.context_files.clone();
+            composer_input.update(cx, |input, cx| {
+                input.set_content_with_mentions(initial_draft.prompt.clone(), mentions, cx);
+                input.set_context_files(context_files);
+                cx.notify();
+            });
+        }
 
         // Flush unsaved drafts when the app quits: the 500ms debounced save
         // can be cut short by an exit, losing the last edit (e.g. a
@@ -617,7 +616,7 @@ impl ConsoleDesktopApp {
             active_picker_tab: PickerTab::Provider("antigravity".to_string()),
             favorites: Rc::new(std::collections::HashSet::new()),
             approval_mode: ApprovalMode::default(),
-                thinking_level: None,
+            thinking_level: None,
             model_menu,
             usage_menu,
             tasks_menu,
@@ -874,7 +873,7 @@ impl ConsoleDesktopApp {
                 selected_model: app.selected_model.clone(),
                 active_picker_tab: app.active_picker_tab.clone(),
                 approval_mode: app.approval_mode,
-                        thinking_level: app.thinking_level,
+                thinking_level: app.thinking_level,
                 model_menu: app.model_menu.clone(),
                 usage_menu: app.usage_menu.clone(),
                 tasks_menu: app.tasks_menu.clone(),

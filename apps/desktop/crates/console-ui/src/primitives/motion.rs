@@ -9,7 +9,6 @@
 //! with no loader mounted schedules nothing at all. Every loader shares one
 //! epoch, keeping multi-instance loaders phase-locked.
 
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use gpui::{
@@ -39,7 +38,7 @@ struct Lease {
 
 struct PulseClock {
     epoch: Instant,
-    leases: HashMap<EntityId, Lease>,
+    leases: Vec<(EntityId, Lease)>,
     ticks: u64,
     running: bool,
 }
@@ -50,7 +49,7 @@ impl Default for PulseClock {
     fn default() -> Self {
         Self {
             epoch: Instant::now(),
-            leases: HashMap::new(),
+            leases: Vec::with_capacity(4),
             ticks: 0,
             running: false,
         }
@@ -76,14 +75,12 @@ fn pulse_lease_with_stride(view: EntityId, stride: u32, cx: &mut App) {
     let clock = cx.default_global::<PulseClock>();
     let until = Instant::now() + PULSE_LEASE;
     // A view hosting both a full-rate and a strided loader keeps full rate.
-    clock
-        .leases
-        .entry(view)
-        .and_modify(|lease| {
-            lease.until = until;
-            lease.stride = lease.stride.min(stride);
-        })
-        .or_insert(Lease { until, stride });
+    if let Some((_, lease)) = clock.leases.iter_mut().find(|(id, _)| *id == view) {
+        lease.until = until;
+        lease.stride = lease.stride.min(stride);
+    } else {
+        clock.leases.push((view, Lease { until, stride }));
+    }
     if clock.running {
         return;
     }
@@ -96,24 +93,26 @@ fn pulse_lease_with_stride(view: EntityId, stride: u32, cx: &mut App) {
                 let now = Instant::now();
                 clock.ticks += 1;
                 let ticks = clock.ticks;
-                clock.leases.retain(|_, lease| lease.until > now);
+                clock.leases.retain(|(_, lease)| lease.until > now);
                 if clock.leases.is_empty() {
                     clock.running = false;
                     return true;
                 }
-                let due = clock
-                    .leases
-                    .iter_mut()
-                    .filter(|(_, lease)| ticks % lease.stride.max(1) as u64 == 0)
-                    .map(|(view, lease)| {
+                let mut due = [None; 16];
+                let mut due_count = 0;
+                for (view, lease) in clock.leases.iter_mut() {
+                    if ticks % lease.stride.max(1) as u64 == 0 {
                         // Strides re-establish on the render this notify
                         // triggers; without the reset, one full-rate lease
                         // would drag its view's cadence down permanently.
                         lease.stride = u32::MAX;
-                        *view
-                    })
-                    .collect::<Vec<_>>();
-                for view in due {
+                        if due_count < due.len() {
+                            due[due_count] = Some(*view);
+                            due_count += 1;
+                        }
+                    }
+                }
+                for view in due.into_iter().take(due_count).flatten() {
                     cx.notify(view);
                 }
                 false

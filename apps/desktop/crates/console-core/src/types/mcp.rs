@@ -11,7 +11,6 @@ pub enum McpTransportType {
     Stdio,
 }
 
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
@@ -21,7 +20,6 @@ pub enum McpAuthType {
     Static,
     Oauth2,
 }
-
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -34,7 +32,6 @@ pub enum McpConnectionStatus {
     NeedsAuth,
     Error(String),
 }
-
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct McpToolInfo {
