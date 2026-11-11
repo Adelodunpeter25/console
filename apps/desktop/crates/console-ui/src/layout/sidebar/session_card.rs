@@ -1,6 +1,6 @@
 use gpui::{
     AnyView, App, AppContext, Context, IntoElement, ParentElement, Render, SharedString,
-    Styled, Window, div, px, rgb,
+    Styled, Window, div, px,
 };
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
@@ -96,8 +96,7 @@ impl Render for SessionHoverCard {
                 .rounded(px(8.0))
                 .border_1()
                 .border_color(theme.border_strong)
-                // Dark background matching the menu surface
-                .bg(rgb(0x0C0C0C))
+                .bg(theme.menu)
                 .shadow_lg()
                 .flex()
                 .flex_col()
