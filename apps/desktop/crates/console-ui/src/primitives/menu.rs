@@ -1040,7 +1040,7 @@ impl RenderOnce for MenuCard {
                     .text_color(color)
                     .when(selected, |element| element.font_weight(FontWeight::MEDIUM))
                     .when_some(item_icon, |element, path| {
-                        element.child(icon(path, 12.0, color))
+                        element.child(icon(path, if context_style { 14.0 } else { 12.0 }, color))
                     })
                     .child(div().flex_1().min_w_0().truncate().child(label))
                     .when_some(shortcut, |element, shortcut| {
@@ -1102,7 +1102,7 @@ fn row(
         .rounded(px(if context_style { 7.0 } else { 6.0 }))
         .flex()
         .items_center()
-        .gap(px(8.0))
+        .gap(px(if context_style { 10.0 } else { 8.0 }))
         .text_size(px(if context_style { 13.0 } else { 11.5 }))
         .line_height(px(15.0))
         .when(highlighted, |element| element.bg(highlight))

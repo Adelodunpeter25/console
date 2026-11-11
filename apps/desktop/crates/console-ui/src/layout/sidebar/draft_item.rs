@@ -1,4 +1,4 @@
-use gpui::{App, ElementId, IntoElement, ParentElement, StatefulInteractiveElement, Window};
+use gpui::{App, ElementId, ParentElement, StatefulInteractiveElement, Window};
 use std::rc::Rc;
 
 use super::item_row::{row_container, status_slot, title_label};
@@ -21,6 +21,8 @@ pub fn render_sidebar_draft_item(
     on_new_chat: &Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_delete_draft: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     theme: Theme,
+    window: &mut Window,
+    cx: &mut App,
 ) -> gpui::AnyElement {
     let is_active = match &draft.session_id {
         Some(sid) => selected_id == Some(sid.as_str()),
@@ -58,8 +60,8 @@ pub fn render_sidebar_draft_item(
     .child(status_slot())
     .child(title_label(is_active, theme).child(draft.title.clone()));
 
-    draft_context_menu(row, move |window, cx| {
+    let menu_id = format!("draft-menu-{delete_key}");
+    draft_context_menu(row, menu_id, window, cx, move |window, cx| {
         on_delete(delete_key.clone(), window, cx);
     })
-    .into_any_element()
 }

@@ -123,7 +123,7 @@ impl SidebarSessionItem {
 }
 
 impl RenderOnce for SidebarSessionItem {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let session = &self.session;
         let is_active = self.is_active;
@@ -278,8 +278,12 @@ impl RenderOnce for SidebarSessionItem {
                 .into_any_element()
         } else {
             let on_toggle_pin = on_toggle_pin;
+            let menu_id = format!("session-menu-{}", session.id);
             session_context_menu(
                 row,
+                menu_id,
+                window,
+                cx,
                 move |window, cx| (on_open_in_new_window)(window, cx),
                 move |window, cx| (on_rename)(window, cx),
                 move |window, cx| (on_toggle_pin)(window, cx),
@@ -289,7 +293,6 @@ impl RenderOnce for SidebarSessionItem {
                 pinned,
                 settled,
             )
-            .into_any_element()
         }
     }
 }

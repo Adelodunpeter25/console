@@ -693,7 +693,7 @@ impl RenderOnce for SidebarView {
         let list_on_toggle_settled = self.on_toggle_settled;
         let list_on_settle = self.on_settle_session;
         let list_on_unsettle = self.on_unsettle_session;
-        let grouped_rows = list(sidebar_list_state, move |index, _window, _cx| {
+        let grouped_rows = list(sidebar_list_state, move |index, window, cx| {
             let Some(row) = list_rows.get(index).cloned() else {
                 return div().into_any_element();
             };
@@ -709,6 +709,8 @@ impl RenderOnce for SidebarView {
                         &list_on_new,
                         &list_on_delete_draft,
                         theme,
+                        window,
+                        cx,
                     )
                 }
                 SidebarRow::Session(session_index) => {
