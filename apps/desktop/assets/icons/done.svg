@@ -1,1 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5 19.5 7"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><mask id="m"><rect width="24" height="24" fill="#fff"/><path d="m6.5 12.5 3.5 3.5 7.5-8" stroke="#000" stroke-width="3"/></mask><circle cx="12" cy="12" r="11" fill="#000" mask="url(#m)"/></svg>
