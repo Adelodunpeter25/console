@@ -730,6 +730,28 @@ where
     )
 }
 
+/// Toggle a [`dropdown_menu`] as if its trigger were clicked, for keyboard shortcuts.
+pub fn toggle_dropdown(
+    handle: &ContextMenuHandle,
+    align: MenuAlign,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if handle.is_open() {
+        handle.close(window, cx);
+        window.refresh();
+        return;
+    }
+    let Some(anchor) = handle
+        .trigger_bounds
+        .get()
+        .map(|bounds| align.anchor_point(bounds, px(TRIGGER_GAP)))
+    else {
+        return;
+    };
+    open_menu(handle, anchor, SurfaceFocus::Card, true, window, cx);
+}
+
 /// Toggle a [`popover`] as if its trigger were clicked, for keyboard shortcuts.
 ///
 /// Anchors to the trigger's last recorded bounds, so it no-ops until the

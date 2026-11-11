@@ -47,6 +47,8 @@ actions!(
         FocusComposer,
         /// Toggle the active pane's model picker (cmd-/).
         ToggleModelPicker,
+        /// Toggle the active pane's thinking mode selector (cmd-.).
+        ToggleThinkingPicker,
         /// Move keyboard focus into the open picker's search field (/).
         /// Scoped to the open-menu key context, so it only fires while a
         /// menu/popover card is open.
@@ -122,6 +124,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-shift-F", ToggleGlobalSearch, None),
         KeyBinding::new("secondary-l", FocusComposer, None),
         KeyBinding::new("secondary-/", ToggleModelPicker, None),
+        KeyBinding::new("secondary-.", ToggleThinkingPicker, None),
         // Plain `/` refocuses the open picker's search box. Scoped to the
         // menu context so it can only fire while a menu/popover card is
         // open — everywhere else `/` types normally. `ConsoleMenu` matches
@@ -347,6 +350,18 @@ pub fn init_handlers(cx: &mut App) {
                 window
                     .update(cx, |_, window, cx| {
                         app.update(cx, |this, cx| this.toggle_model_picker(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+
+    cx.on_action(|_: &ToggleThinkingPicker, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.toggle_thinking_picker(window, cx));
                     })
                     .ok();
             });

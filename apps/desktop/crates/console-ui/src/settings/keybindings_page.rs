@@ -62,6 +62,7 @@ const ACTION_META: &[ActionMeta] = &[
     ActionMeta { action: "OpenSettings", category: "Global & Window", description: "Open settings window" },
     ActionMeta { action: "FocusComposer", category: "Global & Window", description: "Focus composer input" },
     ActionMeta { action: "ToggleModelPicker", category: "Global & Window", description: "Toggle model picker" },
+    ActionMeta { action: "ToggleThinkingPicker", category: "Global & Window", description: "Toggle thinking mode selector" },
     ActionMeta { action: "FocusModelSearch", category: "Global & Window", description: "Focus open picker search field" },
     ActionMeta { action: "CycleApprovalMode", category: "Global & Window", description: "Cycle approval mode" },
     ActionMeta { action: "SwitchSession", category: "Global & Window", description: "Switch session by number" },

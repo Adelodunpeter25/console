@@ -4,7 +4,7 @@
 //! `keybindings::init_handlers`), so they run regardless of keyboard focus.
 
 use console_core::{WorkspaceNode, WorkspaceTabConfig};
-use console_ui::{IconName, MenuAlign, PaletteEntry, browser, toggle_popover};
+use console_ui::{IconName, MenuAlign, PaletteEntry, browser, toggle_dropdown, toggle_popover};
 use gpui::{Context, Focusable as _, WeakEntity, Window};
 
 use super::ConsoleDesktopApp;
@@ -328,6 +328,51 @@ impl ConsoleDesktopApp {
         // As if the trigger were clicked: anchors to the chip's last
         // recorded bounds and no-ops until the trigger has drawn once.
         toggle_popover(&handle, MenuAlign::AboveLeft, window, cx);
+    }
+
+    /// ⌘. — toggle the active pane's thinking mode selector.
+    pub fn toggle_thinking_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Don't fight any palette for focus while it is open.
+        if self.command_palette.read(cx).is_open(cx)
+            || self.tab_palette.read(cx).is_open(cx)
+            || self.quick_open_palette.read(cx).is_open(cx)
+            || self.project_browse_palette.read(cx).is_open(cx)
+        {
+            return;
+        }
+        if self.floating_composer.open {
+            if self.floating_composer.supported_thinking_levels.is_empty() {
+                return;
+            }
+            let handle = self.floating_composer.thinking_menu.clone();
+            if handle.is_open() {
+                handle.close(window, cx);
+                let input = self.floating_composer.input.clone();
+                input.update(cx, |input, cx| {
+                    window.focus(&input.focus_handle(cx), cx);
+                });
+                return;
+            }
+            toggle_dropdown(&handle, MenuAlign::AboveLeft, window, cx);
+            return;
+        }
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        if self.supported_thinking_levels_for_pane(&pane_id).is_empty() {
+            return;
+        }
+        let handle = self.pane_thinking_menu(&pane_id);
+        if handle.is_open() {
+            handle.close(window, cx);
+            let composer = self.composer_for_pane(&pane_id);
+            composer.update(cx, |input, cx| {
+                window.focus(&input.focus_handle(cx), cx);
+            });
+            return;
+        }
+        toggle_dropdown(&handle, MenuAlign::AboveLeft, window, cx);
     }
 
     /// `/` while a menu is open — move focus into the active pane's picker
