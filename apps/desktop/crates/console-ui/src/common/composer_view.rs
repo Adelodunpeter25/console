@@ -9,13 +9,13 @@ use gpui::{
 
 use crate::common::{
     AutocompleteConfirm, AutocompleteDismiss, AutocompleteNext, AutocompletePrevious,
-    AutocompleteView, ModelDropdownMenu, attachment_image, file_mention_chip,
-    format_model_name, provider_svg_path,
+    AutocompleteView, ModelDropdownMenu, attachment_image, file_mention_chip, format_model_name,
+    provider_svg_path,
 };
 use crate::input::ComposerInput;
 use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{
-    app_icon, dropdown_menu, ContextMenuHandle, IconName, MenuAlign, MenuChip, MenuItem, popover,
+    ContextMenuHandle, IconName, MenuAlign, MenuChip, MenuItem, app_icon, dropdown_menu, popover,
 };
 use crate::theme::Theme;
 

@@ -249,4 +249,3 @@ pub fn search_results_group_header(
                 .child(label.into()),
         )
 }
-

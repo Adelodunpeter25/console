@@ -13,23 +13,18 @@ pub use session_item::{
     render_sidebar_session_item,
 };
 
-gpui::actions!(
-    console_sidebar_search,
-    [CancelSidebarSearch]
-);
+gpui::actions!(console_sidebar_search, [CancelSidebarSearch]);
 
 pub const SIDEBAR_SEARCH_PARENT_CONTEXT: &str = "ConsoleSidebarSearch";
 pub const SIDEBAR_SEARCH_FIELD_CONTEXT: &str = "ConsoleSidebarSearch > ComposerInput";
 
 pub fn init_sidebar_search_keybindings(cx: &mut App) {
     use gpui::KeyBinding;
-    cx.bind_keys([
-        KeyBinding::new(
-            "escape",
-            CancelSidebarSearch,
-            Some(SIDEBAR_SEARCH_FIELD_CONTEXT),
-        ),
-    ]);
+    cx.bind_keys([KeyBinding::new(
+        "escape",
+        CancelSidebarSearch,
+        Some(SIDEBAR_SEARCH_FIELD_CONTEXT),
+    )]);
 }
 
 use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
@@ -645,7 +640,10 @@ impl RenderOnce for SidebarView {
                 .into_iter()
                 .filter(|&idx| {
                     let session = &sessions[idx];
-                    session.display_title().to_lowercase().contains(&query_lower)
+                    session
+                        .display_title()
+                        .to_lowercase()
+                        .contains(&query_lower)
                         || session.title.to_lowercase().contains(&query_lower)
                 })
                 .collect();
@@ -947,7 +945,10 @@ impl RenderOnce for SidebarView {
                     .child(if self.search_active {
                         let on_cancel = self.on_clear_search.clone();
                         let on_clear = self.on_clear_search.clone();
-                        let on_outside = self.on_close_search.clone().or_else(|| self.on_clear_search.clone());
+                        let on_outside = self
+                            .on_close_search
+                            .clone()
+                            .or_else(|| self.on_clear_search.clone());
                         let has_query = !self.search_query.trim().is_empty();
                         let clear_tooltip = if has_query {
                             "Clear search"
@@ -961,7 +962,6 @@ impl RenderOnce for SidebarView {
                             .h(px(32.0))
                             .px(px(6.0))
                             .rounded(px(7.0))
-                            .bg(theme.sidebar_item_background)
                             .flex()
                             .items_center()
                             .gap(px(10.0))

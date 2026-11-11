@@ -591,11 +591,7 @@ impl ConsoleDesktopApp {
                 &sidebar_search_input,
                 |this, _input, event: &ComposerEvent, cx| match event {
                     ComposerEvent::Edited => {
-                        let q = this
-                            .sidebar_search_input
-                            .read(cx)
-                            .content()
-                            .to_string();
+                        let q = this.sidebar_search_input.read(cx).content().to_string();
                         this.on_sidebar_search_query_changed(q, cx);
                     }
                     _ => {}

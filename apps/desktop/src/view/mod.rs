@@ -701,387 +701,394 @@ impl Render for ConsoleDesktopApp {
                     .min_h_0()
                     .flex()
                     .overflow_hidden()
-                    .child(SidebarView::new(
-                        self.sidebar_visible,
-                        self.sidebar_width,
-                        sessions,
-                        self.projects.clone(),
-                        self.selected_session_id.clone(),
-                        self.collapsed_groups.clone(),
-                        self.sidebar_sort_mode,
-                        self.collapsed_projects.clone(),
-                        self.running_sessions_snapshot(),
-                        self.waiting_sessions_snapshot(),
-                        self.draft_summaries(),
-                        self.drafts_collapsed,
-                        self.pinned_collapsed,
-                        self.settled_collapsed,
-                        self.sidebar_list_state.clone(),
-                        self.environment_rows(),
-                        self.server_menu.clone(),
-                        {
-                            let entity = entity.clone();
-                            move |id: String, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.select_and_open_session(id, cx);
-                                    });
+                    .child(
+                        SidebarView::new(
+                            self.sidebar_visible,
+                            self.sidebar_width,
+                            sessions,
+                            self.projects.clone(),
+                            self.selected_session_id.clone(),
+                            self.collapsed_groups.clone(),
+                            self.sidebar_sort_mode,
+                            self.collapsed_projects.clone(),
+                            self.running_sessions_snapshot(),
+                            self.waiting_sessions_snapshot(),
+                            self.draft_summaries(),
+                            self.drafts_collapsed,
+                            self.pinned_collapsed,
+                            self.settled_collapsed,
+                            self.sidebar_list_state.clone(),
+                            self.environment_rows(),
+                            self.server_menu.clone(),
+                            {
+                                let entity = entity.clone();
+                                move |id: String, _w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.select_and_open_session(id, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            move |id: String, _w, cx: &mut App| {
-                                crate::window::open_workspace_window(
-                                    cx,
-                                    crate::window::WindowLaunchTarget::Session(id),
-                                );
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |window: &mut Window, cx: &mut App| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.open_floating_composer(window, cx)
-                                    });
+                            },
+                            {
+                                move |id: String, _w, cx: &mut App| {
+                                    crate::window::open_workspace_window(
+                                        cx,
+                                        crate::window::WindowLaunchTarget::Session(id),
+                                    );
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |window: &mut Window, cx: &mut App| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.start_sidebar_search(window, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window: &mut Window, cx: &mut App| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.open_floating_composer(window, cx)
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            // Sidebar "Add Project" opens the directory browser
-                            // palette (works against remote backends, where a
-                            // native dialog can't see the host filesystem).
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.open_project_browse(window, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window: &mut Window, cx: &mut App| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.start_sidebar_search(window, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |group: console_ui::utils::SessionDateGroup, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| this.toggle_sidebar_group(group, cx));
+                            },
+                            {
+                                // Sidebar "Add Project" opens the directory browser
+                                // palette (works against remote backends, where a
+                                // native dialog can't see the host filesystem).
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.open_project_browse(window, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |key: String, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.toggle_sidebar_project(key, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |group: console_ui::utils::SessionDateGroup, _w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_sidebar_group(group, cx)
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.toggle_sidebar_sort_mode(cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |key: String, _w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_sidebar_project(key, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.drafts_collapsed = !this.drafts_collapsed;
-                                        cx.notify();
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |_w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_sidebar_sort_mode(cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.toggle_sidebar_pinned(cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |_w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.drafts_collapsed = !this.drafts_collapsed;
+                                            cx.notify();
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.settled_collapsed = !this.settled_collapsed;
-                                        cx.notify();
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |_w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_sidebar_pinned(cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |id: String, window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.begin_session_rename(id, window, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |_w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.settled_collapsed = !this.settled_collapsed;
+                                            cx.notify();
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| this.commit_session_rename(cx));
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |id: String, window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.begin_session_rename(id, window, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.cancel_session_rename(window, cx)
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |_window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| this.commit_session_rename(cx));
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |id: String, _window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.toggle_pin_session(id, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.cancel_session_rename(window, cx)
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |id: String, _window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.settle_session(id, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |id: String, _window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_pin_session(id, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |id: String, _window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.unsettle_session(id, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |id: String, _window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.settle_session(id, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            let client = client.clone();
-                            move |id: String, _w, cx| {
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |id: String, _window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.unsettle_session(id, cx);
+                                        });
+                                    }
+                                }
+                            },
+                            {
+                                let entity = entity.clone();
                                 let client = client.clone();
-                                let del_id = id.clone();
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.save_transcript_scroll_position(cx);
-                                        Rc::make_mut(&mut this.sessions).retain(|s| s.id != id);
-                                        this.close_matching_workspace_tabs(
-                                            |t| t.id() == format!("chat:{}", id),
-                                            cx,
-                                        );
-                                        for root in this.project_workspace_roots.values_mut() {
-                                            console_ui::workspace::ops::close_matching_tabs(
-                                                root,
+                                move |id: String, _w, cx| {
+                                    let client = client.clone();
+                                    let del_id = id.clone();
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.save_transcript_scroll_position(cx);
+                                            Rc::make_mut(&mut this.sessions).retain(|s| s.id != id);
+                                            this.close_matching_workspace_tabs(
                                                 |t| t.id() == format!("chat:{}", id),
+                                                cx,
                                             );
-                                        }
-                                        // Deleting a worktree's last chat removes the
-                                        // worktree's workspace with it.
-                                        this.sweep_dead_worktree_workspaces(cx);
-                                        // The chat's agent browser tabs go with it.
-                                        this.close_session_browser_tabs(&id, cx);
-                                        // Drop all run-derived state for the deleted
-                                        // session, now keyed by session id.
-                                        this.running_sessions.remove(&id);
-                                        this.pending_questions.remove(&id);
-                                        this.question_selected.remove(&id);
-                                        this.todo_items.remove(&id);
-                                        this.agent_notices.remove(&id);
-                                        if this.selected_session_id.as_deref() == Some(&id) {
-                                            this.selected_session_id =
-                                                this.active_pane_id.as_deref().and_then(
-                                                    |pane_id| this.active_session_for_pane(pane_id),
-                                                );
-                                            let pane_id = this
-                                                .active_pane_id
-                                                .clone()
-                                                .unwrap_or_else(|| "pane-main".to_string());
-                                            let composer = this.composer_for_pane(&pane_id);
-                                            let transcript = this.transcript_for_pane(&pane_id);
-                                            composer.update(cx, |input, cx| {
-                                                input.set_prompt_history(Vec::new(), cx);
-                                            });
-                                            transcript.update(cx, |t, cx| {
-                                                t.set_messages(Vec::new(), cx);
-                                            });
-                                            if let Some(next_id) = this.selected_session_id.clone()
-                                            {
-                                                this.load_session_messages_for_pane(
-                                                    pane_id, next_id, cx,
+                                            for root in this.project_workspace_roots.values_mut() {
+                                                console_ui::workspace::ops::close_matching_tabs(
+                                                    root,
+                                                    |t| t.id() == format!("chat:{}", id),
                                                 );
                                             }
-                                        }
-                                        this.maybe_refresh_inspector(cx);
-                                        cx.notify();
-
-                                        cx.spawn(async move |entity, cx| {
-                                            if let Err(error) =
-                                                client.sessions.delete(&del_id).await
-                                            {
-                                                let message = format!(
-                                                    "Unable to delete the session: {error}"
-                                                );
-                                                cx.update(|cx| {
-                                                    if let Some(app) = entity.upgrade() {
-                                                        app.update(cx, |this, cx| {
-                                                            this.set_error(message, cx)
-                                                        });
-                                                    }
+                                            // Deleting a worktree's last chat removes the
+                                            // worktree's workspace with it.
+                                            this.sweep_dead_worktree_workspaces(cx);
+                                            // The chat's agent browser tabs go with it.
+                                            this.close_session_browser_tabs(&id, cx);
+                                            // Drop all run-derived state for the deleted
+                                            // session, now keyed by session id.
+                                            this.running_sessions.remove(&id);
+                                            this.pending_questions.remove(&id);
+                                            this.question_selected.remove(&id);
+                                            this.todo_items.remove(&id);
+                                            this.agent_notices.remove(&id);
+                                            if this.selected_session_id.as_deref() == Some(&id) {
+                                                this.selected_session_id = this
+                                                    .active_pane_id
+                                                    .as_deref()
+                                                    .and_then(|pane_id| {
+                                                        this.active_session_for_pane(pane_id)
+                                                    });
+                                                let pane_id = this
+                                                    .active_pane_id
+                                                    .clone()
+                                                    .unwrap_or_else(|| "pane-main".to_string());
+                                                let composer = this.composer_for_pane(&pane_id);
+                                                let transcript = this.transcript_for_pane(&pane_id);
+                                                composer.update(cx, |input, cx| {
+                                                    input.set_prompt_history(Vec::new(), cx);
                                                 });
+                                                transcript.update(cx, |t, cx| {
+                                                    t.set_messages(Vec::new(), cx);
+                                                });
+                                                if let Some(next_id) =
+                                                    this.selected_session_id.clone()
+                                                {
+                                                    this.load_session_messages_for_pane(
+                                                        pane_id, next_id, cx,
+                                                    );
+                                                }
                                             }
-                                        })
-                                        .detach();
-                                    });
-                                }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |key: String, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        let is_new_chat = key == "new_chat";
-                                        this.discard_draft(&key, cx);
-                                        // If the discarded draft is currently shown in the
-                                        // active composer, clear the input so stale text
-                                        // doesn't remain.
-                                        let active_sid = this
-                                            .active_pane_id
-                                            .as_deref()
-                                            .and_then(|pane_id| {
-                                                this.active_session_for_pane(pane_id)
+                                            this.maybe_refresh_inspector(cx);
+                                            cx.notify();
+
+                                            cx.spawn(async move |entity, cx| {
+                                                if let Err(error) =
+                                                    client.sessions.delete(&del_id).await
+                                                {
+                                                    let message = format!(
+                                                        "Unable to delete the session: {error}"
+                                                    );
+                                                    cx.update(|cx| {
+                                                        if let Some(app) = entity.upgrade() {
+                                                            app.update(cx, |this, cx| {
+                                                                this.set_error(message, cx)
+                                                            });
+                                                        }
+                                                    });
+                                                }
                                             })
-                                            .map(|s| s.to_string());
-                                        let should_clear = if is_new_chat {
-                                            active_sid.is_none()
-                                        } else {
-                                            active_sid.as_deref() == Some(key.as_str())
-                                        };
-                                        if should_clear {
-                                            let composer = this.active_composer_input();
-                                            composer.update(cx, |input, cx| input.clear(cx));
-                                        }
-                                        cx.notify();
-                                    });
+                                            .detach();
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        self.session_rename_id.clone(),
-                        Some(self.session_rename_input.clone()),
-                        {
-                            let entity = entity.clone();
-                            move |start_x, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.begin_sidebar_resize(start_x);
-                                        cx.notify();
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |key: String, _w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            let is_new_chat = key == "new_chat";
+                                            this.discard_draft(&key, cx);
+                                            // If the discarded draft is currently shown in the
+                                            // active composer, clear the input so stale text
+                                            // doesn't remain.
+                                            let active_sid = this
+                                                .active_pane_id
+                                                .as_deref()
+                                                .and_then(|pane_id| {
+                                                    this.active_session_for_pane(pane_id)
+                                                })
+                                                .map(|s| s.to_string());
+                                            let should_clear = if is_new_chat {
+                                                active_sid.is_none()
+                                            } else {
+                                                active_sid.as_deref() == Some(key.as_str())
+                                            };
+                                            if should_clear {
+                                                let composer = this.active_composer_input();
+                                                composer.update(cx, |input, cx| input.clear(cx));
+                                            }
+                                            cx.notify();
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.open_settings(window, cx);
-                                    });
+                            },
+                            self.session_rename_id.clone(),
+                            Some(self.session_rename_input.clone()),
+                            {
+                                let entity = entity.clone();
+                                move |start_x, _w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.begin_sidebar_resize(start_x);
+                                            cx.notify();
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.open_settings_tab(
-                                            console_ui::settings::SettingsTab::Servers,
-                                            window,
-                                            cx,
-                                        );
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.open_settings(window, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |env_id: String, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.activate_environment(env_id, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.open_settings_tab(
+                                                console_ui::settings::SettingsTab::Servers,
+                                                window,
+                                                cx,
+                                            );
+                                        });
+                                    }
                                 }
-                            }
-                        },
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |env_id: String, _w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.activate_environment(env_id, cx);
+                                        });
+                                    }
+                                }
+                            },
+                        )
+                        .search(
+                            self.sidebar_search_active,
+                            self.sidebar_search_query.clone(),
+                            Some(self.sidebar_search_input.clone()),
+                            {
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.start_sidebar_search(window, cx);
+                                        });
+                                    }
+                                }
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.reset_or_close_sidebar_search(window, cx);
+                                        });
+                                    }
+                                }
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.clear_sidebar_search(window, cx);
+                                        });
+                                    }
+                                }
+                            },
+                        ),
                     )
-                    .search(
-                        self.sidebar_search_active,
-                        self.sidebar_search_query.clone(),
-                        Some(self.sidebar_search_input.clone()),
-                        {
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.start_sidebar_search(window, cx);
-                                    });
-                                }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.reset_or_close_sidebar_search(window, cx);
-                                    });
-                                }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.clear_sidebar_search(window, cx);
-                                    });
-                                }
-                            }
-                        },
-                    ))
                     // The workspace pane is a sibling of the sidebar, inside
                     // the same row, so it sits to the right of it.
                     .child(
