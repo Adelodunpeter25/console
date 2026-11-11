@@ -445,6 +445,7 @@ impl ConsoleDesktopApp {
         // reason: the debounced write may not have run, and the chat still on
         // screen has moved since its last snapshot.
         let drafts_quit_subscription = cx.on_app_quit(|this, cx| {
+            this.flush_state_for_exit();
             this.snapshot_visible_pane_scrolls(cx);
             this.persist_transcript_scroll();
             let drafts = this.drafts.clone();

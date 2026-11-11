@@ -472,6 +472,28 @@ impl ConsoleDesktopApp {
         self.persist_window_state(window, cx);
     }
 
+    /// Write every debounced section now. Runs before the process exits, where
+    /// the render loop will not get another frame to flush them.
+    pub(crate) fn flush_state_for_exit(&mut self) {
+        if !self.is_main_window {
+            return;
+        }
+        self.flush_pending_window_state();
+        self.persist_layout();
+        self.workspaces_dirty.set(false);
+        let Some((document, bytes)) = self.serialized_workspaces() else {
+            return;
+        };
+        let unchanged = self
+            .persisted_workspaces_bytes
+            .borrow()
+            .as_deref()
+            .is_some_and(|last| last == bytes.as_slice());
+        if !unchanged {
+            self.write_workspaces(document, bytes);
+        }
+    }
+
     fn flush_pending_window_state(&mut self) {
         if let Some(state) = self.pending_window_state.take() {
             persistence::window::save(state);

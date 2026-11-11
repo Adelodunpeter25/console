@@ -113,10 +113,13 @@ pub fn install_and_relaunch(zip: &Path) -> Result<()> {
         .ok_or_else(|| anyhow!("the update did not contain an app bundle"))?;
     std::process::Command::new("sh")
         .arg("-c")
-        .arg(r#"sleep 1; rm -rf "$1" && mv "$2" "$1" && open "$1""#)
+        .arg(
+            r#"while kill -0 "$3" 2>/dev/null; do sleep 0.2; done; rm -rf "$1" && mv "$2" "$1" && open "$1""#,
+        )
         .arg("sh")
         .arg(&bundle)
         .arg(&fresh)
+        .arg(std::process::id().to_string())
         .spawn()?;
     Ok(())
 }
