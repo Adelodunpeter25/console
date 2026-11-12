@@ -166,11 +166,10 @@ impl RenderOnce for SidebarSessionItem {
         );
 
         let group_name = format!("sidebar-session-{}", session.id);
-        // Status colour is information, not decoration: a chat that needs
-        // attention stays orange whether or not it is the selected one, so
-        // the state is readable at a glance in a long list. The unread dot
-        // keeps its accent colour for the same reason: its job is to be
-        // noticed, and it sits on unfocused rows.
+        // Status colour is information, not decoration. Unread and needs
+        // attention share the badge red whether or not the row is selected:
+        // both mean "this chat wants you", and the mark's whole job is to be
+        // noticed in a long list, usually on an unfocused row.
         let status_id = || ElementId::Name(format!("status-{}", session.id).into());
         let row_status = sidebar::row_status(session, loading_state);
         let status_indicator = match row_status {
@@ -186,12 +185,12 @@ impl RenderOnce for SidebarSessionItem {
             sidebar::RowStatus::NeedsAttention => status_slot()
                 .id(status_id())
                 .tooltip(Tooltip::text("Needs attention"))
-                .child(app_icon(IconName::Alert, 15.0, theme.warning))
+                .child(app_icon(IconName::Alert, 15.0, theme.badge))
                 .into_any_element(),
             sidebar::RowStatus::Unread => status_slot()
                 .id(status_id())
                 .tooltip(Tooltip::text("Unread"))
-                .child(app_icon(IconName::Unread, 15.0, theme.accent))
+                .child(app_icon(IconName::Unread, 15.0, theme.badge))
                 .into_any_element(),
             sidebar::RowStatus::Done => status_slot()
                 .id(status_id())
@@ -336,8 +335,8 @@ impl RenderOnce for SidebarSessionItem {
 
                 let (status_label, status_color) = match row_status {
                     sidebar::RowStatus::Running => ("Running", theme.accent),
-                    sidebar::RowStatus::NeedsAttention => ("Needs attention", theme.warning),
-                    sidebar::RowStatus::Unread => ("Unread", theme.accent),
+                    sidebar::RowStatus::NeedsAttention => ("Needs attention", theme.badge),
+                    sidebar::RowStatus::Unread => ("Unread", theme.badge),
                     sidebar::RowStatus::Done => ("Done", theme.success),
                     sidebar::RowStatus::Quiet if settled => ("Settled", theme.text_tertiary),
                     sidebar::RowStatus::Quiet => ("Idle", theme.text_ghost),
