@@ -137,6 +137,39 @@ fn command_palette_entries(
         );
     }
 
+    // Expose every settings page under the dedicated "Settings" section.
+    let settings_tabs = [
+        (console_ui::settings::SettingsTab::Servers, IconName::Server, "Servers", "servers, environments, backend"),
+        (console_ui::settings::SettingsTab::Providers, IconName::CircleUser, "Providers", "api keys, credentials, accounts, login"),
+        (console_ui::settings::SettingsTab::Usage, IconName::ChartColumn, "Usage", "billing, token costs, quota, limits"),
+        (console_ui::settings::SettingsTab::Models, IconName::Brain, "Models", "llm, default model, reasoning"),
+        (console_ui::settings::SettingsTab::Integrations, IconName::Package, "Integrations", "github, gitlab, atlassian, jira"),
+        (console_ui::settings::SettingsTab::Mcp, IconName::Cpu, "MCP Servers", "tools, context servers, plugins"),
+        (console_ui::settings::SettingsTab::Projects, IconName::Folder, "Projects", "directories, roots, workspaces"),
+        (console_ui::settings::SettingsTab::DeletedChats, IconName::TrashBinMinimalistic, "Deleted Chats", "trash, restore, archived"),
+        (console_ui::settings::SettingsTab::Browser, IconName::Globe, "Browser", "browser use, web, chrome"),
+        (console_ui::settings::SettingsTab::Keybindings, IconName::Keyboard, "Shortcuts", "keybindings, hotkeys"),
+        (console_ui::settings::SettingsTab::Updates, IconName::Download, "Updates", "version, check for updates"),
+    ];
+
+    for (tab, icon, label, subtitle) in settings_tabs {
+        let entity = entity.clone();
+        entries.push(
+            PaletteEntry::new(
+                format!("settings-{}", label.to_lowercase().replace(' ', "-")),
+                format!("Go to {label}"),
+                move |window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.open_settings_tab(tab, window, cx));
+                    }
+                },
+            )
+            .icon(icon)
+            .subtitle(subtitle)
+            .section("Settings"),
+        );
+    }
+
     // Every chat across every project, most recently modified first.
     let mut recent: Vec<&SessionHeader> = sessions.iter().collect();
     recent.sort_by_key(|session| std::cmp::Reverse(session.updated_at));
@@ -300,10 +333,11 @@ impl ConsoleDesktopApp {
         let sessions = self.sessions.clone();
         self.palette_search_task = None;
         self.command_palette.update(cx, |palette, cx| {
-            palette.set_placeholder("Search commands, servers and chats…", cx);
+            palette.set_placeholder("Search commands, settings, servers and chats…", cx);
             palette.set_section_placeholders(
                 vec![
                     ("Commands".into(), "Search commands…".into()),
+                    ("Settings".into(), "Search settings…".into()),
                     ("Servers".into(), "Search servers…".into()),
                     ("Chats".into(), "Search chats…".into()),
                 ],
