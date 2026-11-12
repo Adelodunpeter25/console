@@ -17,6 +17,39 @@ use std::rc::Rc;
 /// above the floating composer's resting bar (bar height + its padding).
 pub const FLOATING_COMPOSER_INSET: f32 = 78.0;
 
+/// Render a path header row (file icon + directory + filename).
+pub fn file_path_header(path: &str, theme: &Theme) -> impl IntoElement + use<> {
+    let (dir, name) = match path.rfind('/') {
+        Some(i) => (path[..=i].to_string(), path[i + 1..].to_string()),
+        None => (String::new(), path.to_string()),
+    };
+    div()
+        .flex_none()
+        .w_full()
+        .px(px(12.0))
+        .py(px(8.0))
+        .bg(gpui::rgb(0x000000))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .max_w_full()
+                .py(px(4.0))
+                .child(file_type_icon(path, 16.0))
+                .child(
+                    div()
+                        .flex()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .text_size(px(13.0))
+                        .whitespace_nowrap()
+                        .child(div().text_color(theme.text_tertiary).child(dir))
+                        .child(div().flex_none().text_color(theme.text).child(name)),
+                ),
+        )
+}
+
 /// Invisible overlay that reports wheel scrolling anywhere over its bounds.
 /// Listens in the capture phase because the scrolling list stops propagation
 /// of the events it consumes.
@@ -170,37 +203,9 @@ impl RenderOnce for FileViewer {
             )
             .children(overlays);
 
-        let header = path.map(|path| {
+        let header = path.map(|p| {
             let theme = Theme::current(cx);
-            let (dir, name) = match path.rfind('/') {
-                Some(i) => (path[..=i].to_string(), path[i + 1..].to_string()),
-                None => (String::new(), path.clone()),
-            };
-            div()
-                .flex_none()
-                .w_full()
-                .px(px(12.0))
-                .py(px(8.0))
-                .bg(gpui::rgb(0x000000))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.0))
-                        .max_w_full()
-                        .py(px(4.0))
-                        .child(file_type_icon(&path, 16.0))
-                        .child(
-                            div()
-                                .flex()
-                                .min_w_0()
-                                .overflow_hidden()
-                                .text_size(px(13.0))
-                                .whitespace_nowrap()
-                                .child(div().text_color(theme.text_tertiary).child(dir))
-                                .child(div().flex_none().text_color(theme.text).child(name)),
-                        ),
-                )
+            file_path_header(&p, &theme)
         });
 
         div()

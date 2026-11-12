@@ -19,17 +19,41 @@ pub const DIFF_LINE_HEIGHT: f32 = 20.0;
 #[derive(IntoElement)]
 pub struct DiffViewer {
     view: Entity<editor_ui::DiffView>,
+    path: Option<String>,
 }
 
 impl DiffViewer {
     pub fn new(view: Entity<editor_ui::DiffView>) -> Self {
-        Self { view }
+        Self { view, path: None }
+    }
+
+    /// Shows this (already display-ready) path in a header row above the diff.
+    pub fn path(mut self, path: impl Into<String>) -> Self {
+        self.path = Some(path.into());
+        self
     }
 }
 
 impl RenderOnce for DiffViewer {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        div().size_full().bg(gpui::rgb(0x000000)).child(self.view)
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let header = self.path.map(|p| {
+            let theme = Theme::current(cx);
+            crate::viewer::file_path_header(&p, &theme)
+        });
+
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .children(header)
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .bg(gpui::rgb(0x000000))
+                    .child(self.view),
+            )
     }
 }
 

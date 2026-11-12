@@ -509,7 +509,10 @@ impl ConsoleDesktopApp {
             return div()
                 .relative()
                 .size_full()
-                .child(console_ui::DiffViewer::new(diff_view))
+                .child(
+                    console_ui::DiffViewer::new(diff_view)
+                        .path(self.comment_display_path(pane_id, path)),
+                )
                 .child(collapse)
                 .child(composer)
                 .into_any_element();
