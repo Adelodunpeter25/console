@@ -130,7 +130,7 @@ func RegisterGitRoutes(app *fiber.App, git *gitsvc.GitService, watch *fs.FsWatch
 		summary := git.ListBranches(repoPath)
 		out := &consolev1.GitBranchesResponse{IsGitRepository: summary.IsGitRepository}
 		for _, b := range summary.Branches {
-			out.Branches = append(out.Branches, &consolev1.GitBranchInfo{Name: b.Name, Current: b.Current})
+			out.Branches = append(out.Branches, &consolev1.GitBranchInfo{Name: b.Name, Current: b.Current, Remote: b.Remote})
 		}
 		return okProto(c, out)
 	})

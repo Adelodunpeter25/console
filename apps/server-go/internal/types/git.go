@@ -20,6 +20,9 @@ type GitStatusSummary struct {
 type GitBranchInfo struct {
 	Name    string `json:"name"`
 	Current bool   `json:"current"`
+	// Remote marks a remote-tracking branch (origin/…); such a branch cannot
+	// be checked out with a plain switch but is a valid worktree base.
+	Remote bool `json:"remote,omitempty"`
 }
 
 type GitBranchesResponse struct {

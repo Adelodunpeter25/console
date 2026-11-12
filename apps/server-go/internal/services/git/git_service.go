@@ -217,7 +217,10 @@ func (s *GitService) GetDiff(repoPath string, filePath string) (string, error) {
 	return out, nil
 }
 
-// ListBranches lists local branches with the checked-out one marked.
+// ListBranches lists local branches with the checked-out one marked, then
+// remote-tracking branches (origin/…, origin/HEAD skipped) marked Remote.
+// Remotes matter as worktree base choices — a branch that exists only on
+// the remote is still a valid cut point after a fetch.
 func (s *GitService) ListBranches(repoPath string) types.GitBranchesResponse {
 	if isRepo, err := RunGit(repoPath, "rev-parse", "--is-inside-work-tree"); err != nil || strings.TrimSpace(isRepo) != "true" {
 		return types.GitBranchesResponse{Branches: []types.GitBranchInfo{}, IsGitRepository: false}
@@ -232,6 +235,14 @@ func (s *GitService) ListBranches(repoPath string) types.GitBranchesResponse {
 			continue
 		}
 		branches = append(branches, types.GitBranchInfo{Name: name, Current: name == current})
+	}
+	remoteOut, _ := RunGit(repoPath, "branch", "-r", "--format=%(refname:short)")
+	for _, name := range strings.Split(remoteOut, "\n") {
+		name = strings.TrimSpace(name)
+		if name == "" || name == "origin/HEAD" || strings.HasSuffix(name, "/HEAD") {
+			continue
+		}
+		branches = append(branches, types.GitBranchInfo{Name: name, Remote: true})
 	}
 	return types.GitBranchesResponse{Branches: branches, IsGitRepository: true}
 }

@@ -19,6 +19,7 @@ import (
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 )
 
@@ -73,6 +74,40 @@ func TestGitProtoMatchesFixtures(t *testing.T) {
 	}
 	if decoded.GetBranch() != "main" || len(decoded.GetFiles()) != 2 {
 		t.Fatalf("decoded: %+v", &decoded)
+	}
+}
+
+func TestGitBranchesIncludeRemotes(t *testing.T) {
+	repo := gitRepo(t)
+	// Fake a remote-tracking branch and origin/HEAD without a real remote.
+	for _, args := range [][]string{
+		{"update-ref", "refs/remotes/origin/develop", "HEAD"},
+		{"update-ref", "refs/remotes/origin/main", "HEAD"},
+		{"symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+	}
+
+	branches := gitsvc.NewGitService().ListBranches(repo)
+	if !branches.IsGitRepository {
+		t.Fatal("expected a git repository")
+	}
+	byName := map[string]types.GitBranchInfo{}
+	for _, b := range branches.Branches {
+		byName[b.Name] = b
+	}
+	if dev := byName["origin/develop"]; !dev.Remote || dev.Current {
+		t.Fatalf("origin/develop: %+v", dev)
+	}
+	if head := byName["origin/HEAD"]; head.Name != "" {
+		t.Fatalf("origin/HEAD must be skipped, got %+v", head)
+	}
+	if local := byName["main"]; local.Remote || !local.Current {
+		t.Fatalf("local main: %+v", local)
 	}
 }
 
