@@ -21,6 +21,20 @@ pub fn parse_session_id_from_ident(ident: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// How many chats the Dock badge counts: the ones that finished unseen, plus
+/// the ones waiting on the user (a pending question, or an errored run not yet
+/// opened). Read from the session headers, so it survives a restart and agrees
+/// with the sidebar. Settled chats are filed away and never count, and a
+/// running chat shows its spinner, not a badge.
+pub fn badge_count(sessions: &[crate::types::session::SessionHeader]) -> usize {
+    sessions
+        .iter()
+        .filter(|session| session.deleted_at.is_none() && session.settled_at.is_none())
+        .filter(|session| session.status != "working" && session.status != "running")
+        .filter(|session| session.unread || session.status == "needs_attention")
+        .count()
+}
+
 /// Dock badge text for a count of sessions with unopened banners.
 /// Zero clears the badge (`None`); otherwise the count as a string.
 pub fn dock_badge_label(outstanding: usize) -> Option<String> {

@@ -5,8 +5,9 @@
 //! title fallback, and the viewing-suppression decision.
 
 use console_core::types::notification::{
-    NOTIFICATION_THREAD_ID, NotificationDecision, decide_notification, dock_badge_label,
-    normalize_notification_title, notification_ident, parse_session_id_from_ident,
+    NOTIFICATION_THREAD_ID, NotificationDecision, badge_count, decide_notification,
+    dock_badge_label, normalize_notification_title, notification_ident,
+    parse_session_id_from_ident,
 };
 
 #[test]
@@ -87,4 +88,43 @@ fn test_dock_badge_label() {
     assert_eq!(dock_badge_label(0), None);
     assert_eq!(dock_badge_label(1).as_deref(), Some("1"));
     assert_eq!(dock_badge_label(12).as_deref(), Some("12"));
+}
+
+fn session(status: &str, unread: bool) -> console_core::SessionHeader {
+    console_core::SessionHeader {
+        status: status.to_string(),
+        unread,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn badge_counts_unread_and_needs_attention_chats() {
+    let sessions = vec![
+        session("done", true),
+        session("done", true),
+        session("needs_attention", false),
+        session("done", false),
+        session("idle", false),
+    ];
+    assert_eq!(badge_count(&sessions), 3);
+}
+
+#[test]
+fn badge_is_empty_when_everything_is_read() {
+    assert_eq!(
+        badge_count(&[session("done", false), session("idle", false)]),
+        0
+    );
+    assert_eq!(badge_count(&[]), 0);
+}
+
+#[test]
+fn badge_skips_running_settled_and_deleted_chats() {
+    let mut settled = session("done", true);
+    settled.settled_at = Some(1);
+    let mut deleted = session("done", true);
+    deleted.deleted_at = Some(1);
+    let running = session("working", true);
+    assert_eq!(badge_count(&[settled, deleted, running]), 0);
 }
