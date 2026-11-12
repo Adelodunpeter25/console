@@ -163,10 +163,16 @@ fn render_entry_row(
             .h(px(15.0))
             .w(px(15.0))
             .into_any_element(),
+        // Antigravity's mark is multicolor in the wild; the brand tint reads
+        // as a stray orange glyph in a list of neutral icons.
         Some(PaletteIcon::Provider(provider)) => provider_app_icon(
             provider.as_ref(),
             15.0,
-            provider_color(&theme, provider.as_ref()),
+            if provider.as_ref() == "antigravity" {
+                theme.text_secondary
+            } else {
+                provider_color(&theme, provider.as_ref())
+            },
         )
         .into_any_element(),
         None => div().size(px(15.0)).into_any_element(),

@@ -55,8 +55,8 @@ impl QuickOpenPalette {
         self.on_open_file = Some(Rc::new(callback));
     }
 
-    /// Open the palette scoped to `root` with an empty list. Nothing is
-    /// searched until the user types — an empty query shows the empty state.
+    /// Open the palette scoped to `root`, listing some of its files until
+    /// the user types.
     /// `None` shows an empty state instead of searching the app's cwd.
     pub fn open(&mut self, root: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
         self.root = root.clone();
@@ -109,6 +109,7 @@ impl QuickOpenPalette {
             modal.set_entries(Vec::new(), cx);
             modal.show(window, cx);
         });
+        self.schedule_search("", /*immediate*/ true, cx);
     }
 
     pub fn hide(&mut self, cx: &mut Context<Self>) {
@@ -148,25 +149,11 @@ impl QuickOpenPalette {
                 return;
             }
 
-            // Empty query searches nothing — show the empty state instead of
-            // a broad scan. This must run here, not synchronously above: the
-            // query handler can fire while the modal is already borrowed
-            // (open/show cascade), and touching it re-entrantly panics
-            // GPUI's entity lease (double_lease_panic).
-            if query.trim().is_empty() {
-                let _ = this.update(cx, |this, cx| {
-                    if generation != this.search_generation {
-                        return;
-                    }
-                    this.modal.update(cx, |m, cx| {
-                        if m.is_open() {
-                            m.set_entries(Vec::new(), cx);
-                        }
-                    });
-                });
-                return;
-            }
-
+            // An empty query lists some of the project's files; the server
+            // treats it as a broad scan. The search runs here, not
+            // synchronously: the query handler can fire while the modal is
+            // already borrowed (open/show cascade), and touching it
+            // re-entrantly panics GPUI's entity lease.
             let items = match root {
                 Some(root) => {
                     client
