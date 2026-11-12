@@ -59,14 +59,17 @@ pub enum RowStatus {
     NeedsAttention,
     /// A run finished after the chat was last shown: the dot.
     Unread,
-    /// Finished and seen, or never run: the slot stays empty.
+    /// Finished and already seen: the check.
+    Done,
+    /// Never run, or idle: the slot stays empty.
     Quiet,
 }
 
 /// Choose the row's status icon. Precedence is fixed: running, then needs
 /// attention (a pending question, or an errored run not yet opened), then
-/// unread, then nothing. The server's `unread` flag is the only unread input,
-/// so the sidebar never re-derives it.
+/// unread (the dot), then done and read (the check), then nothing. The
+/// server's `unread` flag is the only unread input, so the sidebar never
+/// re-derives it.
 pub fn row_status(
     session: &SessionHeader,
     loading_state: Option<SidebarLoadingState>,
@@ -85,6 +88,9 @@ pub fn row_status(
     }
     if session.unread {
         return RowStatus::Unread;
+    }
+    if session.status == "done" || session.status == "completed" {
+        return RowStatus::Done;
     }
     RowStatus::Quiet
 }

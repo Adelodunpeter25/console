@@ -193,6 +193,11 @@ impl RenderOnce for SidebarSessionItem {
                 .tooltip(Tooltip::text("Unread"))
                 .child(app_icon(IconName::Unread, 15.0, theme.accent))
                 .into_any_element(),
+            sidebar::RowStatus::Done => status_slot()
+                .id(status_id())
+                .tooltip(Tooltip::text("Done"))
+                .child(app_icon(IconName::Done, 15.0, theme.success))
+                .into_any_element(),
             sidebar::RowStatus::Quiet => status_slot().into_any_element(),
         };
 
@@ -329,12 +334,11 @@ impl RenderOnce for SidebarSessionItem {
                     (None, false)
                 };
 
-                let is_done = session.status == "done" || session.status == "completed";
                 let (status_label, status_color) = match row_status {
                     sidebar::RowStatus::Running => ("Running", theme.accent),
                     sidebar::RowStatus::NeedsAttention => ("Needs attention", theme.warning),
                     sidebar::RowStatus::Unread => ("Unread", theme.accent),
-                    sidebar::RowStatus::Quiet if is_done => ("Done", theme.success),
+                    sidebar::RowStatus::Done => ("Done", theme.success),
                     sidebar::RowStatus::Quiet if settled => ("Settled", theme.text_tertiary),
                     sidebar::RowStatus::Quiet => ("Idle", theme.text_ghost),
                 };

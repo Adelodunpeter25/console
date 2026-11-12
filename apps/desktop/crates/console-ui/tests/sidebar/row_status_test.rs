@@ -18,8 +18,12 @@ fn a_finished_chat_you_have_not_opened_shows_the_dot() {
 }
 
 #[test]
-fn a_finished_chat_you_have_read_shows_nothing() {
-    assert_eq!(row_status(&header("done", false), None), RowStatus::Quiet);
+fn a_finished_chat_you_have_read_shows_the_check() {
+    assert_eq!(row_status(&header("done", false), None), RowStatus::Done);
+}
+
+#[test]
+fn a_chat_that_never_ran_shows_nothing() {
     assert_eq!(row_status(&header("idle", false), None), RowStatus::Quiet);
 }
 
@@ -53,8 +57,8 @@ fn running_outranks_everything() {
 }
 
 #[test]
-fn only_the_server_flag_makes_a_chat_unread() {
-    // A "done" status alone is not unread: that was the old behaviour, a check
-    // on every finished chat whether or not anyone had looked.
-    assert_eq!(row_status(&header("done", false), None), RowStatus::Quiet);
+fn only_the_server_flag_makes_a_finished_chat_unread() {
+    // The same finished chat is the dot or the check depending on one flag.
+    assert_eq!(row_status(&header("done", true), None), RowStatus::Unread);
+    assert_eq!(row_status(&header("done", false), None), RowStatus::Done);
 }
