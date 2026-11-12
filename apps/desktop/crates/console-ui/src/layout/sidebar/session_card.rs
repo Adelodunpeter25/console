@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use gpui::prelude::FluentBuilder;
 use gpui::{AnyElement, App, Entity, IntoElement, ParentElement, Styled, div, px};
 
 use crate::primitives::{IconName, app_icon};
@@ -118,6 +119,7 @@ pub fn render_session_card_content(
     title: &str,
     created_at: i64,
     updated_at: i64,
+    model_name: Option<&str>,
     project_name: &str,
     theme: &Theme,
 ) -> AnyElement {
@@ -177,6 +179,28 @@ pub fn render_session_card_content(
                 ),
         )
         .child(div().h(px(1.0)).bg(theme.border))
+        .when_some(model_name.filter(|m| !m.is_empty()), |card, model| {
+            card.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .text_size(px(12.0))
+                    .child(
+                        div()
+                            .w(px(65.0))
+                            .text_color(theme.text_tertiary)
+                            .child("Model"),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(theme.text_secondary)
+                            .child(model.to_string()),
+                    ),
+            )
+        })
         .child(
             div()
                 .flex()

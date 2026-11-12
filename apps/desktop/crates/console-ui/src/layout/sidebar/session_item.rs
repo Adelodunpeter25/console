@@ -301,6 +301,17 @@ impl RenderOnce for SidebarSessionItem {
         if is_card_active && !is_renaming {
             if let Some(bounds) = probe_bounds.get() {
                 let hover_mgr_card = hover_mgr.clone();
+                let model_name = if !session.model_id.is_empty() {
+                    let base = console_shared::format::format_model_name(&session.model_id);
+                    if let Some(thinking) = session.thinking_level.as_deref().filter(|t| !t.is_empty()) {
+                        Some(format!("{base} ({thinking})"))
+                    } else {
+                        Some(base)
+                    }
+                } else {
+                    None
+                };
+
                 let card = div()
                     .id(ElementId::Name(
                         format!("session-card-{}", session.id).into(),
@@ -313,6 +324,7 @@ impl RenderOnce for SidebarSessionItem {
                         &display_title,
                         session.created_at,
                         session.updated_at,
+                        model_name.as_deref(),
                         &self.project_name,
                         &theme,
                     ));
