@@ -151,7 +151,6 @@ pub fn render_session_card_content(
     is_worktree: bool,
     status_label: &str,
     status_color: Hsla,
-    message_count: Option<i32>,
     theme: &Theme,
 ) -> AnyElement {
     let created_ago = if created_at > 0 {
@@ -180,7 +179,7 @@ pub fn render_session_card_content(
 
     div()
         .w(px(290.0))
-        .p(px(12.0))
+        .p(px(10.0))
         .rounded(px(8.0))
         .border_1()
         .border_color(theme.border_strong)
@@ -209,7 +208,7 @@ pub fn render_session_card_content(
                         .child(subtitle),
                 ),
         )
-        .child(div().my(px(4.0)).h(px(1.0)).bg(theme.border))
+        .child(div().h(px(1.0)).bg(theme.border))
         .when_some(model_name.filter(|m| !m.is_empty()), |card, model| {
             card.child(
                 div()
@@ -342,35 +341,6 @@ pub fn render_session_card_content(
                                 .text_color(theme.text_secondary)
                                 .child(status_label.to_string()),
                         ),
-                ),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap_x(px(6.0))
-                .text_size(px(12.0))
-                .child(
-                    div()
-                        .w(px(60.0))
-                        .flex_none()
-                        .text_color(theme.text_tertiary)
-                        .child("Messages"),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_color(theme.text_secondary)
-                        .child(match message_count {
-                            Some(1) => "1 message".to_string(),
-                            Some(n) if n > 1 => {
-                                let turns = (n + 1) / 2;
-                                format!("{n} messages ({turns} turns)")
-                            }
-                            _ => "No messages".to_string(),
-                        }),
                 ),
         )
         .into_any_element()

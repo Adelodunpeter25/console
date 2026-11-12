@@ -361,7 +361,6 @@ impl RenderOnce for SidebarSessionItem {
                         is_worktree,
                         status_label,
                         status_color,
-                        session.message_count,
                         &theme,
                     ));
 
