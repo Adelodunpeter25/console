@@ -218,3 +218,37 @@ fn picking_an_existing_branch_checks_it_out_in_the_project() {
     assert_eq!(BranchChoice::Project.checkout_target(), None);
     assert_eq!(BranchChoice::NewWorktree.checkout_target(), None);
 }
+
+#[test]
+fn branch_menu_section_offers_no_remote_branches() {
+    // Remote-tracking rows are worktree base choices, not checkouts —
+    // `git switch` cannot check them out in place, so the shared section
+    // (the footer and the card's FromBranch mode) must hide them.
+    use console_core::GitBranchInfo;
+    use console_ui::common::branch_menu_section;
+    use console_ui::primitives::MenuItem;
+    use std::rc::Rc;
+
+    let branches = Rc::new(vec![
+        GitBranchInfo { name: "main".into(), current: true, remote: false },
+        GitBranchInfo { name: "origin/develop".into(), current: false, remote: true },
+    ]);
+    let is_selected: Rc<dyn Fn(&GitBranchInfo) -> bool> = Rc::new(|info: &GitBranchInfo| {
+        BranchChoice::FromBranch(info.name.clone()) == BranchChoice::FromBranch("main".into())
+    });
+    let on_select: Rc<dyn Fn(String, &mut gpui::Window, &mut gpui::App)> = Rc::new(|_, _, _| {});
+
+    let items = branch_menu_section(branches, &is_selected, &on_select, true, &[], None);
+    let labels: Vec<&str> = items
+        .iter()
+        .filter_map(|item| match item {
+            MenuItem::Entry { label, .. } => Some(label.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert!(labels.contains(&"main"), "labels: {labels:?}");
+    assert!(
+        !labels.iter().any(|label| label.starts_with("origin/")),
+        "remote rows must not be checkout targets: {labels:?}"
+    );
+}

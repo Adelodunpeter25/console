@@ -48,6 +48,7 @@ pub struct Data {
     pub github_repos_error: Option<String>,
     pub branches: Rc<Vec<GitBranchInfo>>,
     pub branch: BranchChoice,
+    pub worktree_base: Option<String>,
     pub providers: Rc<Vec<ProviderCatalogEntry>>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
     pub favorites: Rc<HashSet<String>>,
@@ -82,6 +83,7 @@ pub struct FloatingComposerView {
     on_refresh_github_repos: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_connect_github: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_choose_branch: Rc<dyn Fn(BranchChoice, &mut Window, &mut App) + 'static>,
+    on_choose_worktree_base: Rc<dyn Fn(Option<String>, &mut Window, &mut App) + 'static>,
     on_choose_model: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     on_choose_thinking: Rc<dyn Fn(ThinkingLevel, &mut Window, &mut App) + 'static>,
     on_submit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -120,6 +122,7 @@ impl FloatingComposerView {
                 github_repos_error: None,
                 branches: Rc::new(Vec::new()),
                 branch: BranchChoice::default(),
+                worktree_base: None,
                 providers: Rc::new(Vec::new()),
                 models_by_provider: Rc::new(HashMap::new()),
                 favorites: Rc::new(HashSet::new()),
@@ -143,6 +146,7 @@ impl FloatingComposerView {
             on_refresh_github_repos: Rc::new(|_, _| {}),
             on_connect_github: Rc::new(|_, _| {}),
             on_choose_branch: Rc::new(|_, _, _| {}),
+            on_choose_worktree_base: Rc::new(|_, _, _| {}),
             on_choose_model: Rc::new(|_, _, _, _| {}),
             on_choose_thinking: Rc::new(|_, _, _| {}),
             on_submit: Rc::new(|_, _, _| {}),
@@ -214,6 +218,14 @@ impl FloatingComposerView {
         f: impl Fn(BranchChoice, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_choose_branch = Rc::new(f);
+        self
+    }
+
+    pub fn on_choose_worktree_base(
+        mut self,
+        f: impl Fn(Option<String>, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_choose_worktree_base = Rc::new(f);
         self
     }
 
@@ -384,6 +396,7 @@ impl FloatingComposerView {
             // branch name is capped rather than pushing the card wider.
             .max_w(px(220.0));
         let on_choose_branch = self.on_choose_branch.clone();
+        let on_choose_worktree_base = self.on_choose_worktree_base.clone();
         let branch_control = dropdown_menu(
             branch_trigger,
             "floating-branch-menu",
@@ -412,7 +425,7 @@ impl FloatingComposerView {
                         }),
                     }
                 };
-                branch_menu_section(
+                let mut items = branch_menu_section(
                     data.branches.clone(),
                     &is_choice,
                     &on_pick_branch,
@@ -430,7 +443,44 @@ impl FloatingComposerView {
                         ),
                     ],
                     None,
-                )
+                );
+                // A worktree launch cuts its branch from a base. When that is
+                // the chosen mode, the menu also offers the cut point: the
+                // repo default (server-resolved) plus every local and remote
+                // branch.
+                if current == BranchChoice::NewWorktree {
+                    let on_choose_worktree_base = on_choose_worktree_base.clone();
+                    let on_pick_base: Rc<dyn Fn(Option<String>, &mut Window, &mut App)> = {
+                        let on_choose_worktree_base = on_choose_worktree_base.clone();
+                        Rc::new(move |base, window, cx| {
+                            on_choose_worktree_base(base, window, cx);
+                        })
+                    };
+                    let base = data.worktree_base.clone();
+                    if !items.is_empty() {
+                        items.push(MenuItem::Separator);
+                    }
+                    let pick_base = on_pick_base.clone();
+                    items.push(
+                        MenuItem::new("Default branch", move |window, cx| {
+                            pick_base(None, window, cx);
+                        })
+                        .selected(base.is_none()),
+                    );
+                    for info in data.branches.iter() {
+                        let name = info.name.clone();
+                        let pick_base = on_pick_base.clone();
+                        let is_base = base.as_deref() == Some(name.as_str());
+                        items.push(
+                            MenuItem::new(name.clone(), move |window, cx| {
+                                pick_base(Some(name.clone()), window, cx);
+                            })
+                            .selected(is_base)
+                            .icon(IconName::GitBranch.path()),
+                        );
+                    }
+                }
+                items
             },
         );
 

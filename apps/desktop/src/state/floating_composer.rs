@@ -546,6 +546,19 @@ impl ConsoleDesktopApp {
                 }
             }
         })
+        .on_choose_worktree_base({
+            let entity = entity.clone();
+            move |base: Option<String>, _window: &mut Window, cx: &mut App| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        // The menu stays open — picking a cut point is a
+                        // two-step choice, unlike the mode rows.
+                        this.floating_composer.worktree_base = base;
+                        cx.notify();
+                    });
+                }
+            }
+        })
         .on_choose_model({
             let entity = entity.clone();
             move |provider: String, model_id: String, window: &mut Window, cx: &mut App| {
@@ -719,11 +732,16 @@ impl ConsoleDesktopApp {
 
         // Only "New worktree" provisions anything; a plain project session
         // sends no worktree key at all. Picking an existing branch works in
-        // the project folder on that branch (checked out first below).
+        // the project folder on that branch (checked out first below). The
+        // optional base is the branch the new worktree branch is cut from;
+        // None lets the server resolve the repo default.
         let worktree = submit
             .branch
             .creates_worktree()
-            .then(CreateWorktreeSpec::default);
+            .then(|| CreateWorktreeSpec {
+                branch: None,
+                base_branch: submit.worktree_base.clone(),
+            });
         // Skip the checkout when the picked branch is already the one checked
         // out in the project folder (the common "stay on main" case).
         let checkout = submit

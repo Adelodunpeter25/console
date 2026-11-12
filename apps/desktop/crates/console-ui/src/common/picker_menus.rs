@@ -116,6 +116,12 @@ pub fn branch_menu_section(
         items.push(MenuItem::new("No branches", |_, _| {}).disabled(true));
     }
     for info in branches.iter() {
+        // Remote-tracking rows (origin/…) are worktree base choices, not
+        // checkouts — `git switch` cannot check them out in place, so the
+        // footer and the card's FromBranch mode never offer them.
+        if info.remote {
+            continue;
+        }
         let name = info.name.clone();
         let on_select = on_select.clone();
         let selected = is_selected(info);

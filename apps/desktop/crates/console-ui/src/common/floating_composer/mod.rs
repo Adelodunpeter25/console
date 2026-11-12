@@ -157,6 +157,10 @@ pub struct FloatingSubmit {
     pub project_id: Option<String>,
     pub cwd: Option<String>,
     pub branch: BranchChoice,
+    /// The existing branch to cut a "New worktree" launch's branch from.
+    /// None lets the server pick the repo default; remote branches
+    /// (origin/…) are valid here.
+    pub worktree_base: Option<String>,
     pub model: Option<SelectedModel>,
     pub thinking_level: Option<ThinkingLevel>,
     /// How much the agent may do unattended. The card seeds this from the
@@ -229,6 +233,7 @@ pub struct FloatingComposerState {
     pub github_repos_error: Option<String>,
     pub branches: Rc<Vec<GitBranchInfo>>,
     pub branch: BranchChoice,
+    pub worktree_base: Option<String>,
     pub providers: Rc<Vec<ProviderCatalogEntry>>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
     pub favorites: Rc<HashSet<String>>,
@@ -294,6 +299,7 @@ impl FloatingComposerState {
             github_repos_error: None,
             branches: Rc::new(Vec::new()),
             branch: BranchChoice::default(),
+            worktree_base: None,
             providers: Rc::new(Vec::new()),
             models_by_provider: Rc::new(HashMap::new()),
             favorites: Rc::new(HashSet::new()),
@@ -357,6 +363,7 @@ impl FloatingComposerState {
         // An existing-branch base is a per-launch decision, not a sticky
         // preference — reset it rather than inheriting the last one.
         self.branch = BranchChoice::default();
+        self.worktree_base = None;
         self.submitting = false;
         self.error = None;
         self.autocomplete = None;
@@ -445,6 +452,7 @@ impl FloatingComposerState {
             github_repos_error: self.github_repos_error.clone(),
             branches: self.branches.clone(),
             branch: self.branch.clone(),
+            worktree_base: self.worktree_base.clone(),
             providers: self.providers.clone(),
             models_by_provider: self.models_by_provider.clone(),
             favorites: self.favorites.clone(),
@@ -493,6 +501,7 @@ impl FloatingComposerState {
             project_id,
             cwd,
             branch: self.branch.clone(),
+            worktree_base: self.worktree_base.clone(),
             model: self.selected_model.clone(),
             thinking_level: self.thinking_level,
             approval_mode: self.approval_mode,
@@ -518,12 +527,14 @@ impl FloatingComposerState {
         if matches!(self.branch, BranchChoice::FromBranch(_)) {
             self.branch = BranchChoice::default();
         }
+        self.worktree_base = None;
     }
 
     pub fn choose_no_project(&mut self) {
         self.selected_project_id = None;
         self.branches = Rc::new(Vec::new());
         self.branch = BranchChoice::default();
+        self.worktree_base = None;
     }
 
     /// Hand the card a freshly fetched branch list, for after a project switch.
@@ -537,6 +548,11 @@ impl FloatingComposerState {
             && !self.branches.iter().any(|b| &b.name == name)
         {
             self.branch = BranchChoice::default();
+        }
+        if let Some(base) = &self.worktree_base
+            && !self.branches.iter().any(|b| &b.name == base)
+        {
+            self.worktree_base = None;
         }
     }
 
