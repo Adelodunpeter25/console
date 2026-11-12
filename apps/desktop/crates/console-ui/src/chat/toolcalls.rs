@@ -850,11 +850,12 @@ impl RenderOnce for ToolCalls {
             header = header.child(div().ml_auto());
         }
 
-        let mut container = div()
-            .w_full()
-            .border_b_1()
-            .border_color(theme.border)
-            .children([header.into_any_element()]);
+        let mut container = div().w_full().border_b_1().border_color(if self.working {
+            transparent_black()
+        } else {
+            theme.border
+        });
+        container = container.children([header.into_any_element()]);
 
         if expanded {
             container = container.child(
