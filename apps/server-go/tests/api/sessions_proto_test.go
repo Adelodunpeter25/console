@@ -93,6 +93,19 @@ func TestSessionHeaderProtoMatchesFixtures(t *testing.T) {
 	if settledHeader.SettledAt == nil || *settledHeader.SettledAt != 1700000000005 {
 		t.Fatalf("header_settled decoded wrong: %#v", settledHeader.SettledAt)
 	}
+
+	// The unread header decodes with the flag set, and a header without it
+	// reads as read: the field is absent from every older fixture.
+	var unreadHeader consolev1.SessionHeader
+	if err := unmarshal.Unmarshal([]byte(sessionFixture(t, "header_unread.json")), &unreadHeader); err != nil {
+		t.Fatal(err)
+	}
+	if !unreadHeader.GetUnread() {
+		t.Fatal("header_unread decoded without the unread flag")
+	}
+	if decoded.GetUnread() {
+		t.Fatal("a header with no unread field must read as read")
+	}
 }
 
 func sessionRoutesApp(t *testing.T) (*fiber.App, string) {

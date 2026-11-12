@@ -49,7 +49,7 @@ func IsAttentionKind(kind loop.EventKind) bool {
 // AttentionNotification builds the needs-attention banner for an event.
 func AttentionNotification(sessionID string, event loop.Event, sessionTitle string) *consolev1.NotificationEvent {
 	out := &consolev1.NotificationEvent{
-		Type: "notification", Kind: "needs_attention", SessionId: sessionID, Title: "Needs Attention",
+		Type: "notification", Kind: "needs_attention", SessionId: sessionID, Title: "Needs Your Attention",
 	}
 	if subtitle := cleanSubtitle(sessionTitle); subtitle != "" {
 		out.Subtitle = subtitle
@@ -90,6 +90,22 @@ func DoneNotification(sessionID, sessionTitle, summary string) *consolev1.Notifi
 func ResumedNotification(sessionID, message string) *consolev1.NotificationEvent {
 	return &consolev1.NotificationEvent{
 		Type: "notification", Kind: "resumed", SessionId: sessionID, Body: message,
+	}
+}
+
+// ReadStateNotification tells connected clients a chat's unread state changed,
+// so a device reading a chat clears its dot on the others without waiting for
+// the next session-list poll. Silent signal, like resume: no banner.
+func ReadStateNotification(sessionID string) *consolev1.NotificationEvent {
+	return &consolev1.NotificationEvent{
+		Type: "notification", Kind: "read_state", SessionId: sessionID,
+	}
+}
+
+// NotifyReadState pushes the read-state signal.
+func (s *Service) NotifyReadState(sessionID string) {
+	if bus := s.notifier(); bus != nil {
+		bus.Push(ReadStateNotification(sessionID))
 	}
 }
 

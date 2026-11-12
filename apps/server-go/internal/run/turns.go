@@ -35,6 +35,17 @@ func (s *Service) setStatus(sessionID, status string) {
 	}
 }
 
+// markActivity records that the chat finished or needs the user, which is what
+// makes it unread. Best-effort like setStatus: it must never fail a run.
+func (s *Service) markActivity(sessionID string) {
+	if s.sessions == nil {
+		return
+	}
+	if err := s.sessions.MarkActivity(sessionID); err != nil {
+		slog.Warn("run: mark activity failed", "session", sessionID, "error", err)
+	}
+}
+
 // execute drives one turn per loop iteration, draining a staged prompt as
 // the next turn when the previous settled cleanly. A failed turn holds
 // (not auto-runs, not drops) any staged prompt. One hub spans the whole
@@ -90,8 +101,10 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 				s.setStatus(sessionID, "done")
 			} else if runErr == nil {
 				s.setStatus(sessionID, "done")
+				s.markActivity(sessionID)
 			} else {
 				s.setStatus(sessionID, "needs_attention")
+				s.markActivity(sessionID)
 			}
 			// Release the session before the hub closes: a run that has
 			// observably finished must leave the session free, or a client

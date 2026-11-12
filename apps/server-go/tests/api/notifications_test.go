@@ -67,3 +67,23 @@ func TestNotificationProtoMatchesFixtures(t *testing.T) {
 		t.Fatalf("attention builder: %+v", attention)
 	}
 }
+
+// The question banner reads "Needs Your Attention" on the user's screen, and
+// the read-state signal is silent (no title or body) so clients show nothing.
+func TestAttentionTitleAndSilentReadState(t *testing.T) {
+	attention := run.AttentionNotification("s1", loop.Event{Kind: loop.EventAskQuestion}, "Fix the parser")
+	if attention.GetTitle() != "Needs Your Attention" {
+		t.Fatalf("question banner title: %q", attention.GetTitle())
+	}
+	if run.AttentionNotification("s1", loop.Event{Kind: loop.EventError, Text: "boom"}, "").GetTitle() != "Agent Error" {
+		t.Fatal("error banner must keep the Agent Error title")
+	}
+
+	read := run.ReadStateNotification("s1")
+	if read.GetKind() != "read_state" || read.GetSessionId() != "s1" {
+		t.Fatalf("read_state: %+v", read)
+	}
+	if read.GetTitle() != "" || read.GetBody() != "" || read.GetSubtitle() != "" {
+		t.Fatalf("read_state must be silent, got %+v", read)
+	}
+}

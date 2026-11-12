@@ -114,6 +114,7 @@ func NewService(sessions *services.SessionService) *Service {
 		// working. It flips back on resolve — see resolveDecision.
 		if event.Kind == loop.EventAskQuestion {
 			s.setStatus(sessionID, "needs_attention")
+			s.markActivity(sessionID)
 		}
 	}
 	return s

@@ -108,6 +108,42 @@ func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {
 	return out
 }
 
+// staleRunStatus reports a chat whose indexed status says a run is going but
+// whose run is gone, so a read should settle it to done: an abort that skipped
+// the terminal status write, or a crash mid-run, would otherwise leave the
+// list showing "working" forever.
+//
+// An unread needs_attention is deliberately left alone. A run that ended in
+// an error writes needs_attention on purpose, and settling it here would wipe
+// the alert within one list poll, before the user ever saw it. It clears when
+// the chat is read (session.MarkRead) or a new run starts.
+func staleRunStatus(h types.SessionHeader, active bool) bool {
+	if active {
+		return false
+	}
+	switch h.Status {
+	case "working":
+		return true
+	case "needs_attention":
+		return !session.IsUnread(h)
+	default:
+		return false
+	}
+}
+
+// sendReadHeader answers a read or unread call with the chat's fresh header,
+// so the caller does not need a second request to see the new state.
+func sendReadHeader(c *fiber.Ctx, sessions *services.SessionService, id string, send func(*fiber.Ctx, types.SessionHeader) error) error {
+	header, err := sessions.Header(id)
+	if err != nil {
+		return sessionError(c, fiber.StatusInternalServerError, err.Error())
+	}
+	if header == nil {
+		return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
+	}
+	return send(c, *header)
+}
+
 // RegisterSessionRoutes registers the /api/sessions routes, with the
 // response shapes, status codes, and defaults the desktop client expects.
 func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, runs *run.Service) {
@@ -147,9 +183,10 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		// without it an abort that skipped the terminal status write (or a
 		// crash mid-run) left the home list showing "working" forever.
 		for i, header := range list {
-			if (header.Status == "working" || header.Status == "needs_attention") && !runs.IsActive(header.ID) {
+			if staleRunStatus(header, runs.IsActive(header.ID)) {
 				if err := sessions.UpdateStatusOnly(header.ID, "done"); err == nil {
 					list[i].Status = "done"
+					list[i].Unread = session.IsUnread(list[i])
 				}
 			}
 			headers = append(headers, sessionHeaderToProto(list[i]))
@@ -203,9 +240,10 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		// Settle stale working state on read, mirroring getSession: a chat
 		// whose run is gone is done, not stuck working. Status-only — a read
 		// must not bump updated_at, which orders the sidebar.
-		if !runs.IsActive(id) && (result.Header.Status == "working" || result.Header.Status == "needs_attention") {
+		if staleRunStatus(result.Header, runs.IsActive(id)) {
 			if err := sessions.UpdateStatusOnly(id, "done"); err == nil {
 				result.Header.Status = "done"
+				result.Header.Unread = session.IsUnread(result.Header)
 			}
 		}
 		// Mixed envelope until messages migrate: proto header plus the raw
@@ -471,6 +509,42 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
 		}
 		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
+	})
+
+	// POST /api/sessions/:id/read — a client showed this chat. Idempotent.
+	// Also clears a lingering needs_attention with no run behind it.
+	h.Post("/:id/read", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		known, err := sessions.MarkRead(id)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		if !known {
+			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
+		}
+		runs.NotifyReadState(id)
+		return sendReadHeader(c, sessions, id, sendSessionHeader)
+	})
+
+	// POST /api/sessions/:id/unread — make a read chat unread again. Refused
+	// with 409 while a run is in flight or for a settled chat.
+	h.Post("/:id/unread", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		known, err := sessions.MarkUnread(id)
+		if errors.Is(err, session.ErrSessionBusy) {
+			return sessionError(c, fiber.StatusConflict, "This chat is running; it will be unread when it finishes.")
+		}
+		if errors.Is(err, session.ErrSessionSettled) {
+			return sessionError(c, fiber.StatusConflict, "Move this chat back to active before marking it unread.")
+		}
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		if !known {
+			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
+		}
+		runs.NotifyReadState(id)
+		return sendReadHeader(c, sessions, id, sendSessionHeader)
 	})
 
 	// DELETE /api/sessions/:id/permanent — irreversibly delete a
