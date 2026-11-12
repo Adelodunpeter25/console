@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use gpui::prelude::FluentBuilder;
-use gpui::{AnyElement, App, Entity, IntoElement, ParentElement, Styled, div, px};
+use gpui::{AnyElement, App, Entity, Hsla, IntoElement, ParentElement, Styled, div, px};
 
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
@@ -115,12 +115,18 @@ pub fn on_card_hover(state: &Entity<SidebarHoverManager>, hovered: bool, cx: &mu
 }
 
 /// Render the content inside the session hover card.
+#[allow(clippy::too_many_arguments)]
 pub fn render_session_card_content(
     title: &str,
     created_at: i64,
     updated_at: i64,
     model_name: Option<&str>,
     project_name: &str,
+    branch: Option<&str>,
+    is_worktree: bool,
+    status_label: &str,
+    status_color: Hsla,
+    message_count: Option<i32>,
     theme: &Theme,
 ) -> AnyElement {
     let created_ago = if created_at > 0 {
@@ -148,7 +154,7 @@ pub fn render_session_card_content(
     let subtitle = format!("Created {created_ago}, {updated_str}");
 
     div()
-        .w(px(280.0))
+        .w(px(290.0))
         .p(px(12.0))
         .rounded(px(8.0))
         .border_1()
@@ -188,7 +194,7 @@ pub fn render_session_card_content(
                     .text_size(px(12.0))
                     .child(
                         div()
-                            .w(px(50.0))
+                            .w(px(60.0))
                             .flex_none()
                             .text_color(theme.text_tertiary)
                             .child("Model"),
@@ -211,7 +217,7 @@ pub fn render_session_card_content(
                 .text_size(px(12.0))
                 .child(
                     div()
-                        .w(px(50.0))
+                        .w(px(60.0))
                         .flex_none()
                         .text_color(theme.text_tertiary)
                         .child("Project"),
@@ -242,6 +248,105 @@ pub fn render_session_card_content(
                         )
                         .into_any_element()
                 }),
+        )
+        .when_some(branch.filter(|b| !b.is_empty()), |card, b| {
+            card.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_x(px(6.0))
+                    .text_size(px(12.0))
+                    .child(
+                        div()
+                            .w(px(60.0))
+                            .flex_none()
+                            .text_color(theme.text_tertiary)
+                            .child("Branch"),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .items_center()
+                            .gap_x(px(5.0))
+                            .text_color(theme.text_secondary)
+                            .child(app_icon(IconName::GitBranch, 13.0, theme.text_tertiary))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .child(if is_worktree {
+                                        format!("{b} (worktree)")
+                                    } else {
+                                        b.to_string()
+                                    }),
+                            ),
+                    ),
+            )
+        })
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_x(px(6.0))
+                .text_size(px(12.0))
+                .child(
+                    div()
+                        .w(px(60.0))
+                        .flex_none()
+                        .text_color(theme.text_tertiary)
+                        .child("Status"),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .gap_x(px(6.0))
+                        .child(
+                            div()
+                                .size(px(7.0))
+                                .rounded_full()
+                                .bg(status_color),
+                        )
+                        .child(
+                            div()
+                                .text_color(theme.text_secondary)
+                                .child(status_label.to_string()),
+                        ),
+                ),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_x(px(6.0))
+                .text_size(px(12.0))
+                .child(
+                    div()
+                        .w(px(60.0))
+                        .flex_none()
+                        .text_color(theme.text_tertiary)
+                        .child("Messages"),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_color(theme.text_secondary)
+                        .child(match message_count {
+                            Some(1) => "1 message".to_string(),
+                            Some(n) if n > 1 => {
+                                let turns = (n + 1) / 2;
+                                format!("{n} messages ({turns} turns)")
+                            }
+                            _ => "No messages".to_string(),
+                        }),
+                ),
         )
         .into_any_element()
 }

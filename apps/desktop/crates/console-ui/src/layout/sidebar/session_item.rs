@@ -321,6 +321,24 @@ impl RenderOnce for SidebarSessionItem {
                     None
                 };
 
+                let (branch, is_worktree) = if let Some(ref wt) = session.worktree && !wt.branch.is_empty() {
+                    (Some(wt.branch.as_str()), true)
+                } else {
+                    (None, false)
+                };
+
+                let (status_label, status_color) = if is_running {
+                    ("Running", theme.accent)
+                } else if needs_attention {
+                    ("Needs attention", theme.warning)
+                } else if is_done {
+                    ("Done", theme.success)
+                } else if settled {
+                    ("Settled", theme.text_tertiary)
+                } else {
+                    ("Idle", theme.text_ghost)
+                };
+
                 let card = div()
                     .id(ElementId::Name(
                         format!("session-card-{}", session.id).into(),
@@ -335,6 +353,11 @@ impl RenderOnce for SidebarSessionItem {
                         session.updated_at,
                         model_name.as_deref(),
                         &self.project_name,
+                        branch,
+                        is_worktree,
+                        status_label,
+                        status_color,
+                        session.message_count,
                         &theme,
                     ));
 
