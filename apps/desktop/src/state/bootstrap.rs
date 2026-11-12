@@ -127,7 +127,7 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.sessions = Rc::new(sessions);
+                                this.set_session_list(sessions);
                                 if matches!(
                                     target_for_bootstrap,
                                     crate::window::WindowLaunchTarget::RestorePersisted
@@ -380,7 +380,7 @@ impl ConsoleDesktopApp {
                     let _ = cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.sessions = Rc::new(sessions);
+                                this.set_session_list(sessions);
                                 cx.notify();
                             });
                         }

@@ -910,6 +910,7 @@ impl Render for ConsoleDesktopApp {
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
                                             Rc::make_mut(&mut this.sessions).retain(|s| s.id != id);
+                                            this.refresh_dock_badge();
                                             // The chat is gone, so its remembered
                                             // position is too.
                                             this.forget_transcript_scroll_position(&id, cx);

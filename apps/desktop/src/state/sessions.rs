@@ -16,6 +16,23 @@ use super::ConsoleDesktopApp;
 use super::user_prompt_history;
 
 impl ConsoleDesktopApp {
+    /// Store a fresh session list and bring the Dock badge in line with it.
+    /// Every place that replaces the list goes through here, so the badge can
+    /// never drift from what the sidebar shows.
+    pub(crate) fn set_session_list(&mut self, sessions: Vec<SessionHeader>) {
+        self.sessions = Rc::new(sessions);
+        self.refresh_dock_badge();
+    }
+
+    /// Recount the Dock badge from the current session list. Called after any
+    /// local edit that changes a chat's unread or settled state, so the badge
+    /// follows an optimistic change at once instead of at the next refresh.
+    pub(crate) fn refresh_dock_badge(&self) {
+        super::macos_notifications::set_dock_badge(console_core::types::notification::badge_count(
+            &self.sessions,
+        ));
+    }
+
     pub fn load_sessions(&mut self, cx: &mut Context<Self>) {
         let client = self.client.clone();
         // Chats known when the request left: one created while it was in
@@ -32,7 +49,7 @@ impl ConsoleDesktopApp {
                                     .sessions
                                     .iter()
                                     .any(|s| !known_at_request.contains(&s.id));
-                                this.sessions = Rc::new(sessions);
+                                this.set_session_list(sessions);
                                 // Chats that no longer exist cannot be
                                 // restored to, so their remembered positions
                                 // are dropped.
@@ -416,6 +433,9 @@ impl ConsoleDesktopApp {
                 session.pinned_at = None;
             }
         }
+        // A settled chat drops out of the Dock badge count, an unsettled one
+        // comes back into it.
+        self.refresh_dock_badge();
         // Settling a chat closes its tab(s), active or not. The optimistic
         // mark lands first so the pane sync below sees the settled session.
         if settled {
@@ -446,6 +466,7 @@ impl ConsoleDesktopApp {
                                 {
                                     (session.settled_at, session.pinned_at) = previous;
                                 }
+                                this.refresh_dock_badge();
                                 this.set_error_for_session(&session_id, message, cx)
                             });
                         }
@@ -1347,6 +1368,7 @@ impl ConsoleDesktopApp {
             session.status = "done".to_string();
         }
         super::macos_notifications::clear_for_session(session_id);
+        self.refresh_dock_badge();
         cx.notify();
 
         let client = self.client.clone();
@@ -1402,6 +1424,7 @@ impl ConsoleDesktopApp {
             session.unread = false;
         }
         super::macos_notifications::clear_for_session(session_id);
+        self.refresh_dock_badge();
         cx.notify();
         let client = self.client.clone();
         let session_id = session_id.to_string();
@@ -1431,6 +1454,7 @@ impl ConsoleDesktopApp {
             return;
         }
         session.unread = true;
+        self.refresh_dock_badge();
         cx.notify();
 
         let client = self.client.clone();
@@ -1447,6 +1471,7 @@ impl ConsoleDesktopApp {
                             {
                                 session.unread = false;
                             }
+                            this.refresh_dock_badge();
                             this.set_error_for_session(&session_id, message, cx)
                         });
                     }
