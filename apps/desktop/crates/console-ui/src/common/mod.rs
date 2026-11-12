@@ -56,7 +56,7 @@ pub use model_picker::{
     ModelDropdownMenu, ModelRolePicker, PickerTab, format_model_name, provider_svg_path,
 };
 pub use notice_banner::notice_banner;
-pub use palette::{CommandPalette, CommandPaletteModal, PaletteEntry};
+pub use palette::{CommandPalette, CommandPaletteModal, PaletteEntry, init_palette_keybindings};
 pub use picker_menus::{
     BranchModeRow, ProjectMenuExtras, branch_menu_section, project_menu_section,
 };

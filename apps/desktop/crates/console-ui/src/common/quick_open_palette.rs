@@ -205,18 +205,19 @@ fn entries_from_results(
             let label = item.relative_path;
             let modal = modal.clone();
             let on_open_file = on_open_file.clone();
-            let mut entry = PaletteEntry::new(path.clone(), label.clone(), move |window, cx| {
+            let name = base_name(&label).to_string();
+            let mut entry = PaletteEntry::new(path.clone(), name, move |window, cx| {
                 if let Some(on_open_file) = &on_open_file {
                     on_open_file(path.clone(), window, cx);
                 }
                 modal.update(cx, |modal, cx| modal.hide(cx));
             });
+            entry = entry.subtitle(label.clone());
             if item.is_dir {
                 entry = entry.icon(IconName::Folder);
             } else {
                 // Prefer basename so extension/name rules hit (Cargo.toml, *.rs, …).
-                let name = base_name(&label).to_string();
-                entry = entry.file_icon(name);
+                entry = entry.file_icon(base_name(&label).to_string());
             }
             entry
         })
