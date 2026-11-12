@@ -10,7 +10,7 @@ pub use group_header::{
     search_results_group_header, settled_group_header, sort_mode_toggle,
 };
 pub use session_card::{
-    SidebarHoverManager, on_card_hover, on_row_hover, render_session_card_content,
+    SidebarHoverManager, dismiss_card, on_card_hover, on_row_hover, render_session_card_content,
 };
 pub use session_item::{
     CancelSessionRename, CommitSessionRename, SidebarSessionItem, init_session_rename_keybindings,

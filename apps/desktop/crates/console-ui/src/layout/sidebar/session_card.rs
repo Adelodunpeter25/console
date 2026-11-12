@@ -15,6 +15,9 @@ pub struct SidebarHoverManager {
     pub active_id: Option<String>,
     pub hovered_id: Option<String>,
     pub card_hovered: bool,
+    /// Set when the user acts on a row (click, right-click) so the card stays
+    /// closed until the pointer leaves it, instead of reopening under a menu.
+    pub suppressed: bool,
     pub generation: u64,
 }
 
@@ -24,6 +27,7 @@ impl SidebarHoverManager {
             active_id: None,
             hovered_id: None,
             card_hovered: false,
+            suppressed: false,
             generation: 0,
         }
     }
@@ -39,7 +43,14 @@ pub fn on_row_hover(
     let (generation, is_active) = state.update(cx, |s, _| {
         s.generation += 1;
         if hovered {
+            let changed_row = s.hovered_id.as_deref() != Some(&session_id);
             s.hovered_id = Some(session_id.clone());
+            if changed_row {
+                s.suppressed = false;
+            }
+            if s.suppressed {
+                return (s.generation, false);
+            }
             if s.active_id.is_some() {
                 // If a popup is already active on another item, switch immediately without delay
                 s.active_id = Some(session_id.clone());
@@ -48,6 +59,7 @@ pub fn on_row_hover(
         } else {
             if s.hovered_id.as_deref() == Some(&session_id) {
                 s.hovered_id = None;
+                s.suppressed = false;
             }
             (s.generation, s.active_id.is_some())
         }
@@ -88,6 +100,19 @@ pub fn on_row_hover(
         })
         .detach();
     }
+}
+
+/// Close the card because the user is acting on a row; it stays closed until
+/// the pointer leaves and re-enters.
+pub fn dismiss_card(state: &Entity<SidebarHoverManager>, cx: &mut App) {
+    state.update(cx, |s, cx| {
+        s.generation += 1;
+        s.suppressed = true;
+        s.card_hovered = false;
+        if s.active_id.take().is_some() {
+            cx.notify();
+        }
+    });
 }
 
 pub fn on_card_hover(state: &Entity<SidebarHoverManager>, hovered: bool, cx: &mut App) {

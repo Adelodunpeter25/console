@@ -10,7 +10,7 @@ use gpui::{
 
 use super::item_row::{draft_badge, row_container, status_slot, title_label};
 use super::session_card::{
-    SidebarHoverManager, on_card_hover, on_row_hover, render_session_card_content,
+    SidebarHoverManager, dismiss_card, on_card_hover, on_row_hover, render_session_card_content,
 };
 use crate::input::ComposerInput;
 use crate::layout::sidebar_loading::{self as sidebar, SidebarLoadingState};
@@ -278,10 +278,14 @@ impl RenderOnce for SidebarSessionItem {
             .when(!is_renaming, |element| {
                 let session_id = session.id.clone();
                 let hover_mgr = hover_mgr.clone();
+                let dismiss_mgr = hover_mgr.clone();
                 element
                     .on_hover(move |hovered, _, cx| {
                         on_row_hover(&hover_mgr, &session_id, *hovered, cx);
                     })
+                    // Capture phase: the context menu stops propagation on
+                    // right-click, which would swallow a bubble-phase handler.
+                    .capture_any_mouse_down(move |_, _, cx| dismiss_card(&dismiss_mgr, cx))
                     .on_click(move |_, w, cx| {
                         (on_click)(w, cx);
                     })
