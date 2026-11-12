@@ -41,19 +41,14 @@ impl RenderOnce for DiffViewer {
             crate::viewer::file_path_header(&p, &theme)
         });
 
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .children(header)
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .w_full()
-                    .bg(gpui::rgb(0x000000))
-                    .child(self.view),
-            )
+        div().size_full().flex().flex_col().children(header).child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .bg(gpui::rgb(0x000000))
+                .child(self.view),
+        )
     }
 }
 

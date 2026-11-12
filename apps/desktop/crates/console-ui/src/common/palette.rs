@@ -19,8 +19,8 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, App, Context, ElementId, Entity, FocusHandle, Focusable, FontWeight, Image,
-    InteractiveElement, IntoElement, KeyBinding, ParentElement, Render, ScrollHandle,
-    SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
+    InteractiveElement, IntoElement, KeyBinding, ParentElement, Render, ScrollHandle, SharedString,
+    StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
 
 use crate::IconName;
@@ -296,7 +296,10 @@ fn compute_layout(
         layout.visible.push(entry);
         layout.rows.push(Row::Item { entry, visible });
     };
-    for &(ix, _) in candidates.iter().filter(|&&(ix, _)| entries[ix].section.is_none()) {
+    for &(ix, _) in candidates
+        .iter()
+        .filter(|&&(ix, _)| entries[ix].section.is_none())
+    {
         push_item(&mut layout, ix);
     }
     for section in layout.sections.clone() {
@@ -457,11 +460,11 @@ fn entry_row(
         );
     }
     if selected {
-        row = row.child(
-            div()
-                .flex_none()
-                .child(app_icon(IconName::Return, 14.0, theme.text_tertiary)),
-        );
+        row = row.child(div().flex_none().child(app_icon(
+            IconName::Return,
+            14.0,
+            theme.text_tertiary,
+        )));
     }
 
     let entry = entry.clone();
@@ -763,7 +766,10 @@ impl CommandPaletteModal {
             .and_then(|tab| layout.sections.iter().position(|section| section == tab))
             .map_or(0, |ix| ix + 1) as isize;
         let next = (current + delta).rem_euclid(layout.sections.len() as isize + 1) as usize;
-        self.select_tab(next.checked_sub(1).map(|ix| layout.sections[ix].clone()), cx);
+        self.select_tab(
+            next.checked_sub(1).map(|ix| layout.sections[ix].clone()),
+            cx,
+        );
     }
 
     fn on_confirm(&mut self, _: &PaletteConfirm, window: &mut Window, cx: &mut Context<Self>) {
@@ -918,11 +924,11 @@ impl Render for CommandPaletteModal {
                     .border_b_1()
                     .border_color(theme.border)
                     .text_size(px(14.0))
-                    .child(
-                        div()
-                            .flex_none()
-                            .child(app_icon(IconName::Search, 15.0, theme.text_tertiary)),
-                    )
+                    .child(div().flex_none().child(app_icon(
+                        IconName::Search,
+                        15.0,
+                        theme.text_tertiary,
+                    )))
                     .child(div().flex_1().min_w_0().child(self.input.clone())),
             )
             .children(tabs)
@@ -1011,8 +1017,9 @@ impl CommandPalette {
         placeholders: Vec<(SharedString, SharedString)>,
         cx: &mut Context<Self>,
     ) {
-        self.modal
-            .update(cx, |modal, cx| modal.set_section_placeholders(placeholders, cx));
+        self.modal.update(cx, |modal, cx| {
+            modal.set_section_placeholders(placeholders, cx)
+        });
     }
 
     pub fn show(&mut self, window: &mut Window, cx: &mut Context<Self>) {

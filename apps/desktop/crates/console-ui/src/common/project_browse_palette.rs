@@ -214,10 +214,14 @@ fn entries_from_browse(
     // Parent directory — pure navigation.
     if let Some(parent) = parent_path {
         out.push(
-            PaletteEntry::new(parent.clone(), format!("Back to {}", short_path(&parent)), |_window, _cx| {})
-                .icon(IconName::ArrowLeft)
-                .section("Actions")
-                .keep_open(true),
+            PaletteEntry::new(
+                parent.clone(),
+                format!("Back to {}", short_path(&parent)),
+                |_window, _cx| {},
+            )
+            .icon(IconName::ArrowLeft)
+            .section("Actions")
+            .keep_open(true),
         );
     }
 

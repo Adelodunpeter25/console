@@ -11,7 +11,11 @@ use super::ConsoleDesktopApp;
 
 /// A shortcut as it reads on this platform.
 fn kbd(mac: &'static str, other: &'static str) -> &'static str {
-    if cfg!(target_os = "macos") { mac } else { other }
+    if cfg!(target_os = "macos") {
+        mac
+    } else {
+        other
+    }
 }
 
 /// Static ⌘K entries shared by toggle and open paths. Lists commands
@@ -139,17 +143,72 @@ fn command_palette_entries(
 
     // Expose every settings page under the dedicated "Settings" section.
     let settings_tabs = [
-        (console_ui::settings::SettingsTab::Servers, IconName::Server, "Servers", &["servers", "environments", "backend"][..]),
-        (console_ui::settings::SettingsTab::Providers, IconName::CircleUser, "Providers", &["api keys", "credentials", "accounts", "login"][..]),
-        (console_ui::settings::SettingsTab::Usage, IconName::ChartColumn, "Usage", &["billing", "token costs", "quota", "limits"][..]),
-        (console_ui::settings::SettingsTab::Models, IconName::Brain, "Models", &["llm", "default model", "reasoning"][..]),
-        (console_ui::settings::SettingsTab::Integrations, IconName::Package, "Integrations", &["github", "gitlab", "atlassian", "jira"][..]),
-        (console_ui::settings::SettingsTab::Mcp, IconName::Cpu, "MCP Servers", &["tools", "context servers", "plugins"][..]),
-        (console_ui::settings::SettingsTab::Projects, IconName::Folder, "Projects", &["directories", "roots", "workspaces"][..]),
-        (console_ui::settings::SettingsTab::DeletedChats, IconName::TrashBinMinimalistic, "Deleted Chats", &["trash", "restore", "archived"][..]),
-        (console_ui::settings::SettingsTab::Browser, IconName::Globe, "Browser", &["browser use", "web", "chrome"][..]),
-        (console_ui::settings::SettingsTab::Keybindings, IconName::Keyboard, "Shortcuts", &["keybindings", "hotkeys"][..]),
-        (console_ui::settings::SettingsTab::Updates, IconName::Download, "Updates", &["version", "check for updates"][..]),
+        (
+            console_ui::settings::SettingsTab::Servers,
+            IconName::Server,
+            "Servers",
+            &["servers", "environments", "backend"][..],
+        ),
+        (
+            console_ui::settings::SettingsTab::Providers,
+            IconName::CircleUser,
+            "Providers",
+            &["api keys", "credentials", "accounts", "login"][..],
+        ),
+        (
+            console_ui::settings::SettingsTab::Usage,
+            IconName::ChartColumn,
+            "Usage",
+            &["billing", "token costs", "quota", "limits"][..],
+        ),
+        (
+            console_ui::settings::SettingsTab::Models,
+            IconName::Brain,
+            "Models",
+            &["llm", "default model", "reasoning"][..],
+        ),
+        (
+            console_ui::settings::SettingsTab::Integrations,
+            IconName::Package,
+            "Integrations",
+            &["github", "gitlab", "atlassian", "jira"][..],
+        ),
+        (
+            console_ui::settings::SettingsTab::Mcp,
+            IconName::Cpu,
+            "MCP Servers",
+            &["tools", "context servers", "plugins"][..],
+        ),
+        (
+            console_ui::settings::SettingsTab::Projects,
+            IconName::Folder,
+            "Projects",
+            &["directories", "roots", "workspaces"][..],
+        ),
+        (
+            console_ui::settings::SettingsTab::DeletedChats,
+            IconName::TrashBinMinimalistic,
+            "Deleted Chats",
+            &["trash", "restore", "archived"][..],
+        ),
+        (
+            console_ui::settings::SettingsTab::Browser,
+            IconName::Globe,
+            "Browser",
+            &["browser use", "web", "chrome"][..],
+        ),
+        (
+            console_ui::settings::SettingsTab::Keybindings,
+            IconName::Keyboard,
+            "Shortcuts",
+            &["keybindings", "hotkeys"][..],
+        ),
+        (
+            console_ui::settings::SettingsTab::Updates,
+            IconName::Download,
+            "Updates",
+            &["version", "check for updates"][..],
+        ),
     ];
 
     for (tab, icon, label, keywords) in settings_tabs {
@@ -181,7 +240,9 @@ fn command_palette_entries(
             session.display_title().to_string(),
             move |_window, cx| {
                 if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| this.select_and_open_session(session_id.clone(), cx));
+                    app.update(cx, |this, cx| {
+                        this.select_and_open_session(session_id.clone(), cx)
+                    });
                 }
             },
         )
@@ -353,7 +414,10 @@ impl ConsoleDesktopApp {
                 },
                 cx,
             );
-            palette.set_entries(command_palette_entries(entity, &environments, &sessions), cx);
+            palette.set_entries(
+                command_palette_entries(entity, &environments, &sessions),
+                cx,
+            );
             palette.toggle(window, cx);
         });
         cx.notify();

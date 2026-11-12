@@ -296,17 +296,11 @@ pub fn render_session_card_content(
                             .gap_x(px(5.0))
                             .text_color(theme.text_secondary)
                             .child(app_icon(IconName::GitBranch, 13.0, theme.text_tertiary))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .child(if is_worktree {
-                                        format!("{b} (worktree)")
-                                    } else {
-                                        b.to_string()
-                                    }),
-                            ),
+                            .child(div().flex_1().min_w_0().truncate().child(if is_worktree {
+                                format!("{b} (worktree)")
+                            } else {
+                                b.to_string()
+                            })),
                     ),
             )
         })
@@ -330,12 +324,7 @@ pub fn render_session_card_content(
                         .flex()
                         .items_center()
                         .gap_x(px(6.0))
-                        .child(
-                            div()
-                                .size(px(7.0))
-                                .rounded_full()
-                                .bg(status_color),
-                        )
+                        .child(div().size(px(7.0)).rounded_full().bg(status_color))
                         .child(
                             div()
                                 .text_color(theme.text_secondary)
