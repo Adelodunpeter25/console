@@ -1,6 +1,8 @@
-// Run service: /visualize lazily activates the visual tool for a session,
-// the skill rides setup, the tool result carries the artifact, and a session
-// that never invoked the command never sees the tool.
+// Run service: /visualize switches the visual skill on for a session, the
+// skill rides setup, and the tool result carries the artifact. The tool itself
+// is always listed (see run.Capabilities), but a session that never asked for
+// the skill gets neither its reference nor a rendered card: the first call is
+// refused until the skill is read.
 package tests
 
 import (
@@ -15,6 +17,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/visualize"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
@@ -223,7 +226,11 @@ func TestVisualizeToolStaysLoadedForLaterMessages(t *testing.T) {
 	}
 }
 
-func TestVisualizeToolAbsentWithoutCommand(t *testing.T) {
+// Without /visualize the tool is still listed, but it is gated: the skill
+// reference is not in setup, a call renders nothing, and the refusal hands the
+// model the reference so the retry works. This is what stops a stray call from
+// drawing a card in a chat that never asked for one.
+func TestVisualizeIsGatedWithoutCommand(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	provider := &visualizeCaller{}
@@ -240,9 +247,36 @@ func TestVisualizeToolAbsentWithoutCommand(t *testing.T) {
 		t.Fatal("run did not settle")
 	}
 
-	for i, req := range provider.requests() {
-		if hasTool(req, "visualize") {
-			t.Fatalf("turn %d has the visualize tool without the command: %v", i, toolList(req))
+	reqs := provider.requests()
+	if len(reqs) < 2 {
+		t.Fatalf("agent turns = %d, want at least 2", len(reqs))
+	}
+	if strings.Contains(reqs[0].Setup, visualize.SkillText()) {
+		t.Fatalf("setup carries the visualize skill without /visualize:\n%s", reqs[0].Setup)
+	}
+
+	// The model's call was refused, with the reference as the answer.
+	refusal := toolResultContent(t, reqs[1])
+	if !strings.Contains(refusal, "before reading the visualize skill") {
+		t.Fatalf("the first call must be refused until the skill is read, got %s", refusal)
+	}
+
+	// Nothing rendered: no persisted tool result carries a visual artifact.
+	loaded, err := sessions.Load(header.ID, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, message := range loaded.Messages {
+		decoded, err := loop.MessageFromProtoBytes(message)
+		if err != nil {
+			continue
+		}
+		if result, ok := decoded.(loop.ToolResultMessage); ok {
+			for _, r := range result.Results {
+				if r.Visual != nil {
+					t.Fatal("a gated call rendered a visual artifact")
+				}
+			}
 		}
 	}
 }
