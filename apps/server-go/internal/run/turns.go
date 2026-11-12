@@ -316,6 +316,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		effectiveThinking = ""
 	} else if effectiveThinking == "" {
 		effectiveThinking = model.DefaultThinking
+		if effectiveThinking != "" && (header.ThinkingLevel == nil || *header.ThinkingLevel != effectiveThinking) {
+			_ = s.sessions.UpdateThinkingLevel(sessionID, effectiveThinking)
+		}
 	}
 	user := loop.UserMessage{
 		Role:         loop.RoleUser,

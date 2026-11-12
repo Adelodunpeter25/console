@@ -303,7 +303,16 @@ impl RenderOnce for SidebarSessionItem {
                 let hover_mgr_card = hover_mgr.clone();
                 let model_name = if !session.model_id.is_empty() {
                     let base = console_shared::format::format_model_name(&session.model_id);
-                    if let Some(thinking) = session.thinking_level.as_deref().filter(|t| !t.is_empty()) {
+                    let thinking = session
+                        .thinking_level
+                        .as_deref()
+                        .filter(|t| !t.is_empty())
+                        .or_else(|| match session.provider.to_ascii_lowercase().as_str() {
+                            "claude" => Some("low"),
+                            "antigravity" | "google" => Some("low"),
+                            _ => None,
+                        });
+                    if let Some(thinking) = thinking {
                         Some(format!("{base} ({thinking})"))
                     } else {
                         Some(base)

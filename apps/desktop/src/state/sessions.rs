@@ -490,25 +490,29 @@ impl ConsoleDesktopApp {
                     prov.clone(),
                 );
             }
-            if let Some(session) = Rc::make_mut(&mut self.sessions)
-                .iter_mut()
-                .find(|session| session.id == session_id)
-            {
-                session.provider = prov.clone();
-                if let Some(ref mid) = payload.model_id {
-                    session.model_id = mid.clone();
-                }
-                if payload.thinking_level.is_some() {
-                    session.thinking_level = payload
-                        .thinking_level
-                        .as_ref()
-                        .map(|t| t.as_str().to_string());
-                }
-            }
             self.persist_workspaces();
             self.maybe_fetch_usage(&session_id, cx);
             self.fetch_context_usage(&session_id, cx);
             cx.notify();
+        }
+
+        if let Some(session) = Rc::make_mut(&mut self.sessions)
+            .iter_mut()
+            .find(|session| session.id == session_id)
+        {
+            if let Some(ref prov) = payload.provider.as_ref().filter(|p| !p.is_empty()) {
+                session.provider = prov.clone();
+            }
+            if let Some(ref mid) = payload.model_id {
+                session.model_id = mid.clone();
+            }
+            if payload.thinking_level.is_some() {
+                session.thinking_level = payload
+                    .thinking_level
+                    .as_ref()
+                    .map(|t| t.as_str().to_string());
+                cx.notify();
+            }
         }
 
         let client = self.client.clone();
