@@ -336,6 +336,7 @@ fn entry_row(
     let mut row = div()
         .id(("palette-row", ix))
         .w_full()
+        .flex_none()
         .h(px(32.0))
         .px(px(10.0))
         .rounded(px(7.0))
@@ -749,6 +750,7 @@ impl Render for CommandPaletteModal {
         for row in &layout.rows {
             list = list.child(match row {
                 Row::Heading(label) => div()
+                    .flex_none()
                     .px(px(10.0))
                     .pt(px(10.0))
                     .pb(px(3.0))
