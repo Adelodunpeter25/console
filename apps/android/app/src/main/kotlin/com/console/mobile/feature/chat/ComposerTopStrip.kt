@@ -109,7 +109,7 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
                 branches = null
                 isRepo = null
                 scope.launch {
-                    AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(cwd = proj.path))
+                    AppContainer.sessionRepository.updateSession(sessionId, UpdateSessionDto(cwd = proj.path))
                     AppContainer.sessionRepository.refreshHeader(sessionId)
                 }
             },
@@ -118,7 +118,7 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
                 branches = null
                 isRepo = null
                 scope.launch {
-                    AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(clearProject = true))
+                    AppContainer.sessionRepository.updateSession(sessionId, UpdateSessionDto(clearProject = true))
                     AppContainer.sessionRepository.refreshHeader(sessionId)
                 }
             },

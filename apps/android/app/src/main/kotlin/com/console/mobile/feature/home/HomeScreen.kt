@@ -92,7 +92,7 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         AppContainer.projectRepository.loadProjects()
-        AppContainer.projectRepository.loadSessions()
+        AppContainer.sessionRepository.loadSessions()
     }
     LaunchedEffect(projectState.projects) {
         val projs = projectState.projects
@@ -127,7 +127,7 @@ fun HomeScreen(
             try {
                 withContext(Dispatchers.IO) {
                     AppContainer.projectRepository.loadProjects()
-                    AppContainer.projectRepository.loadSessions()
+                    AppContainer.sessionRepository.loadSessions()
                 }
             } finally {
                 refreshing = false
@@ -143,7 +143,7 @@ fun HomeScreen(
                 val proj = projectId?.let { id -> projectState.projects.firstOrNull { it.id == id } }
                     ?: projectState.projects.firstOrNull()
                 val created = withContext(Dispatchers.IO) {
-                    AppContainer.projectRepository.createSession(cwd = proj?.path ?: "", projectId = proj?.id, title = "New Chat")
+                    AppContainer.sessionRepository.createSession(cwd = proj?.path ?: "", projectId = proj?.id, title = "New Chat")
                 }
                 AppContainer.appStateHolder.openChatSession(created.id)
                 onOpenChat(created.id)

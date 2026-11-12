@@ -63,7 +63,7 @@ fun ComposerBottomStrip(sessionId: String) {
         PlanChip(on = planOn) {
             val next = if (planOn) ApprovalMode.FullAccess else ApprovalMode.PlanMode
             scope.launch {
-                AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(approvalMode = next.value))
+                AppContainer.sessionRepository.updateSession(sessionId, UpdateSessionDto(approvalMode = next.value))
                 AppContainer.sessionRepository.refreshHeader(sessionId)
             }
         }
@@ -105,7 +105,7 @@ fun ModelChip(sessionId: String, modifier: Modifier = Modifier) {
             onSelect = { newModel, newProvider ->
                 sheet = false
                 scope.launch {
-                    AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(modelId = newModel, provider = newProvider))
+                    AppContainer.sessionRepository.updateSession(sessionId, UpdateSessionDto(modelId = newModel, provider = newProvider))
                     AppContainer.sessionRepository.refreshHeader(sessionId)
                 }
             },
@@ -160,7 +160,7 @@ fun ThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = Modif
             onSelect = { level ->
                 sheet = false
                 scope.launch {
-                    AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(thinkingLevel = level))
+                    AppContainer.sessionRepository.updateSession(sessionId, UpdateSessionDto(thinkingLevel = level))
                     AppContainer.sessionRepository.refreshHeader(sessionId)
                 }
             },

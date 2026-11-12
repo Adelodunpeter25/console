@@ -257,10 +257,7 @@ object AppContainer {
         projectRepository = ProjectRepository(
             api = consoleApi,
             projectState = projectStateHolder,
-            sessionState = sessionStateHolder,
             appState = appStateHolder,
-            // chatRepository is built later; the lambda only runs on delete.
-            onSessionGone = { chatRepository.discard(it) },
         )
         providerRepository = ProviderRepository(
             api = consoleApi,
@@ -310,9 +307,12 @@ object AppContainer {
         )
         sessionRepository = SessionRepository(
             api = consoleApi,
+            projectState = projectStateHolder,
             sessions = sessionStateHolder,
+            appState = appStateHolder,
             chats = chatStateHolder,
             chatRepo = chatRepository,
+            onSessionGone = { chatRepository.discard(it) },
         )
         authRepository = AuthRepository(
             api = consoleApi,
@@ -372,11 +372,10 @@ object AppContainer {
                 backgroundScope.launch { portsRepository.stop() }
                 scriptsRepository.clear()
                 projectRepository.loadProjects()
-                projectRepository.loadSessions()
+                sessionRepository.loadSessions()
                 providerRepository.loadProviders()
                 providerRepository.loadApprovalModes()
                 usageRepository.loadAllUsage()
-                sessionRepository.refresh()
                 authRepository.loadStatus()
                 // STT status is per-server state the composer's mic reads, so
                 // it loads with everything else — not only from Providers.
@@ -420,13 +419,13 @@ object AppContainer {
                         if (event.kind == "read_state") {
                             // Silent: another device read or unread a chat. Refresh the
                             // list so the dot follows without waiting for the next poll.
-                            projectRepository.loadSessions()
+                            sessionRepository.loadSessions()
                             return@collect
                         }
                         if (event.kind == "session_deleted") {
                             // Silent: the chat was deleted elsewhere or by the
                             // settled-chat sweep. Drop it locally, no banner.
-                            projectRepository.onSessionDeletedRemotely(event.session_id)
+                            sessionRepository.onSessionDeletedRemotely(event.session_id)
                             return@collect
                         }
                         val viewingSame = appStateHolder.state.value.activeTab == MobileTab.Chat &&

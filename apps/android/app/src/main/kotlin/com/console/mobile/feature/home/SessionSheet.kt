@@ -68,7 +68,7 @@ internal fun SessionActionsSheet(
                         val target = session
                         onDismiss()
                         AppContainer.actionScope.launch {
-                            AppContainer.projectRepository.markSessionRead(target.id)
+                            AppContainer.sessionRepository.markSessionRead(target.id)
                         }
                     }
                     SectionDivider()
@@ -79,7 +79,7 @@ internal fun SessionActionsSheet(
                         onDismiss()
                         AppContainer.actionScope.launch {
                             try {
-                                AppContainer.projectRepository.markSessionUnread(target.id)
+                                AppContainer.sessionRepository.markSessionUnread(target.id)
                             } catch (e: Exception) {
                                 confirmAlert("Failed", e.message ?: "Unable to mark as unread.")
                             }
@@ -98,7 +98,7 @@ internal fun SessionActionsSheet(
                 AppContainer.actionScope.launch {
                     try {
                         withContext(Dispatchers.IO) {
-                            AppContainer.projectRepository.updateSession(
+                            AppContainer.sessionRepository.updateSession(
                                 target.id,
                                 UpdateSessionDto(pinned = !isPinned),
                             )
@@ -121,7 +121,7 @@ internal fun SessionActionsSheet(
                 AppContainer.actionScope.launch {
                     try {
                         withContext(Dispatchers.IO) {
-                            AppContainer.projectRepository.settleSession(target.id, targetSettled)
+                            AppContainer.sessionRepository.settleSession(target.id, targetSettled)
                         }
                     } catch (e: Exception) {
                         confirmAlert("Failed", e.message ?: "Unable to settle chat.")
@@ -139,7 +139,7 @@ internal fun SessionActionsSheet(
                         ConfirmButton("Delete", destructive = true, onPress = {
                             AppContainer.actionScope.launch {
                                 try {
-                                    withContext(Dispatchers.IO) { AppContainer.projectRepository.deleteSession(session.id) }
+                                    withContext(Dispatchers.IO) { AppContainer.sessionRepository.deleteSession(session.id) }
                                 } catch (e: Exception) {
                                     confirmAlert("Failed", e.message ?: "Unable to delete chat.")
                                 }
@@ -164,7 +164,7 @@ internal fun SessionActionsSheet(
                     AppContainer.actionScope.launch {
                         try {
                             withContext(Dispatchers.IO) {
-                                AppContainer.projectRepository.updateSession(session.id, UpdateSessionDto(title = renameValue.trim().ifBlank { session.title }))
+                                AppContainer.sessionRepository.updateSession(session.id, UpdateSessionDto(title = renameValue.trim().ifBlank { session.title }))
                             }
                         } catch (e: Exception) {
                             confirmAlert("Failed", e.message ?: "Unable to rename chat.")

@@ -110,7 +110,7 @@ fun ChatScreen(
     // Opening a chat is seeing it: clear its unread dot (and a seen needs-attention)
     // on every device. Skipped for a chat already read, so reopening costs nothing.
     LaunchedEffect(sessionId) {
-        AppContainer.projectRepository.markSessionRead(sessionId)
+        AppContainer.sessionRepository.markSessionRead(sessionId)
     }
 
     // A run that finishes while the chat is on screen is seen as it finishes, so it
@@ -124,7 +124,7 @@ fun ChatScreen(
         } else if (wasRunning) {
             wasRunning = false
             delay(600)
-            AppContainer.projectRepository.markSessionRead(sessionId, force = true)
+            AppContainer.sessionRepository.markSessionRead(sessionId, force = true)
         }
     }
 
@@ -315,7 +315,7 @@ fun ChatScreen(
                     onFork = { messageId ->
                         scope.launch {
                             try {
-                                val forked = AppContainer.projectRepository.forkSession(sessionId, messageId)
+                                val forked = AppContainer.sessionRepository.forkSession(sessionId, messageId)
                                 AppContainer.appStateHolder.setSelectedSessionId(forked.id)
                             } catch (_: Exception) {
                             }

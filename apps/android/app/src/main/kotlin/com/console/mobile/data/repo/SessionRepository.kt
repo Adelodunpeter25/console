@@ -2,6 +2,11 @@ package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.model.ApprovalMode
+import com.console.mobile.data.store.ProjectStateHolder
+import com.console.mobile.data.store.AppStateHolder
+import com.console.mobile.data.model.SessionStatus
+import com.console.mobile.data.model.UpdateSessionDto
+import com.console.mobile.data.model.CreateSessionDto
 import com.console.mobile.data.model.SessionDetailResponse
 import com.console.mobile.data.model.SessionPrompt
 import console.v1.SessionHeader
@@ -19,11 +24,21 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Everything about chats: the list Home shows, one chat's detail and paging,
+ * and the actions on a chat (create, rename, settle, read, delete, fork).
+ * Projects are [ProjectRepository]'s. There is one session list, held in
+ * [ProjectStateHolder.state]; nothing here keeps a second copy.
+ */
 class SessionRepository(
     private val api: ConsoleApi,
+    private val projectState: ProjectStateHolder,
     private val sessions: SessionStateHolder,
+    private val appState: AppStateHolder,
     private val chats: ChatStateHolder,
     private val chatRepo: ChatRepository,
+    /** Called once a session is gone for good, so chat state (and its draft) can be dropped. */
+    private val onSessionGone: (String) -> Unit = {},
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
     companion object {
@@ -39,27 +54,182 @@ class SessionRepository(
         const val OLDER_PAGE = 50
     }
 
-    private val _headers = MutableStateFlow<List<SessionHeader>>(emptyList())
-    val headers: StateFlow<List<SessionHeader>> = _headers.asStateFlow()
-
-    private val _loading = MutableStateFlow(false)
-    val loading: StateFlow<Boolean> = _loading.asStateFlow()
-
-    fun refresh(cwd: String? = null, projectId: String? = null) {
+    fun loadSessions() {
         scope.launch {
-            _loading.value = true
+            projectState.patchSessionsLoading(true)
             try {
-                val list = withContext(Dispatchers.IO) { api.getSessions(cwd, projectId) }
-                _headers.value = list
+                val list = withContext(Dispatchers.IO) { api.getSessions() }
+                projectState.setSessions(list)
                 sessions.setStatusesSeed(list.map { h ->
                     h.id to com.console.mobile.data.model.SessionStatus.fromValue(h.status)
                 }.toMap())
-            } catch (_: Exception) {
-            } finally {
-                _loading.value = false
+            } catch (e: Exception) {
+                projectState.patchSessionsLoading(false)
+                projectState.setError(e.message ?: "Failed to load chat sessions")
             }
         }
     }
+
+    fun loadDeletedSessions() {
+        scope.launch {
+            projectState.patchDeletedLoading(true)
+            try {
+                val list = withContext(Dispatchers.IO) { api.getSessions(onlyDeleted = true) }
+                projectState.setDeleted(list)
+            } catch (e: Exception) {
+                projectState.patchDeletedLoading(false)
+                projectState.setError(e.message ?: "Failed to load deleted chats")
+            }
+        }
+    }
+
+    suspend fun createSession(
+        cwd: String? = null,
+        projectId: String? = null,
+        title: String? = "New Chat",
+    ): SessionHeader = withContext(Dispatchers.IO) {
+        val created = api.createSession(
+            CreateSessionDto(
+                cwd = cwd,
+                projectId = projectId,
+                title = title,
+            ),
+        )
+        withContext(Dispatchers.Main.immediate) {
+            projectState.prependSession(created)
+            sessions.setStatus(created.id, com.console.mobile.data.model.SessionStatus.fromValue(created.status))
+        }
+        created
+    }
+
+    suspend fun updateSession(id: String, dto: UpdateSessionDto): SessionHeader = withContext(Dispatchers.IO) {
+        val updated = api.updateSession(id, dto)
+        withContext(Dispatchers.Main.immediate) {
+            projectState.patchSession(id, updated)
+        }
+        updated
+    }
+
+    /**
+     * Settle (or un-settle) a chat. The server refuses settling while a run is
+     * active or a prompt is queued; the exception carries its message and the
+     * local mark is only applied after the call succeeds.
+     */
+    suspend fun settleSession(id: String, settled: Boolean) = withContext(Dispatchers.IO) {
+        if (settled) api.settleSession(id) else api.unsettleSession(id)
+        withContext(Dispatchers.Main.immediate) {
+            projectState.state.value.sessions.firstOrNull { it.id == id }?.let { header ->
+                val patch = if (settled) {
+                    // Pinned and settled are mutually exclusive: settling unpins.
+                    header.copy(settled_at = System.currentTimeMillis(), pinned_at = null)
+                } else {
+                    header.copy(settled_at = null)
+                }
+                projectState.patchSession(id, patch)
+            }
+        }
+    }
+
+    /**
+     * Tell the server this chat was shown, which clears its unread dot (and a
+     * seen needs-attention) on every device. The local header is cleared first
+     * so the dot does not linger until the next refresh, and the call is
+     * skipped for a chat already read. Best-effort: a failure only means the
+     * dot clears on the next refresh.
+     */
+    suspend fun markSessionRead(id: String, force: Boolean = false) {
+        val header = projectState.state.value.sessions.firstOrNull { it.id == id } ?: return
+        // `force` is for a run that just finished on screen: the local header is
+        // stale (it has not been refreshed since the run ended), so it still
+        // reads as already-read while the server has just marked it unread.
+        if (!force && !header.unread && header.status != "needs_attention") return
+        // A needs-attention chat with no run behind it settles to done on read.
+        val settled = if (header.status == "needs_attention") "done" else header.status
+        projectState.patchSession(id, header.copy(unread = false, status = settled))
+        try {
+            withContext(Dispatchers.IO) { api.markSessionRead(id) }
+            if (force) loadSessions()
+        } catch (e: Exception) {
+            android.util.Log.d("ProjectRepository", "markSessionRead($id) failed", e)
+        }
+    }
+
+    /**
+     * Make a read chat unread again. The dot appears at once; a refusal from
+     * the server (a running or settled chat) rolls it back and rethrows so the
+     * caller can show the reason.
+     */
+    suspend fun markSessionUnread(id: String) {
+        val header = projectState.state.value.sessions.firstOrNull { it.id == id } ?: return
+        if (header.unread) return
+        projectState.patchSession(id, header.copy(unread = true))
+        try {
+            withContext(Dispatchers.IO) { api.markSessionUnread(id) }
+        } catch (e: Exception) {
+            projectState.state.value.sessions.firstOrNull { it.id == id }?.let {
+                projectState.patchSession(id, it.copy(unread = false))
+            }
+            throw e
+        }
+    }
+
+    suspend fun deleteSession(id: String) = withContext(Dispatchers.IO) {
+        try {
+            api.deleteSession(id)
+        } catch (e: com.console.mobile.data.api.ApiException) {
+            // Already gone server-side (deleted from the desktop): the local row
+            // and its draft are all that's left, and those still need clearing.
+            if (e.code != "404") throw e
+        }
+        withContext(Dispatchers.Main.immediate) { forgetSession(id) }
+    }
+
+    /** The server deleted a chat (another device, or the settled-chat sweep). Main thread only. */
+    fun onSessionDeletedRemotely(id: String) {
+        if (projectState.state.value.sessions.any { it.id == id }) forgetSession(id)
+    }
+
+    private fun forgetSession(id: String) {
+        projectState.removeSession(id)
+        sessions.clearStatus(id)
+        onSessionGone(id)
+        if (appState.state.value.selectedSessionId == id) {
+            appState.setSelectedSessionId(null)
+            if (appState.state.value.activeTab == com.console.mobile.data.store.MobileTab.Chat) {
+                appState.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
+            }
+        }
+    }
+
+    suspend fun restoreSession(id: String) = withContext(Dispatchers.IO) {
+        api.restoreSession(id)
+        withContext(Dispatchers.Main.immediate) {
+            val restored = projectState.state.value.deletedSessions.firstOrNull { it.id == id }
+            projectState.removeDeleted(id)
+            if (restored != null) {
+                projectState.prependSession(restored)
+            }
+        }
+    }
+
+    suspend fun permanentlyDeleteSession(id: String) = withContext(Dispatchers.IO) {
+        api.permanentlyDeleteSession(id)
+        withContext(Dispatchers.Main.immediate) {
+            projectState.removeDeleted(id)
+            onSessionGone(id)
+        }
+    }
+
+    /** Fork a session through messageId; the new idle session is prepended like a fresh chat. */
+    suspend fun forkSession(id: String, messageId: String): SessionHeader = withContext(Dispatchers.IO) {
+        val forked = api.forkSession(id, messageId)
+        withContext(Dispatchers.Main.immediate) {
+            projectState.prependSession(forked)
+            sessions.setStatus(forked.id, com.console.mobile.data.model.SessionStatus.fromValue(forked.status))
+        }
+        forked
+    }
+
 
     /**
      * Sessions whose older-page fetch is in flight. Held in memory rather than
@@ -210,6 +380,7 @@ class SessionRepository(
         return header
     }
 
+    /** Re-read one chat's header into the list and the chat's view state. */
     fun refreshHeader(sessionId: String) {
         scope.launch {
             try {
@@ -234,6 +405,6 @@ class SessionRepository(
             ),
         )
         sessions.setStatus(sessionId, com.console.mobile.data.model.SessionStatus.fromValue(header.status))
-        _headers.value = _headers.value.map { if (it.id == sessionId) header else it }
+        projectState.patchSession(sessionId, header)
     }
 }
