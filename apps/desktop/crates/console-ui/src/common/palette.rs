@@ -278,7 +278,7 @@ fn compute_layout(
         push_item(&mut layout, ix);
     }
     for section in layout.sections.clone() {
-        let mut heading_pending = tab.is_none();
+        let mut heading_pending = true;
         for &(ix, _) in candidates
             .iter()
             .filter(|&&(ix, _)| entries[ix].section.as_ref() == Some(&section))
@@ -470,6 +470,12 @@ pub struct CommandPaletteModal {
     selected: usize,
     /// The section tab in front; `None` is "All".
     tab: Option<SharedString>,
+    /// Whether the section tab bar shows when there are two or more sections.
+    show_tabs: bool,
+    /// Placeholder when no tab-specific one applies.
+    placeholder: SharedString,
+    /// Placeholder per section, shown while that section's tab is in front.
+    section_placeholders: Vec<(SharedString, SharedString)>,
     scroll: ScrollHandle,
     /// Async search hook: called with the current query whenever it changes.
     query_handler: Option<Rc<dyn Fn(&str, &mut Window, &mut App)>>,
@@ -511,6 +517,9 @@ impl CommandPaletteModal {
             filterable: true,
             selected: 0,
             tab: None,
+            show_tabs: true,
+            placeholder: "Type a command or search…".into(),
+            section_placeholders: Vec::new(),
             scroll: ScrollHandle::new(),
             query_handler: None,
             browse_callback: None,
@@ -539,7 +548,50 @@ impl CommandPaletteModal {
         self.tab = None;
         self.search_generation = 0;
         self.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+        self.apply_tab_placeholder(cx);
         cx.notify();
+    }
+
+    /// Show the placeholder for the tab in front, or the default one.
+    fn apply_tab_placeholder(&self, cx: &mut Context<Self>) {
+        let text = self
+            .tab
+            .as_ref()
+            .and_then(|tab| {
+                self.section_placeholders
+                    .iter()
+                    .find(|(section, _)| section == tab)
+            })
+            .map(|(_, placeholder)| placeholder.clone())
+            .unwrap_or_else(|| self.placeholder.clone());
+        self.input
+            .update(cx, |input, cx| input.set_placeholder(text, cx));
+    }
+
+    /// Bring a section tab (or "All" for `None`) to the front.
+    fn select_tab(&mut self, tab: Option<SharedString>, cx: &mut Context<Self>) {
+        self.tab = tab;
+        self.selected = 0;
+        self.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+        self.apply_tab_placeholder(cx);
+        cx.notify();
+    }
+
+    /// Show or hide the section tab bar. On by default.
+    pub fn set_show_tabs(&mut self, show_tabs: bool, cx: &mut Context<Self>) {
+        self.show_tabs = show_tabs;
+        cx.notify();
+    }
+
+    /// Placeholder text per section, shown while that section's tab is in
+    /// front. Sections without one use the default placeholder.
+    pub fn set_section_placeholders(
+        &mut self,
+        placeholders: Vec<(SharedString, SharedString)>,
+        cx: &mut Context<Self>,
+    ) {
+        self.section_placeholders = placeholders;
+        self.apply_tab_placeholder(cx);
     }
 
     /// Clear the search query so navigation keeps focus.
@@ -560,6 +612,7 @@ impl CommandPaletteModal {
                 .any(|entry| entry.section.as_ref() == Some(tab))
         {
             self.tab = None;
+            self.apply_tab_placeholder(cx);
         }
         cx.notify();
     }
@@ -589,9 +642,8 @@ impl CommandPaletteModal {
         placeholder: impl Into<SharedString>,
         cx: &mut Context<Self>,
     ) {
-        let placeholder = placeholder.into();
-        self.input
-            .update(cx, |input, cx| input.set_placeholder(placeholder, cx));
+        self.placeholder = placeholder.into();
+        self.apply_tab_placeholder(cx);
     }
 
     /// Turn local query filtering on or off. Defaults to `true`; turn it off
@@ -679,7 +731,7 @@ impl CommandPaletteModal {
 
     fn step_tab(&mut self, delta: isize, cx: &mut Context<Self>) {
         let layout = self.layout(cx);
-        if layout.sections.len() < 2 {
+        if !self.show_tabs || layout.sections.len() < 2 {
             return;
         }
         // Position 0 is "All"; sections follow.
@@ -689,10 +741,7 @@ impl CommandPaletteModal {
             .and_then(|tab| layout.sections.iter().position(|section| section == tab))
             .map_or(0, |ix| ix + 1) as isize;
         let next = (current + delta).rem_euclid(layout.sections.len() as isize + 1) as usize;
-        self.tab = next.checked_sub(1).map(|ix| layout.sections[ix].clone());
-        self.selected = 0;
-        self.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
-        cx.notify();
+        self.select_tab(next.checked_sub(1).map(|ix| layout.sections[ix].clone()), cx);
     }
 
     fn on_confirm(&mut self, _: &PaletteConfirm, window: &mut Window, cx: &mut Context<Self>) {
@@ -769,7 +818,7 @@ impl Render for CommandPaletteModal {
             });
         }
 
-        let tabs = (layout.sections.len() >= 2).then(|| {
+        let tabs = (self.show_tabs && layout.sections.len() >= 2).then(|| {
             let mut bar = div()
                 .flex_none()
                 .px(px(8.0))
@@ -805,9 +854,7 @@ impl Render for CommandPaletteModal {
                         .on_click(move |_, _, cx| {
                             if let Some(palette) = palette.upgrade() {
                                 palette.update(cx, |palette, cx| {
-                                    palette.tab = label.clone();
-                                    palette.selected = 0;
-                                    cx.notify();
+                                    palette.select_tab(label.clone(), cx)
                                 });
                             }
                         })
@@ -841,7 +888,7 @@ impl Render for CommandPaletteModal {
             .child(
                 div()
                     .flex_none()
-                    .h(px(46.0))
+                    .h(px(40.0))
                     .px(px(14.0))
                     .flex()
                     .items_center()
@@ -933,6 +980,17 @@ impl CommandPalette {
     ) {
         self.modal
             .update(cx, |modal, cx| modal.set_query_handler(handler, cx));
+    }
+
+    /// Placeholder text per section tab; see
+    /// [`CommandPaletteModal::set_section_placeholders`].
+    pub fn set_section_placeholders(
+        &mut self,
+        placeholders: Vec<(SharedString, SharedString)>,
+        cx: &mut Context<Self>,
+    ) {
+        self.modal
+            .update(cx, |modal, cx| modal.set_section_placeholders(placeholders, cx));
     }
 
     pub fn show(&mut self, window: &mut Window, cx: &mut Context<Self>) {

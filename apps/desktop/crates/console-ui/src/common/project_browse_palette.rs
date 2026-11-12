@@ -61,6 +61,7 @@ impl ProjectBrowsePalette {
             modal.set_placeholder("Filter folders…", cx);
             // Local filter against the listing; query does not re-fetch.
             modal.set_filterable(true, cx);
+            modal.set_show_tabs(false, cx);
             modal.set_query_handler(|_query, _window, _cx| {}, cx);
             modal.set_browse_callback(
                 {
@@ -181,6 +182,7 @@ fn select_folder_entry(
         modal.update(cx, |modal, cx| modal.hide(cx));
     })
     .icon(icon)
+    .section("Actions")
 }
 
 /// Rows for a directory listing:
@@ -204,7 +206,7 @@ fn entries_from_browse(
     out.push(select_folder_entry(
         current_path,
         folder_label,
-        IconName::FolderOpen,
+        IconName::CircleCheck,
         modal,
         on_select_project,
     ));
@@ -214,6 +216,7 @@ fn entries_from_browse(
         out.push(
             PaletteEntry::new(parent.clone(), format!("Back to {}", short_path(&parent)), |_window, _cx| {})
                 .icon(IconName::ArrowLeft)
+                .section("Actions")
                 .keep_open(true),
         );
     }
@@ -234,6 +237,7 @@ fn entries_from_browse(
         out.push(
             PaletteEntry::new(entry.path, entry.name, |_window, _cx| {})
                 .icon(IconName::Folder)
+                .section("Folders")
                 .keep_open(true),
         );
     }

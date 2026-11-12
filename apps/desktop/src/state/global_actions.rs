@@ -305,6 +305,15 @@ impl ConsoleDesktopApp {
         let sessions = self.sessions.clone();
         self.palette_search_task = None;
         self.command_palette.update(cx, |palette, cx| {
+            palette.set_placeholder("Search commands, servers and chats…", cx);
+            palette.set_section_placeholders(
+                vec![
+                    ("Commands".into(), "Search commands…".into()),
+                    ("Servers".into(), "Search servers…".into()),
+                    ("Chats".into(), "Search chats…".into()),
+                ],
+                cx,
+            );
             let search_entity = entity.clone();
             palette.set_query_handler(
                 move |query, _window, cx| {
