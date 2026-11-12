@@ -150,24 +150,30 @@ if [[ -f "$HOME/.bashrc" ]]; then
   source "$HOME/.bashrc"
 fi
 
-__console_title_prompt() {
+__console_ready=0
+
+__console_prompt_begin() {
+  __console_ready=0
   local dir_name="${PWD/#$HOME/~}"
   printf '\033]0;%s\007' "$dir_name"
 }
 
+# Armed only after the whole prompt command ran, so the DEBUG trap ignores
+# rc-file and PROMPT_COMMAND commands and fires once per typed command line.
+__console_prompt_end() {
+  __console_ready=1
+}
+
 __console_title_preexec() {
-  if [[ "$BASH_COMMAND" != "$PROMPT_COMMAND" && "$BASH_COMMAND" != *"__console_title"* ]]; then
+  if [[ "$__console_ready" == 1 ]]; then
+    __console_ready=0
     local cmd="${BASH_COMMAND%%$'\n'*}"
     printf '\033]0;%s\007' "$cmd"
   fi
 }
 
 trap '__console_title_preexec' DEBUG
-if [[ -z "$PROMPT_COMMAND" ]]; then
-  PROMPT_COMMAND="__console_title_prompt"
-else
-  PROMPT_COMMAND="__console_title_prompt; $PROMPT_COMMAND"
-fi
+PROMPT_COMMAND="__console_prompt_begin${PROMPT_COMMAND:+; $PROMPT_COMMAND}; __console_prompt_end"
 `
 	return os.WriteFile(filepath.Join(bashDir, "bashrc"), []byte(bashrcContent), 0644)
 }
