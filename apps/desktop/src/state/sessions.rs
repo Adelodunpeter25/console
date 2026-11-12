@@ -1440,6 +1440,21 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// The row menu's read-state entry: clears an unread chat, or brings the
+    /// dot back on a read one.
+    pub(crate) fn toggle_session_read(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let unread = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .is_some_and(|session| session.unread);
+        if unread {
+            self.report_session_read(&session_id, cx);
+        } else {
+            self.mark_session_unread(session_id, cx);
+        }
+    }
+
     /// Make a read chat unread again ("Mark as unread" in the row menu). The
     /// dot appears at once; a server refusal (a running or settled chat)
     /// rolls it back and shows the reason.

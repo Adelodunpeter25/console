@@ -23,6 +23,15 @@ fn menu_handle(id: &ElementId, window: &mut Window, cx: &mut App) -> ContextMenu
         .clone()
 }
 
+/// The read-state entry a session row offers, which depends on the chat.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReadAction {
+    /// The chat is unread: clear the dot.
+    MarkRead,
+    /// The chat is read and idle: bring the dot back.
+    MarkUnread,
+}
+
 /// Attach the session context menu to a sidebar session row.
 ///
 /// The row owns the session-specific callbacks; this component only owns the
@@ -40,9 +49,8 @@ pub fn session_context_menu<E>(
     on_settle: impl Fn(&mut Window, &mut App) + 'static,
     on_unsettle: impl Fn(&mut Window, &mut App) + 'static,
     on_delete: impl Fn(&mut Window, &mut App) + 'static,
-    // None hides "Mark as unread": the server refuses it for a running or a
-    // settled chat, and it is pointless for one that is already unread.
-    on_mark_unread: Option<impl Fn(&mut Window, &mut App) + 'static>,
+    // None hides the entry; the action decides its label and icon.
+    read_action: Option<(ReadAction, impl Fn(&mut Window, &mut App) + 'static)>,
     pinned: bool,
     settled: bool,
 ) -> AnyElement
@@ -57,7 +65,7 @@ where
     let on_settle = Rc::new(on_settle);
     let on_unsettle = Rc::new(on_unsettle);
     let on_delete = Rc::new(on_delete);
-    let on_mark_unread = on_mark_unread.map(Rc::new);
+    let read_action = read_action.map(|(action, handler)| (action, Rc::new(handler)));
 
     context_menu(element, id, &handle, move |_| {
         let pin_label = if pinned { "Unpin" } else { "Pin" };
@@ -72,11 +80,12 @@ where
         let on_settle = on_settle.clone();
         let on_unsettle = on_unsettle.clone();
         let on_delete = on_delete.clone();
-        let mark_unread = on_mark_unread.clone().map(|on_mark_unread| {
-            MenuItem::new("Mark as unread", move |window, cx| {
-                on_mark_unread(window, cx)
-            })
-            .icon(IconName::Unread.path())
+        let read_item = read_action.clone().map(|(action, handler)| {
+            let (label, icon) = match action {
+                ReadAction::MarkRead => ("Mark as read", IconName::Eye),
+                ReadAction::MarkUnread => ("Mark as unread", IconName::MailUnread),
+            };
+            MenuItem::new(label, move |window, cx| handler(window, cx)).icon(icon.path())
         });
         let mut items = vec![
             MenuItem::new("Open in New Window", move |window, cx| {
@@ -85,7 +94,7 @@ where
             .icon(IconName::OpenInWindow.path()),
             MenuItem::Separator,
         ];
-        items.extend(mark_unread);
+        items.extend(read_item);
         items.extend([
             MenuItem::new(pin_label, move |window, cx| on_toggle_pin(window, cx))
                 .icon(IconName::Pin.path()),

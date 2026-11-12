@@ -95,6 +95,24 @@ pub fn row_status(
     RowStatus::Quiet
 }
 
+/// Which read-state entry a row's menu offers. An unread chat offers "Mark as
+/// read". A read chat offers "Mark as unread", except while it is running (it
+/// shows its spinner) or once settled (it is filed away): the server refuses
+/// both, so the entry is hidden rather than offered and then failed.
+pub fn read_action(
+    session: &SessionHeader,
+    status: RowStatus,
+) -> Option<crate::primitives::ReadAction> {
+    use crate::primitives::ReadAction;
+    if session.unread {
+        Some(ReadAction::MarkRead)
+    } else if session.settled_at.is_none() && status != RowStatus::Running {
+        Some(ReadAction::MarkUnread)
+    } else {
+        None
+    }
+}
+
 /// Render the compact status icon used beside a session title.
 pub fn status_indicator(state: SidebarLoadingState, theme: Theme) -> Option<AnyElement> {
     match state {

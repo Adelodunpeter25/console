@@ -5,4 +5,4 @@
 
 pub mod session_context_menu;
 
-pub use session_context_menu::{draft_context_menu, session_context_menu};
+pub use session_context_menu::{ReadAction, draft_context_menu, session_context_menu};

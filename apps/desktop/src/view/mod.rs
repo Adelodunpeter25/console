@@ -896,7 +896,7 @@ impl Render for ConsoleDesktopApp {
                                 move |id: String, _window, cx| {
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
-                                            this.mark_session_unread(id, cx);
+                                            this.toggle_session_read(id, cx);
                                         });
                                     }
                                 }

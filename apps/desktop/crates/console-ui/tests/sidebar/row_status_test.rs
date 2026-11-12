@@ -2,7 +2,10 @@
 //! nothing. The server's `unread` flag is the only unread input.
 
 use console_core::SessionHeader;
-use console_ui::layout::sidebar_loading::{RowStatus, SidebarLoadingState, row_status};
+use console_ui::ReadAction;
+use console_ui::layout::sidebar_loading::{
+    RowStatus, SidebarLoadingState, read_action, row_status,
+};
 
 fn header(status: &str, unread: bool) -> SessionHeader {
     SessionHeader {
@@ -61,4 +64,31 @@ fn only_the_server_flag_makes_a_finished_chat_unread() {
     // The same finished chat is the dot or the check depending on one flag.
     assert_eq!(row_status(&header("done", true), None), RowStatus::Unread);
     assert_eq!(row_status(&header("done", false), None), RowStatus::Done);
+}
+
+#[test]
+fn an_unread_chat_offers_mark_as_read() {
+    let chat = header("done", true);
+    assert_eq!(
+        read_action(&chat, row_status(&chat, None)),
+        Some(ReadAction::MarkRead)
+    );
+}
+
+#[test]
+fn a_read_idle_chat_offers_mark_as_unread() {
+    let chat = header("done", false);
+    assert_eq!(
+        read_action(&chat, row_status(&chat, None)),
+        Some(ReadAction::MarkUnread)
+    );
+}
+
+#[test]
+fn running_and_settled_chats_offer_no_read_entry() {
+    let running = header("working", false);
+    assert_eq!(read_action(&running, row_status(&running, None)), None);
+    let mut settled = header("done", false);
+    settled.settled_at = Some(5);
+    assert_eq!(read_action(&settled, row_status(&settled, None)), None);
 }
