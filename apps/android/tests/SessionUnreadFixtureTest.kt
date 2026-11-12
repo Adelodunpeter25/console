@@ -1,13 +1,15 @@
 package com.console.mobile
 
 import com.console.mobile.data.model.SessionStatus
-import com.console.mobile.feature.home.canMarkUnread
+import com.console.mobile.feature.home.ReadAction
+import com.console.mobile.feature.home.readAction
 import com.console.mobile.feature.home.showsUnreadDot
 import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.SessionHeader
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -62,11 +64,21 @@ class SessionUnreadFixtureTest {
     }
 
     @Test
-    fun markAsUnreadIsOfferedOnlyForAReadIdleChat() {
-        assertTrue(canMarkUnread(header()))
-        assertFalse("already unread", canMarkUnread(header(unread = true)))
-        assertFalse("settled", canMarkUnread(header(settledAt = 5_000L)))
-        assertFalse("running", canMarkUnread(header(status = "working")))
-        assertEquals(true, canMarkUnread(header(status = "needs_attention")))
+    fun anUnreadChatOffersMarkAsRead() {
+        assertEquals(ReadAction.MarkRead, readAction(header(unread = true)))
+        // Even a chat waiting on the user can be marked read: they have seen it.
+        assertEquals(ReadAction.MarkRead, readAction(header(status = "needs_attention", unread = true)))
+    }
+
+    @Test
+    fun aReadIdleChatOffersMarkAsUnread() {
+        assertEquals(ReadAction.MarkUnread, readAction(header()))
+        assertEquals(ReadAction.MarkUnread, readAction(header(status = "needs_attention")))
+    }
+
+    @Test
+    fun runningAndSettledChatsOfferNoReadEntry() {
+        assertNull("running", readAction(header(status = "working")))
+        assertNull("settled", readAction(header(settledAt = 5_000L)))
     }
 }

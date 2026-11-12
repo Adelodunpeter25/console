@@ -28,6 +28,7 @@ import io.github.lyxnx.compose.ui.tablericons.filled.Pin
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.Edit
 import io.github.lyxnx.compose.ui.tablericons.outline.Mail
+import io.github.lyxnx.compose.ui.tablericons.outline.MailOpened
 import io.github.lyxnx.compose.ui.tablericons.outline.Pin
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
@@ -35,11 +36,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Whether "Mark as unread" applies: the chat is read, not settled, and not running. */
-internal fun canMarkUnread(session: SessionHeader): Boolean =
-    !session.unread && (session.settled_at ?: 0L) <= 0 && session.status != "working"
+/** The read-state entry a chat's sheet offers. */
+internal enum class ReadAction { MarkRead, MarkUnread }
 
-/** The long-press actions sheet: mark unread, rename, pin/unpin, settle/unsettle, delete. */
+/**
+ * Which read-state entry the sheet offers. An unread chat offers "Mark as read".
+ * A read chat offers "Mark as unread", except while it is running or once settled:
+ * the server refuses both, so the entry is hidden rather than offered and failed.
+ */
+internal fun readAction(session: SessionHeader): ReadAction? = when {
+    session.unread -> ReadAction.MarkRead
+    (session.settled_at ?: 0L) <= 0 && session.status != "working" -> ReadAction.MarkUnread
+    else -> null
+}
+
+/** The long-press actions sheet: mark read/unread, rename, pin/unpin, settle/unsettle, delete. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SessionActionsSheet(
@@ -51,21 +62,32 @@ internal fun SessionActionsSheet(
     val isSettled = (session.settled_at ?: 0L) > 0
     BaseSheet(onDismiss = onDismiss) {
         SectionCard {
-            // Offered only where the server will accept it: not for a chat that
-            // is running, settled, or already unread.
-            if (canMarkUnread(session)) {
-                ActionRow(icon = TablerIcons.Outline.Mail, title = "Mark as unread") {
-                    val target = session
-                    onDismiss()
-                    AppContainer.actionScope.launch {
-                        try {
-                            AppContainer.projectRepository.markSessionUnread(target.id)
-                        } catch (e: Exception) {
-                            confirmAlert("Failed", e.message ?: "Unable to mark as unread.")
+            when (readAction(session)) {
+                ReadAction.MarkRead -> {
+                    ActionRow(icon = TablerIcons.Outline.MailOpened, title = "Mark as read") {
+                        val target = session
+                        onDismiss()
+                        AppContainer.actionScope.launch {
+                            AppContainer.projectRepository.markSessionRead(target.id)
                         }
                     }
+                    SectionDivider()
                 }
-                SectionDivider()
+                ReadAction.MarkUnread -> {
+                    ActionRow(icon = TablerIcons.Outline.Mail, title = "Mark as unread") {
+                        val target = session
+                        onDismiss()
+                        AppContainer.actionScope.launch {
+                            try {
+                                AppContainer.projectRepository.markSessionUnread(target.id)
+                            } catch (e: Exception) {
+                                confirmAlert("Failed", e.message ?: "Unable to mark as unread.")
+                            }
+                        }
+                    }
+                    SectionDivider()
+                }
+                null -> Unit
             }
             ActionRow(
                 icon = if (isPinned) TablerIcons.Filled.Pin else TablerIcons.Outline.Pin,
