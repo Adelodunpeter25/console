@@ -407,12 +407,20 @@ pub fn render_sidebar_session_item(
         .find(|project| project.matches_session(&session))
         .map(|project| project.name.clone())
         .unwrap_or_else(|| {
-            std::path::Path::new(&session.cwd)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or("General")
-                .to_string()
+            if session.project_id.is_none()
+                || session.cwd.is_empty()
+                || session.cwd.contains("/scratch/")
+                || session.cwd.contains(r"\scratch\")
+            {
+                "No Project".to_string()
+            } else {
+                std::path::Path::new(&session.cwd)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .filter(|s| !s.is_empty() && s.len() < 32)
+                    .unwrap_or("No Project")
+                    .to_string()
+            }
         });
     let session_id = session.id.clone();
     let is_renaming = renaming_session_id == Some(session_id.as_str());

@@ -184,10 +184,12 @@ pub fn render_session_card_content(
                 div()
                     .flex()
                     .items_center()
+                    .gap_x(px(8.0))
                     .text_size(px(12.0))
                     .child(
                         div()
-                            .w(px(65.0))
+                            .w(px(70.0))
+                            .flex_none()
                             .text_color(theme.text_tertiary)
                             .child("Model"),
                     )
@@ -205,22 +207,41 @@ pub fn render_session_card_content(
             div()
                 .flex()
                 .items_center()
+                .gap_x(px(8.0))
                 .text_size(px(12.0))
                 .child(
                     div()
-                        .w(px(65.0))
+                        .w(px(70.0))
+                        .flex_none()
                         .text_color(theme.text_tertiary)
                         .child("Project"),
                 )
-                .child(
+                .child(if project_name == "No Project" {
                     div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_color(theme.text_tertiary)
+                        .child("No Project")
+                        .into_any_element()
+                } else {
+                    div()
+                        .flex_1()
+                        .min_w_0()
                         .flex()
                         .items_center()
                         .gap_x(px(5.0))
                         .text_color(theme.text_secondary)
                         .child(app_icon(IconName::Folder, 13.0, theme.text_tertiary))
-                        .child(project_name.to_string()),
-                ),
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .child(project_name.to_string()),
+                        )
+                        .into_any_element()
+                }),
         )
         .into_any_element()
 }
