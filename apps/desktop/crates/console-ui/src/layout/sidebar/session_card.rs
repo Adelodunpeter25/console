@@ -163,7 +163,7 @@ pub fn render_session_card_content(
         .shadow_lg()
         .flex()
         .flex_col()
-        .gap_y(px(8.0))
+        .gap_y(px(4.0))
         .child(
             div()
                 .flex()
@@ -184,7 +184,7 @@ pub fn render_session_card_content(
                         .child(subtitle),
                 ),
         )
-        .child(div().h(px(1.0)).bg(theme.border))
+        .child(div().my(px(4.0)).h(px(1.0)).bg(theme.border))
         .when_some(model_name.filter(|m| !m.is_empty()), |card, model| {
             card.child(
                 div()
