@@ -230,8 +230,16 @@ fn branch_menu_section_offers_no_remote_branches() {
     use std::rc::Rc;
 
     let branches = Rc::new(vec![
-        GitBranchInfo { name: "main".into(), current: true, remote: false },
-        GitBranchInfo { name: "origin/develop".into(), current: false, remote: true },
+        GitBranchInfo {
+            name: "main".into(),
+            current: true,
+            remote: false,
+        },
+        GitBranchInfo {
+            name: "origin/develop".into(),
+            current: false,
+            remote: true,
+        },
     ]);
     let is_selected: Rc<dyn Fn(&GitBranchInfo) -> bool> = Rc::new(|info: &GitBranchInfo| {
         BranchChoice::FromBranch(info.name.clone()) == BranchChoice::FromBranch("main".into())
