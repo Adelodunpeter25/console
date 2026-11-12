@@ -173,62 +173,50 @@ fn command_palette_entries(
 fn tab_palette_entries(
     entity: WeakEntity<ConsoleDesktopApp>,
     workspace_root: &WorkspaceNode,
+    focused_pane_id: Option<&str>,
 ) -> Vec<PaletteEntry> {
     // Collect every open tab in layout order, tagged with its pane id and the
     // pane's index for the visible label suffix.
     let leaves: Vec<&console_core::LeafPaneNode> = workspace_root.leaves();
     let pane_count = leaves.len();
-    let mut browser_entries: Vec<(i64, PaletteEntry)> = Vec::new();
-    let mut chat_entries: Vec<(i64, PaletteEntry)> = Vec::new();
-    let mut terminal_entries: Vec<PaletteEntry> = Vec::new();
+    let mut scored: Vec<(i64, PaletteEntry)> = Vec::new();
 
     for (pane_index, leaf) in leaves.iter().enumerate() {
+        let is_focused_pane = focused_pane_id.map_or(pane_index == 0, |id| id == leaf.id);
         for tab in &leaf.tabs {
-            match tab {
-                WorkspaceTabConfig::Browser { .. } => {
-                    let recency = tab.last_active_at_ms().unwrap_or(i64::MIN);
-                    browser_entries.push((
-                        recency,
-                        tab_palette_entry(entity.clone(), &leaf.id, pane_index, pane_count, tab),
-                    ));
+            let is_current = is_focused_pane && leaf.active_tab_id.as_deref() == Some(&tab.id());
+            let (section, recency) = match tab {
+                WorkspaceTabConfig::Chat { .. } => {
+                    ("Chats", tab.last_active_at_ms().unwrap_or(i64::MIN))
                 }
                 WorkspaceTabConfig::Terminal { .. } => {
-                    terminal_entries.push(tab_palette_entry(
-                        entity.clone(),
-                        &leaf.id,
-                        pane_index,
-                        pane_count,
-                        tab,
-                    ));
+                    ("Terminals", tab.last_active_at_ms().unwrap_or(i64::MIN))
                 }
-                WorkspaceTabConfig::Chat { .. } => {
-                    let recency = tab.last_active_at_ms().unwrap_or(i64::MIN);
-                    chat_entries.push((
-                        recency,
-                        tab_palette_entry(entity.clone(), &leaf.id, pane_index, pane_count, tab),
-                    ));
+                WorkspaceTabConfig::Browser { .. } => {
+                    ("Browsers", tab.last_active_at_ms().unwrap_or(i64::MIN))
                 }
-                // File, Diff, and ChangesReview tabs are out of scope for the
-                // ⌘⇧P palette; reachable via the tab bar and ⌘P file search.
                 WorkspaceTabConfig::File { .. }
                 | WorkspaceTabConfig::Diff { .. }
                 | WorkspaceTabConfig::ChangesReview { .. }
-                | WorkspaceTabConfig::Settings { .. } => {}
-            }
+                | WorkspaceTabConfig::Settings { .. } => continue,
+            };
+            let entry = tab_palette_entry(
+                entity.clone(),
+                &leaf.id,
+                pane_index,
+                pane_count,
+                tab,
+                section,
+                is_current,
+            );
+            scored.push((recency, entry));
         }
     }
 
-    // Browsers and chats sorted by recency: most-recently updated first.
-    // Tabs without a timestamp share the bottom of the list in insertion order.
-    browser_entries.sort_by(|(a, _), (b, _)| b.cmp(a));
-    chat_entries.sort_by(|(a, _), (b, _)| b.cmp(a));
-    let mut entries: Vec<PaletteEntry> = browser_entries
-        .into_iter()
-        .map(|(_, entry)| entry)
-        .collect();
-    entries.extend(terminal_entries);
-    entries.extend(chat_entries.into_iter().map(|(_, entry)| entry));
-    entries
+    // Most recently active tab first across all sections, so hitting ⌘T
+    // and Enter immediately jumps to the previous tab.
+    scored.sort_by_key(|(recency, _)| std::cmp::Reverse(*recency));
+    scored.into_iter().map(|(_, entry)| entry).collect()
 }
 
 fn tab_palette_entry(
@@ -237,24 +225,31 @@ fn tab_palette_entry(
     pane_index: usize,
     pane_count: usize,
     tab: &WorkspaceTabConfig,
+    section: &'static str,
+    is_current: bool,
 ) -> PaletteEntry {
     let tab_id = tab.id();
     let title = tab.title().to_string();
-    let pane_suffix = if pane_count > 1 {
-        format!(" · P{}", pane_index + 1)
-    } else {
-        String::new()
-    };
-    let label = format!("{}{}", title, pane_suffix);
     let pane_id_for_handler = pane_id.to_string();
     let tab_id_for_handler = tab_id.clone();
-    let mut entry = PaletteEntry::new(format!("tab-{}", tab_id), label, move |_window, cx| {
+    let mut entry = PaletteEntry::new(format!("tab-{}", tab_id), title, move |_window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {
                 this.activate_workspace_tab(&pane_id_for_handler, &tab_id_for_handler, cx);
             });
         }
-    });
+    })
+    .section(section);
+
+    if pane_count > 1 {
+        entry = entry.subtitle(format!("Pane {}", pane_index + 1));
+    }
+
+    if is_current {
+        entry = entry.detail("current");
+    } else if let Some(last_active) = tab.last_active_at_ms() {
+        entry = entry.detail(console_ui::utils::format_time_ago(last_active));
+    }
 
     // Use favicon for browser tabs, fallback to app icons for other tab types
     match tab {
@@ -418,14 +413,26 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// ⌘⇧P — toggle the open-tab palette. Browser tabs appear first, then
-    /// terminals, then chat tabs sorted by recency.
+    /// ⌘T — toggle the open-tab palette with sectioned tabs, recency sorting,
+    /// and last-active detail.
     pub fn toggle_tab_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let entity = cx.entity().downgrade();
         let workspace_root = self.workspace_root.clone();
+        let focused_pane_id = self.active_pane_id.clone();
         self.tab_palette.update(cx, |palette, cx| {
             palette.set_placeholder("Switch open tab…", cx);
-            palette.set_entries(tab_palette_entries(entity, &workspace_root), cx);
+            palette.set_section_placeholders(
+                vec![
+                    ("Chats".into(), "Search open chats…".into()),
+                    ("Terminals".into(), "Search open terminals…".into()),
+                    ("Browsers".into(), "Search open browsers…".into()),
+                ],
+                cx,
+            );
+            palette.set_entries(
+                tab_palette_entries(entity, &workspace_root, focused_pane_id.as_deref()),
+                cx,
+            );
             palette.toggle(window, cx);
         });
         cx.notify();
