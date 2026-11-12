@@ -222,6 +222,7 @@ impl ConsoleDesktopApp {
                         context_files: context_files.to_vec(),
                         attachments: attachments.to_vec(),
                         annotations: annotations.to_vec(),
+                        floating: None,
                     },
                 );
                 self.schedule_drafts_save(cx);

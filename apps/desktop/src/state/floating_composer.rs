@@ -14,7 +14,11 @@
 
 use std::rc::Rc;
 
-use console_core::{CreateSessionDto, CreateWorktreeSpec, SelectedModel, ThinkingLevel};
+use crate::persistence::store::{PersistedBranchChoice, PersistedFloatingChoices};
+
+use console_core::{
+    ApprovalMode, CreateSessionDto, CreateWorktreeSpec, SelectedModel, ThinkingLevel,
+};
 use console_ui::common::{
     BranchChoice, FloatingComposerView, FloatingSnapshot, FloatingSubmit, ModelDropdownMenu,
     PickerTab,
@@ -123,6 +127,69 @@ impl ConsoleDesktopApp {
             &[],
             cx,
         );
+        let card = &self.floating_composer;
+        let choices = PersistedFloatingChoices {
+            project_id: card.selected_project_id.clone(),
+            branch: match &card.branch {
+                BranchChoice::Project => PersistedBranchChoice::Project,
+                BranchChoice::NewWorktree => PersistedBranchChoice::NewWorktree,
+                BranchChoice::FromBranch(name) => PersistedBranchChoice::FromBranch(name.clone()),
+            },
+            model: card
+                .selected_model
+                .as_ref()
+                .map(|m| (m.provider.clone(), m.model_id.clone())),
+            thinking_level: card.thinking_level,
+            approval_mode: card.approval_mode.value().to_string(),
+        };
+        if let Some(draft) = self.drafts.get_mut(FLOATING_KEY)
+            && draft.floating.as_ref() != Some(&choices)
+        {
+            draft.floating = Some(choices);
+            self.schedule_drafts_save(cx);
+        }
+    }
+
+    /// Re-apply the pickers stashed with the prompt. Each one is checked
+    /// against live state and left at its default when it no longer exists.
+    fn restore_floating_choices(
+        &mut self,
+        choices: PersistedFloatingChoices,
+        cx: &mut Context<Self>,
+    ) {
+        let project_exists = choices
+            .project_id
+            .as_deref()
+            .is_some_and(|id| self.projects.iter().any(|p| p.id == id));
+        if project_exists && let Some(id) = choices.project_id.clone() {
+            self.floating_project_changed(id, cx);
+            // The branch list is still the previous project's here; `set_branches`
+            // drops a base that isn't in the list once the fetch lands.
+            self.floating_composer.branch = match choices.branch {
+                PersistedBranchChoice::Project => BranchChoice::Project,
+                PersistedBranchChoice::NewWorktree => BranchChoice::NewWorktree,
+                PersistedBranchChoice::FromBranch(name) => BranchChoice::FromBranch(name),
+            };
+        } else if choices.project_id.is_none() {
+            self.floating_no_project_chosen(cx);
+        }
+
+        if let Some((provider, model_id)) = choices.model {
+            let known = self.providers.iter().any(|p| p.name == provider)
+                && self
+                    .models_by_provider
+                    .get(&provider)
+                    .is_none_or(|models| models.iter().any(|m| m.id == model_id));
+            if known {
+                let model = SelectedModel { provider, model_id };
+                let supported = self.supported_thinking_levels_for_model(Some(&model));
+                self.floating_composer.selected_model = Some(model);
+                self.floating_composer
+                    .set_thinking_context(choices.thinking_level, supported);
+            }
+        }
+        self.floating_composer.approval_mode = ApprovalMode::from_value(&choices.approval_mode);
+        cx.notify();
     }
 
     fn restore_floating_stash(&mut self, cx: &mut Context<Self>) {
@@ -135,11 +202,18 @@ impl ConsoleDesktopApp {
             .get(FLOATING_KEY)
             .map(|draft| draft.attachments.clone())
             .unwrap_or_default();
+        let choices = self
+            .drafts
+            .get(FLOATING_KEY)
+            .and_then(|draft| draft.floating.clone());
         self.set_attachments_for_pane(FLOATING_KEY, attachments);
         self.floating_composer.input.update(cx, |input, cx| {
             input.set_content_with_mentions(text, mentions, cx);
             input.set_context_files(context_files);
         });
+        if let Some(choices) = choices {
+            self.restore_floating_choices(choices, cx);
+        }
     }
 
     /// Rebuild the card's derived state each frame: the @-file / slash-command

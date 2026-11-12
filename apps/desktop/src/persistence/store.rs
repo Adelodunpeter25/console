@@ -39,6 +39,24 @@ pub struct PersistedDraftMention {
     pub label: Option<String>,
 }
 
+/// Base the floating composer was set to launch from.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PersistedBranchChoice {
+    Project,
+    NewWorktree,
+    FromBranch(String),
+}
+
+/// The floating composer's pickers, stashed beside its unsent prompt.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PersistedFloatingChoices {
+    pub project_id: Option<String>,
+    pub branch: PersistedBranchChoice,
+    pub model: Option<(String, String)>,
+    pub thinking_level: Option<console_core::ThinkingLevel>,
+    pub approval_mode: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PersistedDraft {
     pub prompt: String,
@@ -51,6 +69,8 @@ pub struct PersistedDraft {
     pub attachments: Vec<console_core::ImageAttachment>,
     #[serde(default)]
     pub annotations: Vec<console_core::BrowserElementAnnotation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub floating: Option<PersistedFloatingChoices>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

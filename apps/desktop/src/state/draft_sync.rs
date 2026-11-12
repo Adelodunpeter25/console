@@ -235,6 +235,7 @@ impl ConsoleDesktopApp {
                     ),
                     attachments,
                     annotations,
+                    floating: None,
                 },
             );
         }
