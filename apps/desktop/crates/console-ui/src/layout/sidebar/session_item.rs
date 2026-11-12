@@ -10,7 +10,8 @@ use gpui::{
 
 use super::item_row::{draft_badge, row_container, status_slot, title_label};
 use super::session_card::{
-    SidebarHoverManager, dismiss_card, on_card_hover, on_row_hover, render_session_card_content,
+    CardStatusMark, SidebarHoverManager, dismiss_card, on_card_hover, on_row_hover,
+    render_session_card_content,
 };
 use crate::input::ComposerInput;
 use crate::layout::sidebar_loading::{self as sidebar, SidebarLoadingState};
@@ -333,15 +334,27 @@ impl RenderOnce for SidebarSessionItem {
                     (None, false)
                 };
 
-                let (status_label, status_color, status_icon) = match row_status {
-                    sidebar::RowStatus::Running => ("Running", theme.accent, None),
-                    sidebar::RowStatus::NeedsAttention => {
-                        ("Needs attention", theme.badge, Some(IconName::Alert))
+                let (status_label, status_color, status_mark) = match row_status {
+                    sidebar::RowStatus::Running => {
+                        ("Running", theme.accent, CardStatusMark::Spinner)
                     }
-                    sidebar::RowStatus::Unread => ("Unread", theme.badge, Some(IconName::Unread)),
-                    sidebar::RowStatus::Done => ("Done", theme.success, Some(IconName::Done)),
-                    sidebar::RowStatus::Quiet if settled => ("Settled", theme.text_tertiary, None),
-                    sidebar::RowStatus::Quiet => ("Idle", theme.text_ghost, None),
+                    sidebar::RowStatus::NeedsAttention => (
+                        "Needs attention",
+                        theme.badge,
+                        CardStatusMark::Icon(IconName::Alert),
+                    ),
+                    sidebar::RowStatus::Unread => (
+                        "Unread",
+                        theme.badge,
+                        CardStatusMark::Icon(IconName::Unread),
+                    ),
+                    sidebar::RowStatus::Done => {
+                        ("Done", theme.success, CardStatusMark::Icon(IconName::Done))
+                    }
+                    sidebar::RowStatus::Quiet if settled => {
+                        ("Settled", theme.text_tertiary, CardStatusMark::Dot)
+                    }
+                    sidebar::RowStatus::Quiet => ("Idle", theme.text_ghost, CardStatusMark::Dot),
                 };
 
                 let card = div()
@@ -362,7 +375,7 @@ impl RenderOnce for SidebarSessionItem {
                         is_worktree,
                         status_label,
                         status_color,
-                        status_icon,
+                        status_mark,
                         &theme,
                     ));
 

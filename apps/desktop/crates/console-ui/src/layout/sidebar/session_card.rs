@@ -3,12 +3,26 @@ use std::time::Duration;
 use gpui::prelude::FluentBuilder;
 use gpui::{AnyElement, App, Entity, Hsla, IntoElement, ParentElement, Styled, div, px};
 
-use crate::primitives::{IconName, app_icon};
+use crate::primitives::{IconName, app_icon, motion};
 use crate::theme::Theme;
 use crate::utils::format_time_ago;
 
 const OPEN_DELAY: Duration = Duration::from_millis(200);
 const HIDE_DELAY: Duration = Duration::from_millis(80);
+
+/// The mark beside the card's status label.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CardStatusMark {
+    /// A plain coloured dot, for states the row has no icon for.
+    Dot,
+    /// The same icon the sidebar row shows.
+    Icon(IconName),
+    /// The row's spinner. Rides the shared slow clock, the same cadence as the
+    /// row's own spinner, so it adds a redraw to neither: a view holds one
+    /// lease however many loaders it mounts, and a chat only shows Running here
+    /// while its row spinner is already on screen.
+    Spinner,
+}
 
 /// Manages hover card state across all session items in the sidebar.
 pub struct SidebarHoverManager {
@@ -141,6 +155,16 @@ pub fn on_card_hover(state: &Entity<SidebarHoverManager>, hovered: bool, cx: &mu
 
 /// Render the content inside the session hover card.
 #[allow(clippy::too_many_arguments)]
+/// Fixed 14px box so icons of different shapes line up with the label.
+fn status_mark_slot() -> gpui::Div {
+    div()
+        .size(px(14.0))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+}
+
 pub fn render_session_card_content(
     title: &str,
     created_at: i64,
@@ -151,9 +175,7 @@ pub fn render_session_card_content(
     is_worktree: bool,
     status_label: &str,
     status_color: Hsla,
-    // The row's own status icon, when the state has one, so the card shows the
-    // same mark as the row instead of a generic dot.
-    status_icon: Option<IconName>,
+    status_mark: CardStatusMark,
     theme: &Theme,
 ) -> AnyElement {
     let created_ago = if created_at > 0 {
@@ -327,16 +349,18 @@ pub fn render_session_card_content(
                         .flex()
                         .items_center()
                         .gap_x(px(6.0))
-                        .child(match status_icon {
-                            Some(icon) => div()
-                                .size(px(14.0))
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .justify_center()
+                        .child(match status_mark {
+                            CardStatusMark::Icon(icon) => status_mark_slot()
                                 .child(app_icon(icon, 14.0, status_color))
                                 .into_any_element(),
-                            None => div()
+                            CardStatusMark::Spinner => status_mark_slot()
+                                .child(motion::spin_slow(app_icon(
+                                    IconName::LoaderCircle,
+                                    14.0,
+                                    status_color,
+                                )))
+                                .into_any_element(),
+                            CardStatusMark::Dot => div()
                                 .size(px(7.0))
                                 .rounded_full()
                                 .bg(status_color)
