@@ -571,22 +571,23 @@ impl Render for ConsoleDesktopApp {
                         && !event.keystroke.modifiers.alt
                         && !event.keystroke.modifiers.platform
                     {
+                        // Read the transcript handle and release the app first: the
+                        // cite callback updates the app, and nesting that inside an
+                        // app update panics.
                         if let Some(app) = entity.upgrade() {
-                            let handled = app.update(cx, |this, cx| {
-                                let transcript = this.active_transcript_view();
-                                transcript.update(cx, |trans, cx| trans.trigger_cite(window, cx))
-                            });
-                            if handled {}
+                            let transcript = app.read(cx).active_transcript_view();
+                            if transcript.update(cx, |trans, cx| trans.trigger_cite(window, cx)) {
+                                cx.stop_propagation();
+                            }
                         }
                     } else if (event.keystroke.key == "c" || event.keystroke.key == "C")
                         && (!event.keystroke.modifiers.control && !event.keystroke.modifiers.alt)
                     {
                         if let Some(app) = entity.upgrade() {
-                            let handled = app.update(cx, |this, cx| {
-                                let transcript = this.active_transcript_view();
-                                transcript.update(cx, |trans, cx| trans.trigger_copy(window, cx))
-                            });
-                            if handled {}
+                            let transcript = app.read(cx).active_transcript_view();
+                            if transcript.update(cx, |trans, cx| trans.trigger_copy(window, cx)) {
+                                cx.stop_propagation();
+                            }
                         }
                     } else if event.keystroke.modifiers.platform
                         && event.keystroke.modifiers.shift
