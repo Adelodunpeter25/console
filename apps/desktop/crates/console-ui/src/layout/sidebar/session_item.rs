@@ -81,6 +81,7 @@ pub struct SidebarSessionItem {
     on_toggle_pin: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_settle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_unsettle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_mark_unread: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_delete: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
@@ -102,6 +103,7 @@ impl SidebarSessionItem {
         on_toggle_pin: impl Fn(&mut Window, &mut App) + 'static,
         on_settle: impl Fn(&mut Window, &mut App) + 'static,
         on_unsettle: impl Fn(&mut Window, &mut App) + 'static,
+        on_mark_unread: impl Fn(&mut Window, &mut App) + 'static,
         on_delete: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
@@ -120,6 +122,7 @@ impl SidebarSessionItem {
             on_toggle_pin: Rc::new(on_toggle_pin),
             on_settle: Rc::new(on_settle),
             on_unsettle: Rc::new(on_unsettle),
+            on_mark_unread: Rc::new(on_mark_unread),
             on_delete: Rc::new(on_delete),
         }
     }
@@ -137,6 +140,7 @@ impl RenderOnce for SidebarSessionItem {
         let on_cancel_rename = self.on_cancel_rename;
         let on_toggle_pin = self.on_toggle_pin;
         let on_delete = self.on_delete;
+        let on_mark_unread = self.on_mark_unread;
         let pinned = session.pinned_at.is_some();
         let settled = session.settled_at.is_some();
 
@@ -379,6 +383,12 @@ impl RenderOnce for SidebarSessionItem {
                 .into_any_element()
         } else {
             let on_toggle_pin = on_toggle_pin;
+            // Offered only where the server will accept it: not for a chat
+            // that is running, settled, or already unread.
+            let can_mark_unread =
+                !session.unread && !settled && !matches!(row_status, sidebar::RowStatus::Running);
+            let mark_unread = can_mark_unread
+                .then(|| move |window: &mut Window, cx: &mut App| (on_mark_unread)(window, cx));
             let menu_id = format!("session-menu-{}", session.id);
             session_context_menu(
                 row,
@@ -391,6 +401,7 @@ impl RenderOnce for SidebarSessionItem {
                 move |window, cx| (self.on_settle)(window, cx),
                 move |window, cx| (self.on_unsettle)(window, cx),
                 move |window, cx| (on_delete)(window, cx),
+                mark_unread,
                 pinned,
                 settled,
             )
@@ -414,6 +425,7 @@ pub fn render_sidebar_session_item(
     on_toggle_pin: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_settle: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_unsettle: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_mark_unread: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_delete: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     renaming_session_id: Option<&str>,
     rename_input: Option<Entity<ComposerInput>>,
@@ -487,6 +499,11 @@ pub fn render_sidebar_session_item(
             let session_id = session_id.clone();
             let on_unsettle = on_unsettle.clone();
             move |window, cx| (on_unsettle)(session_id.clone(), window, cx)
+        },
+        {
+            let session_id = session_id.clone();
+            let on_mark_unread = on_mark_unread.clone();
+            move |window, cx| (on_mark_unread)(session_id.clone(), window, cx)
         },
         {
             let on_delete = on_delete.clone();

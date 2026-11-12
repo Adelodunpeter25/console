@@ -142,6 +142,7 @@ pub struct SidebarView {
     on_toggle_pin_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_settle_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_unsettle_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_mark_unread_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_delete_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_delete_draft: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     renaming_session_id: Option<String>,
@@ -197,6 +198,7 @@ impl SidebarView {
         on_toggle_pin_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_settle_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_unsettle_session: impl Fn(String, &mut Window, &mut App) + 'static,
+        on_mark_unread_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_delete_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_delete_draft: impl Fn(String, &mut Window, &mut App) + 'static,
         renaming_session_id: Option<String>,
@@ -239,6 +241,7 @@ impl SidebarView {
             on_toggle_pin_session: Rc::new(on_toggle_pin_session),
             on_settle_session: Rc::new(on_settle_session),
             on_unsettle_session: Rc::new(on_unsettle_session),
+            on_mark_unread_session: Rc::new(on_mark_unread_session),
             on_delete_session: Rc::new(on_delete_session),
             on_delete_draft: Rc::new(on_delete_draft),
             renaming_session_id,
@@ -787,6 +790,7 @@ impl RenderOnce for SidebarView {
         let list_on_toggle_settled = self.on_toggle_settled;
         let list_on_settle = self.on_settle_session;
         let list_on_unsettle = self.on_unsettle_session;
+        let list_on_mark_unread = self.on_mark_unread_session;
         let grouped_rows = list(sidebar_list_state, move |index, window, cx| {
             let Some(row) = list_rows.get(index).cloned() else {
                 return div().into_any_element();
@@ -833,6 +837,7 @@ impl RenderOnce for SidebarView {
                         &list_on_toggle_pin,
                         &list_on_settle,
                         &list_on_unsettle,
+                        &list_on_mark_unread,
                         &list_on_del,
                         list_renaming_session_id.as_deref(),
                         list_rename_input.clone(),

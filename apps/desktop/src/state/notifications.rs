@@ -58,6 +58,18 @@ impl ConsoleDesktopApp {
                                     });
                                     continue;
                                 }
+                                if event.kind == "read_state" {
+                                    // Silent signal: another device (or this one) read
+                                    // or unread a chat. Refresh the headers so the dot
+                                    // and the Dock badge follow without waiting for the
+                                    // 30-second poll. Cheap: one list request.
+                                    let _ = cx.update(|cx| {
+                                        if let Some(app) = entity.upgrade() {
+                                            app.update(cx, |this, cx| this.load_sessions(cx));
+                                        }
+                                    });
+                                    continue;
+                                }
                                 if event.kind == "session_deleted" {
                                     // Silent signal: the chat was deleted (here or on
                                     // another device or by the retention sweep). Its

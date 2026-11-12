@@ -40,6 +40,9 @@ pub fn session_context_menu<E>(
     on_settle: impl Fn(&mut Window, &mut App) + 'static,
     on_unsettle: impl Fn(&mut Window, &mut App) + 'static,
     on_delete: impl Fn(&mut Window, &mut App) + 'static,
+    // None hides "Mark as unread": the server refuses it for a running or a
+    // settled chat, and it is pointless for one that is already unread.
+    on_mark_unread: Option<impl Fn(&mut Window, &mut App) + 'static>,
     pinned: bool,
     settled: bool,
 ) -> AnyElement
@@ -54,6 +57,7 @@ where
     let on_settle = Rc::new(on_settle);
     let on_unsettle = Rc::new(on_unsettle);
     let on_delete = Rc::new(on_delete);
+    let on_mark_unread = on_mark_unread.map(Rc::new);
 
     context_menu(element, id, &handle, move |_| {
         let pin_label = if pinned { "Unpin" } else { "Pin" };
@@ -68,12 +72,21 @@ where
         let on_settle = on_settle.clone();
         let on_unsettle = on_unsettle.clone();
         let on_delete = on_delete.clone();
-        vec![
+        let mark_unread = on_mark_unread.clone().map(|on_mark_unread| {
+            MenuItem::new("Mark as unread", move |window, cx| {
+                on_mark_unread(window, cx)
+            })
+            .icon(IconName::Unread.path())
+        });
+        let mut items = vec![
             MenuItem::new("Open in New Window", move |window, cx| {
                 on_open_in_new_window(window, cx)
             })
             .icon(IconName::OpenInWindow.path()),
             MenuItem::Separator,
+        ];
+        items.extend(mark_unread);
+        items.extend([
             MenuItem::new(pin_label, move |window, cx| on_toggle_pin(window, cx))
                 .icon(IconName::Pin.path()),
             MenuItem::new("Rename", move |window, cx| on_rename(window, cx))
@@ -91,7 +104,8 @@ where
             MenuItem::new("Delete", move |window, cx| on_delete(window, cx))
                 .icon(IconName::TrashBinMinimalistic.path())
                 .destructive(true),
-        ]
+        ]);
+        items
     })
 }
 

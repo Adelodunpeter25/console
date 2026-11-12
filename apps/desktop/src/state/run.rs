@@ -1153,6 +1153,13 @@ impl ConsoleDesktopApp {
                             t.finish_streaming(cx);
                         });
                     }
+                    // The user is watching this chat finish: that is seeing
+                    // the result, so it must not light up unread. The server
+                    // marked it unread when the run ended, so report the read
+                    // now; the dot never needs to appear on a chat on screen.
+                    if pane_shows_run && self.is_window_active {
+                        self.schedule_read_after_finish(run_session_id, cx);
+                    }
                 }
                 self.maybe_refresh_inspector(cx);
             }

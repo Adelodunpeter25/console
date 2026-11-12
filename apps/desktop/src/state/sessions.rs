@@ -1321,6 +1321,141 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// Tell the server this chat was shown, which clears its unread dot (and a
+    /// lingering needs-attention) on every device. The local header is cleared
+    /// first so the dot does not linger until the next list refresh, and the
+    /// call is skipped for a chat already read, so reopening a quiet chat
+    /// costs no request. Best-effort: a failed report only means the dot
+    /// clears on the next refresh instead.
+    pub(crate) fn report_session_read(&mut self, session_id: &str, cx: &mut Context<Self>) {
+        let Some(session) = Rc::make_mut(&mut self.sessions)
+            .iter_mut()
+            .find(|session| session.id == session_id)
+        else {
+            return;
+        };
+        let needs_report = session.unread || session.status == "needs_attention";
+        if !needs_report {
+            return;
+        }
+        session.unread = false;
+        // A needs-attention chat with no run behind it settles to done on the
+        // server when read. A chat that is genuinely waiting on a question
+        // keeps the alert: its run is still active, and the next refresh says
+        // so.
+        if session.status == "needs_attention" && !self.running_sessions.contains_key(session_id) {
+            session.status = "done".to_string();
+        }
+        super::macos_notifications::clear_for_session(session_id);
+        cx.notify();
+
+        let client = self.client.clone();
+        let session_id = session_id.to_string();
+        cx.spawn(async move |_entity, _cx| {
+            if let Err(error) = client.sessions.mark_read(&session_id).await {
+                log::debug!("mark read failed for {session_id}: {error}");
+            }
+        })
+        .detach();
+    }
+
+    /// Report a read for a chat that just finished while on screen, after a
+    /// short beat. The server writes the run's final status and its activity
+    /// time slightly after the stream's end event, and a read that lands first
+    /// would be overwritten by that activity and leave the chat unread.
+    pub(crate) fn schedule_read_after_finish(&mut self, session_id: &str, cx: &mut Context<Self>) {
+        let session_id = session_id.to_string();
+        cx.spawn(async move |entity, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(600))
+                .await;
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        // Still the chat in front of the user, in a focused window.
+                        let still_viewing = this.is_window_active
+                            && this
+                                .active_pane_id
+                                .as_deref()
+                                .and_then(|pane| this.active_session_for_pane(pane))
+                                .as_deref()
+                                == Some(session_id.as_str());
+                        if still_viewing {
+                            // The local header is stale: the list has not been
+                            // refreshed since the run ended, so force the call.
+                            this.force_session_read(&session_id, cx);
+                        }
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Like [`Self::report_session_read`] but always calls the server: the
+    /// local header may not know yet that the run just made the chat unread.
+    fn force_session_read(&mut self, session_id: &str, cx: &mut Context<Self>) {
+        if let Some(session) = Rc::make_mut(&mut self.sessions)
+            .iter_mut()
+            .find(|session| session.id == session_id)
+        {
+            session.unread = false;
+        }
+        super::macos_notifications::clear_for_session(session_id);
+        cx.notify();
+        let client = self.client.clone();
+        let session_id = session_id.to_string();
+        cx.spawn(async move |entity, cx| {
+            if client.sessions.mark_read(&session_id).await.is_ok() {
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.load_sessions(cx));
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Make a read chat unread again ("Mark as unread" in the row menu). The
+    /// dot appears at once; a server refusal (a running or settled chat)
+    /// rolls it back and shows the reason.
+    pub(crate) fn mark_session_unread(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let Some(session) = Rc::make_mut(&mut self.sessions)
+            .iter_mut()
+            .find(|session| session.id == session_id)
+        else {
+            return;
+        };
+        if session.unread {
+            return;
+        }
+        session.unread = true;
+        cx.notify();
+
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_entity, cx| {
+            if let Err(error) = client.sessions.mark_unread(&session_id).await {
+                let message = format!("Unable to mark as unread: {error}");
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if let Some(session) = Rc::make_mut(&mut this.sessions)
+                                .iter_mut()
+                                .find(|session| session.id == session_id)
+                            {
+                                session.unread = false;
+                            }
+                            this.set_error_for_session(&session_id, message, cx)
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
     /// Load a chat into one pane without replacing another pane's transcript.
     /// Uses tail pagination (limit 50) for fast initial paint; older pages
     /// auto-chain while the user holds at the top so the first prompt is
@@ -1332,6 +1467,7 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         self.pull_draft(session_id.clone(), cx);
+        self.report_session_read(&session_id, cx);
         let client = self.client.clone();
         let saved_position = self.transcript_scroll_positions.get(&session_id).cloned();
         cx.spawn(async move |entity, cx| {

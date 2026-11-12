@@ -664,6 +664,45 @@ impl SessionService {
         }
     }
 
+    /// `POST /api/sessions/:id/read` — a client showed this chat. Idempotent;
+    /// also clears a lingering "needs attention" the user has now seen.
+    pub async fn mark_read(&self, id: &str) -> Result<()> {
+        self.post_read_state(id, "read").await
+    }
+
+    /// `POST /api/sessions/:id/unread` — make a read chat unread again. The
+    /// server refuses a running or settled chat; the caller shows the message.
+    pub async fn mark_unread(&self, id: &str) -> Result<()> {
+        self.post_read_state(id, "unread").await
+    }
+
+    async fn post_read_state(&self, id: &str, action: &str) -> Result<()> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{id}/{action}"))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .with_context(|| format!("Failed to mark session {action}"))?;
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .with_context(|| format!("Failed to parse mark {action} response"))?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(body.error.unwrap_or_else(|| format!(
+                "Failed to mark session {action}"
+            ))))
+        }
+    }
+
     /// `DELETE /api/sessions/:id/permanent` — irreversibly delete a
     /// soft-deleted chat and its messages.
     pub async fn permanent_delete(&self, id: &str) -> Result<()> {
