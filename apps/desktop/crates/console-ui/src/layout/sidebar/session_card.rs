@@ -184,11 +184,11 @@ pub fn render_session_card_content(
                 div()
                     .flex()
                     .items_center()
-                    .gap_x(px(8.0))
+                    .gap_x(px(6.0))
                     .text_size(px(12.0))
                     .child(
                         div()
-                            .w(px(70.0))
+                            .w(px(50.0))
                             .flex_none()
                             .text_color(theme.text_tertiary)
                             .child("Model"),
@@ -207,11 +207,11 @@ pub fn render_session_card_content(
             div()
                 .flex()
                 .items_center()
-                .gap_x(px(8.0))
+                .gap_x(px(6.0))
                 .text_size(px(12.0))
                 .child(
                     div()
-                        .w(px(70.0))
+                        .w(px(50.0))
                         .flex_none()
                         .text_color(theme.text_tertiary)
                         .child("Project"),
