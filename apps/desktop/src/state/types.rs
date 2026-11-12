@@ -90,6 +90,7 @@ pub struct ConsoleDesktopApp {
     pub sidebar_search_query: String,
     pub(crate) sidebar_search_input: Entity<ComposerInput>,
     pub(crate) sidebar_search_task: Option<gpui::Task<()>>,
+    pub(crate) palette_search_task: Option<gpui::Task<()>>,
     /// The workspace pane tree (tabs, splits). Starts as a single leaf.
     pub workspace_root: WorkspaceNode,
     /// Cached workspace pane trees per project (keyed by Some(project_id) or None for no-project chats).

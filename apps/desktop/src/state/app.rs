@@ -644,6 +644,7 @@ impl ConsoleDesktopApp {
             sidebar_search_query: String::new(),
             sidebar_search_input,
             sidebar_search_task: None,
+            palette_search_task: None,
             workspace_root: initial_root,
             project_workspace_roots,
             project_active_panes,

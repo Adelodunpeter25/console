@@ -9,6 +9,11 @@ use gpui::{Context, Focusable as _, WeakEntity, Window};
 
 use super::ConsoleDesktopApp;
 
+/// A shortcut as it reads on this platform.
+fn kbd(mac: &'static str, other: &'static str) -> &'static str {
+    if cfg!(target_os = "macos") { mac } else { other }
+}
+
 /// Static ⌘K entries shared by toggle and open paths. Lists commands
 /// (New Chat / New Terminal) plus one row per saved server.
 ///
@@ -29,7 +34,8 @@ fn command_palette_entries(
                 }
             }
         })
-        .icon(IconName::ChatRoundLine),
+        .icon(IconName::ChatRoundLine)
+        .shortcut(kbd("⌘N", "Ctrl+N")),
         PaletteEntry::new("new-terminal", "New Terminal", {
             let entity = entity.clone();
             move |window, cx| {
@@ -38,7 +44,8 @@ fn command_palette_entries(
                 }
             }
         })
-        .icon(IconName::Terminal),
+        .icon(IconName::Terminal)
+        .shortcut(kbd("⇧⌘T", "Ctrl+Shift+T")),
         PaletteEntry::new("add-project", "Add Project", {
             let entity = entity.clone();
             move |window, cx| {
@@ -47,7 +54,8 @@ fn command_palette_entries(
                 }
             }
         })
-        .icon(IconName::FolderNew),
+        .icon(IconName::FolderNew)
+        .shortcut(kbd("⌘O", "Ctrl+O")),
         PaletteEntry::new("quick-open", "Go to File", {
             let entity = entity.clone();
             move |window, cx| {
@@ -56,7 +64,8 @@ fn command_palette_entries(
                 }
             }
         })
-        .icon(IconName::File),
+        .icon(IconName::File)
+        .shortcut(kbd("⌘P", "Ctrl+P")),
         PaletteEntry::new("toggle-left-sidebar", "Toggle Sidebar", {
             let entity = entity.clone();
             move |_window, cx| {
@@ -65,7 +74,8 @@ fn command_palette_entries(
                 }
             }
         })
-        .icon(IconName::SidebarMinimalistic),
+        .icon(IconName::SidebarMinimalistic)
+        .shortcut(kbd("⌘B", "Ctrl+B")),
         PaletteEntry::new("toggle-right-sidebar", "Toggle Inspector", {
             let entity = entity.clone();
             move |_window, cx| {
@@ -74,7 +84,8 @@ fn command_palette_entries(
                 }
             }
         })
-        .icon(IconName::PanelRightOpen),
+        .icon(IconName::PanelRightOpen)
+        .shortcut(kbd("⌥B", "Alt+B")),
         PaletteEntry::new("open-settings", "Open Settings", {
             let entity = entity.clone();
             move |window, cx| {
@@ -83,7 +94,8 @@ fn command_palette_entries(
                 }
             }
         })
-        .icon(IconName::Settings),
+        .icon(IconName::Settings)
+        .shortcut(kbd("⌘,", "Ctrl+,")),
     ];
     // Browser tabs are deferred on Windows.
     #[cfg(not(target_os = "windows"))]
@@ -96,8 +108,13 @@ fn command_palette_entries(
                 }
             }
         })
-        .icon(IconName::Globe),
+        .icon(IconName::Globe)
+        .shortcut(kbd("⇧⌘B", "Ctrl+Shift+B")),
     );
+
+    for entry in &mut entries {
+        entry.section = Some("Commands".into());
+    }
 
     for environment in environments {
         let environment_id = environment.id.clone();
@@ -115,12 +132,9 @@ fn command_palette_entries(
                     }
                 },
             )
-            .icon(IconName::Server),
+            .icon(IconName::Server)
+            .section("Servers"),
         );
-    }
-
-    for entry in &mut entries {
-        entry.section = Some("Commands".into());
     }
 
     // Every chat across every project, most recently modified first.
@@ -289,11 +303,61 @@ impl ConsoleDesktopApp {
         let entity = cx.entity().downgrade();
         let environments = self.environments.clone();
         let sessions = self.sessions.clone();
+        self.palette_search_task = None;
         self.command_palette.update(cx, |palette, cx| {
+            let search_entity = entity.clone();
+            palette.set_query_handler(
+                move |query, _window, cx| {
+                    if let Some(app) = search_entity.upgrade() {
+                        let query = query.to_string();
+                        app.update(cx, |this, cx| this.search_palette_chats(query, cx));
+                    }
+                },
+                cx,
+            );
             palette.set_entries(command_palette_entries(entity, &environments, &sessions), cx);
             palette.toggle(window, cx);
         });
         cx.notify();
+    }
+
+    /// Chats the sidebar has not loaded are found on the server, so the ⌘K
+    /// palette can open any chat, not only the most recent ones.
+    fn search_palette_chats(&mut self, query: String, cx: &mut Context<Self>) {
+        let query = query.trim().to_string();
+        if query.is_empty() {
+            self.palette_search_task = None;
+            return;
+        }
+        let client = self.client.clone();
+        self.palette_search_task = Some(cx.spawn(async move |entity, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(150))
+                .await;
+            let Ok(results) = client.sessions.search_by_title(&query).await else {
+                return;
+            };
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        if !this.command_palette.read(cx).is_open(cx) {
+                            return;
+                        }
+                        // Opening a chat needs its header in the session list.
+                        this.merge_sidebar_search_results(results, cx);
+                        let entity = cx.entity().downgrade();
+                        let environments = this.environments.clone();
+                        let sessions = this.sessions.clone();
+                        this.command_palette.update(cx, |palette, cx| {
+                            palette.set_entries(
+                                command_palette_entries(entity, &environments, &sessions),
+                                cx,
+                            );
+                        });
+                    });
+                }
+            });
+        }));
     }
 
     /// ⌘P — open the quick file search palette scoped to the active pane's

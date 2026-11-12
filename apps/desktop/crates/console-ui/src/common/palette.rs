@@ -59,6 +59,8 @@ pub struct PaletteEntry {
     pub section: Option<SharedString>,
     /// Muted text on the row's right edge, such as a last-modified time.
     pub detail: Option<SharedString>,
+    /// Keyboard shortcut shown as a key chip on the row's right edge.
+    pub shortcut: Option<SharedString>,
     #[allow(clippy::type_complexity)]
     pub handler: Rc<dyn Fn(&mut Window, &mut App)>,
 }
@@ -77,6 +79,7 @@ impl PaletteEntry {
             drill_path: None,
             section: None,
             detail: None,
+            shortcut: None,
             handler: Rc::new(handler),
         }
     }
@@ -84,6 +87,12 @@ impl PaletteEntry {
     /// List the row under a section heading.
     pub fn section(mut self, section: impl Into<SharedString>) -> Self {
         self.section = Some(section.into());
+        self
+    }
+
+    /// Keyboard shortcut for the row's action, drawn as a key chip.
+    pub fn shortcut(mut self, shortcut: impl Into<SharedString>) -> Self {
+        self.shortcut = Some(shortcut.into());
         self
     }
 
@@ -195,6 +204,20 @@ fn render_entry_row(
                 .text_size(px(11.5))
                 .text_color(theme.text_tertiary)
                 .child(detail),
+        );
+    }
+
+    if let Some(shortcut) = entry.shortcut.clone() {
+        row = row.child(
+            div()
+                .flex_none()
+                .px(px(5.0))
+                .py(px(1.0))
+                .rounded(px(4.0))
+                .bg(theme.raised)
+                .text_size(px(11.0))
+                .text_color(theme.text_tertiary)
+                .child(shortcut),
         );
     }
 
@@ -535,6 +558,17 @@ impl CommandPalette {
     ) {
         self.modal
             .update(cx, |modal, cx| modal.set_placeholder(placeholder, cx));
+    }
+
+    /// Run `handler` with the trimmed query whenever it changes. Replace it on
+    /// every open so it captures the latest context.
+    pub fn set_query_handler(
+        &mut self,
+        handler: impl Fn(&str, &mut Window, &mut App) + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.modal
+            .update(cx, |modal, cx| modal.set_query_handler(handler, cx));
     }
 
     pub fn show(&mut self, window: &mut Window, cx: &mut Context<Self>) {
