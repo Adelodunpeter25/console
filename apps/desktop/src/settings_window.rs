@@ -104,11 +104,11 @@ impl SettingsWindow {
 
         let model_vision_input = cx.new(|cx| {
             ComposerInput::new(window, cx)
-                .placeholder("provider/model or leave blank for chat model")
+                .placeholder("provider/model or leave blank to not set")
         });
         let model_smol_input = cx.new(|cx| {
             ComposerInput::new(window, cx)
-                .placeholder("provider/model or leave blank for chat model")
+                .placeholder("provider/model or leave blank to not set")
         });
 
         let vision_for_load = model_vision_input.clone();
@@ -1038,6 +1038,7 @@ impl Render for SettingsWindow {
                         do_save(cx);
                     })
                 };
+                let do_save_on_clear = do_save.clone();
                 let on_select: Rc<
                     dyn Fn(String, String, String, Entity<ComposerInput>, &mut Window, &mut App)
                         + 'static,
@@ -1052,6 +1053,7 @@ impl Render for SettingsWindow {
                         input.update(cx, |input, cx| {
                             input.clear(cx);
                         });
+                        do_save_on_clear(cx);
                     });
                 let self_entity = cx.entity().downgrade();
                 let on_tab: Rc<

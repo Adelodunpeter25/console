@@ -456,7 +456,7 @@ impl RenderOnce for ModelRolePicker {
                     format_model_name(&model.model_id)
                 )
             })
-            .unwrap_or_else(|| "Uses Default".to_string());
+            .unwrap_or_else(|| "Not set".to_string());
         let selected_provider = selected.as_ref().map(|s| s.provider.clone());
         let providers = self.providers;
         let models_by_provider = self.models_by_provider;
@@ -671,7 +671,7 @@ impl RenderOnce for ModelRolePicker {
                                     .flex()
                                     .flex_col()
                                     .gap(px(2.0))
-                                    // Optional "Use Default" button
+                                    // Optional "Not set" button
                                     .when_some(on_clear.clone(), |list, on_c| {
                                         let h = close_handle.clone();
                                         list.child(
@@ -690,7 +690,7 @@ impl RenderOnce for ModelRolePicker {
                                                 .items_center()
                                                 .gap(px(7.0))
                                                 .child(app_icon(
-                                                    IconName::Restart,
+                                                    IconName::Close,
                                                     13.0,
                                                     theme.text_tertiary,
                                                 ))
@@ -700,7 +700,7 @@ impl RenderOnce for ModelRolePicker {
                                                         .text_size(px(12.0))
                                                         .font_weight(FontWeight::MEDIUM)
                                                         .text_color(theme.text_secondary)
-                                                        .child("Use Default Model"),
+                                                        .child("Not set"),
                                                 ),
                                         )
                                     })

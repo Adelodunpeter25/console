@@ -89,10 +89,10 @@ impl RenderOnce for ModelsPage {
         let [vision_menu, smol_menu] = self.menus;
         let [vision_search, smol_search] = self.searches;
         div().flex().flex_col().gap(px(16.0))
-            .child(div().flex().flex_col().gap(px(4.0)).child(div().text_size(px(16.0)).font_weight(gpui::FontWeight::SEMIBOLD).text_color(theme.text).child("Model roles")).child(div().text_size(px(12.5)).text_color(theme.text_secondary).child("Choose the model used for each harness role. Unset roles use the chat model.")))
+            .child(div().flex().flex_col().gap(px(4.0)).child(div().text_size(px(16.0)).font_weight(gpui::FontWeight::SEMIBOLD).text_color(theme.text).child("Model roles")).child(div().text_size(px(12.5)).text_color(theme.text_secondary).child("Choose the model used for each harness role. Roles left not set use the chat model.")))
             .child(div().p(px(14.0)).rounded(px(8.0)).border_1().border_color(theme.border).bg(theme.surface).flex().flex_col().gap(px(14.0))
                 .child(picker(0, "Vision", "Image and screenshot inspection model", self.vision_input, vision_menu, vision_search, true))
-                .child(picker(1, "Smol", "Fast summaries and session titles model", self.smol_input, smol_menu, smol_search, true))
+                .child(picker(1, "Smol", "Fast model for titles, summaries and suggestions. Suggestions stay off until it is set.", self.smol_input, smol_menu, smol_search, true))
                 .child(div().id("save-model-roles").px(px(10.0)).py(px(6.0)).rounded(px(6.0)).bg(theme.accent).text_color(theme.on_inverse).cursor_pointer().on_click(move |_, window, cx| (on_save)(window, cx)).child("Save model roles"))
                 .when(self.saving, |el| el.child(div().text_size(px(12.0)).text_color(theme.text_secondary).child("Saving…")))
                 .when_some(self.error, |el, error| el.child(div().text_size(px(12.0)).text_color(theme.danger).child(error))))

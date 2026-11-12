@@ -56,13 +56,13 @@ private data class RoleSpec(val role: String, val label: String, val description
 
 private val ROLE_SPECS = listOf(
     RoleSpec(ROLE_VISION, "Vision", "Image and screenshot inspection model"),
-    RoleSpec(ROLE_SMOL, "Smol", "Fast summaries and session titles model"),
+    RoleSpec(ROLE_SMOL, "Smol", "Fast model for titles, summaries and suggestions. Suggestions stay off until it is set."),
 )
 
 /**
  * Port of settings/models_page.rs — model roles (vision / smol) resolved
  * against the provider catalog, saved through PATCH /api/settings.
- * Unset roles fall back to the session's chat model.
+ * Roles left not set fall back to the session's chat model.
  */
 @Composable
 fun ModelsSettings(onBack: () -> Unit) {
@@ -91,7 +91,7 @@ fun ModelsSettings(onBack: () -> Unit) {
 
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
             Text(
-                "Choose the model used for each harness role. Unset roles use the chat model.",
+                "Choose the model used for each harness role. Roles left not set use the chat model.",
                 color = NewTheme.TextSecondary, fontSize = 14.sp,
                 modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp),
             )
@@ -180,7 +180,7 @@ private fun RolePickerRow(
                         modifier = Modifier.padding(start = 6.dp),
                     )
                 } else {
-                    Text("Uses chat model", color = NewTheme.TextGhost, fontSize = 14.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                    Text("Not set", color = NewTheme.TextGhost, fontSize = 14.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
                 }
             }
         }
