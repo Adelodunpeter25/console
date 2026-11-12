@@ -22,6 +22,7 @@ fn header(id: &str, title: &str) -> SessionHeader {
         deleted_at: None,
         pinned_at: None,
         settled_at: None,
+        unread: false,
         worktree: None,
     }
 }

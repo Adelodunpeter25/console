@@ -52,6 +52,43 @@ pub fn session_loading_state(
     None
 }
 
+/// What the status slot at the left of a sidebar row shows.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RowStatus {
+    Running,
+    NeedsAttention,
+    /// A run finished after the chat was last shown: the dot.
+    Unread,
+    /// Finished and seen, or never run: the slot stays empty.
+    Quiet,
+}
+
+/// Choose the row's status icon. Precedence is fixed: running, then needs
+/// attention (a pending question, or an errored run not yet opened), then
+/// unread, then nothing. The server's `unread` flag is the only unread input,
+/// so the sidebar never re-derives it.
+pub fn row_status(
+    session: &SessionHeader,
+    loading_state: Option<SidebarLoadingState>,
+) -> RowStatus {
+    let running = matches!(loading_state, Some(SidebarLoadingState::Working { .. }))
+        || session.status == "working"
+        || session.status == "running";
+    if running {
+        return RowStatus::Running;
+    }
+    let needs_attention = matches!(loading_state, Some(SidebarLoadingState::Waiting))
+        || session.status == "needs_attention"
+        || session.status == "waiting";
+    if needs_attention {
+        return RowStatus::NeedsAttention;
+    }
+    if session.unread {
+        return RowStatus::Unread;
+    }
+    RowStatus::Quiet
+}
+
 /// Render the compact status icon used beside a session title.
 pub fn status_indicator(state: SidebarLoadingState, theme: Theme) -> Option<AnyElement> {
     match state {

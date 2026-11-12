@@ -162,20 +162,15 @@ impl RenderOnce for SidebarSessionItem {
         );
 
         let group_name = format!("sidebar-session-{}", session.id);
-        let is_running = matches!(loading_state, Some(SidebarLoadingState::Working { .. }))
-            || session.status == "working"
-            || session.status == "running";
-        let needs_attention = matches!(loading_state, Some(SidebarLoadingState::Waiting))
-            || session.status == "needs_attention"
-            || session.status == "waiting";
-        let is_done = session.status == "done" || session.status == "completed";
-
         // Status colour is information, not decoration: a chat that needs
         // attention stays orange whether or not it is the selected one, so
-        // the state is readable at a glance in a long list.
+        // the state is readable at a glance in a long list. The unread dot
+        // keeps its accent colour for the same reason: its job is to be
+        // noticed, and it sits on unfocused rows.
         let status_id = || ElementId::Name(format!("status-{}", session.id).into());
-        let status_indicator = if is_running {
-            status_slot()
+        let row_status = sidebar::row_status(session, loading_state);
+        let status_indicator = match row_status {
+            sidebar::RowStatus::Running => status_slot()
                 .id(status_id())
                 .tooltip(Tooltip::text("Running"))
                 .child(motion::spin_slow(app_icon(
@@ -183,21 +178,18 @@ impl RenderOnce for SidebarSessionItem {
                     15.0,
                     theme.accent,
                 )))
-                .into_any_element()
-        } else if needs_attention {
-            status_slot()
+                .into_any_element(),
+            sidebar::RowStatus::NeedsAttention => status_slot()
                 .id(status_id())
                 .tooltip(Tooltip::text("Needs attention"))
                 .child(app_icon(IconName::Alert, 15.0, theme.warning))
-                .into_any_element()
-        } else if is_done {
-            status_slot()
+                .into_any_element(),
+            sidebar::RowStatus::Unread => status_slot()
                 .id(status_id())
-                .tooltip(Tooltip::text("Done"))
-                .child(app_icon(IconName::Done, 15.0, theme.success))
-                .into_any_element()
-        } else {
-            status_slot().into_any_element()
+                .tooltip(Tooltip::text("Unread"))
+                .child(app_icon(IconName::Unread, 15.0, theme.accent))
+                .into_any_element(),
+            sidebar::RowStatus::Quiet => status_slot().into_any_element(),
         };
 
         let title = if let Some(rename_input) = rename_input {
@@ -325,22 +317,22 @@ impl RenderOnce for SidebarSessionItem {
                     None
                 };
 
-                let (branch, is_worktree) = if let Some(ref wt) = session.worktree && !wt.branch.is_empty() {
+                let (branch, is_worktree) = if let Some(ref wt) = session.worktree
+                    && !wt.branch.is_empty()
+                {
                     (Some(wt.branch.as_str()), true)
                 } else {
                     (None, false)
                 };
 
-                let (status_label, status_color) = if is_running {
-                    ("Running", theme.accent)
-                } else if needs_attention {
-                    ("Needs attention", theme.warning)
-                } else if is_done {
-                    ("Done", theme.success)
-                } else if settled {
-                    ("Settled", theme.text_tertiary)
-                } else {
-                    ("Idle", theme.text_ghost)
+                let is_done = session.status == "done" || session.status == "completed";
+                let (status_label, status_color) = match row_status {
+                    sidebar::RowStatus::Running => ("Running", theme.accent),
+                    sidebar::RowStatus::NeedsAttention => ("Needs attention", theme.warning),
+                    sidebar::RowStatus::Unread => ("Unread", theme.accent),
+                    sidebar::RowStatus::Quiet if is_done => ("Done", theme.success),
+                    sidebar::RowStatus::Quiet if settled => ("Settled", theme.text_tertiary),
+                    sidebar::RowStatus::Quiet => ("Idle", theme.text_ghost),
                 };
 
                 let card = div()
