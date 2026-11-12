@@ -217,6 +217,9 @@ pub struct FloatingComposerState {
     pub model_search: Entity<ComposerInput>,
     pub project_menu: ContextMenuHandle,
     pub branch_menu: ContextMenuHandle,
+    /// The worktree cut-point menu, shown only while "New worktree" is the
+    /// chosen branch mode.
+    pub worktree_base_menu: ContextMenuHandle,
     pub model_menu: ContextMenuHandle,
     pub thinking_menu: ContextMenuHandle,
     pub picker_tab: PickerTab,
@@ -286,6 +289,7 @@ impl FloatingComposerState {
                 })
             },
             branch_menu: ContextMenuHandle::new(cx),
+            worktree_base_menu: ContextMenuHandle::new(cx),
             model_menu: ContextMenuHandle::new(cx),
             thinking_menu: ContextMenuHandle::new(cx),
             picker_tab: PickerTab::Favorites,

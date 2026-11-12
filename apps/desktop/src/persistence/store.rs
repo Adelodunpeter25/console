@@ -52,6 +52,10 @@ pub enum PersistedBranchChoice {
 pub struct PersistedFloatingChoices {
     pub project_id: Option<String>,
     pub branch: PersistedBranchChoice,
+    /// The worktree cut point for a NewWorktree launch; None is the repo
+    /// default. Defaulted so drafts persisted before the field existed load.
+    #[serde(default)]
+    pub worktree_base: Option<String>,
     pub model: Option<(String, String)>,
     pub thinking_level: Option<console_core::ThinkingLevel>,
     pub approval_mode: String,

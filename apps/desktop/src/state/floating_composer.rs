@@ -135,6 +135,7 @@ impl ConsoleDesktopApp {
                 BranchChoice::NewWorktree => PersistedBranchChoice::NewWorktree,
                 BranchChoice::FromBranch(name) => PersistedBranchChoice::FromBranch(name.clone()),
             },
+            worktree_base: card.worktree_base.clone(),
             model: card
                 .selected_model
                 .as_ref()
@@ -170,6 +171,7 @@ impl ConsoleDesktopApp {
                 PersistedBranchChoice::NewWorktree => BranchChoice::NewWorktree,
                 PersistedBranchChoice::FromBranch(name) => BranchChoice::FromBranch(name),
             };
+            self.floating_composer.worktree_base = choices.worktree_base;
         } else if choices.project_id.is_none() {
             self.floating_no_project_chosen(cx);
         }
@@ -443,6 +445,7 @@ impl ConsoleDesktopApp {
             card.input.clone(),
             card.project_menu.clone(),
             card.branch_menu.clone(),
+            card.worktree_base_menu.clone(),
             card.model_menu.clone(),
             card.thinking_menu.clone(),
             model_menu,
