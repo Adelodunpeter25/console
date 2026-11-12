@@ -151,6 +151,9 @@ pub fn render_session_card_content(
     is_worktree: bool,
     status_label: &str,
     status_color: Hsla,
+    // The row's own status icon, when the state has one, so the card shows the
+    // same mark as the row instead of a generic dot.
+    status_icon: Option<IconName>,
     theme: &Theme,
 ) -> AnyElement {
     let created_ago = if created_at > 0 {
@@ -324,7 +327,21 @@ pub fn render_session_card_content(
                         .flex()
                         .items_center()
                         .gap_x(px(6.0))
-                        .child(div().size(px(7.0)).rounded_full().bg(status_color))
+                        .child(match status_icon {
+                            Some(icon) => div()
+                                .size(px(14.0))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(app_icon(icon, 14.0, status_color))
+                                .into_any_element(),
+                            None => div()
+                                .size(px(7.0))
+                                .rounded_full()
+                                .bg(status_color)
+                                .into_any_element(),
+                        })
                         .child(
                             div()
                                 .text_color(theme.text_secondary)

@@ -333,13 +333,15 @@ impl RenderOnce for SidebarSessionItem {
                     (None, false)
                 };
 
-                let (status_label, status_color) = match row_status {
-                    sidebar::RowStatus::Running => ("Running", theme.accent),
-                    sidebar::RowStatus::NeedsAttention => ("Needs attention", theme.badge),
-                    sidebar::RowStatus::Unread => ("Unread", theme.badge),
-                    sidebar::RowStatus::Done => ("Done", theme.success),
-                    sidebar::RowStatus::Quiet if settled => ("Settled", theme.text_tertiary),
-                    sidebar::RowStatus::Quiet => ("Idle", theme.text_ghost),
+                let (status_label, status_color, status_icon) = match row_status {
+                    sidebar::RowStatus::Running => ("Running", theme.accent, None),
+                    sidebar::RowStatus::NeedsAttention => {
+                        ("Needs attention", theme.badge, Some(IconName::Alert))
+                    }
+                    sidebar::RowStatus::Unread => ("Unread", theme.badge, Some(IconName::Unread)),
+                    sidebar::RowStatus::Done => ("Done", theme.success, Some(IconName::Done)),
+                    sidebar::RowStatus::Quiet if settled => ("Settled", theme.text_tertiary, None),
+                    sidebar::RowStatus::Quiet => ("Idle", theme.text_ghost, None),
                 };
 
                 let card = div()
@@ -360,6 +362,7 @@ impl RenderOnce for SidebarSessionItem {
                         is_worktree,
                         status_label,
                         status_color,
+                        status_icon,
                         &theme,
                     ));
 
