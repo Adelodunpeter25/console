@@ -7,8 +7,8 @@ use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 use crate::utils::format_time_ago;
 
-const OPEN_DELAY: Duration = Duration::from_millis(130);
-const HIDE_DELAY: Duration = Duration::from_millis(90);
+const OPEN_DELAY: Duration = Duration::from_millis(200);
+const HIDE_DELAY: Duration = Duration::from_millis(80);
 
 /// Manages hover card state across all session items in the sidebar.
 pub struct SidebarHoverManager {
