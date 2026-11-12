@@ -309,7 +309,12 @@ fn leading_icon(entry: &PaletteEntry, theme: &Theme) -> AnyElement {
                 None => provider_app_icon(
                     provider.as_ref(),
                     16.0,
-                    provider_color(theme, provider.as_ref()),
+                    match provider.as_ref() {
+                        "claude" | "anthropic" | "deepseek" => {
+                            provider_color(theme, provider.as_ref())
+                        }
+                        _ => theme.text_secondary,
+                    },
                 )
                 .into_any_element(),
             }
@@ -331,15 +336,27 @@ fn entry_row(
     let mut row = div()
         .id(("palette-row", ix))
         .w_full()
-        .h(px(36.0))
+        .h(px(32.0))
         .px(px(10.0))
-        .rounded(px(8.0))
+        .rounded(px(7.0))
         .flex()
         .items_center()
         .gap(px(10.0))
         .cursor_pointer()
         .when(selected, |row| row.bg(theme.overlay_strong))
-        .when(!selected, |row| row.hover(|row| row.bg(theme.overlay)))
+        .on_mouse_move({
+            let palette = palette.clone();
+            move |_, _, cx| {
+                if let Some(palette) = palette.upgrade() {
+                    palette.update(cx, |palette, cx| {
+                        if palette.selected != ix {
+                            palette.selected = ix;
+                            cx.notify();
+                        }
+                    });
+                }
+            }
+        })
         .child(
             div()
                 .flex_none()
@@ -353,7 +370,7 @@ fn entry_row(
             div()
                 .min_w_0()
                 .truncate()
-                .text_size(px(13.5))
+                .text_size(px(13.0))
                 .text_color(theme.text)
                 .when(!has_subtitle, |label| label.flex_1())
                 .when(has_subtitle, |label| label.flex_none().max_w(px(280.0)))
@@ -366,7 +383,7 @@ fn entry_row(
                     .min_w_0()
                     .truncate()
                     .text_size(px(12.0))
-                    .text_color(theme.text_tertiary)
+                    .text_color(theme.text_ghost)
                     .child(subtitle),
             )
         })
@@ -375,7 +392,7 @@ fn entry_row(
                 div()
                     .flex_none()
                     .text_size(px(12.0))
-                    .text_color(theme.text_tertiary)
+                    .text_color(theme.text_ghost)
                     .child(detail),
             )
         })
@@ -384,7 +401,7 @@ fn entry_row(
                 div()
                     .flex_none()
                     .text_size(px(12.0))
-                    .text_color(theme.text_tertiary)
+                    .text_color(theme.text_ghost)
                     .child(shortcut),
             )
         });
@@ -723,11 +740,10 @@ impl Render for CommandPaletteModal {
             .id("palette-list")
             .flex_1()
             .min_h_0()
-            .max_h(px(400.0))
+            .max_h(px(380.0))
             .overflow_y_scroll()
             .track_scroll(&self.scroll)
-            .px(px(6.0))
-            .pb(px(6.0))
+            .p(px(4.0))
             .flex()
             .flex_col();
         for row in &layout.rows {
@@ -735,8 +751,8 @@ impl Render for CommandPaletteModal {
                 Row::Heading(label) => div()
                     .px(px(10.0))
                     .pt(px(10.0))
-                    .pb(px(4.0))
-                    .text_size(px(11.5))
+                    .pb(px(3.0))
+                    .text_size(px(11.0))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(theme.text_tertiary)
                     .child(label.clone())
@@ -754,8 +770,8 @@ impl Render for CommandPaletteModal {
         let tabs = (layout.sections.len() >= 2).then(|| {
             let mut bar = div()
                 .flex_none()
-                .px(px(10.0))
-                .pt(px(8.0))
+                .px(px(8.0))
+                .pt(px(6.0))
                 .pb(px(2.0))
                 .flex()
                 .items_center()
@@ -770,12 +786,12 @@ impl Render for CommandPaletteModal {
                 bar = bar.child(
                     div()
                         .id(ElementId::from(("palette-tab", ix)))
-                        .h(px(26.0))
-                        .px(px(10.0))
-                        .rounded(px(7.0))
+                        .h(px(24.0))
+                        .px(px(9.0))
+                        .rounded(px(6.0))
                         .flex()
                         .items_center()
-                        .text_size(px(12.5))
+                        .text_size(px(12.0))
                         .cursor_pointer()
                         .when(active, |tab| {
                             tab.bg(theme.overlay_strong).text_color(theme.text)
@@ -810,12 +826,12 @@ impl Render for CommandPaletteModal {
             .on_action(cx.listener(|this, _: &PaletteNextTab, _, cx| this.step_tab(1, cx)))
             .on_action(cx.listener(|this, _: &PalettePrevTab, _, cx| this.step_tab(-1, cx)))
             .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .w(px(600.0))
-            .max_h(px(520.0))
+            .w(px(560.0))
+            .max_h(px(480.0))
             .flex()
             .flex_col()
             .overflow_hidden()
-            .rounded(px(12.0))
+            .rounded(px(10.0))
             .border_1()
             .border_color(theme.border_strong)
             .bg(theme.menu)
@@ -823,18 +839,18 @@ impl Render for CommandPaletteModal {
             .child(
                 div()
                     .flex_none()
-                    .h(px(52.0))
-                    .px(px(16.0))
+                    .h(px(46.0))
+                    .px(px(14.0))
                     .flex()
                     .items_center()
                     .gap(px(12.0))
                     .border_b_1()
                     .border_color(theme.border)
-                    .text_size(px(15.0))
+                    .text_size(px(14.0))
                     .child(
                         div()
                             .flex_none()
-                            .child(app_icon(IconName::Search, 16.0, theme.text_tertiary)),
+                            .child(app_icon(IconName::Search, 15.0, theme.text_tertiary)),
                     )
                     .child(div().flex_1().min_w_0().child(self.input.clone())),
             )

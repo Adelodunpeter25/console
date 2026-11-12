@@ -212,7 +212,15 @@ fn entries_from_results(
                 }
                 modal.update(cx, |modal, cx| modal.hide(cx));
             });
-            entry = entry.subtitle(label.clone());
+            // The folder only: the label already names the file, and repeating
+            // it in the path made every row twice as long.
+            let dir = label
+                .rsplit_once('/')
+                .map(|(dir, _)| dir.to_string())
+                .unwrap_or_default();
+            if !dir.is_empty() {
+                entry = entry.subtitle(dir);
+            }
             if item.is_dir {
                 entry = entry.icon(IconName::Folder);
             } else {
