@@ -500,8 +500,8 @@ impl ConsoleDesktopApp {
             .iter_mut()
             .find(|session| session.id == session_id)
         {
-            if let Some(ref prov) = payload.provider.as_ref().filter(|p| !p.is_empty()) {
-                session.provider = prov.clone();
+            if let Some(prov) = payload.provider.as_deref().filter(|p| !p.is_empty()) {
+                session.provider = prov.to_string();
             }
             if let Some(ref mid) = payload.model_id {
                 session.model_id = mid.clone();
