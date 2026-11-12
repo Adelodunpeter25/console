@@ -424,6 +424,48 @@ impl ConsoleDesktopApp {
                         self.fetch_file_tab_content(path.clone(), cx);
                     }
 
+                    let mode = self
+                        .svg_preview_mode
+                        .get(path)
+                        .copied()
+                        .unwrap_or(console_ui::SvgViewMode::Preview);
+                    let toggle_path = path.clone();
+                    let toggle_entity = cx.entity().downgrade();
+                    let header = console_ui::view_header(
+                        theme,
+                        "Markdown",
+                        mode,
+                        Some(Rc::new(move |new_mode, _w, cx| {
+                            if let Some(app) = toggle_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.svg_preview_mode.insert(toggle_path.clone(), new_mode);
+                                    cx.notify();
+                                });
+                            }
+                        })),
+                    );
+
+                    if mode == console_ui::SvgViewMode::Source {
+                        let Some(content) = self.open_file_contents.get(path).cloned() else {
+                            return console_ui::BlockedFilePanel::new(
+                                "Loading file…",
+                                "The file content is still loading.",
+                            )
+                            .icon(console_ui::IconName::File)
+                            .into_any_element();
+                        };
+                        let editor_view = self.get_or_build_editor_view(path, &content, &theme, cx);
+                        let file_viewer = console_ui::FileViewer::new(editor_view)
+                            .path(self.comment_display_path(pane_id, path));
+                        return div()
+                            .size_full()
+                            .flex()
+                            .flex_col()
+                            .child(header)
+                            .child(div().flex_1().min_h_0().size_full().child(file_viewer))
+                            .into_any_element();
+                    }
+
                     let content = self
                         .open_file_contents
                         .get(path)
@@ -457,10 +499,16 @@ impl ConsoleDesktopApp {
                                 }
                             }
                         });
-                    return console_ui::MarkdownViewer::new(path.clone(), view, list_state)
+                    let viewer = console_ui::MarkdownViewer::new(path.clone(), view, list_state)
                         .selection(selection)
                         .scrollbar_state(scrollbar_state)
-                        .link_handler(link_handler)
+                        .link_handler(link_handler);
+                    return div()
+                        .size_full()
+                        .flex()
+                        .flex_col()
+                        .child(header)
+                        .child(div().flex_1().min_h_0().size_full().child(viewer))
                         .into_any_element();
                 }
                 console_core::FileKind::Text => {

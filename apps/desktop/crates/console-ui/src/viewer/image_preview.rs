@@ -4,8 +4,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
-    App, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window, div, img, prelude::*,
-    px,
+    App, FontWeight, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div,
+    img, prelude::*, px,
 };
 
 use crate::primitives::transparency_grid;
@@ -113,10 +113,6 @@ impl RenderOnce for ImagePreview {
         }
         let meta_text = meta_parts.join("  •  ");
 
-        let preview_active = self.svg_mode == SvgViewMode::Preview;
-        let on_toggle_preview = self.on_toggle_svg_mode.clone();
-        let on_toggle_source = self.on_toggle_svg_mode.clone();
-
         div()
             .id(format!("image-preview-{}", self.path))
             .size_full()
@@ -144,72 +140,12 @@ impl RenderOnce for ImagePreview {
                             .child(meta_text),
                     )
                     .when(self.is_svg, |header| {
-                        header.child(
-                            div()
-                                .id("svg-mode-toggle")
-                                .flex()
-                                .items_center()
-                                .bg(theme.canvas)
-                                .border_1()
-                                .border_color(theme.border)
-                                .rounded(px(5.0))
-                                .p(px(1.5))
-                                .gap(px(2.0))
-                                .child(
-                                    div()
-                                        .id("svg-mode-preview")
-                                        .px(px(8.0))
-                                        .py(px(2.0))
-                                        .rounded(px(3.0))
-                                        .text_size(px(11.0))
-                                        .font_weight(if preview_active {
-                                            FontWeight::SEMIBOLD
-                                        } else {
-                                            FontWeight::NORMAL
-                                        })
-                                        .cursor_default()
-                                        .when(preview_active, |s| {
-                                            s.bg(theme.surface).text_color(theme.text).shadow_sm()
-                                        })
-                                        .when(!preview_active, |s| {
-                                            s.text_color(theme.text_tertiary)
-                                                .hover(|h| h.text_color(theme.text))
-                                        })
-                                        .on_click(move |_, window, cx| {
-                                            if let Some(on_toggle) = &on_toggle_preview {
-                                                (on_toggle)(SvgViewMode::Preview, window, cx);
-                                            }
-                                        })
-                                        .child("Preview"),
-                                )
-                                .child(
-                                    div()
-                                        .id("svg-mode-source")
-                                        .px(px(8.0))
-                                        .py(px(2.0))
-                                        .rounded(px(3.0))
-                                        .text_size(px(11.0))
-                                        .font_weight(if !preview_active {
-                                            FontWeight::SEMIBOLD
-                                        } else {
-                                            FontWeight::NORMAL
-                                        })
-                                        .cursor_default()
-                                        .when(!preview_active, |s| {
-                                            s.bg(theme.surface).text_color(theme.text).shadow_sm()
-                                        })
-                                        .when(preview_active, |s| {
-                                            s.text_color(theme.text_tertiary)
-                                                .hover(|h| h.text_color(theme.text))
-                                        })
-                                        .on_click(move |_, window, cx| {
-                                            if let Some(on_toggle) = &on_toggle_source {
-                                                (on_toggle)(SvgViewMode::Source, window, cx);
-                                            }
-                                        })
-                                        .child("Source"),
-                                ),
-                        )
+                        header.child(view_mode_toggle(
+                            theme,
+                            self.svg_mode,
+                            "svg-mode",
+                            self.on_toggle_svg_mode.clone(),
+                        ))
                     }),
             )
             .child(
@@ -259,16 +195,81 @@ impl RenderOnce for ImagePreview {
     }
 }
 
-/// Standalone SVG header for when an SVG file is displayed in Source mode.
+/// Segmented Preview / Source switch shared by the SVG and Markdown viewers.
+pub fn view_mode_toggle(
+    theme: Theme,
+    mode: SvgViewMode,
+    id: &'static str,
+    on_toggle: Option<Rc<dyn Fn(SvgViewMode, &mut Window, &mut App) + 'static>>,
+) -> impl IntoElement {
+    let segment = |label: &'static str, target: SvgViewMode| {
+        let active = mode == target;
+        let on_toggle = on_toggle.clone();
+        div()
+            .id(SharedString::from(format!("{id}-{label}")))
+            .px(px(8.0))
+            .py(px(2.0))
+            .rounded(px(3.0))
+            .text_size(px(11.0))
+            .font_weight(if active {
+                FontWeight::SEMIBOLD
+            } else {
+                FontWeight::NORMAL
+            })
+            .cursor_default()
+            .when(active, |s| {
+                s.bg(theme.surface).text_color(theme.text).shadow_sm()
+            })
+            .when(!active, |s| {
+                s.text_color(theme.text_tertiary)
+                    .hover(|h| h.text_color(theme.text))
+            })
+            .on_click(move |_, window, cx| {
+                if let Some(on_toggle) = &on_toggle {
+                    (on_toggle)(target, window, cx);
+                }
+            })
+            .child(label)
+    };
+    div()
+        .id(SharedString::from(format!("{id}-toggle")))
+        .flex()
+        .items_center()
+        .bg(theme.canvas)
+        .border_1()
+        .border_color(theme.border)
+        .rounded(px(5.0))
+        .p(px(1.5))
+        .gap(px(2.0))
+        .child(segment("Preview", SvgViewMode::Preview))
+        .child(segment("Source", SvgViewMode::Source))
+}
+
+/// Header bar for a file shown in Source mode, with the switch back to Preview.
 pub fn svg_source_header(
     theme: Theme,
     on_toggle_svg_mode: Option<Rc<dyn Fn(SvgViewMode, &mut Window, &mut App) + 'static>>,
 ) -> impl IntoElement {
-    let on_toggle_preview = on_toggle_svg_mode.clone();
-    let on_toggle_source = on_toggle_svg_mode;
+    source_header(theme, "SVG Source", on_toggle_svg_mode)
+}
 
+pub fn source_header(
+    theme: Theme,
+    title: &'static str,
+    on_toggle: Option<Rc<dyn Fn(SvgViewMode, &mut Window, &mut App) + 'static>>,
+) -> impl IntoElement {
+    view_header(theme, title, SvgViewMode::Source, on_toggle)
+}
+
+/// Header bar with a title and the Preview / Source switch.
+pub fn view_header(
+    theme: Theme,
+    title: &'static str,
+    mode: SvgViewMode,
+    on_toggle: Option<Rc<dyn Fn(SvgViewMode, &mut Window, &mut App) + 'static>>,
+) -> impl IntoElement {
     div()
-        .id("svg-source-header")
+        .id(SharedString::from(format!("{title}-header")))
         .h(px(32.0))
         .px(px(12.0))
         .bg(theme.surface)
@@ -282,54 +283,7 @@ pub fn svg_source_header(
             div()
                 .text_size(px(11.0))
                 .text_color(theme.text_tertiary)
-                .child("SVG Source"),
+                .child(title),
         )
-        .child(
-            div()
-                .id("svg-mode-toggle-source")
-                .flex()
-                .items_center()
-                .bg(theme.canvas)
-                .border_1()
-                .border_color(theme.border)
-                .rounded(px(5.0))
-                .p(px(1.5))
-                .gap(px(2.0))
-                .child(
-                    div()
-                        .id("svg-source-switch-preview")
-                        .px(px(8.0))
-                        .py(px(2.0))
-                        .rounded(px(3.0))
-                        .text_size(px(11.0))
-                        .cursor_default()
-                        .text_color(theme.text_tertiary)
-                        .hover(|h| h.text_color(theme.text))
-                        .on_click(move |_, window, cx| {
-                            if let Some(on_toggle) = &on_toggle_preview {
-                                (on_toggle)(SvgViewMode::Preview, window, cx);
-                            }
-                        })
-                        .child("Preview"),
-                )
-                .child(
-                    div()
-                        .id("svg-source-switch-source")
-                        .px(px(8.0))
-                        .py(px(2.0))
-                        .rounded(px(3.0))
-                        .text_size(px(11.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .cursor_default()
-                        .bg(theme.surface)
-                        .text_color(theme.text)
-                        .shadow_sm()
-                        .on_click(move |_, window, cx| {
-                            if let Some(on_toggle) = &on_toggle_source {
-                                (on_toggle)(SvgViewMode::Source, window, cx);
-                            }
-                        })
-                        .child("Source"),
-                ),
-        )
+        .child(view_mode_toggle(theme, mode, "view-mode", on_toggle))
 }

@@ -26,6 +26,7 @@ pub use file_viewer::{
 };
 pub use image_preview::{
     ImageMeta, ImagePreview, SvgViewMode, format_bytes, image_dimensions, svg_source_header,
+    view_header, view_mode_toggle,
 };
 pub use logs_viewer::{ESTIMATED_LOG_ROW_HEIGHT, LogsViewer};
 pub use markdown_viewer::MarkdownViewer;

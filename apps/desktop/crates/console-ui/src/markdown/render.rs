@@ -573,6 +573,12 @@ pub struct MarkdownView {
     /// outside the parsed/flattened caches so a three-second icon change never
     /// invalidates text shaping.
     copied_code_blocks: Rc<RefCell<HashMap<usize, u64>>>,
+    /// Markdown-fence ordinals the reader flipped to raw source. Absent means
+    /// rendered, the default.
+    source_code_blocks: Rc<RefCell<std::collections::HashSet<usize>>>,
+    /// Rendered bodies of markdown fences, keyed by ordinal and rebuilt only
+    /// when the fence text changes.
+    nested_markdown: RefCell<HashMap<usize, (u64, Rc<RefCell<MarkdownView>>)>>,
     streaming: Cell<bool>,
 }
 
@@ -593,6 +599,8 @@ impl MarkdownView {
             titles: Cell::new(page_title_generation()),
             veil: RefCell::new(RowVeil::default()),
             copied_code_blocks: Rc::new(RefCell::new(HashMap::new())),
+            source_code_blocks: Rc::new(RefCell::new(std::collections::HashSet::new())),
+            nested_markdown: RefCell::new(HashMap::new()),
             streaming: Cell::new(false),
         }
     }
@@ -668,7 +676,26 @@ impl MarkdownView {
             self.style.set(Some(current));
             self.titles.set(titles);
             self.flats.borrow_mut().clear();
+            self.nested_markdown.borrow_mut().clear();
         }
+    }
+
+    fn nested_view(&self, ordinal: usize, code: &str) -> Rc<RefCell<MarkdownView>> {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        code.hash(&mut hasher);
+        let hash = hasher.finish();
+        let mut nested = self.nested_markdown.borrow_mut();
+        if let Some((cached, view)) = nested.get(&ordinal)
+            && *cached == hash
+        {
+            return view.clone();
+        }
+        let mut view = MarkdownView::new();
+        view.set_text(code, false);
+        let view = Rc::new(RefCell::new(view));
+        nested.insert(ordinal, (hash, view.clone()));
+        view
     }
 
     /// Flattened inline content for the element at `ordinal`, built on miss.
@@ -1887,8 +1914,28 @@ pub fn decode_data_url(url: &str) -> Option<std::sync::Arc<gpui::Image>> {
     (!bytes.is_empty()).then(|| std::sync::Arc::new(gpui::Image::from_bytes(format, bytes)))
 }
 
+fn is_markdown_fence(language: Option<&str>) -> bool {
+    language.is_some_and(|tag| {
+        matches!(
+            tag.trim().to_ascii_lowercase().as_str(),
+            "markdown" | "md" | "mdx"
+        )
+    })
+}
+
 fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElement {
     let key = ctx.next_key();
+    // A fence still streaming is shown as source: half-parsed markdown would
+    // reflow on every delta.
+    let rendered_markdown = is_markdown_fence(language)
+        && ctx.cache.is_some_and(|view| {
+            !view.streaming.get() && !view.source_code_blocks.borrow().contains(&key.index)
+        });
+    let mode_toggle = is_markdown_fence(language)
+        .then(|| ctx.cache)
+        .flatten()
+        .filter(|view| !view.streaming.get())
+        .map(|view| (view.source_code_blocks.clone(), rendered_markdown));
     // Tokenizing is the most expensive flatten in the document, so a settled
     // code block is exactly the case the cache exists for.
     let flat = ctx.flat(key.index, || {
@@ -1959,6 +2006,27 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
             }
         });
 
+    let nested_body = if rendered_markdown {
+        ctx.cache.and_then(|view| {
+            let nested = view.nested_view(key.index, code);
+            let nested = nested.borrow();
+            let palette = ctx.palette;
+            let inner = Ctx::new(
+                format!("{}/md{}", key.row, key.index),
+                palette,
+                ctx.metrics,
+                ctx.selection.clone(),
+            );
+            let inner = match &ctx.link_handler {
+                Some(handler) => inner.with_link_handler(handler.clone()),
+                None => inner,
+            };
+            markdown(&nested, &inner)
+        })
+    } else {
+        None
+    };
+
     div()
         .id(SharedString::from(format!(
             "code-block-{}-{}",
@@ -2004,6 +2072,41 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
                             }
                         }),
                 )
+                .when_some(mode_toggle, |header, (modes, rendered)| {
+                    let ordinal = key.index;
+                    header.child(
+                        div()
+                            .id(SharedString::from(format!(
+                                "code-mode-{}-{}",
+                                key.row, key.index
+                            )))
+                            .h(px(20.0))
+                            .px(px(7.0))
+                            .mr(px(4.0))
+                            .flex()
+                            .items_center()
+                            .rounded(px(5.0))
+                            .text_size(px(10.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(ctx.palette.ghost)
+                            .cursor_default()
+                            .hover(|style| style.bg(ctx.palette.overlay))
+                            .tooltip(Tooltip::text(if rendered {
+                                "Show source"
+                            } else {
+                                "Show preview"
+                            }))
+                            .on_click(move |_, _, cx| {
+                                let mut modes = modes.borrow_mut();
+                                if !modes.remove(&ordinal) {
+                                    modes.insert(ordinal);
+                                }
+                                drop(modes);
+                                cx.refresh_windows();
+                            })
+                            .child(if rendered { "Source" } else { "Preview" }),
+                    )
+                })
                 .child(copy_button),
         )
         .child(
@@ -2016,16 +2119,18 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
                 .min_w_0()
                 .px(px(10.0))
                 .py(px(8.0))
-                .child(
-                    div()
+                .child(match nested_body {
+                    Some(body) => body,
+                    None => div()
                         .w_full()
                         .min_w_0()
                         .whitespace_normal()
                         .text_size(px(ctx.metrics.code_text_size))
                         .line_height(px(ctx.metrics.code_line_height))
                         .text_color(ctx.palette.secondary)
-                        .child(text_element(&flat, key, ctx)),
-                ),
+                        .child(text_element(&flat, key, ctx))
+                        .into_any_element(),
+                }),
         )
         .into_any_element()
 }
