@@ -97,6 +97,8 @@ pub struct PaletteEntry {
     pub shortcut: Option<SharedString>,
     /// Muted text right after the label, such as a file's directory.
     pub subtitle: Option<SharedString>,
+    /// Hidden search keywords matched against the query but never painted in the UI.
+    pub keywords: Vec<String>,
     #[allow(clippy::type_complexity)]
     pub handler: Rc<dyn Fn(&mut Window, &mut App)>,
 }
@@ -117,6 +119,7 @@ impl PaletteEntry {
             detail: None,
             shortcut: None,
             subtitle: None,
+            keywords: Vec::new(),
             handler: Rc::new(handler),
         }
     }
@@ -130,6 +133,16 @@ impl PaletteEntry {
     /// Muted text right after the label.
     pub fn subtitle(mut self, subtitle: impl Into<SharedString>) -> Self {
         self.subtitle = Some(subtitle.into());
+        self
+    }
+
+    /// Add hidden keywords matched during search but never displayed.
+    pub fn keywords<I, S>(mut self, keywords: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.keywords.extend(keywords.into_iter().map(Into::into));
         self
     }
 
@@ -243,13 +256,22 @@ fn compute_layout(
             continue;
         }
         let rank = if filtering {
-            match match_rank(&entry.label, &query).or_else(|| {
-                entry
-                    .subtitle
-                    .as_ref()
-                    .and_then(|subtitle| match_rank(subtitle, &query))
-                    .map(|rank| rank + 20_000)
-            }) {
+            match match_rank(&entry.label, &query)
+                .or_else(|| {
+                    entry
+                        .subtitle
+                        .as_ref()
+                        .and_then(|subtitle| match_rank(subtitle, &query))
+                        .map(|rank| rank + 20_000)
+                })
+                .or_else(|| {
+                    entry
+                        .keywords
+                        .iter()
+                        .filter_map(|kw| match_rank(kw, &query))
+                        .min()
+                        .map(|rank| rank + 40_000)
+                }) {
                 Some(rank) => rank,
                 None => continue,
             }
