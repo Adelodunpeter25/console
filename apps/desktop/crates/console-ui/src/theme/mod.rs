@@ -129,7 +129,7 @@ impl Theme {
             overlay: hsla(220.0 / 360.0, 0.10, 0.90, 0.05),
             overlay_strong: hsla(220.0 / 360.0, 0.10, 0.90, 0.09),
 
-            border: rgb(0x3A3A3A).into(),
+            border: rgb(0x2A2A2A).into(),
             border_strong: hsla(220.0 / 360.0, 0.10, 0.90, 0.14),
             sidebar_border: hsla(126.93 / 360.0, 0.000_000_1, 0.16077, 1.0),
 
