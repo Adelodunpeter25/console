@@ -3,7 +3,7 @@
 //! They are registered as *global* action handlers (`App::on_action` in
 //! `keybindings::init_handlers`), so they run regardless of keyboard focus.
 
-use console_core::{WorkspaceNode, WorkspaceTabConfig};
+use console_core::{SessionHeader, SessionHeaderExt, WorkspaceNode, WorkspaceTabConfig};
 use console_ui::{IconName, MenuAlign, PaletteEntry, browser, toggle_dropdown, toggle_popover};
 use gpui::{Context, Focusable as _, WeakEntity, Window};
 
@@ -18,6 +18,7 @@ use super::ConsoleDesktopApp;
 fn command_palette_entries(
     entity: WeakEntity<ConsoleDesktopApp>,
     environments: &[super::environments::Environment],
+    sessions: &[SessionHeader],
 ) -> Vec<PaletteEntry> {
     let mut entries = vec![
         PaletteEntry::new("new-chat", "New Chat", {
@@ -38,6 +39,51 @@ fn command_palette_entries(
             }
         })
         .icon(IconName::Terminal),
+        PaletteEntry::new("add-project", "Add Project", {
+            let entity = entity.clone();
+            move |window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.open_project_browse(window, cx));
+                }
+            }
+        })
+        .icon(IconName::FolderNew),
+        PaletteEntry::new("quick-open", "Go to File", {
+            let entity = entity.clone();
+            move |window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.open_quick_open(window, cx));
+                }
+            }
+        })
+        .icon(IconName::File),
+        PaletteEntry::new("toggle-left-sidebar", "Toggle Sidebar", {
+            let entity = entity.clone();
+            move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.toggle_left_sidebar(cx));
+                }
+            }
+        })
+        .icon(IconName::SidebarMinimalistic),
+        PaletteEntry::new("toggle-right-sidebar", "Toggle Inspector", {
+            let entity = entity.clone();
+            move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.toggle_right_sidebar(cx));
+                }
+            }
+        })
+        .icon(IconName::PanelRightOpen),
+        PaletteEntry::new("open-settings", "Open Settings", {
+            let entity = entity.clone();
+            move |window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.open_settings(window, cx));
+                }
+            }
+        })
+        .icon(IconName::Settings),
     ];
     // Browser tabs are deferred on Windows.
     #[cfg(not(target_os = "windows"))]
@@ -71,6 +117,35 @@ fn command_palette_entries(
             )
             .icon(IconName::Server),
         );
+    }
+
+    for entry in &mut entries {
+        entry.section = Some("Commands".into());
+    }
+
+    // Every chat across every project, most recently modified first.
+    let mut recent: Vec<&SessionHeader> = sessions.iter().collect();
+    recent.sort_by_key(|session| std::cmp::Reverse(session.updated_at));
+    for session in recent {
+        let session_id = session.id.clone();
+        let entity = entity.clone();
+        let mut entry = PaletteEntry::new(
+            format!("chat-{session_id}"),
+            session.display_title().to_string(),
+            move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.select_and_open_session(session_id.clone(), cx));
+                }
+            },
+        )
+        .section("Chats")
+        .detail(console_ui::utils::format_time_ago(session.updated_at));
+        entry = if session.provider.is_empty() {
+            entry.icon(IconName::ChatRoundLine)
+        } else {
+            entry.provider_icon(session.provider.clone())
+        };
+        entries.push(entry);
     }
 
     entries
@@ -213,8 +288,9 @@ impl ConsoleDesktopApp {
     pub fn toggle_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let entity = cx.entity().downgrade();
         let environments = self.environments.clone();
+        let sessions = self.sessions.clone();
         self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(command_palette_entries(entity, &environments), cx);
+            palette.set_entries(command_palette_entries(entity, &environments, &sessions), cx);
             palette.toggle(window, cx);
         });
         cx.notify();

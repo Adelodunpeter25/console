@@ -21,7 +21,7 @@ use gpui::{
     AnyElement, App, Context, Entity, Focusable, Image, IntoElement, ParentElement, Render,
     SharedString, Styled, Window, div, prelude::*, px,
 };
-use gpui_component::command::{Command, CommandItem, CommandState};
+use gpui_component::command::{Command, CommandGroup, CommandItem, CommandState};
 
 use crate::IconName;
 use crate::Theme;
@@ -54,6 +54,11 @@ pub struct PaletteEntry {
     /// into that path (via the browse callback) without confirming the row —
     /// so Enter can mean "use this folder" while the chevron means "open it".
     pub drill_path: Option<SharedString>,
+    /// Heading the row is listed under. Rows sharing a heading are grouped;
+    /// rows without one stay ungrouped at the top.
+    pub section: Option<SharedString>,
+    /// Muted text on the row's right edge, such as a last-modified time.
+    pub detail: Option<SharedString>,
     #[allow(clippy::type_complexity)]
     pub handler: Rc<dyn Fn(&mut Window, &mut App)>,
 }
@@ -70,8 +75,22 @@ impl PaletteEntry {
             icon: None,
             keep_open: false,
             drill_path: None,
+            section: None,
+            detail: None,
             handler: Rc::new(handler),
         }
+    }
+
+    /// List the row under a section heading.
+    pub fn section(mut self, section: impl Into<SharedString>) -> Self {
+        self.section = Some(section.into());
+        self
+    }
+
+    /// Muted text on the row's right edge.
+    pub fn detail(mut self, detail: impl Into<SharedString>) -> Self {
+        self.detail = Some(detail.into());
+        self
     }
 
     /// Leading monochrome app icon (Folder, commands, …).
@@ -168,6 +187,16 @@ fn render_entry_row(
                 .text_color(theme.text)
                 .child(entry.label.clone()),
         );
+
+    if let Some(detail) = entry.detail.clone() {
+        row = row.child(
+            div()
+                .flex_none()
+                .text_size(px(11.5))
+                .text_color(theme.text_tertiary)
+                .child(detail),
+        );
+    }
 
     if let Some(drill_path) = entry.drill_path.clone() {
         let path_for_click = drill_path.clone();
@@ -360,18 +389,45 @@ impl Render for CommandPaletteModal {
         let backdrop = Theme::current(cx).backdrop;
         let entries = self.entries.clone();
         let palette_handle = cx.entity().downgrade();
-        let command = Command::new(&self.state)
+        let mut ungrouped: Vec<usize> = Vec::new();
+        let mut groups: Vec<(SharedString, Vec<usize>)> = Vec::new();
+        for (ix, entry) in entries.iter().enumerate() {
+            match &entry.section {
+                None => ungrouped.push(ix),
+                Some(name) => match groups.iter_mut().find(|(group, _)| group == name) {
+                    Some((_, ixs)) => ixs.push(ix),
+                    None => groups.push((name.clone(), vec![ix])),
+                },
+            }
+        }
+        // Keep label for local filtering / accessibility, but draw the full
+        // icon+label row ourselves — `.child()` replaces default content.
+        let make_item = |ix: usize| {
+            let entry = entries[ix].clone();
+            let palette_handle = palette_handle.clone();
+            CommandItem::new()
+                .label(entry.label.clone())
+                .child(move |_window, cx| render_entry_row(&entry, palette_handle.clone(), cx))
+        };
+        let mut command = Command::new(&self.state)
             .filterable(self.filterable)
             .max_h(px(360.0))
-            .items(entries.iter().map(|entry| {
-                let entry = entry.clone();
-                let palette_handle = palette_handle.clone();
-                // Keep label for local filtering / accessibility, but draw the
-                // full icon+label row ourselves — `.child()` replaces default content.
-                CommandItem::new()
-                    .label(entry.label.clone())
-                    .child(move |_window, cx| render_entry_row(&entry, palette_handle.clone(), cx))
-            }))
+            .items(ungrouped.iter().map(|&ix| make_item(ix)));
+        for (name, ixs) in &groups {
+            command = command.group(
+                CommandGroup::new()
+                    .label(name.clone())
+                    .items(ixs.iter().map(|&ix| make_item(ix))),
+            );
+        }
+        // Confirm reports (section, row); the library numbers the ungrouped
+        // items as section 0 when there are any, then each group in order.
+        let mut sections: Vec<Vec<usize>> = Vec::new();
+        if !ungrouped.is_empty() {
+            sections.push(ungrouped);
+        }
+        sections.extend(groups.into_iter().map(|(_, ixs)| ixs));
+        let command = command
             .placeholder(self.placeholder.clone())
             // Escape with a non-empty query clears it; once the query is
             // empty gpui-component hands dismissal to us here.
@@ -397,7 +453,11 @@ impl Render for CommandPaletteModal {
                 }
             })
             .on_confirm(move |index, window, cx| {
-                let entry = entries.get(index.row).cloned();
+                let entry = sections
+                    .get(index.section)
+                    .and_then(|ixs| ixs.get(index.row))
+                    .and_then(|&ix| entries.get(ix))
+                    .cloned();
                 if let Some(palette) = palette_handle.upgrade()
                     && let Some(entry) = entry
                 {
