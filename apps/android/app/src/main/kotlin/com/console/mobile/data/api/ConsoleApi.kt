@@ -53,6 +53,10 @@ interface ConsoleApi {
     suspend fun restoreSession(id: String)
     /** POST /api/sessions/:id/settle — refused while a run is active or a prompt is queued. */
     suspend fun settleSession(id: String): SessionSettleResponse
+    /** POST /api/sessions/:id/read — this chat was shown. Idempotent; clears a seen needs-attention. */
+    suspend fun markSessionRead(id: String)
+    /** POST /api/sessions/:id/unread — make a read chat unread; refused while running or settled. */
+    suspend fun markSessionUnread(id: String)
     /** POST /api/sessions/:id/unsettle — bring a settled chat back to active. */
     suspend fun unsettleSession(id: String): SessionSettleResponse
     suspend fun permanentlyDeleteSession(id: String)

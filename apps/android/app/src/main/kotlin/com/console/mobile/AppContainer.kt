@@ -417,6 +417,12 @@ object AppContainer {
                             }
                             return@collect
                         }
+                        if (event.kind == "read_state") {
+                            // Silent: another device read or unread a chat. Refresh the
+                            // list so the dot follows without waiting for the next poll.
+                            projectRepository.loadSessions()
+                            return@collect
+                        }
                         if (event.kind == "session_deleted") {
                             // Silent: the chat was deleted elsewhere or by the
                             // settled-chat sweep. Drop it locally, no banner.

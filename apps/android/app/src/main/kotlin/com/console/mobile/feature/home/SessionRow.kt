@@ -2,7 +2,11 @@ package com.console.mobile.feature.home
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -57,6 +61,15 @@ internal fun SessionRow(
     ) {
         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
             Row(modifier = Modifier.height(FirstLineHeight), verticalAlignment = Alignment.CenterVertically) {
+                // The unread dot: a finished chat the user has not opened yet.
+                // A chat that is running or needs attention shows its own pill
+                // on the right instead, so the dot would only repeat it.
+                if (showsUnreadDot(session, status)) {
+                    Box(
+                        modifier = Modifier.padding(end = 8.dp).size(8.dp).clip(CircleShape)
+                            .background(NewTheme.Accent),
+                    )
+                }
                 if (titlePending) {
                     // The server is generating the title (first prompt sent,
                     // placeholder still stored): pulse dots instead of the
@@ -107,6 +120,13 @@ internal fun SessionRow(
         }
     }
 }
+
+/**
+ * Whether a row shows the unread dot: the server says the chat is unread, and
+ * it is neither running nor waiting on the user, whose pills already say so.
+ */
+internal fun showsUnreadDot(session: SessionHeader, status: SessionStatus?): Boolean =
+    session.unread && status != SessionStatus.Working && status != SessionStatus.NeedsAttention
 
 private fun shortRelative(ts: Long): String {
     if (ts <= 0) return ""

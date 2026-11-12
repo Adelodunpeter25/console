@@ -107,6 +107,27 @@ fun ChatScreen(
         onDispose { AppContainer.chatRepository.flushDraft(sessionId) }
     }
 
+    // Opening a chat is seeing it: clear its unread dot (and a seen needs-attention)
+    // on every device. Skipped for a chat already read, so reopening costs nothing.
+    LaunchedEffect(sessionId) {
+        AppContainer.projectRepository.markSessionRead(sessionId)
+    }
+
+    // A run that finishes while the chat is on screen is seen as it finishes, so it
+    // must not light up unread. The server marks the chat unread when the run ends,
+    // so report the read after a beat: a read that lands before that is overwritten
+    // by the run's own activity time and would leave the chat unread.
+    var wasRunning by remember(sessionId) { mutableStateOf(false) }
+    LaunchedEffect(sessionId, chat.running) {
+        if (chat.running) {
+            wasRunning = true
+        } else if (wasRunning) {
+            wasRunning = false
+            delay(600)
+            AppContainer.projectRepository.markSessionRead(sessionId, force = true)
+        }
+    }
+
     // Load detail + hydrate todos/subagents/changes on entry; attach to server run if working.
     LaunchedEffect(sessionId) {
         val header = coroutineScope {

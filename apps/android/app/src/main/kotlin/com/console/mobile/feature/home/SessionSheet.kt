@@ -27,6 +27,7 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.filled.Pin
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.Edit
+import io.github.lyxnx.compose.ui.tablericons.outline.Mail
 import io.github.lyxnx.compose.ui.tablericons.outline.Pin
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
@@ -34,7 +35,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** The long-press actions sheet: rename, pin/unpin, settle/unsettle, delete. */
+/** Whether "Mark as unread" applies: the chat is read, not settled, and not running. */
+internal fun canMarkUnread(session: SessionHeader): Boolean =
+    !session.unread && (session.settled_at ?: 0L) <= 0 && session.status != "working"
+
+/** The long-press actions sheet: mark unread, rename, pin/unpin, settle/unsettle, delete. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SessionActionsSheet(
@@ -46,6 +51,22 @@ internal fun SessionActionsSheet(
     val isSettled = (session.settled_at ?: 0L) > 0
     BaseSheet(onDismiss = onDismiss) {
         SectionCard {
+            // Offered only where the server will accept it: not for a chat that
+            // is running, settled, or already unread.
+            if (canMarkUnread(session)) {
+                ActionRow(icon = TablerIcons.Outline.Mail, title = "Mark as unread") {
+                    val target = session
+                    onDismiss()
+                    AppContainer.actionScope.launch {
+                        try {
+                            AppContainer.projectRepository.markSessionUnread(target.id)
+                        } catch (e: Exception) {
+                            confirmAlert("Failed", e.message ?: "Unable to mark as unread.")
+                        }
+                    }
+                }
+                SectionDivider()
+            }
             ActionRow(
                 icon = if (isPinned) TablerIcons.Filled.Pin else TablerIcons.Outline.Pin,
                 title = if (isPinned) "Unpin" else "Pin",

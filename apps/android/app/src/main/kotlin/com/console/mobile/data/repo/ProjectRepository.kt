@@ -154,6 +154,49 @@ class ProjectRepository(
         }
     }
 
+    /**
+     * Tell the server this chat was shown, which clears its unread dot (and a
+     * seen needs-attention) on every device. The local header is cleared first
+     * so the dot does not linger until the next refresh, and the call is
+     * skipped for a chat already read. Best-effort: a failure only means the
+     * dot clears on the next refresh.
+     */
+    suspend fun markSessionRead(id: String, force: Boolean = false) {
+        val header = projectState.state.value.sessions.firstOrNull { it.id == id } ?: return
+        // `force` is for a run that just finished on screen: the local header is
+        // stale (it has not been refreshed since the run ended), so it still
+        // reads as already-read while the server has just marked it unread.
+        if (!force && !header.unread && header.status != "needs_attention") return
+        // A needs-attention chat with no run behind it settles to done on read.
+        val settled = if (header.status == "needs_attention") "done" else header.status
+        projectState.patchSession(id, header.copy(unread = false, status = settled))
+        try {
+            withContext(Dispatchers.IO) { api.markSessionRead(id) }
+            if (force) loadSessions()
+        } catch (e: Exception) {
+            android.util.Log.d("ProjectRepository", "markSessionRead($id) failed", e)
+        }
+    }
+
+    /**
+     * Make a read chat unread again. The dot appears at once; a refusal from
+     * the server (a running or settled chat) rolls it back and rethrows so the
+     * caller can show the reason.
+     */
+    suspend fun markSessionUnread(id: String) {
+        val header = projectState.state.value.sessions.firstOrNull { it.id == id } ?: return
+        if (header.unread) return
+        projectState.patchSession(id, header.copy(unread = true))
+        try {
+            withContext(Dispatchers.IO) { api.markSessionUnread(id) }
+        } catch (e: Exception) {
+            projectState.state.value.sessions.firstOrNull { it.id == id }?.let {
+                projectState.patchSession(id, it.copy(unread = false))
+            }
+            throw e
+        }
+    }
+
     suspend fun deleteSession(id: String) = withContext(Dispatchers.IO) {
         try {
             api.deleteSession(id)

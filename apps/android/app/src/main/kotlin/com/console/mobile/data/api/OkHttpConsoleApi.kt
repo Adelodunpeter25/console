@@ -226,6 +226,16 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             ?: throw ApiException("Failed to unsettle session")
     }
 
+    override suspend fun markSessionRead(id: String) {
+        val raw = http.post("/api/sessions/${enc(id)}/read")
+        ensureOk(raw, "mark session read")
+    }
+
+    override suspend fun markSessionUnread(id: String) {
+        val raw = http.post("/api/sessions/${enc(id)}/unread")
+        ensureOk(raw, "mark session unread")
+    }
+
     override suspend fun permanentlyDeleteSession(id: String) {
         val raw = http.delete("/api/sessions/${enc(id)}/permanent")
         ensureOk(raw, "permanently delete session")
