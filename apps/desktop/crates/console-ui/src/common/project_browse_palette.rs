@@ -212,8 +212,8 @@ fn entries_from_browse(
     // Parent directory — pure navigation.
     if let Some(parent) = parent_path {
         out.push(
-            PaletteEntry::new(parent, "..", |_window, _cx| {})
-                .icon(IconName::Folder)
+            PaletteEntry::new(parent.clone(), format!("Back to {}", short_path(&parent)), |_window, _cx| {})
+                .icon(IconName::ArrowLeft)
                 .keep_open(true),
         );
     }

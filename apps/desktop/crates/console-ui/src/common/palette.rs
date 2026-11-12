@@ -845,7 +845,7 @@ impl Render for CommandPaletteModal {
                     .px(px(14.0))
                     .flex()
                     .items_center()
-                    .gap(px(12.0))
+                    .gap(px(8.0))
                     .border_b_1()
                     .border_color(theme.border)
                     .text_size(px(14.0))
