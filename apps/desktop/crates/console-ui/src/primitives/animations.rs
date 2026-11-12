@@ -1,7 +1,7 @@
 //! Animation curves, interpolation utilities, and animated scrolling helpers.
 
-use std::time::Duration;
 use gpui::{ListOffset, Pixels, px};
+use std::time::Duration;
 
 /// Default duration for quick, responsive scroll animations.
 pub const DEFAULT_SCROLL_DURATION: Duration = Duration::from_millis(180);

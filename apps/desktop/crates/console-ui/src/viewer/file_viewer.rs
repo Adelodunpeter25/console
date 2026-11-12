@@ -5,12 +5,12 @@
 //! geometry of the virtualized rows, including the live scroll offset, which
 //! lets the cards ride scrolling without being inserted into the list.
 
+use crate::primitives::file_type_icon;
+use crate::theme::Theme;
 use gpui::{
     AnyElement, App, DispatchPhase, Entity, IntoElement, ParentElement, RenderOnce,
     ScrollWheelEvent, Styled, Window, canvas, div, px,
 };
-use crate::primitives::file_type_icon;
-use crate::theme::Theme;
 use std::rc::Rc;
 
 /// Room kept free under a file/diff viewer so its last lines can scroll up
