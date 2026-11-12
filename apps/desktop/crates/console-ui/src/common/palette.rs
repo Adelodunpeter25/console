@@ -26,7 +26,7 @@ use gpui_component::command::{Command, CommandGroup, CommandItem, CommandState};
 use crate::IconName;
 use crate::Theme;
 use crate::primitives::{
-    app_icon, file_icon, file_type_icon, provider_app_icon, provider_color,
+    app_icon, file_type_icon, provider_app_icon, provider_color, provider_color_icon,
 };
 
 /// How a palette row draws its leading icon.
@@ -165,17 +165,17 @@ fn render_entry_row(
             .h(px(15.0))
             .w(px(15.0))
             .into_any_element(),
-        // Antigravity's mark is a gradient, so it is drawn as an image to keep
-        // its colours; the flat glyph would be a single tint.
-        Some(PaletteIcon::Provider(provider)) if provider.as_ref() == "antigravity" => {
-            file_icon("icons/providers/antigravity-color.svg", 15.0).into_any_element()
+        Some(PaletteIcon::Provider(provider)) => {
+            match provider_color_icon(provider.as_ref(), 15.0) {
+                Some(logo) => logo.into_any_element(),
+                None => provider_app_icon(
+                    provider.as_ref(),
+                    15.0,
+                    provider_color(&theme, provider.as_ref()),
+                )
+                .into_any_element(),
+            }
         }
-        Some(PaletteIcon::Provider(provider)) => provider_app_icon(
-            provider.as_ref(),
-            15.0,
-            provider_color(&theme, provider.as_ref()),
-        )
-        .into_any_element(),
         None => div().size(px(15.0)).into_any_element(),
     };
 

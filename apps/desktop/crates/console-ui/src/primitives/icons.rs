@@ -4,7 +4,7 @@
 //! migrated in batches. New code should prefer [`app_icon`], [`ProviderIcon`],
 //! and [`FileTypeIcon`] so asset paths are centralized and checked in one place.
 
-use gpui::{Hsla, Styled, Svg, px, svg};
+use gpui::{Hsla, Img, Styled, Svg, img, px, svg};
 
 /// An icon from the root `assets/icons` directory.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -576,6 +576,16 @@ impl ProviderIcon {
             Self::Pi => "icons/provider-pi.svg",
         }
     }
+
+    /// The provider's full-color mark, for providers whose logo is more than
+    /// one flat tint. Drawn as an image so the authored colors survive; the
+    /// flat glyph from [`Self::path`] stays the choice wherever a tint applies.
+    pub const fn color_path(self) -> Option<&'static str> {
+        match self {
+            Self::Antigravity => Some("icons/providers/antigravity-color.svg"),
+            _ => None,
+        }
+    }
 }
 
 impl FileTypeIcon {
@@ -796,6 +806,14 @@ impl FileTypeIcon {
 /// Render a typed application icon.
 pub fn app_icon(name: IconName, size: f32, color: Hsla) -> Svg {
     name.render(size, color)
+}
+
+/// The provider's full-color logo as an image, when it has one. `None` means
+/// the provider is a single-tint mark: use [`provider_app_icon`].
+pub fn provider_color_icon(provider: &str, size: f32) -> Option<Img> {
+    ProviderIcon::from_name(provider)
+        .color_path()
+        .map(|path| img(path).w(px(size)).h(px(size)).flex_none())
 }
 
 /// Render a typed provider icon.
