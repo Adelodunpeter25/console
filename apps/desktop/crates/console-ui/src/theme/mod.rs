@@ -93,9 +93,10 @@ pub struct Theme {
     pub user_bubble_border: Hsla,
     pub danger: Hsla,
     pub danger_soft: Hsla,
-    /// Notification-badge red: the unread marker and the needs-attention alert
-    /// in the sidebar. Louder than `danger` on purpose, so a chat waiting on the
-    /// user stands out in a long list the way a Dock badge does.
+    /// The red of the unread marker and the needs-attention alert in the
+    /// sidebar. It is the same red as `danger` (the `-N` in the changed-files
+    /// pill), kept as its own token so the badge can be retuned without
+    /// touching delete and error states.
     pub badge: Hsla,
     /// Tinted backgrounds for diff `+` and `-` lines.
     pub diff_added_bg: Hsla,
@@ -170,7 +171,7 @@ impl Theme {
             user_bubble_border: hsla(37.0 / 360.0, 1.0, 0.657, 0.15),
             danger: rgb(0xE2726A).into(),
             danger_soft: hsla(4.0 / 360.0, 0.55, 0.63, 0.10),
-            badge: rgb(0xE5493A).into(),
+            badge: rgb(0xE2726A).into(),
             diff_added_bg: hsla(145.0 / 360.0, 0.50, 0.66, 0.08),
             diff_removed_bg: hsla(4.0 / 360.0, 0.55, 0.63, 0.08),
         }
@@ -235,7 +236,7 @@ impl Theme {
             user_bubble_border: hsla(30.0 / 360.0, 0.70, 0.40, 0.20),
             danger: rgb(0xC64A42).into(),
             danger_soft: hsla(4.0 / 360.0, 0.55, 0.52, 0.10),
-            badge: rgb(0xD93A2B).into(),
+            badge: rgb(0xC64A42).into(),
             diff_added_bg: hsla(145.0 / 360.0, 0.50, 0.50, 0.08),
             diff_removed_bg: hsla(4.0 / 360.0, 0.55, 0.50, 0.08),
         }
