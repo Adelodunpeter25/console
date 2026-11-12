@@ -48,6 +48,11 @@ const CATEGORY_ORDER: &[&str] = &[
 /// keymap and are derived at runtime, so they can never drift from this table.
 const ACTION_META: &[ActionMeta] = &[
     ActionMeta {
+        action: "FocusSidebarSearch",
+        category: "Global & Window",
+        description: "Search sessions",
+    },
+    ActionMeta {
         action: "ToggleCommandPalette",
         category: "Global & Window",
         description: "Open command palette",

@@ -174,11 +174,17 @@ impl ConsoleDesktopApp {
     }
 
     pub fn start_sidebar_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sidebar_visible = true;
         self.sidebar_search_active = true;
-        self.sidebar_search_query.clear();
-        self.sidebar_search_input.update(cx, |input, cx| {
-            input.clear(cx);
-        });
+        if self.sidebar_search_query.is_empty() {
+            self.sidebar_search_input.update(cx, |input, cx| {
+                input.clear(cx);
+            });
+        } else {
+            self.sidebar_search_input.update(cx, |input, cx| {
+                input.select_all_text(cx);
+            });
+        }
         let focus = self.sidebar_search_input.read(cx).focus();
         window.focus(&focus, cx);
         cx.notify();

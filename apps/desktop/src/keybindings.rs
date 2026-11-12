@@ -35,6 +35,8 @@ actions!(
         NewProject,
         /// Open the quick file search palette scoped to the active pane's project (cmd-p).
         QuickOpenFile,
+        /// Focus the sidebar session search input (cmd-f).
+        FocusSidebarSearch,
         /// Toggle the command palette.
         ToggleCommandPalette,
         /// Toggle the open-tab palette (browser tabs first, then terminals,
@@ -118,6 +120,7 @@ pub fn init(cx: &mut App) {
         // so AppKit routes them to us instead of the system Open/Print handlers.
         KeyBinding::new("secondary-o", AddProject, None),
         KeyBinding::new("secondary-p", QuickOpenFile, None),
+        KeyBinding::new("secondary-f", FocusSidebarSearch, None),
         KeyBinding::new("secondary-k", ToggleCommandPalette, None),
         KeyBinding::new("secondary-t", ToggleTabPalette, None),
         KeyBinding::new("secondary-shift-f", ToggleGlobalSearch, None),
@@ -254,6 +257,18 @@ pub fn init_handlers(cx: &mut App) {
                             );
                             this.check_for_update(cx);
                         });
+                    })
+                    .ok();
+            });
+        }
+    });
+
+    cx.on_action(|_: &FocusSidebarSearch, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.start_sidebar_search(window, cx));
                     })
                     .ok();
             });
