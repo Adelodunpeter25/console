@@ -21,6 +21,10 @@ import (
 // queued prompt, so it is not finished work. The routes layer maps it to 409.
 var ErrSessionBusy = errors.New("session has an active run or queued prompt")
 
+// ErrSessionSettled refuses marking a settled chat unread: settling files a
+// chat away, so it is never unread. The routes layer maps it to 409.
+var ErrSessionSettled = errors.New("session is settled")
+
 // ErrCwdMissing rejects pointing a project session at a working directory
 // that is no longer on disk (typically: the folder was deleted after the
 // project was registered). Failing here beats a session whose every tool
@@ -169,7 +173,7 @@ type ListFilter struct {
 
 const sessionColumns = `id, title, cwd, project_id, model_id, provider, approval_mode,
 	thinking_level, pinned_at, settled_at, created_at, updated_at, message_count, status, deleted_at,
-	worktree_path, worktree_branch, worktree_repo`
+	worktree_path, worktree_branch, worktree_repo, last_activity_at, last_read_at`
 
 const sessionListOrder = `ORDER BY pinned_at IS NULL, pinned_at DESC, updated_at DESC`
 
@@ -252,9 +256,10 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 		var settledAt sql.NullInt64
 		var deletedAt sql.NullInt64
 		var wtPath, wtBranch, wtRepo sql.NullString
+		var lastActivityAt, lastReadAt sql.NullInt64
 		if err := rows.Scan(&h.ID, &h.Title, &h.Cwd, &projectID, &h.ModelID, &h.Provider,
 			&h.ApprovalMode, &thinkingLevel, &pinnedAt, &settledAt, &h.CreatedAt, &h.UpdatedAt, &h.MessageCount, &h.Status, &deletedAt,
-			&wtPath, &wtBranch, &wtRepo); err != nil {
+			&wtPath, &wtBranch, &wtRepo, &lastActivityAt, &lastReadAt); err != nil {
 			return nil, err
 		}
 		if projectID.Valid && projectID.String != "" && projectID.String != "scratch" {
@@ -277,6 +282,15 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 			v := settledAt.Int64
 			h.SettledAt = &v
 		}
+		if lastActivityAt.Valid {
+			v := lastActivityAt.Int64
+			h.LastActivityAt = &v
+		}
+		if lastReadAt.Valid {
+			v := lastReadAt.Int64
+			h.LastReadAt = &v
+		}
+		h.Unread = IsUnread(h)
 		if wtPath.Valid && wtPath.String != "" {
 			h.Worktree = &types.SessionWorktree{
 				Path:   wtPath.String,

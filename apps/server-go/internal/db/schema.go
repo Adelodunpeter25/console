@@ -45,6 +45,8 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			thinking_level TEXT,
 			pinned_at INTEGER,
 			settled_at INTEGER,
+			last_activity_at INTEGER,
+			last_read_at INTEGER,
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL,
 			deleted_at INTEGER,
@@ -135,6 +137,8 @@ func InitGlobalDB(db *sql.DB, path string) error {
 		"capabilities TEXT",
 		"pinned_at INTEGER",
 		"settled_at INTEGER",
+		"last_activity_at INTEGER",
+		"last_read_at INTEGER",
 	} {
 		name := col[:len(col)-len(" TEXT")]
 		if strings.HasSuffix(col, " INTEGER") {

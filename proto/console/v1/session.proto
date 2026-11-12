@@ -49,6 +49,9 @@ message SessionHeader {
   SessionWorktree worktree = 14;
   optional int64 pinned_at = 15;
   optional int64 settled_at = 16;  // unset = active
+  // A run finished or needs the user after any client last showed this chat.
+  // Computed on the server from two timestamps, so no client re-derives it.
+  bool unread = 17;
 }
 
 message SessionDeleteResponse {

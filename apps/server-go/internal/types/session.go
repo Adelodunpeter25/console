@@ -21,6 +21,13 @@ type SessionHeader struct {
 	// SettledAt is non-nil when the chat is settled: finished enough to sit
 	// in the collapsed Settled section, but never touched by any purge.
 	SettledAt *int64 `json:"settledAt,omitempty"`
+	// LastActivityAt is when a run last finished or stopped to ask the user
+	// something; LastReadAt is when a client last showed the chat. Unread is
+	// derived from the two and is the only thing clients receive.
+	LastActivityAt *int64 `json:"-"`
+	LastReadAt     *int64 `json:"-"`
+	// Unread: a run finished or needs the user after the chat was last shown.
+	Unread bool `json:"unread,omitempty"`
 	// Worktree is non-nil when the session lives in its own git worktree.
 	Worktree *SessionWorktree `json:"worktree,omitempty"`
 }

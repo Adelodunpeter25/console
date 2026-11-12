@@ -231,7 +231,7 @@ func (s *Service) HeaderIncludingDeleted(sessionID string) (*types.SessionHeader
 	rows, err := s.manager.Global().Query(`
 		SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
 			thinking_level, pinned_at, settled_at, created_at, updated_at, message_count, status, deleted_at,
-			worktree_path, worktree_branch, worktree_repo
+			worktree_path, worktree_branch, worktree_repo, last_activity_at, last_read_at
 		FROM sessions WHERE id = ?`, sessionID)
 	if err != nil {
 		return nil, err

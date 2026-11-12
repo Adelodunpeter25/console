@@ -99,6 +99,7 @@ func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {
 	if h.SettledAt != nil {
 		out.SettledAt = h.SettledAt
 	}
+	out.Unread = h.Unread
 	if h.Worktree != nil {
 		out.Worktree = &consolev1.SessionWorktree{
 			Path: h.Worktree.Path, Branch: h.Worktree.Branch, Repo: h.Worktree.Repo,

@@ -173,6 +173,9 @@ type SessionHeader struct {
 	Worktree      *SessionWorktree       `protobuf:"bytes,14,opt,name=worktree,proto3" json:"worktree,omitempty"`
 	PinnedAt      *int64                 `protobuf:"varint,15,opt,name=pinned_at,json=pinnedAt,proto3,oneof" json:"pinned_at,omitempty"`
 	SettledAt     *int64                 `protobuf:"varint,16,opt,name=settled_at,json=settledAt,proto3,oneof" json:"settled_at,omitempty"` // unset = active
+	// A run finished or needs the user after any client last showed this chat.
+	// Computed on the server from two timestamps, so no client re-derives it.
+	Unread        bool `protobuf:"varint,17,opt,name=unread,proto3" json:"unread,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -317,6 +320,13 @@ func (x *SessionHeader) GetSettledAt() int64 {
 		return *x.SettledAt
 	}
 	return 0
+}
+
+func (x *SessionHeader) GetUnread() bool {
+	if x != nil {
+		return x.Unread
+	}
+	return false
 }
 
 type SessionDeleteResponse struct {
@@ -1325,7 +1335,7 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\x0fSessionWorktree\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04repo\x18\x03 \x01(\tR\x04repo\"\xf6\x04\n" +
+	"\x04repo\x18\x03 \x01(\tR\x04repo\"\x8e\x05\n" +
 	"\rSessionHeader\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x10\n" +
@@ -1348,7 +1358,8 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\bworktree\x18\x0e \x01(\v2\x1b.console.v1.SessionWorktreeR\bworktree\x12 \n" +
 	"\tpinned_at\x18\x0f \x01(\x03H\x04R\bpinnedAt\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"settled_at\x18\x10 \x01(\x03H\x05R\tsettledAt\x88\x01\x01B\r\n" +
+	"settled_at\x18\x10 \x01(\x03H\x05R\tsettledAt\x88\x01\x01\x12\x16\n" +
+	"\x06unread\x18\x11 \x01(\bR\x06unreadB\r\n" +
 	"\v_project_idB\x11\n" +
 	"\x0f_thinking_levelB\x10\n" +
 	"\x0e_message_countB\r\n" +
