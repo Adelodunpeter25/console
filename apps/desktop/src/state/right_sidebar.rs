@@ -232,6 +232,9 @@ impl ConsoleDesktopApp {
             console_ui::terminal::TerminalView::new(params, client, transport, window, cx)
         });
 
+        let sub = cx.observe(&terminal, |_, _, cx| cx.notify());
+        self._subscriptions.push(sub);
+
         state.terminals.push((id, terminal));
         state.active_idx = state.terminals.len().saturating_sub(1);
         self.persist_workspaces();
@@ -499,6 +502,8 @@ impl ConsoleDesktopApp {
                     };
                     console_ui::terminal::TerminalView::new(params, client, transport, window, cx)
                 });
+                let sub = cx.observe(&terminal, |_, _, cx| cx.notify());
+                self._subscriptions.push(sub);
                 state.terminals.push((id, terminal));
             }
             state.active_idx = target_active_idx.min(state.terminals.len().saturating_sub(1));
