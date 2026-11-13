@@ -125,11 +125,7 @@ impl ConsoleDesktopApp {
     /// Apply a server draft if it is newer than what this device holds.
     /// Never touches a draft the user has edited since it was requested:
     /// those edits stamp a newer local time.
-    fn adopt_remote_draft(
-        &mut self,
-        remote: ChatDraft,
-        cx: &mut Context<Self>,
-    ) {
+    fn adopt_remote_draft(&mut self, remote: ChatDraft, cx: &mut Context<Self>) {
         let session_id = remote.session_id.clone();
         // A push is queued, so this device has edits the server has not seen
         // yet; adopting now would overwrite them.

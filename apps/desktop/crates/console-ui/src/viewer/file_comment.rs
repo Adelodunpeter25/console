@@ -296,7 +296,11 @@ impl RenderOnce for FileCommentCard {
                                 } else {
                                     theme.text
                                 })
-                                .child(if staged { "Remove from chat" } else { "Send to chat" }),
+                                .child(if staged {
+                                    "Remove from chat"
+                                } else {
+                                    "Send to chat"
+                                }),
                         ),
                 ),
         };

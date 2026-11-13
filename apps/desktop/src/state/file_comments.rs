@@ -387,7 +387,14 @@ impl ConsoleDesktopApp {
                 let _ = handle.update(cx, |_, window, cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            this.adopt_loaded_comments(&pane_id, &project_id, &root, items, window, cx)
+                            this.adopt_loaded_comments(
+                                &pane_id,
+                                &project_id,
+                                &root,
+                                items,
+                                window,
+                                cx,
+                            )
                         });
                     }
                 });
@@ -880,8 +887,8 @@ impl ConsoleDesktopApp {
             });
 
             let editing = comment.state != FileCommentState::Added;
-            let text_rows = comment.text.lines().count().max(1) as u32
-                + (comment.text.len() / 80) as u32;
+            let text_rows =
+                comment.text.lines().count().max(1) as u32 + (comment.text.len() / 80) as u32;
             let rows = if editing { 9 } else { 4 + text_rows };
 
             let id = comment.id;
@@ -898,7 +905,12 @@ impl ConsoleDesktopApp {
                 end_line,
                 rows,
                 move |_window, _cx| {
-                    let act = |f: fn(&mut ConsoleDesktopApp, &str, u64, &mut Context<ConsoleDesktopApp>)| {
+                    let act = |f: fn(
+                        &mut ConsoleDesktopApp,
+                        &str,
+                        u64,
+                        &mut Context<ConsoleDesktopApp>,
+                    )| {
                         let entity = entity.clone();
                         let pane_id = pane_id.clone();
                         move |_window: &mut Window, cx: &mut App| {

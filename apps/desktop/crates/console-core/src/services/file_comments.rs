@@ -20,7 +20,10 @@ impl FileCommentService {
     pub async fn list(&self, project_id: &str) -> Result<Vec<FileComment>> {
         let url = self
             .transport
-            .url(&format!("/api/projects/{}/comments", encode_segment(project_id)))
+            .url(&format!(
+                "/api/projects/{}/comments",
+                encode_segment(project_id)
+            ))
             .await;
         let response = self
             .transport
@@ -40,7 +43,10 @@ impl FileCommentService {
     ) -> Result<FileComment> {
         let url = self
             .transport
-            .url(&format!("/api/projects/{}/comments", encode_segment(project_id)))
+            .url(&format!(
+                "/api/projects/{}/comments",
+                encode_segment(project_id)
+            ))
             .await;
         let response = self
             .transport
@@ -94,11 +100,18 @@ impl FileCommentService {
         if body.success {
             Ok(())
         } else {
-            Err(anyhow!(body.error.unwrap_or_else(|| "Failed to delete comment".into())))
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to delete comment".into())
+            ))
         }
     }
 
-    async fn decode<T: DeserializeOwned + Send + 'static>(&self, response: reqwest::Response, fallback: &str) -> Result<T> {
+    async fn decode<T: DeserializeOwned + Send + 'static>(
+        &self,
+        response: reqwest::Response,
+        fallback: &str,
+    ) -> Result<T> {
         let body: ApiResponse<T> = self
             .transport
             .decode_json(response)

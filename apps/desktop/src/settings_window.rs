@@ -103,12 +103,10 @@ impl SettingsWindow {
         });
 
         let model_vision_input = cx.new(|cx| {
-            ComposerInput::new(window, cx)
-                .placeholder("provider/model or leave blank to not set")
+            ComposerInput::new(window, cx).placeholder("provider/model or leave blank to not set")
         });
         let model_smol_input = cx.new(|cx| {
-            ComposerInput::new(window, cx)
-                .placeholder("provider/model or leave blank to not set")
+            ComposerInput::new(window, cx).placeholder("provider/model or leave blank to not set")
         });
 
         let vision_for_load = model_vision_input.clone();
