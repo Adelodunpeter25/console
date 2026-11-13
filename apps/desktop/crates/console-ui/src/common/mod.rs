@@ -20,7 +20,6 @@ pub mod project_browse_palette;
 pub mod queued_prompt_card;
 pub mod quick_open_palette;
 pub mod stripe;
-pub mod suggestion_chips;
 pub mod usage_meter;
 pub mod usage_panel;
 pub mod workspace_footer;
@@ -32,7 +31,9 @@ pub use autocomplete::{
     AutocompletePrevious, AutocompleteTrigger, AutocompleteView, detect_trigger, filter_items,
     init as init_autocomplete_keybindings, slugify_chat_title,
 };
-pub use composer_pills::{ShellEntry, ShellsPill, SubagentsPill, TasksPill, composer_pills};
+pub use composer_pills::{
+    ShellEntry, ShellsPill, SubagentsPill, SuggestionsPill, TasksPill, composer_pills,
+};
 pub(crate) use composer_view::plan_mode_stripes;
 pub use composer_view::{ComposerAnnotation, ComposerComment, ComposerView};
 pub use copy_button::{copy_button, copy_button_with_action};
@@ -65,7 +66,6 @@ pub use project_browse_palette::ProjectBrowsePalette;
 pub use queued_prompt_card::{queued_prompt_card, queued_prompt_row, queued_prompts_stack};
 pub use quick_open_palette::QuickOpenPalette;
 pub use stripe::centered_stripe;
-pub use suggestion_chips::suggestion_chips;
 pub use usage_meter::UsageMeter;
 pub use usage_panel::UsagePanel;
 pub use workspace_footer::WorkspaceFooter;

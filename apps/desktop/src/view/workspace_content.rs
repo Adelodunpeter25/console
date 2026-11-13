@@ -3,8 +3,8 @@ use console_core::{SelectedModel, SessionHeaderExt, UpdateSessionDto};
 use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ComposerView, ModelDropdownMenu, PickerTab, QuestionInteractionCard, ShellEntry, ShellsPill,
-    SubagentsPill, TasksPill, Theme, WorkspaceFooter, centered_stripe, composer_pills,
-    error_banner, notice_banner, queued_prompts_stack, suggestion_chips,
+    SubagentsPill, SuggestionsPill, TasksPill, Theme, WorkspaceFooter, centered_stripe,
+    composer_pills, error_banner, notice_banner, queued_prompts_stack,
 };
 use gpui::{
     App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -754,6 +754,22 @@ impl ConsoleDesktopApp {
                 on_stop,
             }
         });
+        // Chips yield to queued prompts, which the user has already committed.
+        let suggestions_pill = (!suggestions.is_empty() && queued_prompts.is_empty()).then(|| {
+            let entity_pick = entity.clone();
+            let pane_for_pick = pane_id.clone();
+            SuggestionsPill {
+                items: suggestions.clone(),
+                on_pick: Rc::new(move |prompt, _window, cx| {
+                    if let Some(app) = entity_pick.upgrade() {
+                        let pid = pane_for_pick.clone();
+                        app.update(cx, |this, cx| {
+                            this.send_suggestion_for_pane(&pid, prompt, cx);
+                        });
+                    }
+                }),
+            }
+        });
         let pills_key = format!("composer-pills-{pane_id}");
         let composer_pills_row = composer_pills(
             &pills_key,
@@ -761,6 +777,7 @@ impl ConsoleDesktopApp {
             subagents_pill,
             shells_pill,
             changes_summary.zip(on_open_changes),
+            suggestions_pill,
             theme,
         );
 
@@ -810,23 +827,6 @@ impl ConsoleDesktopApp {
             })
             .when_some(agent_notice, |el, notice| {
                 el.child(notice_banner(notice, theme))
-            })
-            .when(!suggestions.is_empty() && queued_prompts.is_empty(), |el| {
-                let theme = Theme::current(cx);
-                let entity_pick = entity.clone();
-                let pane_for_pick = pane_id.clone();
-                el.child(suggestion_chips(
-                    suggestions,
-                    Rc::new(move |prompt, _window, cx| {
-                        if let Some(app) = entity_pick.upgrade() {
-                            let pid = pane_for_pick.clone();
-                            app.update(cx, |this, cx| {
-                                this.send_suggestion_for_pane(&pid, prompt, cx);
-                            });
-                        }
-                    }),
-                    theme,
-                ))
             })
             .when(!queued_prompts.is_empty(), |el| {
                 let theme = Theme::current(cx);

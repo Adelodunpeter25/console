@@ -21,6 +21,13 @@ use crate::theme::Theme;
 
 type ClickHandler = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
 pub(crate) type StopHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
+type PickHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
+
+/// Follow-up prompts that fill the rest of the row and scroll sideways.
+pub struct SuggestionsPill {
+    pub items: Vec<String>,
+    pub on_pick: PickHandler,
+}
 
 /// The active task list plus the menu handle that anchors its popover to the
 /// leading pill.
@@ -63,9 +70,15 @@ pub fn composer_pills(
     subagents: Option<SubagentsPill>,
     shells: Option<ShellsPill>,
     changes: Option<(ChangesSummary, ClickHandler)>,
+    suggestions: Option<SuggestionsPill>,
     theme: Theme,
 ) -> Option<Div> {
-    if tasks.is_none() && subagents.is_none() && shells.is_none() && changes.is_none() {
+    if tasks.is_none()
+        && subagents.is_none()
+        && shells.is_none()
+        && changes.is_none()
+        && suggestions.is_none()
+    {
         return None;
     }
 
@@ -148,6 +161,38 @@ pub fn composer_pills(
                 shells_popover(shells_list.clone(), on_stop.clone(), Theme::current(cx))
             },
         ));
+    }
+
+    // The status pills keep their size on the left; the chips take whatever
+    // room remains and scroll sideways. Kept outside the scroller so the
+    // status popovers are never clipped by it.
+    if let Some(suggestions) = suggestions {
+        let on_pick = suggestions.on_pick;
+        row = row.child(
+            div()
+                .id(ElementId::Name(format!("{key}-suggestions").into()))
+                .flex_1()
+                .min_w(px(0.0))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(8.0))
+                .overflow_x_scroll()
+                .children(
+                    suggestions
+                        .items
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, text)| {
+                            suggestion_pill(
+                                format!("{key}-suggestion-{index}"),
+                                text,
+                                on_pick.clone(),
+                                theme,
+                            )
+                        }),
+                ),
+        );
     }
 
     Some(
@@ -254,6 +299,48 @@ fn pill(
                 .text_size(px(12.0))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme.text_secondary)
+                .child(text),
+        )
+}
+
+/// One follow-up chip: the pill shape of the status row, with an accent
+/// send button so it reads as clickable rather than informational.
+fn suggestion_pill(id: String, text: String, on_pick: PickHandler, theme: Theme) -> Stateful<Div> {
+    let picked = text.clone();
+    div()
+        .id(ElementId::Name(id.into()))
+        .flex_none()
+        .max_w(px(260.0))
+        .flex()
+        .items_center()
+        .gap(px(7.0))
+        .pl(px(4.0))
+        .pr(px(10.0))
+        .py(px(3.0))
+        .rounded_full()
+        .bg(theme.raised)
+        .cursor_pointer()
+        .hover(|style| style.bg(theme.overlay))
+        .active(|style| style.bg(theme.overlay_strong))
+        .on_click(move |_, window, cx| (on_pick)(picked.clone(), window, cx))
+        .child(
+            div()
+                .flex_none()
+                .size(px(20.0))
+                .rounded_full()
+                .bg(theme.accent)
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(app_icon(IconName::ArrowUp, 12.0, theme.on_inverse)),
+        )
+        .child(
+            div()
+                .min_w(px(0.0))
+                .text_size(px(12.0))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(theme.text_secondary)
+                .truncate()
                 .child(text),
         )
 }
