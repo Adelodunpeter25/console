@@ -320,8 +320,10 @@ fn suggestion_pill(id: String, text: String, on_pick: PickHandler, theme: Theme)
         .rounded_full()
         .bg(theme.raised)
         .cursor_pointer()
-        .hover(|style| style.bg(theme.overlay))
-        .active(|style| style.bg(theme.overlay_strong))
+        // `overlay` is a ~5% tint meant to sit on top of a surface, so it has
+        // to be blended onto `raised` or the chip turns see-through on hover.
+        .hover(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
+        .active(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
         .on_click(move |_, window, cx| (on_pick)(picked.clone(), window, cx))
         .child(
             div()
