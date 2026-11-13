@@ -158,7 +158,7 @@ func newRequestID() string {
 // that worked a turn ago now fails.
 func deniedMessage(tool string, mode permissions.Mode) string {
 	if mode == permissions.PlanMode {
-		return tools.NewToolError("Tool '%s' is denied: plan mode is read-only. Describe the change in your plan; to save the plan as a file use writePlan. To make changes, call requestFullAccess if the user asked you to implement; otherwise ask the user to switch out of plan mode.", tool).Error()
+		return tools.NewToolError("Tool '%s' is denied: plan mode is read-only. Describe the change in your plan; to save the plan as a file use writePlan. To make changes, call requestFullAccess so the user can approve Full Access.", tool).Error()
 	}
 	return tools.NewToolError("Tool '%s' is denied in %s mode.", tool, mode).Error()
 }
