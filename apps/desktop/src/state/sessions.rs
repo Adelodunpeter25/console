@@ -1322,8 +1322,10 @@ impl ConsoleDesktopApp {
     }
 
     /// Fork the pane's session through one assistant message into a new idle
-    /// chat sharing cwd/worktree, then open the fork in that pane. No-op
-    /// while the session is running (the server rejects active runs).
+    /// chat sharing cwd/worktree, then open the fork in that pane. Allowed
+    /// while the source is running: only finalized messages carry a
+    /// server-assigned id, so the in-flight message simply has no fork
+    /// button, and the fork sits idle until prompted.
     pub fn fork_session_for_pane(
         &mut self,
         pane_id: String,
@@ -1333,9 +1335,6 @@ impl ConsoleDesktopApp {
         let Some(session_id) = self.active_session_for_pane(&pane_id) else {
             return;
         };
-        if self.is_session_running(&session_id) {
-            return;
-        }
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
             match client.sessions.fork(&session_id, &message_id).await {

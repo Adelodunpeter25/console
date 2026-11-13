@@ -800,10 +800,11 @@ impl RenderOnce for AssistantMessageBubble {
         let file_changes = self.file_changes;
         let on_open_change = self.on_open_change;
         let load_diff = self.load_diff;
-        let fork_action = self
-            .fork_message_id
-            .zip(self.on_fork)
-            .filter(|_| !is_streaming);
+        // The in-flight message hides its own fork button: it has no
+        // server-assigned id yet (`fork_message_id` is None until finalize),
+        // so no extra streaming gate — a finalized message stays forkable
+        // for the rest of the run.
+        let fork_action = self.fork_message_id.zip(self.on_fork);
         let chips = file_changes.as_ref().and_then(|turn| {
             turn_change_chips(
                 &self.selection_row,
