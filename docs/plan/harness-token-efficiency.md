@@ -444,7 +444,7 @@ Label every line: **keep / rewrite / delete / move**. Planned changes:
 | "Today is X. Working directory is Y." | **deleted (2026-11-13)** | Repeated the workstation block. The workstation block itself now holds only session-stable facts: **date and git branch were removed too** (2026-11-13) — they went stale in the cached prompt over multi-day sessions, and the model can run `date` / `git branch` when a task needs them. No midnight cache invalidation needed. |
 | Skills header sentence | keep | Tells the model the skill lookup exists. |
 | Approval-mode text (`approvalModeInstructions`) | audit, rewrite | Remove emphasis; keep what each mode allows. |
-| Tool descriptions (`jsonschema` tags) | tighten — **next, separate pass** | Describe behavior and arguments; remove usage lectures (for example, bash's "not for reading or editing files" → keep one short line, since that's a real quirk). |
+| Tool descriptions (`jsonschema` tags) | **done (2026-11-13)** — bash, bashJob and editFile tightened; bash's false-timeout line replaced with the real promotion behavior. Everything else was already tight; `todo` stays as expanded in 31158ec9. |
 
 Also audit `SYSTEM.md` handling and the subagent preamble in the same pass.
 **Measure:** static tokens per request, success, turns.

@@ -85,7 +85,7 @@ func renderJobOutputBody(jobs *terminal.BashJobManager, jobID, ownerSessionID st
 // ownerSessionID (must match the session that started the job via bash's
 // background=true).
 func NewBashJobTool(jobs *terminal.BashJobManager, ownerSessionID string) Tool {
-	return NewTool("bashJob", "Inspect or stop background bash jobs. action: output|kill|list. You do NOT need this to learn that a job finished: its exit status and output are delivered to you automatically, even if you end your turn. Use it only to read the output of a job that is still running (e.g. a dev server) or to kill one. Never poll in a loop.", TierExec,
+	return NewTool("bashJob", "Inspect or stop background bash jobs (action: output|kill|list). Job completion and output are delivered automatically when a job finishes. Use `output` only to peek at a still-running job, `kill` only to stop one.", TierExec,
 		func(ctx context.Context, in bashJobInput) (any, error) {
 			if jobs == nil {
 				return nil, NewToolError("Background jobs are not available in this context.")

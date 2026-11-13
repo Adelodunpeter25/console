@@ -20,7 +20,7 @@ type editFileInput struct {
 // EditFile replaces one exact occurrence of oldContent with newContent.
 // Errors (not found / ambiguous) surface as tool errors so the model can
 // re-read the file and retry with a unique anchor.
-var EditFile = NewTool("editFile", "Edit a file by replacing an exact string. Read the file first to get the exact match. For complete rewrites, use write_file.", TierWrite,
+var EditFile = NewTool("editFile", "Replace one exact occurrence of oldContent in a file. Read the file first. Whole-file rewrites: use write_file.", TierWrite,
 	func(ctx context.Context, in editFileInput) (any, error) {
 		if in.Path == "" {
 			return nil, NewToolError("path is required")

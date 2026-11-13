@@ -124,7 +124,7 @@ func NewSandboxedBashTool(mode SandboxMode, jobs *terminal.BashJobManager, owner
 	if len(parentIDs) > 1 {
 		parentCallID = parentIDs[1]
 	}
-	return NewTool("bash", "Run a shell command and return output. Use for builds, tests, or git — not for reading or editing files. Builds, installs, test suites and dev servers should use background=true: it returns immediately and you are notified with the result when it finishes, even if you end your turn. A foreground command that is still running after its timeout (default 30s) is not killed; it continues as a background job.", TierExec,
+	return NewTool("bash", "Run a shell command and return output. For file access prefer read_file/grep/editFile. Long-running commands (builds, test suites, dev servers): background=true returns immediately and the result is delivered when it finishes. A foreground command still running at its timeout keeps running as a background job — you're notified when it finishes.", TierExec,
 		func(ctx context.Context, in bashInput) (any, error) {
 			if in.Command == "" {
 				return nil, NewToolError("command is required")
