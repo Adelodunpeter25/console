@@ -149,7 +149,10 @@ fn test_lists_match_shared_fixture() {
         v.sort();
         v
     };
-    assert_eq!(sorted(RASTER_IMAGE_EXTENSIONS), list("raster_image_extensions"));
+    assert_eq!(
+        sorted(RASTER_IMAGE_EXTENSIONS),
+        list("raster_image_extensions")
+    );
     assert_eq!(sorted(BLOCKED_FILE_EXTENSIONS), list("blocked_extensions"));
     for name in list("lock_basenames") {
         assert!(is_lock_file(&name), "{name}");
