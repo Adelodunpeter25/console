@@ -32,10 +32,31 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
 (function () {
   const statusEl = document.getElementById('status');
   const canvas = document.getElementById('screen');
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
   let cfg = null, ws = null, decoder = null;
   let streamW = 0, streamH = 0, codec = '', desc = null, needKey = true, seq = 0, gotFrame = false;
-  let retry = null;
+  let retry = null, retryMs = 500, lastReset = 0;
+  // Only the newest decoded frame is painted, once per animation frame.
+  let pendingFrame = null, rafId = 0, pendingMove = null;
+  function paint() {
+    rafId = 0;
+    if (pendingFrame) {
+      const frame = pendingFrame; pendingFrame = null;
+      const w = frame.displayWidth || frame.codedWidth || streamW;
+      const h = frame.displayHeight || frame.codedHeight || streamH;
+      if (w && h && (canvas.width !== w || canvas.height !== h)) {
+        canvas.width = w; canvas.height = h;
+      }
+      if (canvas.width && canvas.height) ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+      frame.close();
+      if (!gotFrame) { gotFrame = true; retryMs = 500; setStatus('streaming'); }
+    }
+    if (pendingMove) {
+      send({ type: 'touch', action: 'move', x: pendingMove.x, y: pendingMove.y });
+      pendingMove = null;
+    }
+  }
+  function schedulePaint() { if (!rafId) rafId = requestAnimationFrame(paint); }
 
   const report = (msg) => {
     try {
@@ -69,12 +90,13 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
   function closeDecoder() {
     try { if (decoder && decoder.state !== 'closed') decoder.close(); } catch (e) {}
     decoder = null; needKey = true;
+    if (pendingFrame) { pendingFrame.close(); pendingFrame = null; }
   }
 
   function stopAll() {
     if (retry) { clearTimeout(retry); retry = null; }
     if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} ws = null; }
-    closeDecoder();
+    closeDecoder(); pendingMove = null;
     codec = ''; desc = null; streamW = 0; streamH = 0; seq = 0; gotFrame = false;
   }
 
@@ -97,17 +119,9 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
     try {
       decoder = new VideoDecoder({
         output(frame) {
-          const targetW = frame.displayWidth || frame.codedWidth || streamW;
-          const targetH = frame.displayHeight || frame.codedHeight || streamH;
-          if (targetW && targetH && (canvas.width !== targetW || canvas.height !== targetH)) {
-            canvas.width = targetW; canvas.height = targetH;
-          }
-          fitCanvas();
-          if (canvas.width && canvas.height) {
-            ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-          }
-          frame.close();
-          if (!gotFrame) { gotFrame = true; setStatus('streaming'); }
+          if (pendingFrame) pendingFrame.close();
+          pendingFrame = frame;
+          schedulePaint();
         },
         error(e) {
           const errMsg = e && e.message ? e.message : String(e);
@@ -116,7 +130,7 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
           send({ type: 'reset' });
         },
       });
-      decoder.configure({ codec, description: desc, optimizeForLatency: true });
+      decoder.configure({ codec, description: desc, optimizeForLatency: true, hardwareAcceleration: 'prefer-hardware' });
       needKey = true;
       return true;
     } catch (e) {
@@ -132,6 +146,13 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
     if (tag !== 2 && tag !== 3) return;
     if (!ensureDecoder()) return;
     if (needKey && tag !== 2) return;
+    // A decoder falling behind only adds latency: skip to the next key frame.
+    if (tag === 3 && decoder.decodeQueueSize > 4) {
+      needKey = true;
+      const now = Date.now();
+      if (now - lastReset > 1000) { lastReset = now; send({ type: 'reset' }); }
+      return;
+    }
     if (tag === 2) needKey = false;
     try {
       decoder.decode(new EncodedVideoChunk({ type: tag === 2 ? 'key' : 'delta', timestamp: (seq++) * 1000, data: payload }));
@@ -163,7 +184,7 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
       if (ws !== sock) return;
       ws = null; closeDecoder(); gotFrame = false;
       setStatus('disconnected', true);
-      if (cfg) retry = setTimeout(() => { retry = null; connect(); }, 2000);
+      if (cfg) retry = setTimeout(() => { retry = null; connect(); }, retryMs); retryMs = Math.min(retryMs * 2, 8000);
     };
   }
 
@@ -189,11 +210,11 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
   canvas.addEventListener('pointermove', (e) => {
     if (!down || !ws) return;
     const p = toStream(e);
-    send({ type: 'touch', action: 'move', x: p.x, y: p.y });
+    pendingMove = p; schedulePaint();
   });
   const release = (e) => {
     if (!down) return;
-    down = false;
+    down = false; pendingMove = null;
     const p = toStream(e);
     send({ type: 'touch', action: 'up', x: p.x, y: p.y });
     try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
