@@ -33,9 +33,8 @@ func TestSystemPromptDiscoveryAndBuild(t *testing.T) {
 		"---\ndescription: Cut a release\n---\nRun the release checklist.")
 
 	result := systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{
-		Cwd:               dir,
-		Home:              t.TempDir(), // isolate from the real user's home config
-		SkipWorkspaceTree: true,
+		Cwd:  dir,
+		Home: t.TempDir(), // isolate from the real user's home config
 	})
 
 	prompt := result.SystemPrompt
@@ -62,7 +61,7 @@ func TestSystemPromptDiscoveryAndBuild(t *testing.T) {
 func TestSystemPromptApprovalModeInstructions(t *testing.T) {
 	dir := t.TempDir()
 	result := systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{
-		Cwd: dir, Home: t.TempDir(), SkipWorkspaceTree: true,
+		Cwd: dir, Home: t.TempDir(),
 		ApprovalMode: systemprompt.PlanMode,
 	})
 	if !strings.Contains(result.SystemPrompt, "Plan mode is ACTIVE") {
@@ -76,7 +75,7 @@ func TestSystemPromptStableSplitsFromSetup(t *testing.T) {
 			t.Fatal(err)
 		}
 		return systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{
-			Cwd: dir, Home: t.TempDir(), SkipWorkspaceTree: true,
+			Cwd: dir, Home: t.TempDir(),
 			Model: "m", ApprovalMode: systemprompt.FullAccess,
 		})
 	}

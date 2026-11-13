@@ -35,23 +35,19 @@ type DiscoveredContext struct {
 	Rules            []Rule
 	Skills           []Skill
 	Commands         []SlashCommand
-	WorkspaceTree    WorkspaceTree
 	Environment      EnvironmentInfo
 }
 
-// BuildOptions configures one discovery + prompt-assembly run. The
-// workspace tree section is included by default; set SkipWorkspaceTree to
-// omit it.
+// BuildOptions configures one discovery + prompt-assembly run.
 type BuildOptions struct {
-	Cwd               string
-	Home              string
-	StopAt            string
-	Model             string
-	ApprovalMode      ApprovalMode
-	CustomPrompt      string
-	AppendPrompt      string
-	SkipWorkspaceTree bool
-	Identity          string
+	Cwd          string
+	Home         string
+	StopAt       string
+	Model        string
+	ApprovalMode ApprovalMode
+	CustomPrompt string
+	AppendPrompt string
+	Identity     string
 }
 
 // Result is the outcome of BuildSystemPrompt.
@@ -89,18 +85,12 @@ func section(name, content string) *Section {
 func DiscoverContext(opts BuildOptions) DiscoveredContext {
 	roots := ResolveRoots(opts.Cwd, opts.Home, opts.StopAt)
 
-	tree := WorkspaceTree{RootPath: roots.Cwd}
-	if !opts.SkipWorkspaceTree {
-		tree = BuildWorkspaceTree(roots.Cwd)
-	}
-
 	return DiscoveredContext{
 		ContextFiles:     DiscoverContextFiles(roots),
 		SystemPromptFile: DiscoverSystemPromptFile(roots),
 		Rules:            DiscoverRules(roots),
 		Skills:           DiscoverSkills(roots),
 		Commands:         DiscoverCommands(roots),
-		WorkspaceTree:    tree,
 		Environment:      CollectEnvironmentInfo(roots.Cwd, opts.Model),
 	}
 }
@@ -202,19 +192,6 @@ func renderContextFiles(files []ContextFile) string {
 	lines = append(lines, "</repo-rules>",
 		"Context files above are loaded automatically. Do not waste tools grepping for AGENTS.md / CLAUDE.md unless the user asks.")
 	return strings.Join(lines, "\n")
-}
-
-func renderWorkspaceTree(tree WorkspaceTree, skip bool) string {
-	if skip || strings.TrimSpace(tree.Rendered) == "" {
-		return ""
-	}
-	return strings.Join([]string{
-		"# Workspace tree",
-		"<workspace-tree>",
-		"Working directory layout (depth-limited):",
-		tree.Rendered,
-		"</workspace-tree>",
-	}, "\n")
 }
 
 func renderWorkstation(env EnvironmentInfo) string {
@@ -323,7 +300,6 @@ func BuildSystemPrompt(opts BuildOptions) Result {
 	add(&setup, section("domain-rules", renderDomainRules(context.Rules)))
 	add(&setup, section("commands", renderCommands(context.Commands)))
 	add(&setup, section("repo-rules", renderContextFiles(context.ContextFiles)))
-	add(&setup, section("workspace-tree", renderWorkspaceTree(context.WorkspaceTree, opts.SkipWorkspaceTree)))
 	add(&setup, section("workstation", renderWorkstation(context.Environment)))
 	for i := range setup {
 		setup[i].Setup = true
