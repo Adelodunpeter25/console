@@ -431,6 +431,19 @@ func (s *SessionService) ClearCompletedTodos(sessionID string) error {
 	return s.inner.ClearCompletedTodos(sessionID)
 }
 
+// Suggestion operations
+func (s *SessionService) SaveSessionSuggestions(sessionID string, items []string) error {
+	return s.inner.SaveSessionSuggestions(sessionID, items)
+}
+
+func (s *SessionService) GetSessionSuggestions(sessionID string) ([]string, error) {
+	return s.inner.GetSessionSuggestions(sessionID)
+}
+
+func (s *SessionService) ClearSessionSuggestions(sessionID string) error {
+	return s.inner.ClearSessionSuggestions(sessionID)
+}
+
 // File change operations
 func (s *SessionService) RecordFileChange(sessionID string, change types.SessionFileChange) error {
 	return s.inner.RecordFileChange(sessionID, change)

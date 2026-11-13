@@ -4,6 +4,8 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,10 +13,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/suggestions"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
@@ -81,7 +86,7 @@ func setSmolRole(t *testing.T, ref string) {
 	t.Setenv("CONSOLE_SETTINGS_PATH", path)
 }
 
-func runForSuggestions(t *testing.T, assistant, reply string) (chan *consolev1.NotificationEvent, *suggestingProvider) {
+func runForSuggestions(t *testing.T, assistant, reply string) (chan *consolev1.NotificationEvent, *suggestingProvider, *services.SessionService, string) {
 	t.Helper()
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
@@ -98,33 +103,37 @@ func runForSuggestions(t *testing.T, assistant, reply string) (chan *consolev1.N
 		t.Fatal(err)
 	}
 	helpers.WaitSettled(t, hub)
-	return notes, prov
+	return notes, prov, sessions, header.ID
 }
 
 func TestSuggestionsDeliveredWithSmolRole(t *testing.T) {
 	setSmolRole(t, "codex/gpt-5.5")
-	notes, _ := runForSuggestions(t, "Fixed the parser.", `["Run the tests","Commit this"]`)
+	notes, _, sessions, sessionID := runForSuggestions(t, "Fixed the parser.", `["Run the tests","Commit this"]`)
 	ev := waitNotification(t, notes, "suggestions")
 	if !reflect.DeepEqual(ev.GetItems(), []string{"Run the tests", "Commit this"}) {
 		t.Fatalf("items: %v", ev.GetItems())
+	}
+	stored, err := sessions.GetSessionSuggestions(sessionID)
+	if err != nil || !reflect.DeepEqual(stored, ev.GetItems()) {
+		t.Fatalf("stored = %v, %v; want the pushed items", stored, err)
 	}
 }
 
 func TestSuggestionsOffWithoutSmolRole(t *testing.T) {
 	setSmolRole(t, "")
-	notes, prov := runForSuggestions(t, "Fixed the parser.", `["Run the tests"]`)
+	notes, prov, _, _ := runForSuggestions(t, "Fixed the parser.", `["Run the tests"]`)
 	expectNoSuggestions(t, notes, prov, false)
 }
 
 func TestSuggestionsSkippedAfterQuestion(t *testing.T) {
 	setSmolRole(t, "codex/gpt-5.5")
-	notes, prov := runForSuggestions(t, "Should I also update the docs?", `["Yes please"]`)
+	notes, prov, _, _ := runForSuggestions(t, "Should I also update the docs?", `["Yes please"]`)
 	expectNoSuggestions(t, notes, prov, false)
 }
 
 func TestSuggestionsDroppedWhenMalformed(t *testing.T) {
 	setSmolRole(t, "codex/gpt-5.5")
-	notes, prov := runForSuggestions(t, "Fixed the parser.", `sorry, no idea`)
+	notes, prov, _, _ := runForSuggestions(t, "Fixed the parser.", `sorry, no idea`)
 	expectNoSuggestions(t, notes, prov, true)
 }
 
@@ -205,5 +214,86 @@ func TestSuggestionsDiscardedWhenNewRunStarts(t *testing.T) {
 			t.Fatalf("stale suggestions delivered: %v", ev.GetItems())
 		}
 	case <-time.After(700 * time.Millisecond):
+	}
+}
+
+func TestSuggestionsStoredUntilNextRun(t *testing.T) {
+	setSmolRole(t, "codex/gpt-5.5")
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	bus := services.NewNotificationService()
+	svc.SetNotifications(bus)
+	stop := make(chan struct{})
+	defer close(stop)
+	notes := collectNotifications(t, bus, stop)
+	prov := &suggestingProvider{assistant: "Fixed the parser.", reply: `["Run the tests"]`, calls: make(chan struct{}, 4)}
+	svc.Lookup = func(id string) (loop.Provider, error) { return prov, nil }
+	header := helpers.CreateRunSession(t, sessions)
+
+	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "fix it", Provider: "mock", ModelID: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	helpers.WaitSettled(t, hub)
+	waitNotification(t, notes, "suggestions")
+
+	// A later read, with no push involved, still finds them.
+	if got, _ := sessions.GetSessionSuggestions(header.ID); !reflect.DeepEqual(got, []string{"Run the tests"}) {
+		t.Fatalf("stored after settle: %v", got)
+	}
+
+	// The next run makes them stale, so they go as soon as it starts.
+	prov.reply = `[]`
+	hub, err = svc.StartRun(header.ID, run.Prompt{Text: "again", Provider: "mock", ModelID: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := sessions.GetSessionSuggestions(header.ID); len(got) != 0 {
+		t.Fatalf("stored after next run started: %v", got)
+	}
+	helpers.WaitSettled(t, hub)
+}
+
+func TestSuggestionsRoute(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	header := helpers.CreateRunSession(t, sessions)
+	app := fiber.New()
+	routes.RegisterSessionRoutes(app, sessions, run.NewService(sessions))
+
+	get := func() []string {
+		resp, err := app.Test(httptest.NewRequest("GET", "/api/sessions/"+header.ID+"/suggestions", nil), 10000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var envelope struct {
+			Success bool     `json:"success"`
+			Data    []string `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil || !envelope.Success {
+			t.Fatalf("envelope: %+v, %v", envelope, err)
+		}
+		return envelope.Data
+	}
+
+	if got := get(); got == nil || len(got) != 0 {
+		t.Fatalf("empty session must return an empty list, got %v", got)
+	}
+	if err := sessions.SaveSessionSuggestions(header.ID, []string{"Run the tests", "Commit this"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := get(); !reflect.DeepEqual(got, []string{"Run the tests", "Commit this"}) {
+		t.Fatalf("stored: %v", got)
+	}
+	if err := sessions.SaveSessionSuggestions(header.ID, []string{"Only one"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := get(); !reflect.DeepEqual(got, []string{"Only one"}) {
+		t.Fatalf("replace: %v", got)
+	}
+	if err := sessions.ClearSessionSuggestions(header.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := get(); len(got) != 0 {
+		t.Fatalf("cleared: %v", got)
 	}
 }

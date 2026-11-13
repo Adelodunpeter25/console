@@ -6,6 +6,7 @@ package run
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -54,15 +55,23 @@ func (s *Service) startSuggestions(sessionID, providerID, modelID string, pins *
 		if len(items) == 0 || busy || !current {
 			return
 		}
+		// Stored before the push so a client that reconnects between the two
+		// still finds them.
+		if err := s.sessions.SaveSessionSuggestions(sessionID, items); err != nil {
+			slog.Warn("run: save suggestions failed", "session", sessionID, "error", err)
+		}
 		if bus := s.notifier(); bus != nil {
 			bus.Push(SuggestionsNotification(sessionID, items))
 		}
 	}()
 }
 
-// cancelSuggestions drops any in-flight generation for the session; a new
-// run or a deletion makes its result stale.
+// cancelSuggestions drops any in-flight generation and the stored set for
+// the session; a new run makes both stale.
 func (s *Service) cancelSuggestions(sessionID string) {
+	if err := s.sessions.ClearSessionSuggestions(sessionID); err != nil {
+		slog.Warn("run: clear suggestions failed", "session", sessionID, "error", err)
+	}
 	s.mu.Lock()
 	cancel := s.suggestCancel[sessionID]
 	delete(s.suggestCancel, sessionID)

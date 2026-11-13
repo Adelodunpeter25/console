@@ -603,6 +603,16 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
+	// GET /api/sessions/:id/suggestions — the latest follow-up prompts, kept
+	// until the next run starts. Empty when there are none.
+	h.Get("/:id/suggestions", func(c *fiber.Ctx) error {
+		items, err := sessions.GetSessionSuggestions(c.Params("id"))
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(fiber.Map{"success": true, "data": items})
+	})
+
 	// GET /api/sessions/:id/prompts — every user prompt (id, time, one-line
 	// preview), oldest first, for "jump to prompt" lists. Ids match the loaded
 	// messages', so a client can find the row or page older history to it.

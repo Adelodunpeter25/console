@@ -228,6 +228,12 @@ func InitSessionDB(db *sql.DB, path string) error {
 			updated_at INTEGER NOT NULL
 		);
 
+		CREATE TABLE IF NOT EXISTS session_suggestions (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			items TEXT NOT NULL,
+			created_at INTEGER NOT NULL
+		);
+
 		CREATE TABLE IF NOT EXISTS session_subagents (
 			id TEXT PRIMARY KEY,
 			parent_tool_call_id TEXT NOT NULL,
