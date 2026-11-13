@@ -239,6 +239,9 @@ impl ConsoleDesktopApp {
         let path = comment.path.clone();
         let was_draft = comment.state == FileCommentState::Draft;
         comment.text = text.clone();
+        if was_draft {
+            comment.staged = true;
+        }
         comment.state = FileCommentState::Added;
         comment.focus_pending = false;
         let server_id = comment.server_id.clone();
@@ -571,17 +574,8 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// Mirror the pane's comment ranges into the editor's persistent
-    /// highlight. The editor also records the range on mouse-up; this keeps
-    /// cancel/remove and reopened tabs in sync.
-    pub(super) fn sync_comment_selections(
-        &mut self,
-        pane_id: &str,
-        path: &str,
-        cx: &mut Context<Self>,
-    ) {
-        let ranges = self
-            .workspace_pane_states
+    fn comment_ranges(&self, pane_id: &str, path: &str) -> Vec<editor_ui::CommentTarget> {
+        self.workspace_pane_states
             .get(pane_id)
             .map(|pane| {
                 pane.file_comments
@@ -591,9 +585,21 @@ impl ConsoleDesktopApp {
                         start_line: comment.start_line,
                         end_line: comment.end_line,
                     })
-                    .collect::<Vec<_>>()
+                    .collect()
             })
-            .unwrap_or_default();
+            .unwrap_or_default()
+    }
+
+    /// Mirror the pane's comment ranges into the editor's persistent
+    /// highlight. The editor also records the range on mouse-up; this keeps
+    /// cancel/remove and reopened tabs in sync.
+    pub(super) fn sync_comment_selections(
+        &mut self,
+        pane_id: &str,
+        path: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let ranges = self.comment_ranges(pane_id, path);
         if let Some((_, _, state, _)) = self.viewer_editor_views.get(path) {
             state.update(cx, |editor, cx| {
                 editor.set_comment_selections(ranges);
@@ -738,6 +744,14 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) -> Vec<FileCommentOverlay> {
         self.ensure_file_comments_loaded(pane_id, cx);
+        // A reopened tab gets a fresh editor with no highlight; reapply it
+        // whenever the editor's ranges differ from the comments'.
+        let wanted = self.comment_ranges(pane_id, path);
+        if let Some((_, _, state, _)) = self.viewer_editor_views.get(path)
+            && state.read(cx).comment_selections() != wanted.as_slice()
+        {
+            self.sync_comment_selections(pane_id, path, cx);
+        }
         let entity = cx.entity().downgrade();
         let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
             return Vec::new();

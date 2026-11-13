@@ -1389,17 +1389,20 @@ impl ComposerInput {
             return;
         }
         let value = self.content.trim().to_owned();
+        if value.is_empty() && !self.allow_empty_submit {
+            return;
+        }
+        let context_files: Vec<String> = self
+            .mentions
+            .iter()
+            .map(|mention| mention.path.clone())
+            .collect();
         if !value.is_empty() {
-            let context_files: Vec<String> = self
-                .mentions
-                .iter()
-                .map(|mention| mention.path.clone())
-                .collect();
             self.prompt_history
                 .record(value.clone(), context_files.clone(), None);
-            cx.emit(ComposerEvent::SubmitSteer(value, context_files));
-            self.clear(cx);
         }
+        cx.emit(ComposerEvent::SubmitSteer(value, context_files));
+        self.clear(cx);
     }
 
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {

@@ -394,6 +394,8 @@ impl ConsoleDesktopApp {
         else {
             return;
         };
+        self.set_attachments_for_pane(&pane_id, Vec::new());
+        self.set_annotations_for_pane(&pane_id, Vec::new());
         self.steer_composer_prompt(
             pane_id,
             session_id,

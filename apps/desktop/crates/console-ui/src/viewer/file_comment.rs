@@ -43,7 +43,7 @@ pub struct FileCommentCard {
     on_edit: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_remove: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_send: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    /// Already attached to the next message; the send action then takes it back.
+    /// Attached to the next message; the action then reads "Remove from chat".
     staged: bool,
 }
 
@@ -81,12 +81,12 @@ impl FileCommentCard {
         }
     }
 
-    /// `+12-31` for a range, `+12` for a single line.
+    /// `12-31` for a range, `12` for a single line.
     fn line_label(&self) -> String {
         if self.start_line == self.end_line {
-            format!("+{}", self.start_line)
+            format!("{}", self.start_line)
         } else {
-            format!("+{}-{}", self.start_line, self.end_line)
+            format!("{}-{}", self.start_line, self.end_line)
         }
     }
 }
@@ -292,11 +292,11 @@ impl RenderOnce for FileCommentCard {
                                 .text_size(px(11.5))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(if staged {
-                                    theme.text_tertiary
+                                    theme.text_secondary
                                 } else {
                                     theme.text
                                 })
-                                .child(if staged { "Added to chat" } else { "Send to AI" }),
+                                .child(if staged { "Remove from chat" } else { "Send to chat" }),
                         ),
                 ),
         };

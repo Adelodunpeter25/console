@@ -50,9 +50,9 @@ impl FileComment {
             .and_then(|name| name.to_str())
             .unwrap_or(&self.path);
         if self.start_line == self.end_line {
-            format!("{name} +{}", self.start_line)
+            format!("{name} {}", self.start_line)
         } else {
-            format!("{name} +{}-{}", self.start_line, self.end_line)
+            format!("{name} {}-{}", self.start_line, self.end_line)
         }
     }
 }
