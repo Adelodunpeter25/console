@@ -92,7 +92,7 @@ func TestSystemPromptStableSplitsFromSetup(t *testing.T) {
 	if a.StableSystem != b.StableSystem {
 		t.Fatalf("stable system differs across sessions:\n%s\n---\n%s", a.StableSystem, b.StableSystem)
 	}
-	for _, want := range []string{"You are a coding agent.", "Full Access", "# Tool inventory", "<critical>"} {
+	for _, want := range []string{"You are a coding agent.", "Full Access", "<critical>"} {
 		if !strings.Contains(a.StableSystem, want) {
 			t.Fatalf("stable system missing %q", want)
 		}

@@ -3,11 +3,11 @@
 //
 // The prompt has two parts. StableSystem holds what never changes within a
 // session and is sent as the system prompt: identity/SYSTEM.md,
-// approval-mode instructions, what skills are for, tool inventory, the
+// approval-mode instructions, what skills are for, the
 // <critical> block, and any appended prompt. Setup holds the per-session
 // context sent as a leading user message: skills list, rules, slash
-// commands, repo context files (AGENTS.md, …), workspace tree, and
-// workstation info (date/cwd/OS/git/model).
+// commands, repo context files (AGENTS.md, …), and workstation info
+// (date/cwd/OS/git/model).
 package systemprompt
 
 import (
@@ -28,15 +28,6 @@ const (
 const defaultIdentity = `You are a coding agent.
 Use the available tools to explore the codebase, edit files, run shell commands, and accomplish user tasks correctly and concisely.`
 
-// DefaultToolNames lists the built-in tool inventory shown when the caller
-// doesn't supply an explicit set.
-var DefaultToolNames = []string{
-	"read_file", "readSkill", "list_dir", "glob", "grep",
-	"write_file", "editFile", "batchWrite", "bash", "bashJob", "webSearch", "webFetch",
-	"todo", "subagent", "ask", "askMany", "memory", "console", "console_reset", "browser",
-	"browser_reset",
-}
-
 // DiscoveredContext is everything discovery found for one build.
 type DiscoveredContext struct {
 	ContextFiles     []ContextFile
@@ -56,7 +47,6 @@ type BuildOptions struct {
 	Home              string
 	StopAt            string
 	Model             string
-	ToolNames         []string
 	ApprovalMode      ApprovalMode
 	CustomPrompt      string
 	AppendPrompt      string
@@ -201,17 +191,6 @@ func renderDomainRules(rules []Rule) string {
 	return strings.Join(out, "\n")
 }
 
-func renderTools(names []string) string {
-	if len(names) == 0 {
-		return ""
-	}
-	lines := []string{"# Tool inventory"}
-	for _, n := range names {
-		lines = append(lines, fmt.Sprintf("- `%s`", n))
-	}
-	return strings.Join(lines, "\n")
-}
-
 func renderContextFiles(files []ContextFile) string {
 	if len(files) == 0 {
 		return ""
@@ -324,12 +303,6 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 
 // BuildSystemPrompt runs discovery then assembles the final prompt string.
 func BuildSystemPrompt(opts BuildOptions) Result {
-	if opts.ToolNames == nil {
-		opts.ToolNames = DefaultToolNames
-		if opts.ApprovalMode == PlanMode {
-			opts.ToolNames = append(append([]string(nil), DefaultToolNames...), "writePlan")
-		}
-	}
 	context := DiscoverContext(opts)
 	identity := renderIdentity(opts, systemMdContent(context.SystemPromptFile))
 
@@ -342,7 +315,6 @@ func BuildSystemPrompt(opts BuildOptions) Result {
 	add(&stable, section("identity", identity))
 	add(&stable, section("approval-mode", renderApprovalModeInstruction(opts.ApprovalMode)))
 	add(&stable, section("skills-guide", renderSkillsGuide(context.Skills)))
-	add(&stable, section("tools", renderTools(opts.ToolNames)))
 	add(&stable, section("critical", renderCritical(opts.ApprovalMode)))
 	add(&stable, section("append", opts.AppendPrompt))
 
