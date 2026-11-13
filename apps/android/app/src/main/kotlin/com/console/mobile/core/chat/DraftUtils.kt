@@ -8,7 +8,8 @@ import com.console.mobile.data.model.SessionStatus
 /** Client-only id of a new chat that has no server session until its first send. */
 const val NEW_CHAT_PREFIX = "new-chat:"
 
-fun newChatId(): String = NEW_CHAT_PREFIX + java.util.UUID.randomUUID()
+/** One slot, like the desktop floating composer, so its draft is restored the next time a new chat opens. */
+fun newChatId(): String = NEW_CHAT_PREFIX + "draft"
 
 fun isNewChatId(id: String?): Boolean = id != null && id.startsWith(NEW_CHAT_PREFIX)
 

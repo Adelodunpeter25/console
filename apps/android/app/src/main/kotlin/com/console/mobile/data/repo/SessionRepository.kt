@@ -111,8 +111,8 @@ class SessionRepository(
 
     fun discardNewChat(id: String) {
         if (!com.console.mobile.core.chat.isNewChatId(id)) return
+        // The composer text stays in chats so it persists and returns on the next new chat.
         sessions.removeView(id)
-        chats.remove(id)
     }
 
     /** Create the real session from a new chat's picks, move its composer over, and return the new id. */
@@ -144,6 +144,7 @@ class SessionRepository(
                 it.copy(input = draft.input, attachments = draft.attachments, draftUpdatedAt = draft.draftUpdatedAt)
             }
             discardNewChat(draftId)
+            chats.remove(draftId)
         }
         return created.id
     }

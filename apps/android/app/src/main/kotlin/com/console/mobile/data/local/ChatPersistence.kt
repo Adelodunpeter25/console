@@ -147,7 +147,7 @@ class ChatPersistence(
 
     private fun buildPersistedPayload(sessions: Map<String, ChatSessionState>): PersistedChatPayload {
         val filtered = sessions.entries
-            .filter { (id, s) -> !com.console.mobile.core.chat.isNewChatId(id) && hasDraft(s.input, s.attachments) }
+            .filter { (_, s) -> hasDraft(s.input, s.attachments) }
             .sortedByDescending { (_, s) -> s.draftUpdatedAt ?: 0L }
             .take(MAX_PERSISTED_SESSIONS)
             .associate { (id, s) ->
