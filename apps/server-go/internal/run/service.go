@@ -79,6 +79,7 @@ type Service struct {
 	mcp        *mcp.Manager
 	prompts    promptCache
 	groups     toolGroups
+	lazyLoaded toolGroups
 	// cuaManager owns the computer-use driver runtime (nil-safe when the
 	// library is absent: runs simply never activate computer use).
 	cuaManager *cua.Manager

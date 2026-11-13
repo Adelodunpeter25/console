@@ -490,28 +490,24 @@ The Factory article reinforces several principles for this plan:
   codemode requirements. Bounded autonomy and model-specific tuning are also
   later validation work.
 
-### Task 4.4: `lazy_tools`: load rarely used tools on demand
+### Task 4.4: `lazy_tools`: load rarely used tools on demand — **done (2026-11-13), behind `CONSOLE_HARNESS_LAZY_TOOLS=1` (default off)**
 - **Always sent:** `read_file`, `list_dir`, `glob`, `grep`, `editFile`,
-  `write_file`, `bash`, `todo`, `ask` (models call it even when it's
-  missing), `subagent`, `readSkill`.
-- **Loaded when needed:** `webSearch`, `webFetch`, `bashJob`, `askMany`,
-  `memory`, `batchWrite`.
-- **Revised 2026-11-13:** a `loadTools` tool already exists for MCP servers
-  (`internal/services/mcp/adapter.go`, wired in `internal/run/tool_groups.go`
-  and `internal/run/turns.go`) with the right semantics: append-only into the
-  tool list, group descriptions, `OnLoad` tracking. This task **extends that
-  existing loader to built-in tools** instead of building a new one — keep
-  the same append-at-the-end behavior so the earlier tool prefix stays
-  cached. Status notes (for example, "firecrawl key missing") go on the
-  deferred-tools list line.
-- `bashJob` exception: when `bash` starts a background job, load `bashJob`
-  automatically, so the model never calls a tool it can't see.
-- **Files:** `internal/run/turns.go` (tool list),
-  `internal/services/mcp/adapter.go` (generalize `loadTools` beyond MCP),
-  `internal/agent/loop/loop.go` (tool list can change during a run).
-- **Watch:** calls to unknown tools (count them in Task 1.3), turns, and
-  cost. Try 2 configurations (the list above, and the list above with
-  `webFetch` always sent).
+  `write_file`, `bash`, `todo`, `ask`, `subagent`, `readSkill`.
+- **Held back:** `webSearch`, `webFetch`, `bashJob`, `askMany`, `memory`,
+  `batchWrite`.
+- **What landed** (`internal/run/lazy_tools.go`, wired in `turns.go`): one
+  combined `loadTools` tool — `names` loads deferred built-ins, `group`
+  delegates to the standard MCP loader (the registry can't hold two tools
+  with the same name, so MCP's own loadTools is not added under the flag).
+  Loads append at the end of the tool list; the cached prefix never changes.
+  Loads persist per session (`s.lazyLoaded`, mirroring the MCP group
+  restore) and subagents get their own combined loader. The setup message
+  lists the deferred tools. `bashJob` auto-load: a bash tool wrapper loads
+  it the moment a job starts (background=true) or a foreground command is
+  promoted at timeout. Tests: `tests/agent/lazy_tools_test.go`.
+- **Validate:** bench A/B against baseline-v2 before flipping the default.
+  Watch calls to unknown tools, turns, and cost. Try a second configuration
+  with `webFetch` always sent.
 
 ### Task 4.5: `compaction_v2`
 - Before compacting, save the full history to

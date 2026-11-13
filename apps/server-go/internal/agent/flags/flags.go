@@ -18,12 +18,18 @@ type Flags struct {
 	// and the last line (~11% smaller reads). Default off: the A/B halved
 	// read output but doubled editFile failures, for flat cost.
 	SparseLineNumbers bool
+	// LazyTools holds six rarely used built-in tools (webSearch, webFetch,
+	// bashJob, askMany, memory, batchWrite) back from the request and loads
+	// them on demand through loadTools. Default off until a bench A/B shows
+	// no drop in success at lower cost.
+	LazyTools bool
 }
 
 // FromEnv builds Flags from CONSOLE_HARNESS_* environment variables. getenv
 // is injectable so tests and the bench can drive it directly.
 func FromEnv(getenv func(string) string) Flags {
 	return Flags{
-		SparseLineNumbers: getenv(HarnessEnvPrefix + "SPARSE_LINE_NUMBERS") == "1",
+		SparseLineNumbers: getenv(HarnessEnvPrefix+"SPARSE_LINE_NUMBERS") == "1",
+		LazyTools:         getenv(HarnessEnvPrefix+"LAZY_TOOLS") == "1",
 	}
 }
