@@ -33,7 +33,7 @@ func formatJobSnapshot(s terminal.BashJobSnapshot) string {
 		lines = append(lines, fmt.Sprintf("Exit code: %d", *s.ExitCode))
 	}
 	if s.TimedOut {
-		lines = append(lines, fmt.Sprintf("Timed out: true (max %dms)", terminal.BashJobMaxTimeoutMs))
+		lines = append(lines, "Timed out: true (hit the timeoutMs cap set at start)")
 	}
 	if s.Aborted {
 		lines = append(lines, "Killed: true")

@@ -4,6 +4,7 @@
 package terminal
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -17,12 +18,10 @@ import (
 )
 
 const (
-	BashJobDefaultTimeoutMs = 10 * 60 * 1000
-	BashJobMaxTimeoutMs     = 20 * 60 * 1000
-	bashJobMaxOutputChars   = 256 * 1024
-	bashJobMaxRunning       = 10
-	bashJobMaxRetained      = 50
-	bashJobRetention        = 30 * time.Minute
+	bashJobMaxOutputChars = 256 * 1024
+	bashJobMaxRunning     = 10
+	bashJobMaxRetained    = 50
+	bashJobRetention      = 30 * time.Minute
 )
 
 type BashJobStatus string
@@ -79,12 +78,12 @@ type bashJobRecord struct {
 	// reconstructs the dropped prefix of its stream.
 	stdoutSpill, stderrSpill string
 	stdoutDone, stderrDone   bool
-	exited                       bool
-	rawExit                      int
-	timer                        *time.Timer
-	retentionTimer               *time.Timer
-	ownerSessionID               string
-	workManager                  *background.Manager
+	exited                   bool
+	rawExit                  int
+	timer                    *time.Timer
+	retentionTimer           *time.Timer
+	ownerSessionID           string
+	workManager              *background.Manager
 	// changed is closed and replaced whenever output arrives or the status
 	// moves, so any number of stream watchers can wait for the next change.
 	changed chan struct{}
@@ -127,21 +126,26 @@ func (m *BashJobManager) runningCount() int {
 
 // StartBashJobOptions configures one background job.
 type StartBashJobOptions struct {
-	Command        string
-	Cwd            string
-	Env            []string
+	Command string
+	Cwd     string
+	Env     []string
+	// TimeoutMs caps the job's lifetime; 0 means no limit.
 	TimeoutMs      int
 	OwnerSessionID string
 	WorkManager    *background.Manager
 	ParentRunID    string
 	ParentCallID   string
+	// Foreground starts the job silently: no background-work record and no
+	// completion notification until Promote is called, and it does not count
+	// toward the running-jobs limit.
+	Foreground bool
 }
 
 // Start launches command as a detached background job and returns its
 // snapshot immediately (the caller polls status/output/wait).
 func (m *BashJobManager) Start(opts StartBashJobOptions) (BashJobSnapshot, error) {
 	m.mu.Lock()
-	if m.runningCount() >= bashJobMaxRunning {
+	if !opts.Foreground && m.runningCount() >= bashJobMaxRunning {
 		m.mu.Unlock()
 		return BashJobSnapshot{}, fmt.Errorf("Too many running background jobs (max %d). Kill a job with bashJob action=\"kill\" first.", bashJobMaxRunning)
 	}
@@ -182,15 +186,11 @@ func (m *BashJobManager) Start(opts StartBashJobOptions) (BashJobSnapshot, error
 		return BashJobSnapshot{}, fmt.Errorf("Failed to start background job: %v", err)
 	}
 
-	timeoutMs := opts.TimeoutMs
-	if timeoutMs <= 0 {
-		timeoutMs = BashJobDefaultTimeoutMs
-	}
 	ownerSessionID := opts.OwnerSessionID
 	if ownerSessionID == "" {
 		ownerSessionID = "default"
 	}
-	if opts.WorkManager == nil {
+	if opts.WorkManager == nil && !opts.Foreground {
 		m.mu.Lock()
 		opts.WorkManager = m.work
 		m.mu.Unlock()
@@ -224,12 +224,98 @@ func (m *BashJobManager) Start(opts StartBashJobOptions) (BashJobSnapshot, error
 		_ = opts.WorkManager.SetCancel(rec.WorkID, func() { m.killRecord(rec) })
 	}
 
-	rec.timer = time.AfterFunc(time.Duration(timeoutMs)*time.Millisecond, func() { m.expire(rec) })
+	if opts.TimeoutMs > 0 {
+		rec.timer = time.AfterFunc(time.Duration(opts.TimeoutMs)*time.Millisecond, func() { m.expire(rec) })
+	}
 	go m.drain(rec, stdout, "stdout")
 	go m.drain(rec, stderr, "stderr")
 	go m.trackExit(rec)
 
 	return rec.snapshot(), nil
+}
+
+// WaitSettled blocks until the job leaves the running state, wait elapses, or
+// ctx is done, and returns the latest snapshot.
+func (m *BashJobManager) WaitSettled(ctx context.Context, jobID, ownerSessionID string, wait time.Duration) (BashJobSnapshot, error) {
+	rec, err := m.getOwned(jobID, ownerSessionID)
+	if err != nil {
+		return BashJobSnapshot{}, err
+	}
+	deadline := time.NewTimer(wait)
+	defer deadline.Stop()
+	for {
+		rec.mu.Lock()
+		snap, changed := rec.snapshotLocked(), rec.changed
+		rec.mu.Unlock()
+		if snap.Status != BashJobRunning {
+			return snap, nil
+		}
+		select {
+		case <-changed:
+		case <-deadline.C:
+			return snap, nil
+		case <-ctx.Done():
+			return snap, ctx.Err()
+		}
+	}
+}
+
+// Promote turns a still-running foreground job into a normal background job
+// by registering its background-work record, so its completion is announced.
+// It returns false when the job already settled and nothing was registered.
+func (m *BashJobManager) Promote(jobID, ownerSessionID, parentRunID, parentCallID string) (BashJobSnapshot, bool, error) {
+	rec, err := m.getOwned(jobID, ownerSessionID)
+	if err != nil {
+		return BashJobSnapshot{}, false, err
+	}
+	m.mu.Lock()
+	work := m.work
+	m.mu.Unlock()
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if rec.Status != BashJobRunning {
+		return rec.snapshotLocked(), false, nil
+	}
+	if work != nil {
+		w, err := work.Register(background.Options{
+			SessionID: rec.ownerSessionID, ParentRunID: parentRunID, ParentCallID: parentCallID,
+			Kind: background.KindShell, Metadata: map[string]string{"job_id": rec.JobID, "command": rec.Command},
+		})
+		if err != nil {
+			return rec.snapshotLocked(), false, err
+		}
+		rec.WorkID = w.ID
+		rec.workManager = work
+		_ = work.SetCancel(w.ID, func() { m.killRecord(rec) })
+	}
+	return rec.snapshotLocked(), true, nil
+}
+
+// BashJobResult is the full buffered output of a settled job.
+type BashJobResult struct {
+	Snapshot      BashJobSnapshot
+	Stdout        string
+	Stderr        string
+	StdoutDropped int
+	StderrDropped int
+}
+
+// Collect returns a settled job's buffered output and removes the job. It is
+// for foreground runs, whose result is returned inline instead of retained.
+func (m *BashJobManager) Collect(jobID, ownerSessionID string) (BashJobResult, error) {
+	rec, err := m.getOwned(jobID, ownerSessionID)
+	if err != nil {
+		return BashJobResult{}, err
+	}
+	rec.mu.Lock()
+	res := BashJobResult{
+		Snapshot: rec.snapshotLocked(), Stdout: rec.stdout.String(), Stderr: rec.stderr.String(),
+		StdoutDropped: rec.stdoutDropped, StderrDropped: rec.stderrDropped,
+	}
+	rec.mu.Unlock()
+	m.delete(jobID)
+	return res, nil
 }
 
 func (m *BashJobManager) drain(rec *bashJobRecord, r interface{ Read([]byte) (int, error) }, stream string) {
