@@ -231,8 +231,11 @@ func (s *DeviceService) Screenshot(ctx context.Context, platform, id string) ([]
 
 // OpenStream attaches a viewer to a booted device. Call before the
 // websocket upgrade so failures can still be plain HTTP errors.
-func (s *DeviceService) OpenStream(ctx context.Context, platform, id string) (*sdk.Stream, error) {
-	return s.client.Stream(ctx, platform, id)
+//
+// quality only applies when this viewer starts the device session; later
+// viewers join the running one as-is.
+func (s *DeviceService) OpenStream(ctx context.Context, platform, id string, quality sdk.StreamQuality) (*sdk.Stream, error) {
+	return s.client.StreamWith(ctx, platform, id, quality)
 }
 
 // StreamConn is the slice of a websocket the pump needs. Writes happen

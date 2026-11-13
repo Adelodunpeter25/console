@@ -2,6 +2,10 @@ github.com/Adelodunpeter25/iroh-go v0.0.0-20261107173249-9605c02ec0fb h1:irLhikT
 github.com/Adelodunpeter25/iroh-go v0.0.0-20261107173249-9605c02ec0fb/go.mod h1:+ul6B3sMRtSAgZrjqHXg6ZLdNWwhYstLT2MUF7Kh8Bc=
 github.com/Adelodunpeter25/sim-go v0.0.0-20261105211509-ebadf911bb73 h1:MMs4dBDfLY0UUoVkPSF0P6q6h5PRe4xCp/K5caoSFQw=
 github.com/Adelodunpeter25/sim-go v0.0.0-20261105211509-ebadf911bb73/go.mod h1:FDOXO4efJHkjCcl+arWTrk7DxTfXc3qNd6hSTPXeCf0=
+github.com/Adelodunpeter25/sim-go v0.0.0-20261113114501-1eca961a9333 h1:Z+LDxIdwXQp2sLSdge4eOzfPY5VbCeAZQI5IjrMfYsE=
+github.com/Adelodunpeter25/sim-go v0.0.0-20261113114501-1eca961a9333/go.mod h1:FDOXO4efJHkjCcl+arWTrk7DxTfXc3qNd6hSTPXeCf0=
+github.com/Adelodunpeter25/sim-go v0.0.0-20261113114546-188c1b2af066 h1:lEjQyL0a6eiwlXY2M2eRJYrx8uXNN+5+TY3hryo6IQk=
+github.com/Adelodunpeter25/sim-go v0.0.0-20261113114546-188c1b2af066/go.mod h1:FDOXO4efJHkjCcl+arWTrk7DxTfXc3qNd6hSTPXeCf0=
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/MoeForge/moego v0.1.0-alpha.1 h1:d+asBZu+2oKnBj1kzdvdANMStbIKw9BLCpknuWjiR28=

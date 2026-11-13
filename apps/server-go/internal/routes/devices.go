@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/Adelodunpeter25/sim-go/sdk"
 	"github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v2"
 
@@ -133,7 +134,7 @@ func registerDeviceRoutes(app *fiber.App, svc *services.DeviceService) {
 
 	h.Get("/:id/stream", func(c *fiber.Ctx) error {
 		// Attach before upgrading so not-booted / bad platform stay HTTP errors.
-		st, err := svc.OpenStream(c.Context(), c.Query("platform"), c.Params("id"))
+		st, err := svc.OpenStream(c.Context(), c.Query("platform"), c.Params("id"), sdk.ParseQuality(func(k string) string { return c.Query(k) }))
 		if err != nil {
 			return deviceFail(c, err)
 		}
