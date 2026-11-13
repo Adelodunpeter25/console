@@ -128,6 +128,7 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 				hub.Close(OutcomeDone)
 				if runErr == nil {
 					s.notifyDone(sessionID)
+					s.startSuggestions(sessionID, currentProviderID, suggestionModelID(s, sessionID, current), pins)
 					// A prompt queued after nextTurn looked but before the slot was
 					// released would never be drained: nothing is running to drain it.
 					if _, err := s.startStagedIfIdle(sessionID); err != nil {
@@ -724,4 +725,16 @@ func systemSections(sections []systemprompt.Section) []loop.NamedText {
 		out[i] = loop.NamedText{Name: section.Name, Content: section.Content}
 	}
 	return out
+}
+
+// suggestionModelID is the model the last turn ran on: the prompt's own
+// choice, else the session's.
+func suggestionModelID(s *Service, sessionID string, last Prompt) string {
+	if last.ModelID != "" {
+		return last.ModelID
+	}
+	if header, err := s.sessions.Header(sessionID); err == nil && header != nil {
+		return header.ModelID
+	}
+	return ""
 }

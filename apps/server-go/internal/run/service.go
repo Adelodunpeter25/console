@@ -97,6 +97,8 @@ type Service struct {
 	// recorded, since by then the tool has already written the file. Dropped
 	// when the run settles.
 	snapshots *writeSnapshots
+	// suggestCancel aborts a session's in-flight suggestion generation.
+	suggestCancel map[string]context.CancelFunc
 	// Lookup resolves a provider id to a backend (overridable in tests).
 	Lookup func(id string) (loop.Provider, error)
 	// WatchdogTimeout overrides defaultWatchdogTimeout. Zero uses the
@@ -329,6 +331,7 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	// The send itself is the un-settle: it happens before the run starts, so
 	// the event stream that follows already reflects the chat as active.
 	s.unsettleOnSend(sessionID)
+	s.cancelSuggestions(sessionID)
 	// Fail fast on an unknown provider before streaming starts. The
 	// validated instance is reused for the first turn; later turns
 	// re-resolve only when the staged prompt switches provider.
