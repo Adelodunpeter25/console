@@ -99,7 +99,8 @@ class DeviceRepository(
         val token = apiClient.authToken?.takeIf { it.isNotBlank() }
             ?.let { "&token=" + URLEncoder.encode(it, "UTF-8") }
             .orEmpty()
-        return "$wsBase/api/devices/$encId/stream?platform=$encPlat$token"
+        // Phone screens and mobile links: 720px at 3 Mbps is plenty.
+        return "$wsBase/api/devices/$encId/stream?platform=$encPlat&max_size=720&bitrate=3000000$token"
     }
 
     val serverBaseUrl: String
