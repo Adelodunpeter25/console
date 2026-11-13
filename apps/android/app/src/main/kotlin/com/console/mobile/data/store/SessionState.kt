@@ -20,6 +20,8 @@ data class SessionViewState(
     val projectId: String? = null,
     // A new chat that will start in a fresh worktree once its first message creates the session.
     val worktreePending: Boolean = false,
+    // Branch the pending worktree is cut from; null lets the server use the repo default.
+    val worktreeBase: String? = null,
 )
 
 val EMPTY_SESSION_VIEW = SessionViewState()

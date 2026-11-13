@@ -116,6 +116,7 @@ class SessionRepository(
                 approvalMode = saved?.approvalMode ?: ApprovalMode.PlanMode.value,
                 thinkingLevel = saved?.thinkingLevel,
                 worktreePending = saved?.worktreePending == true,
+                worktreeBase = saved?.worktreeBase,
                 worktreeBranch = if (saved?.worktreePending == true) "New worktree" else null,
                 projectId = projectId ?: saved?.projectId,
             ),
@@ -142,7 +143,7 @@ class SessionRepository(
                     title = "New Chat",
                     approvalMode = view.approvalMode,
                     thinkingLevel = view.thinkingLevel,
-                    worktree = if (view.worktreePending) com.console.mobile.data.model.CreateWorktreeDto() else null,
+                    worktree = if (view.worktreePending) com.console.mobile.data.model.CreateWorktreeDto(baseBranch = view.worktreeBase) else null,
                 ),
             )
         }
@@ -191,6 +192,19 @@ class SessionRepository(
         saveNewChatOptions(next)
     }
 
+    fun setNewChatWorktreeBase(id: String, base: String?) {
+        val next = sessions.getView(id).copy(worktreeBase = base)
+        sessions.setView(id, next)
+        saveNewChatOptions(next)
+    }
+
+    /** Back to working in the project folder: drops the pending worktree and its base. */
+    fun clearNewChatWorktree(id: String) {
+        val next = sessions.getView(id).copy(worktreePending = false, worktreeBase = null, worktreeBranch = null)
+        sessions.setView(id, next)
+        saveNewChatOptions(next)
+    }
+
     private fun saveNewChatOptions(v: SessionViewState) {
         persistence?.saveNewChatOptions(
             com.console.mobile.data.local.PersistedNewChatOptions(
@@ -199,6 +213,7 @@ class SessionRepository(
                 approvalMode = v.approvalMode,
                 thinkingLevel = v.thinkingLevel,
                 worktreePending = v.worktreePending,
+                worktreeBase = v.worktreeBase,
                 projectId = v.projectId,
                 cwd = v.sessionCwd,
             ),

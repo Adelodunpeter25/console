@@ -38,6 +38,7 @@ data class PersistedNewChatOptions(
     val approvalMode: String? = null,
     val thinkingLevel: String? = null,
     val worktreePending: Boolean = false,
+    val worktreeBase: String? = null,
     val projectId: String? = null,
     val cwd: String? = null,
 )

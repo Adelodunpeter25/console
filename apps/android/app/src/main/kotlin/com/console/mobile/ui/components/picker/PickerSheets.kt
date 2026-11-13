@@ -427,9 +427,12 @@ fun BranchPickerSheet(
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit,
     onNewWorktree: () -> Unit,
+    title: String = "Branch",
+    /** Highlights this branch instead of the checked-out one. */
+    selectedName: String? = null,
 ) {
     // The branch list scrolls itself, so the sheet must not also scroll.
-    BaseSheet(onDismiss = onDismiss, title = "Branch", scrollable = false) {
+    BaseSheet(onDismiss = onDismiss, title = title, scrollable = false) {
         if (locked && !lockedReason.isNullOrBlank()) {
             Text(lockedReason, color = NewTheme.TextMuted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
         }
@@ -454,7 +457,7 @@ fun BranchPickerSheet(
                     itemsIndexed(branches, key = { _, b -> b.name }) { index, b ->
                         OptionRow(
                             title = b.name,
-                            selected = b.current,
+                            selected = if (selectedName != null) b.name == selectedName else b.current,
                             trailing = if (switchingTo == b.name) {
                                 { CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(18.dp)) }
                             } else null,

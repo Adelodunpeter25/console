@@ -41,7 +41,8 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
     val projects = projectState.projects
     var projectSheet by remember { mutableStateOf(false) }
     var branchSheet by remember { mutableStateOf(false) }
-    HoldComposerOpen(projectSheet || branchSheet)
+    var baseSheet by remember { mutableStateOf(false) }
+    HoldComposerOpen(projectSheet || branchSheet || baseSheet)
 
     val selectedProject = projectForSession(projects, view?.projectId, cwd)
 
@@ -72,6 +73,7 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
     val worktreeBranch = view?.worktreeBranch
     val currentBranch = worktreeBranch ?: branches?.firstOrNull { it.current }?.name
     val hasMessages = projectLocked
+    val worktreePending = view?.worktreePending == true
 
     LazyRow(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
         item {
@@ -88,9 +90,20 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
         }
         if (isRepo == true && currentBranch != null) {
             item {
-                PickerChip(icon = TablerIcons.Outline.GitBranch, label = currentBranch) {
+                PickerChip(icon = TablerIcons.Outline.GitBranch, label = currentBranch, modifier = Modifier.padding(end = 8.dp)) {
                     reloadTick++
                     branchSheet = true
+                }
+            }
+            if (worktreePending) {
+                item {
+                    PickerChip(
+                        icon = TablerIcons.Outline.GitBranch,
+                        label = "From ${view?.worktreeBase ?: "default branch"}",
+                    ) {
+                        reloadTick++
+                        baseSheet = true
+                    }
                 }
             }
         }
@@ -132,6 +145,24 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
             },
         )
     }
+    if (baseSheet) {
+        BranchPickerSheet(
+            branches = branches,
+            loading = loadingBranches,
+            locked = false,
+            lockedReason = null,
+            canStartWorktree = false,
+            worktreeBranch = null,
+            title = "Start from",
+            selectedName = view?.worktreeBase ?: "",
+            onDismiss = { baseSheet = false },
+            onSelect = { name ->
+                baseSheet = false
+                AppContainer.sessionRepository.setNewChatWorktreeBase(sessionId, name)
+            },
+            onNewWorktree = {},
+        )
+    }
     if (branchSheet && cwd != null) {
         // A worktree chat is pinned to its own branch, and a run in flight would
         // only pick a change up on the next turn — neither can be switched here.
@@ -147,7 +178,8 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
             locked = reason != null,
             lockedReason = reason,
             canStartWorktree = !hasMessages,
-            worktreeBranch = worktreeBranch,
+            worktreeBranch = if (worktreePending) null else worktreeBranch,
+            selectedName = if (worktreePending) "" else null,
             switchingTo = switchingTo,
             error = switchError,
             onDismiss = {
@@ -155,6 +187,14 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
                 switchError = null
             },
             onSelect = { name ->
+                if (worktreePending) {
+                    // Picking a branch leaves the "new worktree" plan: work in the project folder.
+                    AppContainer.sessionRepository.clearNewChatWorktree(sessionId)
+                    if (branches?.firstOrNull { it.current }?.name == name) {
+                        branchSheet = false
+                        return@BranchPickerSheet
+                    }
+                }
                 if (switchingTo == null && name != currentBranch) {
                     switchError = null
                     switchingTo = name
