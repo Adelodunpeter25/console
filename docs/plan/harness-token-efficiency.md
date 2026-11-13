@@ -49,15 +49,15 @@ size, not as targets.
 | Area | Where | Finding |
 |---|---|---|
 | Prompt assembly | `internal/agent/systemprompt/builder.go`, called from `internal/run/turns.go` | Was one flat string. Tasks 2.1/2.2 split it into a stable `StableSystem` and a per-session `Setup` sent as a leading user message, so volatile values (date, branch, tree, model) no longer sit in the cached system prefix. |
-| Tool inventory | `renderTools` | Repeats the tool names that are already in the tool schemas. Pure duplication. |
+| Tool inventory | **removed (2026-11-13)** | The `renderTools` name list duplicated the tool schemas; it is gone from the stable prompt. |
 | Emphasis | `renderContextFiles`, `renderWorkstation` | "You MUST follow…", "Do not waste tools…", `<critical>` "MUST advance the task". |
-| Workspace tree | `workspacetree.go` | Depth-limited tree on every request, even though `glob`/`list_dir` exist. |
+| Workspace tree | **removed (2026-11-13)** | The tree section and `workspacetree.go` are gone; the model discovers structure with `glob`/`list_dir`. Watch turns on the next bench run. |
 | Claude cache | `internal/providers/claude/convert.go` (last message, last tool), `stream.go` (stable system block) | Breakpoints on the stable system block, the last tool, and the last message. The setup user message still has **no** breakpoint (Task 2.3). |
 | OpenCode cache | `internal/providers/opencode/stream.go` | Responses path sends `prompt_cache_key`. **The Chat path (`runChat`) sends no cache key.** |
 | Usage telemetry | `loop.TurnUsage` (`internal/agent/loop/message.go`), each provider's `NormalizeUsage` | Per-turn input, cache read/write and output are recorded on the assistant message, and Phase 1 added per-run totals and a breakdown; per-tool cost share is still partial. |
 | File reads | `internal/agent/tools/file_tools.go` | Task 3.0 capped default reads at 300 lines; every kept line is still numbered (`%*d: `). |
-| Bash output | `internal/agent/tools/bash_tools.go` | Still keeps the first 50 KB and drops the rest. Errors usually show up at the **end**, which is the part that gets thrown away. |
-| Firecrawl / webFetch | `internal/agent/tools/firecrawl.go`, `web_fetch_tool.go` | Also cut off the head without saving the rest. |
+| Bash output | `internal/agent/tools/bash_tools.go` | Task 3.1 (2026-11-13): over the 50 KB cap the full output is spilled to a file and the **tail** is shown. `bashJob` pages still head-truncate. |
+| Firecrawl / webFetch | `internal/agent/tools/firecrawl.go`, `web_fetch_tool.go` | Task 3.1 (2026-11-13): webFetch spills bodies over 512 KB (reads up to 5 MB) and keeps the head; Firecrawl scrape spills markdown over 25 KB. |
 | Tools shipped | `internal/agent/tools` + memory | 17 tools with full schemas on every request (`webSearch`, `webFetch`, `bashJob`, `askMany`, `memory`, `batchWrite` are rarely used). |
 | Compaction | `internal/agent/compaction/llm.go` | Summary prompt is already short. The full history isn't saved anywhere the agent can search. |
 | Subagent | `internal/agent/loop/subagent.go` | Adds a fixed preamble to the parent's **whole** system prompt (tree included). Returns the child's entire streamed text as its "summary". |
@@ -356,9 +356,17 @@ results (26.7%) are handled before bash output (9.2%).
   per task, and the `read_file` share. If turns go up a lot, raise the cap.
 - **Test:** `tests/tools/read_file_test.go`.
 
-### Task 3.1: Save large output to a file instead of cutting it off
+### Task 3.1: Save large output to a file instead of cutting it off — **done (2026-11-13)**
 - **Files:** `internal/agent/tools/bash_tools.go`,
-  new `internal/agent/tools/spill.go`.
+  `internal/agent/tools/spill.go` (new), `web_fetch_tool.go`, `firecrawl.go`.
+- **What landed:** output over the cap is written to
+  `<tmp>/console-tool-output/<session>/...` and the result keeps the **tail**
+  (50 KB) with a "full output saved to <path>" notice; webFetch keeps the
+  **head** (512 KB of a 5 MB read) and spills the rest; Firecrawl scrape
+  spills full markdown over 25 KB. Secrets are redacted before spilling.
+  Tests: `tests/tools/spill_test.go`.
+- **Validate:** one bench run against the baseline. Watch success rate, turns
+  per task, and the `bash`/`read_file` shares.
 - **Change:** when stdout or stderr is over the limit (keep 50 KB for now,
   and consider lowering it to about 16 KB after measuring), write the full
   stream to `<session-tmp>/tool-output/<callID>.<stdout|stderr>.log`, and
@@ -370,8 +378,7 @@ results (26.7%) are handled before bash output (9.2%).
   ```
   The model can then `grep`, or use `read_file` with a line range, on the
   saved file. Keep the tail, not the head.
-- Do the same for `firecrawl.go` / `webFetch` and for `bashJob` output
-  pages.
+- Do the same for `bashJob` output pages (not done yet).
 - **Test:** `tests/tools/spill_test.go`. Check large output gives a file
   with the full contents, a tail, and the stated size; small output is
   unchanged.
@@ -411,7 +418,7 @@ Label every line: **keep / rewrite / delete / move**. Planned changes:
 | Line / section | Action | Reason |
 |---|---|---|
 | `defaultIdentity` | keep, tighten | Product identity. Drop "correctly and concisely" (asks for brevity). |
-| `# Tool inventory` list | **delete** | Repeats the tool schemas. |
+| `# Tool inventory` list | **deleted (2026-11-13)** | Repeated the tool schemas. |
 | "You MUST follow the context files below for all tasks:" | rewrite | → "Project rules from AGENTS.md and similar files:" |
 | "Context files above are loaded automatically. Do not waste tools grepping for AGENTS.md…" | rewrite | → "These files are already loaded." (a quirk we've seen, so keep it as a fact) |
 | `<critical>` "Each response MUST advance the task." | delete | Capable models do this already; emphasis. |
@@ -425,12 +432,14 @@ Label every line: **keep / rewrite / delete / move**. Planned changes:
 Also audit `SYSTEM.md` handling and the subagent preamble in the same pass.
 **Measure:** static tokens per request, success, turns.
 
-### Task 4.2: `no_workspace_tree`
-- Skip the workspace tree (`SkipWorkspaceTree` already exists; connect it to
-  the flag). Keep OS, git branch and repo status (dirty/clean, as one line).
-- **Watch:** turns per task and `list_dir`/`glob` calls on the
-  code-question tasks. Kill the flag if turns go up enough to cancel out the
-  savings.
+### Task 4.2: `no_workspace_tree` — **done (2026-11-13), tree removed outright**
+- The workspace tree section was removed from the prompt (and
+  `workspacetree.go` deleted) instead of being flag-gated: the model has
+  `list_dir`/`glob` for discovery. Workstation info (OS, git branch, cwd)
+  stays.
+- **Watch:** turns per task and `list_dir`/`glob` calls on the code-question
+  tasks in the next bench run. If turns go up enough to cancel out the
+  savings, restore a minimal one-line directory hint instead of the tree.
 
 ### Task 4.3: `sparse_line_numbers`
 - `read_file` numbers only line 1, every line that's a multiple of 10, and
@@ -592,14 +601,15 @@ Tasks 2.1 (stable/setup split) and 2.2 (setup as leading user message) are
 
 Suggested order, ranked against the baseline-v2 token shares:
 
-1. **Task 3.1 spill** (`read_file` 22.7–26.5% of tokens; bash still
-   head-truncates at 50 KB, so error tails are lost). Direct change, no
-   flag, low quality risk.
-2. **Task 4.4 lazy_tools** (tool definitions ~32% of tokens — the biggest
+1. **Task 4.4 lazy_tools** (tool definitions ~32% of tokens — the biggest
    single lever). Extend the existing MCP `loadTools` to built-in tools,
    behind a flag.
-3. **Task 2.3 setup breakpoint.** Three breakpoints exist (last tool,
+2. **Task 2.3 setup breakpoint.** Three breakpoints exist (last tool,
    stable system block, last message); the setup message has none.
+3. **Bench validation run** for the 2026-11-13 batch (tool inventory
+   removed, workspace tree removed, output spill) against
+   `bench/results/baseline-v2.json` — watch success rate, turns, and
+   `list_dir`/`glob` call counts (tree removal).
 
 - Use `bench/results/baseline-v2.json` as the baseline (3 runs per task).
 - Build the `internal/agent/flags` package before the Phase 4 A/B work;
