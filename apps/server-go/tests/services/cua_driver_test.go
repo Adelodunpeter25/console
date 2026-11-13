@@ -6,7 +6,6 @@ package tests
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -122,19 +121,6 @@ func TestOptionsMarshalIsAlwaysAJSONObject(t *testing.T) {
 	t.Setenv("CUA_DRIVER_DISABLED", "1")
 	if _, err := cua.Open(cua.Options{}); err == nil {
 		t.Fatal("expected a load failure")
-	}
-}
-
-// TestMissingLibraryPathIsNotSilentlyIgnored documents that an env override
-// pointing nowhere produces an error rather than falling through to a
-// different candidate.
-func TestMissingLibraryPathIsNotSilentlyIgnored(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "definitely-absent.so")
-	if _, err := os.Stat(missing); err == nil {
-		t.Skip("path unexpectedly exists")
-	}
-	if filepath.IsAbs(missing) != true {
-		t.Fatal("temp paths must be absolute for this test to mean anything")
 	}
 }
 

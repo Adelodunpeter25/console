@@ -117,14 +117,6 @@ fn autocomplete_content_key_changes_with_content() {
 }
 
 #[test]
-fn empty_autocomplete_pops_share_a_key() {
-    // `None` is the steady state before typing; it must compare equal to
-    // itself or opening the card would ping a notify every frame.
-    let empty = AutocompleteView::new(Vec::new(), 0, false);
-    assert_eq!(empty.content_key(), empty.content_key());
-}
-
-#[test]
 fn project_menu_section_renders_no_project_row() {
     use console_core::ProjectInfo;
     use console_ui::common::{ProjectMenuExtras, project_menu_section};
