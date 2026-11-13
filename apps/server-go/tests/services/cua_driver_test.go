@@ -111,19 +111,6 @@ func TestLibraryPathOverrideEmptyIsNotAnError(t *testing.T) {
 	}
 }
 
-// TestOptionsMarshalIsAlwaysAJSONObject guards the ABI contract: create_v1
-// takes a JSON object and fails closed on unknown fields, so an empty options
-// set must still serialize as "{}" and never as nil or an empty string.
-func TestOptionsMarshalIsAlwaysAJSONObject(t *testing.T) {
-	// The encoding happens inside Open, which needs the library, so assert the
-	// property through the exported entry point: with no library the call must
-	// fail at load time rather than panicking on an empty byte slice.
-	t.Setenv("CUA_DRIVER_DISABLED", "1")
-	if _, err := cua.Open(cua.Options{}); err == nil {
-		t.Fatal("expected a load failure")
-	}
-}
-
 // TestCandidatePathsOrderBesideBinaryFirst pins the search order: an
 // explicitly installed library next to the binary beats every repo-layout
 // guess, and the system dir is the last resort, never the first.

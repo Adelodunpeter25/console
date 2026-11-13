@@ -140,10 +140,10 @@ func TestMcpListServesProtoRows(t *testing.T) {
 		t.Fatalf("rows: %+v", rows)
 	}
 	if rows[0].GetStatus() != "connected" || len(rows[0].GetTools()) == 0 {
-		t.Fatalf("live state missing: %+v", rows[0])
+		t.Fatalf("live state missing: status=%q tools=%d", rows[0].GetStatus(), len(rows[0].GetTools()))
 	}
 	if rows[0].GetEnv()["REGION"] != "eu" {
-		t.Fatalf("env must stay an object: %+v", rows[0])
+		t.Fatalf("env must stay an object: %v", rows[0].GetEnv())
 	}
 }
 

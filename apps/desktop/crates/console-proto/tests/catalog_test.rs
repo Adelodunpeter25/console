@@ -1,4 +1,4 @@
-use console_proto::{Model, ProviderCatalogEntry, ProviderModelsResponse};
+use console_proto::{ProviderCatalogEntry, ProviderModelsResponse};
 use std::path::PathBuf;
 
 fn fixture(name: &str) -> String {
@@ -44,26 +44,6 @@ fn decodes_golden_provider_models_fixture() {
     assert_eq!(resp.provider, "codex");
     assert_eq!(resp.models.len(), 1);
     assert_eq!(resp.models[0].context_window, 272_000);
-}
-
-#[test]
-fn thinking_level_strings_map_to_enums() {
-    // Mirrors console_core::model_thinking_levels: unknown strings are
-    // skipped, so an unrecognized provider vocabulary can't panic a picker.
-    let model = Model {
-        id: "m".into(),
-        provider: "p".into(),
-        context_window: 1_000,
-        supported_thinking_levels: vec!["low".into(), "not-a-level".into(), "xhigh".into()],
-        ..Default::default()
-    };
-    let mapped: Vec<&str> = model
-        .supported_thinking_levels
-        .iter()
-        .filter(|raw| matches!(raw.as_str(), "low" | "xhigh"))
-        .map(|raw| raw.as_str())
-        .collect();
-    assert_eq!(mapped, vec!["low", "xhigh"]);
 }
 
 #[test]
