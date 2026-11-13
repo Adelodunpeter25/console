@@ -461,6 +461,9 @@ impl ConsoleDesktopApp {
                 this.is_window_active = window.is_window_active();
                 if this.is_window_active {
                     crate::state::clear_all_notifications();
+                    // The chat in front of the user is seen the moment the
+                    // window returns, whatever finished while they were away.
+                    this.report_read_for_active_chat(cx);
                 }
                 cx.notify();
             }),

@@ -6,7 +6,7 @@
 
 use console_core::types::notification::{
     NOTIFICATION_THREAD_ID, NotificationDecision, badge_count, decide_notification,
-    dock_badge_label, normalize_notification_title, notification_ident,
+    dock_badge_label, needs_read_report, normalize_notification_title, notification_ident,
     parse_session_id_from_ident,
 };
 
@@ -127,4 +127,21 @@ fn badge_skips_running_settled_and_deleted_chats() {
     deleted.deleted_at = Some(1);
     let running = session("working", true);
     assert_eq!(badge_count(&[settled, deleted, running]), 0);
+}
+
+#[test]
+fn an_unread_or_attention_chat_needs_a_read_report() {
+    // The case that bit: a chat finished while the user was away, so it is
+    // unread even though it was already open in its pane.
+    assert!(needs_read_report(&session("done", true)));
+    assert!(needs_read_report(&session("needs_attention", false)));
+}
+
+#[test]
+fn a_read_chat_needs_no_report() {
+    // Returning to the window, or reopening a chat from a banner, must not
+    // send a request for a chat that is already read.
+    assert!(!needs_read_report(&session("done", false)));
+    assert!(!needs_read_report(&session("idle", false)));
+    assert!(!needs_read_report(&session("working", false)));
 }

@@ -1118,6 +1118,10 @@ impl ConsoleDesktopApp {
         self.open_chat_tab(id.clone(), title);
 
         if !is_different_project && prev_sid.as_deref() == Some(&id) {
+            // Already on screen, so nothing reloads. Opening it from a banner
+            // is the user looking at the result, so report the read here: the
+            // loader is what reports it for every other way of opening a chat.
+            self.report_session_read(&id, cx);
             cx.notify();
             return;
         }
@@ -1342,6 +1346,20 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// The window just came to the front: the chat in the active pane is now in
+    /// front of the user, so whatever finished while they were away is seen.
+    /// Reports a read for it. A no-op when the chat is already read.
+    pub(crate) fn report_read_for_active_chat(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self
+            .active_pane_id
+            .as_deref()
+            .and_then(|pane| self.active_session_for_pane(pane))
+        else {
+            return;
+        };
+        self.report_session_read(&session_id, cx);
+    }
+
     /// Tell the server this chat was shown, which clears its unread dot (and a
     /// lingering needs-attention) on every device. The local header is cleared
     /// first so the dot does not linger until the next list refresh, and the
@@ -1355,8 +1373,7 @@ impl ConsoleDesktopApp {
         else {
             return;
         };
-        let needs_report = session.unread || session.status == "needs_attention";
-        if !needs_report {
+        if !console_core::types::notification::needs_read_report(session) {
             return;
         }
         session.unread = false;

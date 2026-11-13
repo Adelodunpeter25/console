@@ -21,6 +21,14 @@ pub fn parse_session_id_from_ident(ident: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// Whether showing a chat needs a read report: it is unread, or it is flagged
+/// as needing attention (an errored run the user has now seen). A chat that is
+/// already read needs none, which is what keeps reopening a quiet chat, or
+/// returning to the window while on one, free of any request.
+pub fn needs_read_report(session: &crate::types::session::SessionHeader) -> bool {
+    session.unread || session.status == "needs_attention"
+}
+
 /// How many chats the Dock badge counts: the ones that finished unseen, plus
 /// the ones waiting on the user (a pending question, or an errored run not yet
 /// opened). Read from the session headers, so it survives a restart and agrees
