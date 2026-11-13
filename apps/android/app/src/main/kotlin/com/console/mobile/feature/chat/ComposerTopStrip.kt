@@ -173,7 +173,7 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
         // Starting a worktree is further limited to a chat with no messages yet.
         val reason = when {
             running -> "Locked while a run is active — a change would only apply to the next message."
-            worktreeBranch != null -> "This chat works in its own worktree branch."
+            worktreeBranch != null && !worktreePending -> "This chat works in its own worktree branch."
             else -> null
         }
         BranchPickerSheet(
