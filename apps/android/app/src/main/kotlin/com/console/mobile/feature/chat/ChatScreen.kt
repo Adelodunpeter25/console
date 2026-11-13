@@ -78,10 +78,15 @@ fun ChatScreen(
 
     var inspectingChange by remember { mutableStateOf<SessionFileChange?>(null) }
 
-    BackHandler {
+    val isNewChat = com.console.mobile.core.chat.isNewChatId(sessionId)
+    var sending by remember { mutableStateOf(false) }
+    fun leave() {
+        if (sessionId != null) AppContainer.sessionRepository.discardNewChat(sessionId)
         AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
         onBackToHome()
     }
+
+    BackHandler { leave() }
 
     if (sessionId == null) {
         Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
@@ -106,10 +111,12 @@ fun ChatScreen(
     DisposableEffect(sessionId) {
         onDispose { AppContainer.chatRepository.flushDraft(sessionId) }
     }
+    val titleFallback = "Generating title…"
 
     // Opening a chat is seeing it: clear its unread dot (and a seen needs-attention)
     // on every device. Skipped for a chat already read, so reopening costs nothing.
     LaunchedEffect(sessionId) {
+        if (isNewChat) return@LaunchedEffect
         AppContainer.sessionRepository.markSessionRead(sessionId)
     }
 
@@ -119,6 +126,7 @@ fun ChatScreen(
     // by the run's own activity time and would leave the chat unread.
     var wasRunning by remember(sessionId) { mutableStateOf(false) }
     LaunchedEffect(sessionId, chat.running) {
+        if (isNewChat) return@LaunchedEffect
         if (chat.running) {
             wasRunning = true
         } else if (wasRunning) {
@@ -130,6 +138,11 @@ fun ChatScreen(
 
     // Load detail + hydrate todos/subagents/changes on entry; attach to server run if working.
     LaunchedEffect(sessionId) {
+        if (isNewChat) {
+            sessionDetailLoaded = true
+            loadingMessages = false
+            return@LaunchedEffect
+        }
         val header = coroutineScope {
             val detail = async { AppContainer.sessionRepository.loadDetail(sessionId) }
             launch { AppContainer.chatRepository.loadDraft(sessionId) }
@@ -151,7 +164,7 @@ fun ChatScreen(
 
     // Refresh file changes and background work when an active run settles.
     LaunchedEffect(chat.running) {
-        if (!chat.running) {
+        if (!chat.running && !isNewChat) {
             AppContainer.sessionRepository.loadSessionChanges(sessionId)
             AppContainer.chatRepository.loadBackgroundWork(sessionId)
         }
@@ -160,6 +173,7 @@ fun ChatScreen(
     // A run can also start after entry — the desktop app, another device, or a
     // queued prompt — and the chat screen is where its output belongs.
     LaunchedEffect(sessionId) {
+        if (isNewChat) return@LaunchedEffect
         AppContainer.sessionStateHolder.statuses
             .map { it[sessionId] }
             .distinctUntilChanged()
@@ -211,7 +225,7 @@ fun ChatScreen(
     // A detached shell outlives its run, so no SSE stream is attached while it
     // keeps running. Poll only while shells are live to keep the chip honest.
     LaunchedEffect(sessionId, hasLiveShells) {
-        if (!hasLiveShells) return@LaunchedEffect
+        if (!hasLiveShells || isNewChat) return@LaunchedEffect
         while (isActive) {
             delay(5_000)
             AppContainer.chatRepository.loadBackgroundWork(sessionId)
@@ -220,7 +234,11 @@ fun ChatScreen(
 
     val chatTitle = remember(sessionId, messages, projectState.sessions) {
         val header = projectState.sessions.firstOrNull { it.id == sessionId }
-        header?.title?.ifBlank { "Chat" } ?: "Chat"
+        when {
+            isNewChat -> "New chat"
+            header != null && header.message_count != 0 && com.console.mobile.core.chat.isGenericTitle(header.title) -> titleFallback
+            else -> header?.title?.ifBlank { "Chat" } ?: "Chat"
+        }
     }
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -332,10 +350,7 @@ fun ChatScreen(
 
         ChatHeader(
             title = chatTitle,
-            onBack = {
-                AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
-                onBackToHome()
-            },
+            onBack = { leave() },
             onOpenFiles = { jumpToProjectTab(MobileTab.Files) },
             onOpenChanges = { jumpToProjectTab(MobileTab.Changes) },
             onOpenPorts = onOpenPorts,
@@ -399,8 +414,25 @@ fun ChatScreen(
                         onSend = {
                             subagentPanelOpen = false
                             keyboardController?.hide()
-                            AppContainer.chatRepository.sendMessage(sessionId)
-                            transcriptScroll.scrollToBottom(scope)
+                            if (isNewChat) {
+                                if (!sending) {
+                                    sending = true
+                                    scope.launch {
+                                        try {
+                                            val realId = AppContainer.sessionRepository.commitNewChat(sessionId)
+                                            AppContainer.chatRepository.sendMessage(realId)
+                                            AppContainer.appStateHolder.setSelectedSessionId(realId)
+                                        } catch (_: Exception) {
+                                            com.console.mobile.ui.components.confirmAlert("Unable to start chat", "Check the backend connection and try again.")
+                                        } finally {
+                                            sending = false
+                                        }
+                                    }
+                                }
+                            } else {
+                                AppContainer.chatRepository.sendMessage(sessionId)
+                                transcriptScroll.scrollToBottom(scope)
+                            }
                         },
                         onStop = { AppContainer.chatRepository.abort(sessionId) },
                     )

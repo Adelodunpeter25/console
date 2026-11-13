@@ -102,7 +102,78 @@ class SessionRepository(
         created
     }
 
+    /** Open a new chat locally; nothing reaches the server until [commitNewChat]. */
+    fun startNewChat(projectId: String?, cwd: String?): String {
+        val id = com.console.mobile.core.chat.newChatId()
+        sessions.setView(id, SessionViewState(sessionCwd = cwd, projectId = projectId))
+        return id
+    }
+
+    fun discardNewChat(id: String) {
+        if (!com.console.mobile.core.chat.isNewChatId(id)) return
+        sessions.removeView(id)
+        chats.remove(id)
+    }
+
+    /** Create the real session from a new chat's picks, move its composer over, and return the new id. */
+    suspend fun commitNewChat(draftId: String): String {
+        val view = sessions.getView(draftId)
+        val created = withContext(Dispatchers.IO) {
+            api.createSession(
+                CreateSessionDto(
+                    cwd = view.sessionCwd,
+                    projectId = view.projectId,
+                    modelId = view.sessionModelId,
+                    provider = view.sessionProvider,
+                    title = "New Chat",
+                    approvalMode = view.approvalMode,
+                    thinkingLevel = view.thinkingLevel,
+                    worktree = if (view.worktreePending) com.console.mobile.data.model.CreateWorktreeDto() else null,
+                ),
+            )
+        }
+        withContext(Dispatchers.Main.immediate) {
+            // The prompt is about to be sent, so the row reads "Generating title…" like desktop.
+            projectState.prependSession(created.copy(message_count = 1))
+            applyHeader(created.id, created)
+            if (created.thinking_level.isNullOrBlank() && view.thinkingLevel != null) {
+                sessions.setView(created.id, sessions.getView(created.id).copy(thinkingLevel = view.thinkingLevel))
+            }
+            val draft = chats.get(draftId)
+            chats.update(created.id) {
+                it.copy(input = draft.input, attachments = draft.attachments, draftUpdatedAt = draft.draftUpdatedAt)
+            }
+            discardNewChat(draftId)
+        }
+        return created.id
+    }
+
+    private fun updateNewChat(id: String, dto: UpdateSessionDto): SessionHeader {
+        val view = sessions.getView(id)
+        val next = when {
+            dto.clearProject -> view.copy(sessionCwd = null, projectId = null)
+            dto.cwd != null -> view.copy(sessionCwd = dto.cwd, projectId = null)
+            else -> view
+        }.let {
+            it.copy(
+                sessionModelId = dto.modelId ?: it.sessionModelId,
+                sessionProvider = dto.provider ?: it.sessionProvider,
+                approvalMode = dto.approvalMode ?: it.approvalMode,
+                thinkingLevel = dto.thinkingLevel ?: it.thinkingLevel,
+            )
+        }
+        sessions.setView(id, next)
+        return com.console.mobile.core.chat.createEphemeralDraftHeader(
+            id, com.console.mobile.core.chat.createChatSessionState(), next.projectId, next.sessionCwd,
+        )
+    }
+
+    fun requestNewChatWorktree(id: String) {
+        sessions.setView(id, sessions.getView(id).copy(worktreePending = true, worktreeBranch = "New worktree"))
+    }
+
     suspend fun updateSession(id: String, dto: UpdateSessionDto): SessionHeader = withContext(Dispatchers.IO) {
+        if (com.console.mobile.core.chat.isNewChatId(id)) return@withContext updateNewChat(id, dto)
         val updated = api.updateSession(id, dto)
         withContext(Dispatchers.Main.immediate) {
             projectState.patchSession(id, updated)
@@ -382,6 +453,7 @@ class SessionRepository(
 
     /** Re-read one chat's header into the list and the chat's view state. */
     fun refreshHeader(sessionId: String) {
+        if (com.console.mobile.core.chat.isNewChatId(sessionId)) return
         scope.launch {
             try {
                 val detail = withContext(Dispatchers.IO) { api.getSession(sessionId, 1, null) }

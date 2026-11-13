@@ -18,6 +18,14 @@ data class CreateSessionDto(
     val provider: String? = null,
     val title: String? = null,
     val approvalMode: String? = null,
+    val thinkingLevel: String? = null,
+    val worktree: CreateWorktreeDto? = null,
+)
+
+@Serializable
+data class CreateWorktreeDto(
+    val branch: String? = null,
+    val baseBranch: String? = null,
 )
 
 @Serializable

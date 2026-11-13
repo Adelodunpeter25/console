@@ -178,7 +178,9 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
             },
             onNewWorktree = {
                 branchSheet = false
-                scope.launch {
+                if (com.console.mobile.core.chat.isNewChatId(sessionId)) {
+                    AppContainer.sessionRepository.requestNewChatWorktree(sessionId)
+                } else scope.launch {
                     try {
                         val header = AppContainer.sessionRepository.attachWorktree(sessionId)
                         // The Home list reads its own copy of the header; without this it

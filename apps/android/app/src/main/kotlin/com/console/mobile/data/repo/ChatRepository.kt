@@ -169,6 +169,7 @@ class ChatRepository(
     }
 
     private fun scheduleDraftPush(sessionId: String) {
+        if (com.console.mobile.core.chat.isNewChatId(sessionId)) return
         draftPushJobs.remove(sessionId)?.cancel()
         draftPushJobs[sessionId] = scope.launch {
             kotlinx.coroutines.delay(DRAFT_PUSH_DEBOUNCE_MS)
@@ -178,6 +179,7 @@ class ChatRepository(
 
     /** Push immediately, e.g. when leaving the chat; also used after a send clears the composer. */
     fun flushDraft(sessionId: String) {
+        if (com.console.mobile.core.chat.isNewChatId(sessionId)) return
         draftPushJobs.remove(sessionId)?.cancel()
         scope.launch { pushDraft(sessionId) }
     }

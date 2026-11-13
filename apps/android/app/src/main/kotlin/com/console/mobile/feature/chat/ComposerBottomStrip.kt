@@ -51,7 +51,7 @@ fun ComposerBottomStrip(sessionId: String) {
     HoldComposerOpen(usageSheet)
 
     // A value before the first live update, so the ring isn't blank on entry.
-    LaunchedEffect(sessionId) { AppContainer.chatRepository.loadContext(sessionId) }
+    LaunchedEffect(sessionId) { if (!com.console.mobile.core.chat.isNewChatId(sessionId)) AppContainer.chatRepository.loadContext(sessionId) }
 
     val planOn = ApprovalMode.fromValue(view?.approvalMode) == ApprovalMode.PlanMode
 

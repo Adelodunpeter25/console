@@ -79,7 +79,6 @@ fun HomeScreen(
     val sessionStatuses by AppContainer.sessionStateHolder.statuses.collectAsStateWithLifecycle()
     var searchQuery by remember { mutableStateOf("") }
     var refreshing by remember { mutableStateOf(false) }
-    var creatingSession by remember { mutableStateOf(false) }
     var activeSession by remember { mutableStateOf<SessionHeader?>(null) }
     var branches by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     // Section keys whose sessions are hidden (Pinned/Drafts/Settled/project ids),
@@ -136,27 +135,11 @@ fun HomeScreen(
     }
 
     fun startChat(projectId: String?) {
-        if (creatingSession) return
-        creatingSession = true
-        scope.launch {
-            try {
-                val proj = projectId?.let { id -> projectState.projects.firstOrNull { it.id == id } }
-                    ?: projectState.projects.firstOrNull()
-                val created = withContext(Dispatchers.IO) {
-                    AppContainer.sessionRepository.createSession(cwd = proj?.path ?: "", projectId = proj?.id, title = "New Chat")
-                }
-                AppContainer.appStateHolder.openChatSession(created.id)
-                onOpenChat(created.id)
-                // Navigate first, then load: loadDetail suspends until the fetch
-                // lands, and holding the transition for that round trip showed a
-                // visible stall on every new chat.
-                launch { AppContainer.sessionRepository.loadDetail(created.id) }
-            } catch (_: Exception) {
-                confirmAlert("Unable to start chat", "Check the backend connection and try again.")
-            } finally {
-                creatingSession = false
-            }
-        }
+        val proj = projectId?.let { id -> projectState.projects.firstOrNull { it.id == id } }
+            ?: projectState.projects.firstOrNull()
+        val id = AppContainer.sessionRepository.startNewChat(proj?.id, proj?.path)
+        AppContainer.appStateHolder.openChatSession(id)
+        onOpenChat(id)
     }
 
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
@@ -294,7 +277,6 @@ fun HomeScreen(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     onComposePress = { startChat(projectState.projects.firstOrNull()?.id) },
-                    composeEnabled = !creatingSession,
                 )
             }
         }

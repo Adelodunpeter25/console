@@ -18,6 +18,8 @@ data class SessionViewState(
     // worktree folder, outside the project's path, so path matching alone
     // loses the project; this id survives the move.
     val projectId: String? = null,
+    // A new chat that will start in a fresh worktree once its first message creates the session.
+    val worktreePending: Boolean = false,
 )
 
 val EMPTY_SESSION_VIEW = SessionViewState()
@@ -56,6 +58,7 @@ class SessionStateHolder {
 
     fun getView(id: String): SessionViewState = _views.value[id] ?: EMPTY_SESSION_VIEW
     fun setView(id: String, view: SessionViewState) { _views.value = _views.value + (id to view) }
+    fun removeView(id: String) { _views.value = _views.value - id }
     fun applyHeader(id: String, modelId: String?, provider: String?, cwd: String?, approvalMode: String?, status: SessionStatus?) {
         setView(id, SessionViewState(modelId, provider, cwd, approvalMode ?: "plan-mode"))
         if (status != null) setStatus(id, status)

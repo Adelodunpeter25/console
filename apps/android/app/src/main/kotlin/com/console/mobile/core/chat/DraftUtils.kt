@@ -5,6 +5,13 @@ import console.v1.ProjectInfo
 import console.v1.SessionHeader
 import com.console.mobile.data.model.SessionStatus
 
+/** Client-only id of a new chat that has no server session until its first send. */
+const val NEW_CHAT_PREFIX = "new-chat:"
+
+fun newChatId(): String = NEW_CHAT_PREFIX + java.util.UUID.randomUUID()
+
+fun isNewChatId(id: String?): Boolean = id != null && id.startsWith(NEW_CHAT_PREFIX)
+
 fun isDraftSession(state: ChatSessionState): Boolean =
     state.input.trim().isNotEmpty() || state.attachments.isNotEmpty()
 
@@ -76,8 +83,8 @@ fun buildGroupedProjectSections(
     val filteredSessions = if (q.isEmpty()) sessions else sessions.filter { it.title.lowercase().contains(q) }
 
     // Draft summaries for 0-message sessions
-    val draftEntries = draftSessions.filter { (_, s) ->
-        s.messages.isEmpty() && isDraftSession(s)
+    val draftEntries = draftSessions.filter { (id, s) ->
+        !isNewChatId(id) && s.messages.isEmpty() && isDraftSession(s)
     }
 
     val draftHeaders = mutableListOf<SessionHeader>()
