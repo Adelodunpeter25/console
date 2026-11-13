@@ -4,22 +4,7 @@
 //! (tools.ToolIconKey, classify.go); a call without one falls back to the
 //! generic wrench. These tests pin the key → glyph mapping.
 
-use console_core::ToolCall;
 use console_ui::primitives::{IconName, activity_icon};
-
-/// A call with only its classified icon key set — the fields the icon path
-/// actually reads.
-fn call_with_icon(icon: &str) -> ToolCall {
-    ToolCall {
-        id: "c".to_string(),
-        name: "whatever".to_string(),
-        arguments: serde_json::json!({}),
-        thought_signature: None,
-        label: None,
-        kind_flags: None,
-        icon: Some(icon.to_string()),
-    }
-}
 
 #[test]
 fn test_server_icon_keys_map_to_glyphs() {
