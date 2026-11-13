@@ -52,7 +52,7 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
       if (!gotFrame) { gotFrame = true; retryMs = 500; setStatus('streaming'); }
     }
     if (pendingMove) {
-      send({ type: 'touch', action: 'move', x: pendingMove.x, y: pendingMove.y });
+      if (!ws || ws.bufferedAmount < 16384) send({ type: 'touch', action: 'move', x: pendingMove.x, y: pendingMove.y });
       pendingMove = null;
     }
   }
@@ -142,7 +142,10 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
 
   function onBinary(buf) {
     const tag = buf[0], payload = buf.subarray(1);
-    if (tag === 1) { desc = payload.slice(); if (!codec) codec = codecFromAvcC(desc); closeDecoder(); return; }
+    if (tag === 1) {
+      if (desc && decoder && desc.length === payload.length && desc.every((v, i) => v === payload[i])) return;
+      desc = payload.slice(); if (!codec) codec = codecFromAvcC(desc); closeDecoder(); return;
+    }
     if (tag !== 2 && tag !== 3) return;
     if (!ensureDecoder()) return;
     if (needKey && tag !== 2) return;
