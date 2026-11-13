@@ -259,6 +259,13 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         }
     }
 
+    override suspend fun getSuggestions(id: String): List<String> {
+        val raw = http.get("/api/sessions/${enc(id)}/suggestions")
+        val element = http.unwrap(raw, JsonElement.serializer(), "get session suggestions")
+        val array = element as? JsonArray ?: throw ApiException("Failed to get session suggestions")
+        return array.map { it.jsonPrimitive.content }
+    }
+
     override suspend fun getSubagents(id: String): List<SubagentInfo> {
         val raw = http.get("/api/sessions/${enc(id)}/subagents")
         val element = http.unwrap(raw, JsonElement.serializer(), "get session subagents")

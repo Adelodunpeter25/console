@@ -48,6 +48,9 @@ data class ChatSessionState(
     val backgroundWork: List<BackgroundWork> = emptyList(),
     val runs: List<RunActivityState> = emptyList(),
     val queuedPrompt: console.v1.QueuedPrompt? = null,
+    // Follow-up prompt chips; the server keeps the latest set, so this is a
+    // cache that is never persisted on the phone.
+    val suggestions: List<String> = emptyList(),
     // Context-window occupancy for the footer ring; null until first known.
     val context: ContextSnapshot? = null,
     val attachments: List<ImageAttachment> = emptyList(),

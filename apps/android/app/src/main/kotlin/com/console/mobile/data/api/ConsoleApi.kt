@@ -63,6 +63,8 @@ interface ConsoleApi {
     /** POST /api/sessions/:id/fork — duplicate history through messageId into a new idle session. */
     suspend fun forkSession(id: String, messageId: String): SessionHeader
     suspend fun getTodos(id: String): List<TodoItem>
+    /** GET /api/sessions/:id/suggestions — follow-up prompts kept until the next run starts. */
+    suspend fun getSuggestions(id: String): List<String>
     suspend fun getSubagents(id: String): List<SubagentInfo>
     suspend fun getBackgroundWork(id: String): List<BackgroundWork>
     suspend fun cancelBackgroundWork(id: String, workId: String): BackgroundWork

@@ -268,6 +268,33 @@ class ChatRepository(
         }
     }
 
+    fun setSuggestions(sessionId: String, items: List<String>) {
+        chats.update(sessionId) { if (it.suggestions == items) it else it.copy(suggestions = items) }
+    }
+
+    /**
+     * Fetch the chat's stored follow-ups: on open, and after the notification
+     * stream reconnects, when a push may have been missed. The server is
+     * authoritative, so an empty reply clears stale chips. A chat that started
+     * running meanwhile keeps none.
+     */
+    fun loadSuggestions(sessionId: String) {
+        scope.launch {
+            try {
+                val items = withContext(Dispatchers.IO) { api.getSuggestions(sessionId) }
+                setSuggestions(sessionId, if (chats.get(sessionId).running) emptyList() else items)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /** A chip tap: a normal turn that leaves the typed draft and attachments in the composer. */
+    fun sendSuggestion(sessionId: String, text: String) {
+        val prompt = text.trim()
+        if (prompt.isEmpty() || chats.get(sessionId).running) return
+        startRun(sessionId, prompt, attachments = emptyList(), contextFiles = emptyList(), clearComposer = false)
+    }
+
     fun loadSubagents(sessionId: String) {
         scope.launch {
             try {
@@ -469,6 +496,7 @@ class ChatRepository(
                 streamingText = "",
                 streamingThinking = "",
                 activeToolCalls = emptyList(),
+                suggestions = emptyList(),
                 running = true,
                 runs = it.runs + com.console.mobile.core.chat.RunActivityState(
                     runId = newMessageId(),

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,7 +34,15 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -49,6 +58,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowLeft
+import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.FileDiff
 import io.github.lyxnx.compose.ui.tablericons.outline.GridDots
@@ -90,16 +100,19 @@ fun ComposerPills(
     onSubagents: () -> Unit,
     onShells: () -> Unit,
     onChanges: () -> Unit,
+    suggestions: List<String> = emptyList(),
+    onSuggestion: (String) -> Unit = {},
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    if (!showTasks && subagents.isEmpty() && shellCount == 0 && changes.files == 0 && trailing == null) return
+    if (!showTasks && subagents.isEmpty() && shellCount == 0 && changes.files == 0 && suggestions.isEmpty() && trailing == null) return
+    val scroll = rememberScrollState()
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).padding(bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
-            modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+            modifier = Modifier.weight(1f).fadeScrollEdges(scroll).horizontalScroll(scroll),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -129,6 +142,11 @@ fun ComposerPills(
                     running = true,
                     onClick = onShells,
                 )
+            }
+            // Follow-ups share the scroller, after the status pills, so a phone
+            // keeps one row and the pills never lose their place.
+            suggestions.forEach { text ->
+                SuggestionPill(text = text, onClick = { onSuggestion(text) })
             }
         }
         // Sits on the same level as the pills, pinned to the right.
@@ -183,6 +201,68 @@ private fun ChangesPill(changes: ChangeTotals, onClick: () -> Unit) {
                 modifier = Modifier.padding(start = 5.dp),
             )
         }
+    }
+}
+
+/**
+ * Softens the edge of a horizontal scroller that still has content beyond it,
+ * so a pill ends in a fade and not a hard slice. An edge with nothing further
+ * to scroll stays crisp.
+ */
+private fun Modifier.fadeScrollEdges(scroll: ScrollState, width: Dp = 20.dp): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val fade = width.toPx()
+        if (scroll.value > 0) {
+            drawRect(
+                brush = Brush.horizontalGradient(listOf(Color.Transparent, Color.Black), startX = 0f, endX = fade),
+                size = Size(fade, size.height),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+        if (scroll.value < scroll.maxValue) {
+            drawRect(
+                brush = Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width - fade, endX = size.width),
+                topLeft = Offset(size.width - fade, 0f),
+                size = Size(fade, size.height),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+    }
+
+/**
+ * One follow-up prompt. The pill shape of its neighbours, with an accent send
+ * button so it reads as tappable rather than informational. The background is
+ * the solid [NewTheme.Raised]: a translucent press tint would let the
+ * transcript show through.
+ */
+@Composable
+private fun SuggestionPill(text: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .widthIn(max = 260.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(NewTheme.Raised)
+            .clickable(onClick = onClick)
+            .padding(start = 5.dp, end = 13.dp, top = 5.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier.size(24.dp).clip(CircleShape).background(NewTheme.Accent),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(TablerIcons.Outline.ArrowUp, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(14.dp))
+        }
+        Text(
+            text = text,
+            color = NewTheme.TextSecondary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 8.dp),
+        )
     }
 }
 

@@ -406,7 +406,15 @@ object AppContainer {
             var backoffMs = 1_000L
             while (isActive) {
                 try {
+                    // A push sent while the stream was down is gone, but the server
+                    // kept the set, so ask for the open chat's again.
+                    appStateHolder.state.value.selectedSessionId?.let { chatRepository.loadSuggestions(it) }
                     notificationRepository.notifications().collect { event ->
+                        if (event.kind == "suggestions") {
+                            // Silent: chips for the chat that just finished, no banner.
+                            chatRepository.setSuggestions(event.session_id, event.items)
+                            return@collect
+                        }
                         if (event.kind == "resumed") {
                             // Silent: an idle session woke itself for finished background
                             // work. The old run stream ended, so re-attach to the new run

@@ -147,6 +147,7 @@ fun ChatScreen(
             val detail = async { AppContainer.sessionRepository.loadDetail(sessionId) }
             launch { AppContainer.chatRepository.loadDraft(sessionId) }
             launch { AppContainer.chatRepository.loadTodos(sessionId) }
+            launch { AppContainer.chatRepository.loadSuggestions(sessionId) }
             launch { AppContainer.chatRepository.loadSubagents(sessionId) }
             launch { AppContainer.chatRepository.loadBackgroundWork(sessionId) }
             launch { AppContainer.sessionRepository.loadSessionChanges(sessionId) }
@@ -380,6 +381,10 @@ fun ChatScreen(
                     onSubagents = { subagentPanelOpen = !subagentPanelOpen },
                     onShells = { shellSheet = true },
                     onChanges = { jumpToProjectTab(MobileTab.Changes) },
+                    // Queued prompts have already been committed to, and chips are
+                    // meaningless mid-run, so both yield the row.
+                    suggestions = if (chat.running || chat.queuedPrompt != null) emptyList() else chat.suggestions,
+                    onSuggestion = { AppContainer.chatRepository.sendSuggestion(sessionId, it) },
                     // The arrow half only shows while the reader is scrolled away
                     // from the latest message.
                     trailing = if (hasMessages) {

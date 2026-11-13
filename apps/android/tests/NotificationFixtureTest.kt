@@ -41,6 +41,14 @@ class NotificationFixtureTest {
     }
 
     @Test
+    fun decodesGoldenSuggestionsFixture() {
+        val n = adapter.fromJson(fixture("suggestions.json"))!!
+        assertEquals("suggestions", n.kind)
+        assertEquals("s1", n.session_id)
+        assertEquals(listOf("Run the tests", "Commit this"), n.items)
+    }
+
+    @Test
     fun missingSubtitleDefaultsToBlank() {
         // Absent key (old omitempty) must read as a blank subtitle, which the
         // presenter renders as a single-line banner.
