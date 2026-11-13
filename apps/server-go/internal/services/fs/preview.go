@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	maxFilePreviewBytes = 512 * 1024
+	maxFilePreviewBytes = 10 * 1024 * 1024
 	imageMaxBytes       = 10 * 1024 * 1024
 )
 

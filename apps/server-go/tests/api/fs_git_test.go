@@ -45,7 +45,7 @@ func TestFilePreviewGates(t *testing.T) {
 	root := t.TempDir()
 	fs := fssvc.NewFsService()
 
-	if err := os.WriteFile(filepath.Join(root, "big.txt"), make([]byte, 600*1024), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "big.txt"), make([]byte, 11*1024*1024), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := fs.ReadFileContentWithMeta(filepath.Join(root, "big.txt"), 0, 0); err == nil {

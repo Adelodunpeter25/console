@@ -1,6 +1,5 @@
 package com.console.mobile.data.model
 
-const val MAX_FILE_PREVIEW_BYTES: Long = 512 * 1024
 const val IMAGE_MAX_BYTES: Long = 10 * 1024 * 1024
 const val SVG_EXTENSION = ".svg"
 
@@ -68,7 +67,7 @@ fun formatBytes(bytes: Long): String = when {
     else -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
 }
 
-fun getFilePreviewBlock(fileName: String, sizeBytes: Long? = null): FilePreviewBlock? {
+fun getFilePreviewBlock(fileName: String): FilePreviewBlock? {
     if (isLockFileName(fileName)) return FilePreviewBlock(
         kind = "LOCKFILE_BLOCKED",
         title = "Lockfiles can't be previewed",
@@ -78,11 +77,6 @@ fun getFilePreviewBlock(fileName: String, sizeBytes: Long? = null): FilePreviewB
         kind = "BINARY_FILE",
         title = "Binary file",
         message = "\"$fileName\" isn't a text file, so there's nothing to preview here."
-    )
-    if (sizeBytes != null && sizeBytes > MAX_FILE_PREVIEW_BYTES) return FilePreviewBlock(
-        kind = "FILE_TOO_LARGE",
-        title = "File too large",
-        message = "\"$fileName\" is ${formatBytes(sizeBytes)} — previews are capped at ${formatBytes(MAX_FILE_PREVIEW_BYTES)}."
     )
     return null
 }

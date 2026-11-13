@@ -223,7 +223,7 @@ fun FilesScreen(onBack: () -> Unit) {
     if (sel != null) {
         val fileName = sel.split("/").lastOrNull() ?: sel
         val kind = filePreviewKind(fileName)
-        val block = if (kind == FilePreviewKind.BLOCKED) getFilePreviewBlock(fileName, selectedSize) else null
+        val block = if (kind == FilePreviewKind.BLOCKED) getFilePreviewBlock(fileName) else null
         val relativePath = projectRoot?.let { root ->
             val normalizedRoot = root.trimEnd('/')
             if (sel.startsWith("$normalizedRoot/")) sel.removePrefix("$normalizedRoot/") else sel
