@@ -41,9 +41,12 @@ var binaryExtensions = map[string]bool{
 	".mp3": true, ".wav": true, ".flac": true, ".ogg": true, ".m4a": true,
 	".zip": true, ".tar": true, ".gz": true, ".tgz": true, ".bz2": true, ".xz": true,
 	".7z": true, ".rar": true, ".jar": true, ".war": true,
-	".woff": true, ".woff2": true, ".ttf": true, ".otf": true, ".eot": true,
-	".pdf": true, ".exe": true, ".dll": true, ".so": true, ".dylib": true,
-	".lock": true, ".lockb": true,
+	".exe": true, ".dll": true, ".so": true, ".dylib": true, ".a": true, ".o": true,
+	".obj": true, ".bin": true, ".iso": true, ".dmg": true, ".pkg": true, ".deb": true,
+	".rpm": true, ".apk": true, ".ipa": true, ".node": true,
+	".ttf": true, ".otf": true, ".woff": true, ".woff2": true, ".eot": true,
+	".pdf": true, ".wasm": true, ".psd": true, ".sketch": true, ".class": true,
+	".pyc": true, ".db": true, ".sqlite": true, ".sqlite3": true,
 }
 
 var imageExtensions = map[string]bool{

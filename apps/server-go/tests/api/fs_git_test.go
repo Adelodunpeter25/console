@@ -240,3 +240,40 @@ func TestFsGrepResponseContainsOnlySearchPanelFields(t *testing.T) {
 		}
 	}
 }
+
+func TestFilePreviewGatesMatchSharedFixture(t *testing.T) {
+	raw, err := os.ReadFile("../../../../proto/testdata/fs/file_kinds.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds struct {
+		LockBasenames []string `json:"lock_basenames"`
+		LockSuffixes  []string `json:"lock_suffixes"`
+		Raster        []string `json:"raster_image_extensions"`
+		Blocked       []string `json:"blocked_extensions"`
+	}
+	if err := json.Unmarshal(raw, &kinds); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	fs := fssvc.NewFsService()
+	check := func(name, wantCode string) {
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := fs.ReadFileContentWithMeta(path, 0, 0)
+		if blocked, ok := err.(*fssvc.PreviewBlocked); !ok || blocked.Code != wantCode {
+			t.Errorf("%s: want %s, got %v", name, wantCode, err)
+		}
+	}
+	for _, n := range kinds.LockBasenames {
+		check(n, "LOCKFILE_BLOCKED")
+	}
+	for _, s := range kinds.LockSuffixes {
+		check("x"+s, "LOCKFILE_BLOCKED")
+	}
+	for _, e := range append(kinds.Raster, kinds.Blocked...) {
+		check("x"+e, "BINARY_FILE")
+	}
+}

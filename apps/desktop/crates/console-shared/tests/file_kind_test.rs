@@ -125,3 +125,36 @@ fn test_case_insensitivity() {
     assert_eq!(file_kind_for_path("CARGO.LOCK"), FileKind::Blocked);
     assert_eq!(file_kind_for_path("PACKAGE-LOCK.JSON"), FileKind::Blocked);
 }
+
+#[test]
+fn test_lists_match_shared_fixture() {
+    let raw = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../proto/testdata/fs/file_kinds.json"),
+    )
+    .expect("read fixture");
+    let fixture: serde_json::Value = serde_json::from_str(&raw).expect("parse fixture");
+    let list = |key: &str| -> Vec<String> {
+        let mut v: Vec<String> = fixture[key]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e.as_str().unwrap().to_string())
+            .collect();
+        v.sort();
+        v
+    };
+    let sorted = |src: &[&str]| -> Vec<String> {
+        let mut v: Vec<String> = src.iter().map(|e| e.to_string()).collect();
+        v.sort();
+        v
+    };
+    assert_eq!(sorted(RASTER_IMAGE_EXTENSIONS), list("raster_image_extensions"));
+    assert_eq!(sorted(BLOCKED_FILE_EXTENSIONS), list("blocked_extensions"));
+    for name in list("lock_basenames") {
+        assert!(is_lock_file(&name), "{name}");
+    }
+    for suffix in list("lock_suffixes") {
+        assert!(is_lock_file(&format!("x{suffix}")), "{suffix}");
+    }
+}
