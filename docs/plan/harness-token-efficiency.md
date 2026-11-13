@@ -423,6 +423,13 @@ already reads through it, and the bench keeps recording active
 struct field + a `FromEnv` entry, and read through their tool constructors.
 
 ### Task 4.1: `prompt_trim`: rewrite the system prompt
+**Prompt-side changes landed 2026-11-13 (no flag, direct change):** identity
+no longer asks for brevity; "Each response MUST advance the task" deleted;
+informed-action line rewritten as a plain fact; plan-mode critical compressed
+to one line (still names writePlan/docs/plan via the approval-mode section);
+full-access lecturing removed; repo-rules header and grep line rewritten;
+workstation duplicate "Today is / Working directory" line deleted.
+
 Label every line: **keep / rewrite / delete / move**. Planned changes:
 
 | Line / section | Action | Reason |
@@ -437,7 +444,7 @@ Label every line: **keep / rewrite / delete / move**. Planned changes:
 | "Today is X. Working directory is Y." | delete | Repeats the workstation block (which moves to setup in Phase 2). |
 | Skills header sentence | keep | Tells the model the skill lookup exists. |
 | Approval-mode text (`approvalModeInstructions`) | audit, rewrite | Remove emphasis; keep what each mode allows. |
-| Tool descriptions (`jsonschema` tags) | tighten | Describe behavior and arguments; remove usage lectures (for example, bash's "not for reading or editing files" → keep one short line, since that's a real quirk). |
+| Tool descriptions (`jsonschema` tags) | tighten — **next, separate pass** | Describe behavior and arguments; remove usage lectures (for example, bash's "not for reading or editing files" → keep one short line, since that's a real quirk). |
 
 Also audit `SYSTEM.md` handling and the subagent preamble in the same pass.
 **Measure:** static tokens per request, success, turns.
