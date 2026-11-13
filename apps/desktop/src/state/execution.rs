@@ -387,6 +387,13 @@ impl ConsoleDesktopApp {
         }
     }
 
+    pub(crate) fn suggestion_scroll_for_pane(&mut self, pane_id: &str) -> gpui::ScrollHandle {
+        self.suggestion_scrolls
+            .entry(pane_id.to_string())
+            .or_insert_with(gpui::ScrollHandle::new)
+            .clone()
+    }
+
     pub(crate) fn suggestions_for_pane(&self, pane_id: &str) -> Vec<String> {
         self.active_session_for_pane(pane_id)
             .and_then(|sid| self.suggestions.get(&sid).cloned())

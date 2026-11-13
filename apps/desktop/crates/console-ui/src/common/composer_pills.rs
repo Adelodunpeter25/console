@@ -9,8 +9,9 @@ use std::rc::Rc;
 
 use console_core::{SubagentInfo, TodoItem};
 use gpui::{
-    App, Div, ElementId, FontWeight, ParentElement, Stateful, StatefulInteractiveElement, Styled,
-    Window, div, prelude::*, px,
+    App, Div, ElementId, FontWeight, ParentElement, ScrollHandle, Stateful,
+    StatefulInteractiveElement, Styled, Window, div, linear_color_stop, linear_gradient,
+    prelude::*, px,
 };
 
 use crate::chat::change_chips::ChangesSummary;
@@ -26,6 +27,8 @@ type PickHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 /// Follow-up prompts that fill the rest of the row and scroll sideways.
 pub struct SuggestionsPill {
     pub items: Vec<String>,
+    /// Owned by the caller so the scroll position survives re-renders.
+    pub scroll: ScrollHandle,
     pub on_pick: PickHandler,
 }
 
@@ -166,32 +169,74 @@ pub fn composer_pills(
     // The status pills keep their size on the left; the chips take whatever
     // room remains and scroll sideways. Kept outside the scroller so the
     // status popovers are never clipped by it.
+    let reserve_for_controls = suggestions.is_some();
     if let Some(suggestions) = suggestions {
         let on_pick = suggestions.on_pick;
+        let scroll = suggestions.scroll;
+        let offset = scroll.offset().x;
+        let max = scroll.max_offset().x;
+        // Offsets run negative as the row scrolls right.
+        let more_left = offset < px(-0.5);
+        let more_right = max > px(0.5) && -offset < max - px(0.5);
+        let clear = theme.chat_canvas.opacity(0.0);
+        let fade = |angle: f32| {
+            linear_gradient(
+                angle,
+                linear_color_stop(theme.chat_canvas, 0.0),
+                linear_color_stop(clear, 1.0),
+            )
+        };
         row = row.child(
             div()
-                .id(ElementId::Name(format!("{key}-suggestions").into()))
+                .relative()
                 .flex_1()
                 .min_w(px(0.0))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(8.0))
-                .overflow_x_scroll()
-                .children(
-                    suggestions
-                        .items
-                        .into_iter()
-                        .enumerate()
-                        .map(|(index, text)| {
-                            suggestion_pill(
-                                format!("{key}-suggestion-{index}"),
-                                text,
-                                on_pick.clone(),
-                                theme,
-                            )
-                        }),
-                ),
+                .child(
+                    div()
+                        .id(ElementId::Name(format!("{key}-suggestions").into()))
+                        .w_full()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(8.0))
+                        .overflow_x_scroll()
+                        .restrict_scroll_to_axis()
+                        .track_scroll(&scroll)
+                        .children(suggestions.items.into_iter().enumerate().map(
+                            |(index, text)| {
+                                suggestion_pill(
+                                    format!("{key}-suggestion-{index}"),
+                                    text,
+                                    on_pick.clone(),
+                                    theme,
+                                )
+                            },
+                        )),
+                )
+                // Soft edges so a chip fades out instead of being sliced
+                // against the status pills; shown only where there is more.
+                .when(more_left, |el| {
+                    el.child(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .top_0()
+                            .bottom_0()
+                            .w(px(28.0))
+                            .bg(fade(90.0)),
+                    )
+                })
+                .when(more_right, |el| {
+                    el.child(
+                        div()
+                            .absolute()
+                            .right_0()
+                            .top_0()
+                            .bottom_0()
+                            .w(px(28.0))
+                            .bg(fade(270.0)),
+                    )
+                }),
         );
     }
 
@@ -202,7 +247,10 @@ pub fn composer_pills(
             .right_0()
             .bottom(px(8.0))
             .w_full()
-            .px(px(20.0))
+            .pl(px(20.0))
+            // The transcript's jump / scroll-to-bottom pill floats at the
+            // bottom right (~67px wide, 16px in); keep chips out from under it.
+            .pr(px(if reserve_for_controls { 96.0 } else { 20.0 }))
             .flex()
             .justify_center()
             .child(row),

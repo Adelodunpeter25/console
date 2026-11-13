@@ -699,6 +699,7 @@ impl ConsoleDesktopApp {
             todo_items: std::collections::HashMap::new(),
             queued_prompts: std::collections::HashMap::new(),
             suggestions: std::collections::HashMap::new(),
+            suggestion_scrolls: std::collections::HashMap::new(),
             agent_notices: std::collections::HashMap::new(),
             error_message: None,
             session_errors: std::collections::HashMap::new(),

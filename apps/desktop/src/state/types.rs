@@ -199,6 +199,9 @@ pub struct ConsoleDesktopApp {
     /// Follow-up prompt chips per session, pushed once a run settles. Never
     /// persisted; dropped on typing, sending, or the next run.
     pub suggestions: std::collections::HashMap<String, Vec<String>>,
+    /// Horizontal scroll state of each pane's suggestion row, kept across
+    /// renders so the edge fades know which way there is more to scroll.
+    pub suggestion_scrolls: std::collections::HashMap<String, gpui::ScrollHandle>,
     pub agent_notices: std::collections::HashMap<String, String>,
     /// App-level error banner (not tied to any chat); shown in every pane.
     pub error_message: Option<super::errors::BannerError>,
