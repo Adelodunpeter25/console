@@ -1165,6 +1165,7 @@ impl ConsoleDesktopApp {
             }
             AgentSessionEvent::SessionStart => {
                 self.set_agent_notice_for_session(run_session_id, None);
+                self.clear_suggestions(run_session_id, cx);
                 // A chained queued turn re-announces sessionStart on the same
                 // stream. Re-engage streaming so the auto-sent prompt visibly
                 // keeps working even if queueUpdated(null) arrived out of

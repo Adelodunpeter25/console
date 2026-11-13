@@ -516,6 +516,11 @@ impl ConsoleDesktopApp {
                         let text = input.content().to_string();
                         let mentions = input.mentions().to_vec();
                         let session_id = this.active_session_for_pane("pane-main");
+                        if !text.is_empty() {
+                            if let Some(sid) = session_id.as_deref() {
+                                this.clear_suggestions(sid, cx);
+                            }
+                        }
                         let attachments = this.attachments_for_pane("pane-main");
                         let annotations = this.annotations_for_pane("pane-main");
                         this.save_draft_for_session_with_context(
@@ -694,6 +699,7 @@ impl ConsoleDesktopApp {
             question_selected: std::collections::HashMap::new(),
             todo_items: std::collections::HashMap::new(),
             queued_prompts: std::collections::HashMap::new(),
+            suggestions: std::collections::HashMap::new(),
             agent_notices: std::collections::HashMap::new(),
             error_message: None,
             session_errors: std::collections::HashMap::new(),

@@ -211,6 +211,11 @@ impl ConsoleDesktopApp {
                     let text = input.content().to_string();
                     let mentions = input.mentions().to_vec();
                     let session_id = this.active_session_for_pane(&edit_pane_id);
+                    if !text.is_empty() {
+                        if let Some(sid) = session_id.as_deref() {
+                            this.clear_suggestions(sid, cx);
+                        }
+                    }
                     let attachments = this.attachments_for_pane(&edit_pane_id);
                     let annotations = this.annotations_for_pane(&edit_pane_id);
                     this.save_draft_for_session_with_context(

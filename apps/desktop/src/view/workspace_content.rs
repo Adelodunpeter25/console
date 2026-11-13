@@ -4,7 +4,7 @@ use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ComposerView, ModelDropdownMenu, PickerTab, QuestionInteractionCard, ShellEntry, ShellsPill,
     SubagentsPill, TasksPill, Theme, WorkspaceFooter, centered_stripe, composer_pills,
-    error_banner, notice_banner, queued_prompts_stack,
+    error_banner, notice_banner, queued_prompts_stack, suggestion_chips,
 };
 use gpui::{
     App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -654,6 +654,7 @@ impl ConsoleDesktopApp {
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
         let queued_prompts = self.queued_prompts_for_pane(&pane_id);
+        let suggestions = self.suggestions_for_pane(&pane_id);
         let error_message = self
             .error_for_pane(&pane_id)
             .map(|error| error.message.clone());
@@ -808,6 +809,23 @@ impl ConsoleDesktopApp {
             })
             .when_some(agent_notice, |el, notice| {
                 el.child(notice_banner(notice, theme))
+            })
+            .when(!suggestions.is_empty() && queued_prompts.is_empty(), |el| {
+                let theme = Theme::current(cx);
+                let entity_pick = entity.clone();
+                let pane_for_pick = pane_id.clone();
+                el.child(suggestion_chips(
+                    suggestions,
+                    Rc::new(move |prompt, _window, cx| {
+                        if let Some(app) = entity_pick.upgrade() {
+                            let pid = pane_for_pick.clone();
+                            app.update(cx, |this, cx| {
+                                this.send_suggestion_for_pane(&pid, prompt, cx);
+                            });
+                        }
+                    }),
+                    theme,
+                ))
             })
             .when(!queued_prompts.is_empty(), |el| {
                 let theme = Theme::current(cx);

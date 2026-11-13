@@ -334,3 +334,49 @@ impl ConsoleDesktopApp {
             .is_some_and(|sid| self.queued_prompts.get(&sid).is_some_and(|v| !v.is_empty()))
     }
 }
+
+impl ConsoleDesktopApp {
+    /// Show chips for a chat, unless it is already working again.
+    pub(crate) fn set_suggestions(
+        &mut self,
+        session_id: &str,
+        items: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        if session_id.is_empty() || items.is_empty() || self.is_session_running(session_id) {
+            return;
+        }
+        self.suggestions.insert(session_id.to_string(), items);
+        cx.notify();
+    }
+
+    pub(crate) fn clear_suggestions(&mut self, session_id: &str, cx: &mut Context<Self>) {
+        if self.suggestions.remove(session_id).is_some() {
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn suggestions_for_pane(&self, pane_id: &str) -> Vec<String> {
+        self.active_session_for_pane(pane_id)
+            .and_then(|sid| self.suggestions.get(&sid).cloned())
+            .unwrap_or_default()
+    }
+
+    /// A chip click sends the suggestion as a normal prompt in that pane.
+    pub(crate) fn send_suggestion_for_pane(
+        &mut self,
+        pane_id: &str,
+        prompt: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(sid) = self.active_session_for_pane(pane_id) {
+            self.clear_suggestions(&sid, cx);
+        }
+        if self.is_active_session_running_for_pane(pane_id) {
+            return;
+        }
+        self.active_pane_id = Some(pane_id.to_string());
+        self.selected_session_id = self.active_session_for_pane(pane_id);
+        self.submit_prompt_with_context(prompt, Vec::new(), Vec::new(), Vec::new(), cx);
+    }
+}

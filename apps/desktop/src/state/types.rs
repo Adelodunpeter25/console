@@ -194,6 +194,9 @@ pub struct ConsoleDesktopApp {
     /// Staged next-turn prompt per session, persisted on the server and
     /// broadcast as `queueUpdated` via SSE.
     pub queued_prompts: std::collections::HashMap<String, Vec<QueuedPrompt>>,
+    /// Follow-up prompt chips per session, pushed once a run settles. Never
+    /// persisted; dropped on typing, sending, or the next run.
+    pub suggestions: std::collections::HashMap<String, Vec<String>>,
     pub agent_notices: std::collections::HashMap<String, String>,
     /// App-level error banner (not tied to any chat); shown in every pane.
     pub error_message: Option<super::errors::BannerError>,

@@ -18,6 +18,7 @@ pub mod picker_menus;
 pub(crate) mod pill_popovers;
 pub mod project_browse_palette;
 pub mod queued_prompt_card;
+pub mod suggestion_chips;
 pub mod quick_open_palette;
 pub mod stripe;
 pub mod usage_meter;
@@ -62,6 +63,7 @@ pub use picker_menus::{
 };
 pub use project_browse_palette::ProjectBrowsePalette;
 pub use queued_prompt_card::{queued_prompt_card, queued_prompt_row, queued_prompts_stack};
+pub use suggestion_chips::suggestion_chips;
 pub use quick_open_palette::QuickOpenPalette;
 pub use stripe::centered_stripe;
 pub use usage_meter::UsageMeter;

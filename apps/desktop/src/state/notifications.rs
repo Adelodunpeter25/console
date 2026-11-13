@@ -58,6 +58,20 @@ impl ConsoleDesktopApp {
                                     });
                                     continue;
                                 }
+                                if event.kind == "suggestions" {
+                                    // Silent signal: chips for the chat that just
+                                    // finished. Dropped if the chat started working
+                                    // again before they arrived.
+                                    let items = event.items.clone();
+                                    let _ = cx.update(|cx| {
+                                        if let Some(app) = entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.set_suggestions(&session_id, items, cx);
+                                            });
+                                        }
+                                    });
+                                    continue;
+                                }
                                 if event.kind == "read_state" {
                                     // Silent signal: another device (or this one) read
                                     // or unread a chat. Refresh the headers so the dot
