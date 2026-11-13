@@ -430,6 +430,8 @@ fun BranchPickerSheet(
     title: String = "Branch",
     /** Highlights this branch instead of the checked-out one. */
     selectedName: String? = null,
+    /** Optional first row that clears the choice, e.g. "Use default branch". */
+    onUseDefault: (() -> Unit)? = null,
 ) {
     // The branch list scrolls itself, so the sheet must not also scroll.
     BaseSheet(onDismiss = onDismiss, title = title, scrollable = false) {
@@ -440,6 +442,15 @@ fun BranchPickerSheet(
             Banner(error, modifier = Modifier.padding(vertical = 8.dp))
         }
         Column(modifier = Modifier.alpha(if (locked) 0.45f else 1f)) {
+            if (onUseDefault != null) {
+                SectionCard(modifier = Modifier.padding(bottom = 12.dp)) {
+                    OptionRow(
+                        title = "Use default branch",
+                        subtitle = "Let the repository's default branch be the starting point",
+                        selected = selectedName == "",
+                    ) { onUseDefault() }
+                }
+            }
             if (worktreeBranch == null && canStartWorktree) {
                 SectionCard(modifier = Modifier.padding(bottom = 12.dp)) {
                     OptionRow(title = "New worktree", subtitle = "Work in an isolated copy on its own branch") {

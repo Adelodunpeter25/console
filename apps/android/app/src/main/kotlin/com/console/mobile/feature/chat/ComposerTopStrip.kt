@@ -155,6 +155,10 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
             worktreeBranch = null,
             title = "Start from",
             selectedName = view?.worktreeBase ?: "",
+            onUseDefault = {
+                baseSheet = false
+                AppContainer.sessionRepository.setNewChatWorktreeBase(sessionId, null)
+            },
             onDismiss = { baseSheet = false },
             onSelect = { name ->
                 baseSheet = false
