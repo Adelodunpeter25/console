@@ -72,6 +72,47 @@ impl ConsoleDesktopApp {
         context_files: Vec<String>,
         cx: &mut Context<Self>,
     ) {
+        self.stage_prompt_for_pane(
+            pane_id,
+            prompt,
+            attachments,
+            annotations,
+            context_files,
+            false,
+            cx,
+        );
+    }
+
+    /// A suggestion chip tapped mid-run: staged like any prompt, but whatever
+    /// the user has typed in the composer stays put.
+    pub fn queue_suggestion_for_pane(
+        &mut self,
+        pane_id: String,
+        prompt: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.stage_prompt_for_pane(
+            pane_id,
+            prompt,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            true,
+            cx,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn stage_prompt_for_pane(
+        &mut self,
+        pane_id: String,
+        prompt: String,
+        attachments: Vec<ImageAttachment>,
+        annotations: Vec<console_core::BrowserElementAnnotation>,
+        context_files: Vec<String>,
+        keep_draft: bool,
+        cx: &mut Context<Self>,
+    ) {
         if prompt.trim().is_empty() {
             return;
         }
@@ -128,22 +169,24 @@ impl ConsoleDesktopApp {
             session.settled_at = None;
         }
 
-        self.composer_for_pane(&pane_id)
-            .update(cx, |input, cx| input.clear(cx));
-        self.set_attachments_for_pane(&pane_id, Vec::new());
-        self.set_annotations_for_pane(&pane_id, Vec::new());
-        self.clear_draft_for_session(Some(&session_id), cx);
-        self.revoke_sidebar_draft(&session_id);
-        self.composer_for_pane(&pane_id).update(cx, |input, cx| {
-            // The server assigns the message id, so it is unknown here; the
-            // history is rebuilt from the transcript once the run settles.
-            input.record_prompt_history(
-                prompt.clone(),
-                dq.context_files.clone().unwrap_or_default(),
-                None,
-                cx,
-            );
-        });
+        if !keep_draft {
+            self.composer_for_pane(&pane_id)
+                .update(cx, |input, cx| input.clear(cx));
+            self.set_attachments_for_pane(&pane_id, Vec::new());
+            self.set_annotations_for_pane(&pane_id, Vec::new());
+            self.clear_draft_for_session(Some(&session_id), cx);
+            self.revoke_sidebar_draft(&session_id);
+            self.composer_for_pane(&pane_id).update(cx, |input, cx| {
+                // The server assigns the message id, so it is unknown here; the
+                // history is rebuilt from the transcript once the run settles.
+                input.record_prompt_history(
+                    prompt.clone(),
+                    dq.context_files.clone().unwrap_or_default(),
+                    None,
+                    cx,
+                );
+            });
+        }
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
         cx.spawn(

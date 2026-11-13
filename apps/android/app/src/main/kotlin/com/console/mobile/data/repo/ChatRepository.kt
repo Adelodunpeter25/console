@@ -288,10 +288,16 @@ class ChatRepository(
         }
     }
 
-    /** A chip tap: a normal turn that leaves the typed draft and attachments in the composer. */
+    /** A chip tap: a normal turn (or a queued one mid-run) that leaves the typed draft and attachments in the composer. */
     fun sendSuggestion(sessionId: String, text: String) {
         val prompt = text.trim()
-        if (prompt.isEmpty() || chats.get(sessionId).running) return
+        if (prompt.isEmpty()) return
+        // Mid-run it is staged for after the turn, like any prompt sent then.
+        if (chats.get(sessionId).running) {
+            setSuggestions(sessionId, emptyList())
+            queuePrompt(sessionId, prompt, clearComposer = false)
+            return
+        }
         startRun(sessionId, prompt, attachments = emptyList(), contextFiles = emptyList(), clearComposer = false)
     }
 
@@ -570,25 +576,28 @@ class ChatRepository(
     }
 
     /** Stage prompt to run right after the active turn settles (POST /api/sessions/:id/queue). */
-    fun queuePrompt(sessionId: String, promptText: String? = null) {
+    fun queuePrompt(sessionId: String, promptText: String? = null, clearComposer: Boolean = true) {
         val session = chats.get(sessionId)
         val prompt = (promptText ?: session.input).trim()
         if (prompt.isEmpty()) return
         val view = sessions.getView(sessionId)
-        val attachments = session.attachments
+        // A chip carries no attachments of its own, and must not take the draft's.
+        val attachments = if (clearComposer) session.attachments else emptyList()
 
-        // Clear local input so user can type subsequent notes
-        chats.update(sessionId) {
-            it.copy(
-                input = "",
-                draftUpdatedAt = null,
-                attachments = emptyList(),
-            )
+        if (clearComposer) {
+            // Clear local input so user can type subsequent notes
+            chats.update(sessionId) {
+                it.copy(
+                    input = "",
+                    draftUpdatedAt = null,
+                    attachments = emptyList(),
+                )
+            }
+            // The staged prompt lives server-side now; drop the local draft copy
+            // and the synced one so other devices stop offering the queued text.
+            persistence?.removeSession(sessionId)
+            flushDraft(sessionId)
         }
-        // The staged prompt lives server-side now; drop the local draft copy
-        // and the synced one so other devices stop offering the queued text.
-        persistence?.removeSession(sessionId)
-        flushDraft(sessionId)
         projectState?.unsettleSession(sessionId)
 
         val body = RunPromptDto(
@@ -605,12 +614,15 @@ class ChatRepository(
                 val queued = withContext(Dispatchers.IO) { api.queuePrompt(sessionId, body) }
                 chats.update(sessionId) { it.copy(queuedPrompt = it.queuedPrompt ?: queued) }
             } catch (e: Exception) {
-                // Restore draft on failure
-                chats.update(sessionId) {
-                    it.copy(
-                        input = prompt,
-                        attachments = attachments,
-                    )
+                // Restore draft on failure. A chip never took the draft, so
+                // there is nothing to give back.
+                if (clearComposer) {
+                    chats.update(sessionId) {
+                        it.copy(
+                            input = prompt,
+                            attachments = attachments,
+                        )
+                    }
                 }
             }
         }

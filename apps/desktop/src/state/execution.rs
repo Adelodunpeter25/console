@@ -411,6 +411,7 @@ impl ConsoleDesktopApp {
             self.clear_suggestions(&sid, cx);
         }
         if self.is_active_session_running_for_pane(pane_id) {
+            self.queue_suggestion_for_pane(pane_id.to_string(), prompt, cx);
             return;
         }
         self.active_pane_id = Some(pane_id.to_string());
