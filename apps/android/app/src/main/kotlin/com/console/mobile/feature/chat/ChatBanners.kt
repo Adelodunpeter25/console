@@ -209,7 +209,7 @@ private fun ChangesPill(changes: ChangeTotals, onClick: () -> Unit) {
  * so a pill ends in a fade and not a hard slice. An edge with nothing further
  * to scroll stays crisp.
  */
-private fun Modifier.fadeScrollEdges(scroll: ScrollState, width: Dp = 20.dp): Modifier = this
+private fun Modifier.fadeScrollEdges(scroll: ScrollState, width: Dp = 28.dp): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithContent {
         drawContent()
