@@ -97,7 +97,7 @@ func TestSystemPromptStableSplitsFromSetup(t *testing.T) {
 		}
 	}
 	// Setup: per-session context.
-	for _, want := range []string{dirA, "Date:", "Follow the style guide.", "/init:"} {
+	for _, want := range []string{dirA, "Follow the style guide.", "/init:"} {
 		if !strings.Contains(a.Setup, want) {
 			t.Fatalf("setup missing %q:\n%s", want, a.Setup)
 		}

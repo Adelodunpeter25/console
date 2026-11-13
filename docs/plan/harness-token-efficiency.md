@@ -50,7 +50,7 @@ size, not as targets.
 |---|---|---|
 | Prompt assembly | `internal/agent/systemprompt/builder.go`, called from `internal/run/turns.go` | Was one flat string. Tasks 2.1/2.2 split it into a stable `StableSystem` and a per-session `Setup` sent as a leading user message, so volatile values (date, branch, tree, model) no longer sit in the cached system prefix. |
 | Tool inventory | **removed (2026-11-13)** | The `renderTools` name list duplicated the tool schemas; it is gone from the stable prompt. |
-| Emphasis | `renderContextFiles`, `renderWorkstation` | "You MUST follow…", "Do not waste tools…", `<critical>` "MUST advance the task". |
+| Emphasis | `renderContextFiles`, `renderWorkstation` | Prompt-side Task 4.1 lines landed 2026-11-13: MUST/scolding lines rewritten or deleted. Remaining: tool-description tightening. |
 | Workspace tree | **removed (2026-11-13)** | The tree section and `workspacetree.go` are gone; the model discovers structure with `glob`/`list_dir`. Watch turns on the next bench run. |
 | Claude cache | `internal/providers/claude/convert.go` (last message, last tool), `stream.go` (stable system block) | Breakpoints on the stable system block, the last tool, and the last message. The setup user message still has **no** breakpoint (Task 2.3). |
 | OpenCode cache | `internal/providers/opencode/stream.go` | Responses path sends `prompt_cache_key`. **The Chat path (`runChat`) sends no cache key.** |
@@ -441,7 +441,7 @@ Label every line: **keep / rewrite / delete / move**. Planned changes:
 | `<critical>` "Each response MUST advance the task." | delete | Capable models do this already; emphasis. |
 | `<critical>` "Default to informed action; do not ask for confirmation…" | rewrite, keep | Real quirk (stopping to ask permission). → "When tools or the repo can answer a question, use them instead of asking the user." |
 | Plan-mode `<critical>` | keep, rewrite | The mode depends on it. → "Plan mode: discuss and ask questions; no file writes." |
-| "Today is X. Working directory is Y." | delete | Repeats the workstation block (which moves to setup in Phase 2). |
+| "Today is X. Working directory is Y." | **deleted (2026-11-13)** | Repeated the workstation block. The workstation block itself now holds only session-stable facts: **date and git branch were removed too** (2026-11-13) — they went stale in the cached prompt over multi-day sessions, and the model can run `date` / `git branch` when a task needs them. No midnight cache invalidation needed. |
 | Skills header sentence | keep | Tells the model the skill lookup exists. |
 | Approval-mode text (`approvalModeInstructions`) | audit, rewrite | Remove emphasis; keep what each mode allows. |
 | Tool descriptions (`jsonschema` tags) | tighten — **next, separate pass** | Describe behavior and arguments; remove usage lectures (for example, bash's "not for reading or editing files" → keep one short line, since that's a real quirk). |

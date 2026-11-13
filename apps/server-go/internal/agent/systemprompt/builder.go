@@ -196,13 +196,9 @@ func renderContextFiles(files []ContextFile) string {
 
 func renderWorkstation(env EnvironmentInfo) string {
 	lines := []string{
-		fmt.Sprintf("Date: %s", env.Date),
 		fmt.Sprintf("CWD: %s", env.Cwd),
 		fmt.Sprintf("OS: %s", env.OS),
 		fmt.Sprintf("Arch: %s", env.Arch),
-	}
-	if env.GitBranch != "" {
-		lines = append(lines, fmt.Sprintf("Git branch: %s", env.GitBranch))
 	}
 	if env.Model != "" {
 		lines = append(lines, fmt.Sprintf("Model: %s", env.Model))
