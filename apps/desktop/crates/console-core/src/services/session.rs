@@ -334,6 +334,36 @@ impl SessionService {
         })))
     }
 
+    /// `GET /api/sessions/:id/suggestions` — follow-up prompts kept for a
+    /// session until its next run starts.
+    pub async fn get_suggestions(&self, id: &str) -> Result<Vec<String>> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/suggestions", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get session suggestions")?;
+
+        let body: ApiResponse<Vec<String>> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse session suggestions response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to load session suggestions".into()
+            })))
+        }
+    }
+
     /// `GET /api/sessions/:id/todos` — persisted todo checklist for a session.
     pub async fn get_todos(&self, id: &str) -> Result<Vec<TodoItem>> {
         let url = self

@@ -38,6 +38,13 @@ impl ConsoleDesktopApp {
             loop {
                 match transport.watch_notifications(&client).await {
                     Ok(mut stream) => {
+                        // Pushes sent while the stream was down are gone;
+                        // the server kept the latest set, so ask for it.
+                        let _ = cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| this.reload_open_suggestions(cx));
+                            }
+                        });
                         while let Some(event_res) = stream.next().await {
                             if let Ok(event) = event_res {
                                 let session_id = event.session_id.clone();

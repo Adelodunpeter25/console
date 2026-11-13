@@ -1694,6 +1694,8 @@ impl ConsoleDesktopApp {
                                 // Shells started before this window attached.
                                 this.load_background_work(session_id.clone(), cx);
 
+                                this.load_suggestions(session_id.clone(), cx);
+
                                 // Hydrate any staged next-turn prompt so a queue
                                 // set before restart or on another device shows
                                 // immediately without waiting for queueUpdated SSE.

@@ -350,6 +350,37 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    /// Fetch the chat's stored suggestions, for a chat just opened or a
+    /// notification stream that reconnected and may have missed the push.
+    pub(crate) fn load_suggestions(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            if let Ok(items) = client.sessions.get_suggestions(&session_id).await {
+                let _ = cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.set_suggestions(&session_id, items, cx);
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Re-fetch suggestions for every chat a pane is showing.
+    pub(crate) fn reload_open_suggestions(&mut self, cx: &mut Context<Self>) {
+        let open: Vec<String> = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .filter_map(|leaf| self.active_session_for_pane(&leaf.id))
+            .collect();
+        for session_id in open {
+            self.load_suggestions(session_id, cx);
+        }
+    }
+
     pub(crate) fn clear_suggestions(&mut self, session_id: &str, cx: &mut Context<Self>) {
         if self.suggestions.remove(session_id).is_some() {
             cx.notify();
@@ -377,6 +408,6 @@ impl ConsoleDesktopApp {
         }
         self.active_pane_id = Some(pane_id.to_string());
         self.selected_session_id = self.active_session_for_pane(pane_id);
-        self.submit_prompt_with_context(prompt, Vec::new(), Vec::new(), Vec::new(), cx);
+        self.submit_suggestion(prompt, cx);
     }
 }

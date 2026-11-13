@@ -499,6 +499,25 @@ impl ConsoleDesktopApp {
         );
     }
 
+    /// A suggestion chip click: a normal turn that leaves whatever the user
+    /// has typed, attached, or annotated in the composer untouched.
+    pub fn submit_suggestion(&mut self, prompt: String, cx: &mut Context<Self>) {
+        self.start_prompt_run(
+            PromptStart {
+                prompt,
+                attachments: Vec::new(),
+                annotations: Vec::new(),
+                context_files: Vec::new(),
+                model_id: None,
+                provider: None,
+                approval_mode: None,
+                thinking_level: None,
+                keep_draft: true,
+            },
+            cx,
+        );
+    }
+
     fn start_prompt_run(&mut self, start: PromptStart, cx: &mut Context<Self>) {
         if start.prompt.trim().is_empty() {
             return;
