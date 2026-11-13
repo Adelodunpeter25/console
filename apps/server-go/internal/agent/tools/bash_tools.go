@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 const (
@@ -38,10 +40,48 @@ func truncateOutput(output string, maxBytes int, label string) string {
 }
 
 // bashSection renders one stdout/stderr section. Output over the cap is
-// spilled to a per-session file and the tail is shown (errors print at the
-// end), with secrets scrubbed before anything is written or returned.
+// spilled raw to a per-session file and the tail is shown (errors print at
+// the end), with secrets scrubbed before anything is written or returned.
 func bashSection(sessionID, label, output string) string {
-	return spilledSection(sessionID, "bash", "."+label+".log", label, github.RedactSecrets(output), bashMaxOutputBytes, truncateOutput)
+	redacted := github.RedactSecrets(output)
+	if len(redacted) <= bashMaxOutputBytes {
+		return cleanCommandOutput(redacted)
+	}
+	path, err := utils.SpillFile(utils.SpillDir(sessionID), "bash", "."+label+".log", redacted)
+	if err != nil {
+		return truncateOutput(cleanCommandOutput(redacted), bashMaxOutputBytes, label)
+	}
+	return fmt.Sprintf("%s: %s, %d lines, full output saved to %s\n--- last %s ---\n%s",
+		label, utils.HumanBytes(len(redacted)), countLines(redacted), path,
+		utils.HumanBytes(bashMaxOutputBytes), cleanCommandOutput(utils.TailOutput(redacted, bashMaxOutputBytes)))
+}
+
+var (
+	ansiCSIRe    = regexp.MustCompile("\x1b\\[[0-9;?]*[ -/]*[@-~]")
+	ansiOSCRe    = regexp.MustCompile("\x1b\\][^\x07\x1b]*(?:\x07|\x1b\\\\)")
+	ansiSimpleRe = regexp.MustCompile("\x1b[@-Z\\-_]")
+)
+
+// cleanCommandOutput strips ANSI escapes and collapses carriage-return
+// progress redraws (keep the last frame of each line) before the text
+// reaches the model. The spill file keeps the raw bytes.
+func cleanCommandOutput(output string) string {
+	if !strings.ContainsAny(output, "\x1b\r") {
+		return output
+	}
+	out := ansiOSCRe.ReplaceAllString(output, "")
+	out = ansiCSIRe.ReplaceAllString(out, "")
+	out = ansiSimpleRe.ReplaceAllString(out, "")
+	if strings.Contains(out, "\r") {
+		lines := strings.Split(out, "\n")
+		for i, line := range lines {
+			if idx := strings.LastIndex(line, "\r"); idx >= 0 {
+				lines[i] = line[idx+1:]
+			}
+		}
+		out = strings.Join(lines, "\n")
+	}
+	return out
 }
 
 func mergedEnv(overrides map[string]string) []string {

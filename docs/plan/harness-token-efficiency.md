@@ -386,18 +386,24 @@ results (26.7%) are handled before bash output (9.2%).
   with the full contents, a tail, and the stated size; small output is
   unchanged.
 
-### Task 3.2: Strip noise from command output
-- **Change:** in bash results, remove ANSI escape codes and collapse
-  carriage-return progress bars (keep only the last frame of each `\r`
-  sequence). This is just a transform before the text reaches the model.
-  The spill file keeps the raw bytes.
-- **Test:** add to the spill test file.
+### Task 3.2: Strip noise from command output — **done (2026-11-13)**
+- **Change (landed):** bash results are cleaned before they reach the model:
+  ANSI escape sequences (CSI/OSC) are stripped and carriage-return progress
+  redraws collapse to the last frame of each line. The spill file keeps the
+  raw bytes. Tests: `tests/tools/edit_errors_test.go`.
 
-### Task 3.3: Fix recurring tool errors
-- Using the Task 1.3 stats from the baseline, fix the top 3 error causes
-  (for example, `editFile` "must match exactly once" failures: return the
-  closest candidate lines; invalid-argument messages: name the bad field).
-  Each fix is its own commit with its own test.
+### Task 3.3: Fix recurring tool errors — **done (2026-11-13)**
+- **editFile not-found** now diagnoses the near-miss: it reports a
+  whitespace-insensitive match (with the line number) when only indentation
+  or line endings differ, CRLF mismatches, and otherwise the 3 closest
+  matching lines by similarity.
+- **editFile ambiguous** now lists the line numbers of every occurrence.
+- **Required fields are enforced** in the generic tool executor: a call
+  omitting a schema-required field fails with "Missing required fields for
+  <tool>: …" instead of a confusing failure deeper in the tool (an omitted
+  `oldContent` used to match the empty string everywhere).
+- **Next check:** after the next bench run, see whether the `editFile` error
+  rate (18/76 in baseline-v2) drops.
 
 ---
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -35,14 +36,14 @@ var EditFile = NewTool("editFile", "Edit a file by replacing an exact string. Re
 
 		occurrences := strings.Count(original, in.OldContent)
 		if occurrences == 0 {
-			preview := in.OldContent
-			if len(preview) > 80 {
-				preview = preview[:80] + "..."
-			}
-			return nil, NewToolError("The oldContent was not found in %q.\nLooked for:\n%s\n\nUse read_file to verify the current file content before editing.", in.Path, preview)
+			return nil, NewToolError("%s", editNotFoundMessage(in.Path, original, in.OldContent))
 		}
 		if occurrences > 1 {
-			return nil, NewToolError("The oldContent appears %d times in %q. Include more surrounding context in oldContent to make it unique.", occurrences, in.Path)
+			msg := fmt.Sprintf("The oldContent appears %d times in %q. Include more surrounding context in oldContent to make it unique.", occurrences, in.Path)
+			if lines := lineNumbersOf(original, in.OldContent); len(lines) > 0 {
+				msg += fmt.Sprintf("\nOccurrences at lines: %s.", joinLineNumbers(lines, 8))
+			}
+			return nil, NewToolError("%s", msg)
 		}
 
 		updated := strings.Replace(original, in.OldContent, in.NewContent, 1)
@@ -61,6 +62,160 @@ var EditFile = NewTool("editFile", "Edit a file by replacing an exact string. Re
 		}
 		return textResult(fmt.Sprintf("Edited: %s\n  Replaced %d line(s) with %d line(s) (%s)", in.Path, oldLines, newLines, deltaStr)), nil
 	})
+
+// editNotFoundMessage builds the not-found error with recovery hints: a
+// whitespace-insensitive match check (the most common real cause) and the
+// closest matching lines in the file.
+func editNotFoundMessage(path, original, oldContent string) string {
+	preview := oldContent
+	if len(preview) > 80 {
+		preview = preview[:80] + "..."
+	}
+	msg := fmt.Sprintf("The oldContent was not found in %q.\nLooked for:\n%s", path, preview)
+	if hint := editNotFoundHint(original, oldContent); hint != "" {
+		msg += "\n\n" + hint
+	}
+	return msg + "\n\nUse read_file to verify the current file content before editing."
+}
+
+// editNotFoundHint explains near-misses. Empty when the text is genuinely
+// absent.
+func editNotFoundHint(original, oldContent string) string {
+	if strings.Contains(strings.ReplaceAll(original, "\r\n", "\n"), oldContent) {
+		return "The text exists but the file uses CRLF line endings — match the file's line endings."
+	}
+	if idx := strings.Index(normalizeWhitespace(original), normalizeWhitespace(oldContent)); idx >= 0 {
+		return fmt.Sprintf("A whitespace-insensitive match exists near line %d — indentation, trailing whitespace or line endings differ.",
+			1+strings.Count(normalizeWhitespace(original)[:idx], "\n"))
+	}
+	if candidates := closestLines(original, oldContent, 3); len(candidates) > 0 {
+		var b strings.Builder
+		b.WriteString("Closest matching lines:")
+		for _, c := range candidates {
+			line := c.text
+			if len(line) > 120 {
+				line = line[:120] + "..."
+			}
+			fmt.Fprintf(&b, "\n  %d: %s", c.number, strings.TrimSpace(line))
+		}
+		return b.String()
+	}
+	return ""
+}
+
+// normalizeWhitespace collapses runs of spaces/tabs and trims each line, so
+// an edit that only differs in indentation still finds its target.
+func normalizeWhitespace(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = strings.Join(strings.Fields(line), " ")
+	}
+	return strings.Join(lines, "\n")
+}
+
+type lineCandidate struct {
+	number int
+	text   string
+	score  float64
+}
+
+// closestLines ranks file lines by similarity to the needle's first
+// meaningful line, so a failed edit points at where the text probably lives.
+func closestLines(original, oldContent string, want int) []lineCandidate {
+	needle := ""
+	for _, line := range strings.Split(oldContent, "\n") {
+		if t := strings.TrimSpace(line); t != "" {
+			needle = t
+			break
+		}
+	}
+	if needle == "" {
+		return nil
+	}
+	if len(needle) > 160 {
+		needle = needle[:160]
+	}
+	var out []lineCandidate
+	for i, line := range strings.Split(original, "\n") {
+		t := strings.TrimSpace(line)
+		if t == "" {
+			continue
+		}
+		score := similarity(t, needle)
+		if score < 0.6 {
+			continue
+		}
+		out = append(out, lineCandidate{number: i + 1, text: line, score: score})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].score > out[j].score })
+	if len(out) > want {
+		out = out[:want]
+	}
+	return out
+}
+
+// similarity is 1 - Levenshtein distance over the longer string, with an
+// early length filter to keep the scan cheap on big files.
+func similarity(a, b string) float64 {
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+	if len(b) > 0 && float64(len(b)-len(a))/float64(len(b)) > 0.5 {
+		return 0
+	}
+	dist := levenshtein(a, b)
+	if len(b) == 0 {
+		return 0
+	}
+	return 1 - float64(dist)/float64(len(b))
+}
+
+func levenshtein(a, b string) int {
+	prev := make([]int, len(b)+1)
+	curr := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		curr[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			curr[j] = min(curr[j-1]+1, min(prev[j]+1, prev[j-1]+cost))
+		}
+		prev, curr = curr, prev
+	}
+	return prev[len(b)]
+}
+
+// lineNumbersOf maps every occurrence of needle to its 1-based line number.
+func lineNumbersOf(original, needle string) []int {
+	var lines []int
+	for idx := 0; len(needle) > 0 && idx <= len(original)-len(needle); {
+		found := strings.Index(original[idx:], needle)
+		if found < 0 {
+			break
+		}
+		lines = append(lines, 1+strings.Count(original[:idx+found], "\n"))
+		idx += found + len(needle)
+	}
+	return lines
+}
+
+// joinLineNumbers renders at most max line numbers, then "…".
+func joinLineNumbers(lines []int, max int) string {
+	parts := make([]string, 0, min(len(lines), max))
+	for i, n := range lines {
+		if i == max {
+			parts = append(parts, fmt.Sprintf("… (%d more)", len(lines)-max))
+			break
+		}
+		parts = append(parts, fmt.Sprintf("%d", n))
+	}
+	return strings.Join(parts, ", ")
+}
 
 type batchWriteFile struct {
 	Path    string `json:"path" jsonschema:"required,description=File path to write"`

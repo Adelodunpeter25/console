@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/invopop/jsonschema"
 )
@@ -123,11 +124,36 @@ func (t *typedTool[I]) Schema() *jsonschema.Schema { return t.schema }
 func (t *typedTool[I]) Execute(ctx context.Context, arguments json.RawMessage) (any, error) {
 	var input I
 	if len(arguments) > 0 {
+		// Name the missing fields explicitly: json.Unmarshal neither enforces
+		// the schema's required list nor mentions it, so an omitted field
+		// used to surface as a confusing failure deeper in the tool.
+		var provided map[string]json.RawMessage
+		_ = json.Unmarshal(arguments, &provided)
+		missing := missingRequired(t.schema, provided)
 		if err := json.Unmarshal(arguments, &input); err != nil {
-			return nil, NewToolError("Invalid arguments for %s: %v", t.name, err)
+			msg := fmt.Sprintf("Invalid arguments for %s: %v", t.name, err)
+			if len(missing) > 0 {
+				msg += fmt.Sprintf("\nMissing required fields: %s", strings.Join(missing, ", "))
+			}
+			return nil, NewToolError("%s", msg)
+		}
+		if len(missing) > 0 {
+			return nil, NewToolError("Missing required fields for %s: %s", t.name, strings.Join(missing, ", "))
 		}
 	}
 	return t.run(ctx, input)
+}
+
+// missingRequired lists the schema's required fields absent from the call's
+// arguments.
+func missingRequired(schema *jsonschema.Schema, provided map[string]json.RawMessage) []string {
+	var missing []string
+	for _, req := range schema.Required {
+		if _, ok := provided[req]; !ok {
+			missing = append(missing, req)
+		}
+	}
+	return missing
 }
 
 // RawSchemaTool is a Tool whose input schema is arbitrary JSON (e.g. an MCP
