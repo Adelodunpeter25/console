@@ -55,3 +55,11 @@ func TestBashBackgroundHasNoDefaultLifetime(t *testing.T) {
 		t.Fatalf("unexpected output: %s", out)
 	}
 }
+
+func TestBashPlanModeTimeoutHint(t *testing.T) {
+	raw, _ := json.Marshal(map[string]any{"command": "sleep 5", "timeoutMs": 200})
+	_, err := tools.NewSandboxedBashTool(tools.SandboxReadOnly, nil, "s1").Execute(context.Background(), raw)
+	if err == nil || !strings.Contains(err.Error(), "too slow for plan mode") {
+		t.Fatalf("expected plan-mode hint, got: %v", err)
+	}
+}

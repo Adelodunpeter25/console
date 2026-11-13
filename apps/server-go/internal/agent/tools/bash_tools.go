@@ -194,9 +194,13 @@ func NewSandboxedBashTool(mode SandboxMode, jobs *terminal.BashJobManager, owner
 					in.Command, cwd, bashSection(ownerSessionID, "stdout", res.Stdout), bashSection(ownerSessionID, "stderr", res.Stderr))
 			}
 			if res.Killed {
+				hint := ""
+				if mode == SandboxReadOnly {
+					hint = "\n\n" + planModeTimeoutHint
+				}
 				return nil, NewToolError(
-					"Command timed out after %dms.\nCommand: %s\nWorking directory: %s\n\nPartial stdout:\n%s\n\nPartial stderr:\n%s",
-					timeoutMs, in.Command, cwd, bashSection(ownerSessionID, "stdout", res.Stdout), bashSection(ownerSessionID, "stderr", res.Stderr))
+					"Command timed out after %dms.\nCommand: %s\nWorking directory: %s\n\nPartial stdout:\n%s\n\nPartial stderr:\n%s%s",
+					timeoutMs, in.Command, cwd, bashSection(ownerSessionID, "stdout", res.Stdout), bashSection(ownerSessionID, "stderr", res.Stderr), hint)
 			}
 
 			// bashSection redacts before spilling: the child inherits
@@ -221,6 +225,8 @@ func NewSandboxedBashTool(mode SandboxMode, jobs *terminal.BashJobManager, owner
 			return Envelope{Content: textResult(result), IsError: res.ExitCode != 0}, nil
 		})
 }
+
+const planModeTimeoutHint = "This command is too slow for plan mode, which can't run background jobs. Narrow it (for example, limit the paths or output), or describe it in your plan and run it after the plan is approved."
 
 func backgroundStartedText(jobID, workLine string, timeoutMs int, prefix string) string {
 	limit := "none (runs until it exits or is killed)"
