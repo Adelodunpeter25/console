@@ -37,6 +37,13 @@ func truncateOutput(output string, maxBytes int, label string) string {
 	return output[:maxBytes] + fmt.Sprintf("\n\n[... %s truncated: %d bytes total, showing first %d bytes ...]", label, len(output), maxBytes)
 }
 
+// bashSection renders one stdout/stderr section. Output over the cap is
+// spilled to a per-session file and the tail is shown (errors print at the
+// end), with secrets scrubbed before anything is written or returned.
+func bashSection(sessionID, label, output string) string {
+	return spilledSection(spillDir(sessionID), "bash", "."+label+".log", label, github.RedactSecrets(output), bashMaxOutputBytes)
+}
+
 func mergedEnv(overrides map[string]string) []string {
 	env := os.Environ()
 	if len(overrides) == 0 {
@@ -130,19 +137,20 @@ func NewSandboxedBashTool(mode SandboxMode, jobs *terminal.BashJobManager, owner
 			if res.Aborted {
 				return nil, NewToolError(
 					"Command cancelled by user abort.\nCommand: %s\nWorking directory: %s\n\nPartial stdout:\n%s\n\nPartial stderr:\n%s",
-					in.Command, cwd, github.RedactSecrets(truncateOutput(res.Stdout, bashMaxOutputBytes, "stdout")), github.RedactSecrets(truncateOutput(res.Stderr, bashMaxOutputBytes, "stderr")))
+					in.Command, cwd, bashSection(ownerSessionID, "stdout", res.Stdout), bashSection(ownerSessionID, "stderr", res.Stderr))
 			}
 			if res.Killed {
 				return nil, NewToolError(
 					"Command timed out after %dms.\nCommand: %s\nWorking directory: %s\n\nPartial stdout:\n%s\n\nPartial stderr:\n%s",
-					timeoutMs, in.Command, cwd, github.RedactSecrets(truncateOutput(res.Stdout, bashMaxOutputBytes, "stdout")), github.RedactSecrets(truncateOutput(res.Stderr, bashMaxOutputBytes, "stderr")))
+					timeoutMs, in.Command, cwd, bashSection(ownerSessionID, "stdout", res.Stdout), bashSection(ownerSessionID, "stderr", res.Stderr))
 			}
 
-			// The child inherits GH_TOKEN, so its output may echo the secret
-			// (`env`, `printenv GH_TOKEN`) — scrub the exact token before it
-			// can reach the transcript.
-			stdout := github.RedactSecrets(truncateOutput(res.Stdout, bashMaxOutputBytes, "stdout"))
-			stderr := github.RedactSecrets(truncateOutput(res.Stderr, bashMaxOutputBytes, "stderr"))
+			// bashSection redacts before spilling: the child inherits
+			// GH_TOKEN, so its output may echo the secret (`env`,
+			// `printenv GH_TOKEN`) — scrub the exact token before it can
+			// reach the transcript or the spill file.
+			stdout := bashSection(ownerSessionID, "stdout", res.Stdout)
+			stderr := bashSection(ownerSessionID, "stderr", res.Stderr)
 			sections := []string{fmt.Sprintf("Exit code: %d", res.ExitCode), fmt.Sprintf("Working directory: %s", cwd)}
 			if strings.TrimSpace(stdout) != "" {
 				sections = append(sections, "", "stdout:", stdout)

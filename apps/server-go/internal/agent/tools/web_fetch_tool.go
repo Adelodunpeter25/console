@@ -25,6 +25,10 @@ type fetchInput struct {
 const (
 	fetchDefaultTimeoutMs = 15_000
 	fetchDefaultMaxBytes  = 512 * 1024
+	// fetchSpillMaxBytes caps the read for the spill file. Beyond this the
+	// rest of the body is genuinely discarded: 5 MB of one page is already
+	// far past what any follow-up read would want.
+	fetchSpillMaxBytes = 5 << 20
 )
 
 var (
@@ -100,17 +104,28 @@ var Fetch = NewTool("webFetch", "Fetch content from a URL or web page as markdow
 		defer resp.Body.Close()
 
 		contentType := resp.Header.Get("Content-Type")
-		data, err := io.ReadAll(io.LimitReader(resp.Body, int64(maxBytes)+1))
+		data, err := io.ReadAll(io.LimitReader(resp.Body, fetchSpillMaxBytes+1))
 		if err != nil {
 			return nil, NewToolError("Error reading response body: %v", err)
 		}
-		truncated := len(data) > maxBytes
-		if truncated {
-			data = data[:maxBytes]
+		hardTruncated := len(data) > fetchSpillMaxBytes
+		if hardTruncated {
+			data = data[:fetchSpillMaxBytes]
 		}
 		bodyText := string(data)
-		if truncated {
-			bodyText += fmt.Sprintf("\n\n[... response truncated: showing first %d bytes ...]", maxBytes)
+		// Over the display cap: keep the head for the model (the start of a
+		// page is the useful side), spill the full body to a file it can
+		// re-read or grep.
+		if len(data) > maxBytes {
+			if path, spillErr := spillToFile(spillDir(""), spillURLName(in.URL), ".body.log", bodyText); spillErr == nil {
+				bodyText = bodyText[:maxBytes] + fmt.Sprintf(
+					"\n\n[... response truncated: showing first %s of %s. Full body saved to %s ...]",
+					humanBytes(maxBytes), humanBytes(len(data)), path)
+			} else {
+				bodyText += fmt.Sprintf("\n\n[... response truncated: showing first %d bytes ...]", maxBytes)
+			}
+		} else if hardTruncated {
+			bodyText += fmt.Sprintf("\n\n[... response truncated at %s ...]", humanBytes(fetchSpillMaxBytes))
 		}
 
 		var formattedBody string
