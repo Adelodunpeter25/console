@@ -94,11 +94,11 @@ func TestOpenCodeDiscoveryAndChatProvider(t *testing.T) {
 		t.Fatalf("user message: %#v", messages[1])
 	}
 	toolNames := chatToolNames(chatRequest["tools"])
-	if !reflect.DeepEqual(toolNames[:6], []string{"edit", "glob", "grep", "question", "read", "shell"}) {
-		t.Fatalf("compatibility tools: %v", toolNames)
-	}
 	if !contains(toolNames, "read_file") || !contains(toolNames, "custom_tool") {
 		t.Fatalf("real tools missing: %v", toolNames)
+	}
+	if contains(toolNames, "question") || contains(toolNames, "read") || contains(toolNames, "shell") {
+		t.Fatalf("marker tools should be gone: %v", toolNames)
 	}
 	if countName(toolNames, "glob") != 1 || countName(toolNames, "grep") != 1 {
 		t.Fatalf("duplicate tools: %v", toolNames)

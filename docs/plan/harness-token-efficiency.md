@@ -53,12 +53,12 @@ size, not as targets.
 | Emphasis | `renderContextFiles`, `renderWorkstation` | "You MUST follow…", "Do not waste tools…", `<critical>` "MUST advance the task". |
 | Workspace tree | `workspacetree.go` | Depth-limited tree on every request, even though `glob`/`list_dir` exist. |
 | Claude cache | `internal/providers/claude/convert.go` (last message, last tool), `stream.go` (stable system block) | Breakpoints on the stable system block, the last tool, and the last message. The setup user message still has **no** breakpoint (Task 2.3). |
-| OpenCode cache | `internal/providers/opencode/stream.go` | Responses path sends `prompt_cache_key`. **The Chat path (`runChat`, used by `space-bunny-free`) sends no cache key.** |
+| OpenCode cache | `internal/providers/opencode/stream.go` | Responses path sends `prompt_cache_key`. **The Chat path (`runChat`) sends no cache key.** |
 | Usage telemetry | `loop.TurnUsage` (`internal/agent/loop/message.go`), each provider's `NormalizeUsage` | Per-turn input, cache read/write and output are recorded on the assistant message, and Phase 1 added per-run totals and a breakdown; per-tool cost share is still partial. |
 | File reads | `internal/agent/tools/file_tools.go` | Task 3.0 capped default reads at 300 lines; every kept line is still numbered (`%*d: `). |
 | Bash output | `internal/agent/tools/bash_tools.go` | Still keeps the first 50 KB and drops the rest. Errors usually show up at the **end**, which is the part that gets thrown away. |
 | Firecrawl / webFetch | `internal/agent/tools/firecrawl.go`, `web_fetch_tool.go` | Also cut off the head without saving the rest. |
-| Tools shipped | `internal/agent/tools` + memory | 17 tools with full schemas on every request (`webSearch`, `webFetch`, `bashJob`, `askMany`, `memory`, `batchWrite` are rarely used). OpenCode adds 6 compatibility marker tools on top. |
+| Tools shipped | `internal/agent/tools` + memory | 17 tools with full schemas on every request (`webSearch`, `webFetch`, `bashJob`, `askMany`, `memory`, `batchWrite` are rarely used). |
 | Compaction | `internal/agent/compaction/llm.go` | Summary prompt is already short. The full history isn't saved anywhere the agent can search. |
 | Subagent | `internal/agent/loop/subagent.go` | Adds a fixed preamble to the parent's **whole** system prompt (tree included). Returns the child's entire streamed text as its "summary". |
 
@@ -68,11 +68,11 @@ All cost measurements use the `claude` provider (Claude Code OAuth
 subscription) with **`claude-haiku-4-5`**. That's the model with remaining
 usage on the account.
 
-Why Haiku instead of the OpenCode free model:
+Why Haiku instead of OpenCode:
 
 - **Real cache numbers.** Anthropic reports `cache_read_input_tokens` and
   `cache_creation_input_tokens` on every response, and `NormalizeUsage`
-  (`providers/claude/stream.go:228`) already maps them into `TurnUsage`.
+  (`internal/providers/claude/stream.go`) already maps them into `TurnUsage`.
   We don't need to estimate caching locally.
 - **Explicit cache breakpoints** are already wired up
   (`claude/convert.go:251,316`, `stream.go:150`), so the Phase 2 work is
@@ -81,7 +81,7 @@ Why Haiku instead of the OpenCode free model:
   input $1.00, cache read $0.10, cache write (5 min) $1.25, output $5.00.
   The bench reports weighted cost in real dollars using these prices, kept
   as a table in the bench tool so it's easy to add other models.
-- More consistent quality than free models, so each run is less noisy.
+- More consistent quality, so each run is less noisy.
 
 Things to know about Haiku and the subscription:
 
@@ -104,11 +104,11 @@ Things to know about Haiku and the subscription:
 - **Required identity line.** `ClaudeCodeSystemInstruction` stays as the
   first system block. Prompt trimming (4.1) never touches it.
 
-OpenCode's free model (`space-bunny-free`) is an optional **second check**,
-useful to see whether prompt changes still work on a weaker, non-Anthropic
-model. Zen does report some cached tokens on the Chat path. If we want better
-cache numbers there, sending `prompt_cache_key` on the Chat path (as the
-Responses path already does) is a small optional follow-up.
+OpenCode Go (API key) is an optional **second check** to see whether prompt
+changes also work on a non-Anthropic model. The Responses path reports some
+cached tokens. If we want better cache numbers on the Chat path, sending
+`prompt_cache_key` there (as the Responses path already does) is a small
+optional follow-up.
 
 ---
 
@@ -540,8 +540,8 @@ The Factory article reinforces several principles for this plan:
 - Record null and negative results in the Results log below. Don't delete
   them.
 - Before flipping any Phase 4 default: one run of the full 12-task set on
-  Haiku. Optionally, a second check on the OpenCode free model to see that
-  the change also works on a non-Anthropic model.
+  Haiku. Optionally, a second check on OpenCode Go to see that the change
+  also works on a non-Anthropic model.
 
 ## Traps to avoid
 

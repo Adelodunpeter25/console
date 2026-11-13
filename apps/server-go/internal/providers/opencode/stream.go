@@ -71,7 +71,7 @@ func (p *Provider) ensureModel(ctx context.Context, modelID string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("OpenCode model %q is not available in the free model list", modelID)
+	return fmt.Errorf("OpenCode model %q is not available in the model list", modelID)
 }
 
 func (p *Provider) postJSON(ctx context.Context, path, conversationID string, body map[string]any) (*http.Response, error) {
@@ -116,7 +116,7 @@ func (p *Provider) runChat(ctx context.Context, req loop.TurnRequest, events *st
 			"include_usage": true,
 		},
 	}
-	toolDefinitions := MergeToolDefinitions(req.Tools)
+	toolDefinitions := req.Tools
 	if len(toolDefinitions) > 0 {
 		body["tools"] = ConvertChatTools(toolDefinitions)
 	}
@@ -195,7 +195,7 @@ func (p *Provider) runResponses(ctx context.Context, req loop.TurnRequest, event
 	if strings.TrimSpace(req.SystemPrompt) != "" {
 		body["instructions"] = req.SystemPrompt
 	}
-	toolDefinitions := MergeToolDefinitions(req.Tools)
+	toolDefinitions := req.Tools
 	if len(toolDefinitions) > 0 {
 		body["tools"] = ConvertResponsesTools(toolDefinitions)
 	}
