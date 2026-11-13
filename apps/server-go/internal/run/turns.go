@@ -490,18 +490,12 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	registry = tools.NewRegistry(toolList...)
 	// MCP servers load lazily: only a small loadTools entry is in the list
 	// until the model asks for a group, which then appends that server's
-	// tools (visible from the next turn via agent.ToolDefs). Groups loaded
-	// earlier in this session are restored up front, in load order.
+	// tools (visible from the next turn via agent.ToolDefs).
 	if mcpManager != nil {
 		if lt := mcp.NewLoadToolsTool(mcpManager, registry, mcp.LoadToolsOptions{
 			OnLoad: func(group string) { s.groups.add(sessionID, group) },
 		}); lt != nil {
 			registry.Add(lt)
-			for _, group := range s.groups.list(sessionID) {
-				if _, _, err := mcp.LoadGroup(ctx, mcpManager, registry, group); err != nil {
-					slog.Warn("restore tool group failed", "session", sessionID, "group", group, "error", err)
-				}
-			}
 		}
 	}
 	// Capabilities that are on restore here, appended after everything else so
@@ -514,6 +508,16 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// readSkill is rebuilt per run so it can see which capabilities are on
 	// and, for the ones the agent may switch on, load their tools mid-turn.
 	registry.Replace(tools.NewReadSkillTool(s.readSkillCapabilities(loadCtx, registry)))
+	// Groups loaded earlier in this session are restored last, in load order —
+	// the same position an in-run loadTools call appends them, so the tool
+	// order matches the previous run's turns.
+	if mcpManager != nil {
+		for _, group := range s.groups.list(sessionID) {
+			if _, _, err := mcp.LoadGroup(ctx, mcpManager, registry, group); err != nil {
+				slog.Warn("restore tool group failed", "session", sessionID, "group", group, "error", err)
+			}
+		}
+	}
 	executor := loop.NewExecutor(registry, mode)
 	executor.Guard = guard
 	// Capture the pre-write content of every file a whole-file overwrite
