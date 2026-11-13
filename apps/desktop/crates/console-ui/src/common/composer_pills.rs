@@ -22,6 +22,10 @@ use crate::theme::Theme;
 
 type ClickHandler = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
 pub(crate) type StopHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
+/// Every pill in the row, status and suggestion alike, is this tall so they
+/// read as one set. Fixed rather than padding-derived, so it does not drift
+/// with the font's line height.
+const PILL_HEIGHT: f32 = 29.0;
 type PickHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 
 /// Follow-up prompts that fill the rest of the row and scroll sideways.
@@ -269,8 +273,8 @@ fn changes_pill(
         .flex()
         .items_center()
         .gap(px(6.0))
+        .h(px(PILL_HEIGHT))
         .px(px(10.0))
-        .py(px(5.0))
         .rounded_full()
         .bg(theme.raised)
         .cursor_pointer()
@@ -323,8 +327,8 @@ fn pill(
         .flex()
         .items_center()
         .gap(px(6.0))
+        .h(px(PILL_HEIGHT))
         .px(px(10.0))
-        .py(px(5.0))
         .rounded_full()
         .bg(theme.raised)
         .cursor_pointer()
@@ -360,9 +364,9 @@ fn suggestion_pill(id: String, text: String, on_pick: PickHandler, theme: Theme)
         .flex()
         .items_center()
         .gap(px(7.0))
+        .h(px(PILL_HEIGHT))
         .pl(px(4.0))
         .pr(px(10.0))
-        .py(px(3.0))
         .rounded_full()
         .bg(theme.raised)
         .cursor_pointer()
