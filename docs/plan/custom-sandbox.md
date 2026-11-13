@@ -161,9 +161,143 @@ silently running the command without a sandbox.
 7. Add shared and platform-specific behavior tests.
 8. Add workspace/full-access policy support after the read-only path is reliable.
 
-## 9. Definition of success
+## 9. Gaps to resolve before implementation
+
+The first draft describes the direction, but these decisions must be explicit
+before code is written.
+
+### 9.1 Define the security promise
+
+“Read-only” and “workspace” are security promises, not just labels. Document the
+threat model first:
+
+- the command may be malicious or may contain model-generated mistakes;
+- the command may start child processes, follow symlinks, inspect environment
+  variables, and use interpreters already installed on the machine;
+- the command must not escape the approved paths through `..`, symlinks,
+  bind mounts, junctions, or alternate path spellings;
+- credentials, SSH agents, desktop sockets, and other sensitive handles are not
+  automatically available merely because the command runs as the user.
+
+For each policy, state what is protected and what is deliberately not protected.
+The implementation and tests should use that statement as the contract.
+
+### 9.2 Separate policy from capability
+
+A requested policy is not the same thing as what a platform can enforce. Define
+stable result types for:
+
+- requested policy;
+- effective policy;
+- supported capabilities;
+- degraded or unavailable capabilities;
+- refusal reason.
+
+A backend must either enforce the required fields or refuse the request. It must
+never quietly downgrade `workspace` to `full-access`. If a caller explicitly
+allows a weaker policy, that downgrade should be visible in the result and in
+logs.
+
+### 9.3 Clarify “full access”
+
+Full access should not mean that every command is trusted. It means the command
+may use the user's normal filesystem permissions. The runner should still apply
+lifetime, output, process-tree cleanup, and resource limits.
+
+Also decide where the user makes this choice, how it is displayed, and whether a
+session can change policy while a command is running. A policy must be fixed for
+the lifetime of a process; changing it requires starting a new process.
+
+### 9.4 Make path rules precise
+
+Define whether the approved workspace includes the workspace itself, hidden
+files, generated files, mounted repositories, and temporary directories. Resolve
+and validate paths before launch, but also enforce them inside the OS backend so
+validation alone is not vulnerable to a race.
+
+Tests must cover symlinks, renamed directories, junctions on Windows, hard links
+where relevant, relative paths, and commands launched from outside the workspace.
+Do not expose host-wide read access by default just because the command needs
+system libraries to start.
+
+### 9.5 Treat network and secrets as separate policies
+
+“Network allowed” is too broad for a first API. Decide whether it means all
+network access, no network access, or a future allowlist. Make credentials a
+separate policy: inherited environment variables, SSH agent forwarding, cloud
+credentials, and browser/session sockets should be opt-in and clearly shown to
+the user.
+
+### 9.6 Specify the Windows starting point honestly
+
+A Job Object controls process lifetime and resources; by itself it does not
+sandbox filesystem access. A restricted token also does not automatically make a
+workspace-only filesystem boundary. Choose and document the first Windows
+filesystem mechanism, or explicitly mark the Windows backend as process-managed
+rather than filesystem-isolated.
+
+The product must not call that backend “workspace sandboxing” until tests prove
+that it prevents writes outside the workspace. If strong filesystem isolation is
+not available, fail closed for policies that require it.
+
+### 9.7 Define process and shell behavior
+
+Specify whether the runner launches `/bin/sh`, `bash`, PowerShell, or `cmd.exe`,
+and how arguments and environment values are passed. Keep the command and policy
+separate; never build a shell command by concatenating untrusted policy values.
+
+Define behavior for descendants, daemons, detached processes, process groups,
+stdin, terminal allocation, signals, and background jobs. A timeout is incomplete
+if a child process survives it or retains a writable handle.
+
+### 9.8 Plan helper distribution and trust
+
+If a native helper is needed, decide how it is built, signed, installed, updated,
+and versioned on each platform. The server should verify that the helper speaks a
+compatible protocol and should fail safely when it is missing or altered. Avoid
+requiring a compiler or administrator access at runtime.
+
+### 9.9 Add operational and compatibility requirements
+
+Record the effective policy and backend in structured logs without recording
+secrets. Return a stable machine-readable error so the desktop can explain a
+refusal and offer the user an intentional alternative. Keep older clients
+compatible while adding policy fields, and define what happens after a server
+restart to running jobs.
+
+### 9.10 Use security review gates
+
+Before enabling a backend by default, review its launch arguments, environment,
+file descriptor inheritance, path handling, and child-process cleanup. Add a
+platform-specific adversarial test suite and document known limitations. A
+backend should be promoted from experimental only after its required policy is
+proven on supported OS versions, not merely when its launcher executable exists.
+
+## 10. Suggested implementation order
+
+1. Write the threat model and policy contract, including path, network, secret,
+   and process semantics.
+2. Define policy, capability, result, error, and runner types.
+3. Move the current Linux and macOS launchers behind platform backends without
+   changing user-visible behavior.
+4. Change availability checks to return a reason and capabilities.
+5. Add fail-closed behavior for required read-only and workspace policies.
+6. Add shared process-tree cleanup, resource limits, and structured results.
+7. Decide and prototype the Windows filesystem backend; do not promise workspace
+   isolation until its behavior tests pass.
+8. Add shared and platform-specific adversarial tests.
+9. Add workspace/full-access UI and policy selection after the read-only path is
+   reliable.
+10. Document helper packaging, upgrades, support boundaries, and recovery of
+    running jobs.
+
+## 11. Definition of success
 
 The server has one platform-independent way to request a command policy. Linux,
 macOS, and Windows each have a backend that reports what it can enforce. Plan
 mode never silently becomes unrestricted because a dependency is missing, and
 full-access commands remain bounded, tracked, and cleanly stoppable.
+
+The product documentation also states the exact security promise for every
+policy, exposes effective capabilities to the user, handles paths and secrets
+explicitly, and refuses policies that a platform cannot actually enforce.
