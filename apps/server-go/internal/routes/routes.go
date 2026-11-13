@@ -77,6 +77,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 
 	RegisterFavoriteRoutes(app, services.NewFavoriteService(cfg.DB))
 	RegisterDraftRoutes(app, services.NewDraftService(cfg.DB))
+	RegisterFileCommentRoutes(app, services.NewFileCommentService(cfg.DB))
 	RegisterPortRoutes(app, cfg.Ports)
 	RegisterSettingsRoutes(app, services.NewSettingsService())
 	RegisterFsRoutes(app, fs.NewFsService(), cfg.Watch)
