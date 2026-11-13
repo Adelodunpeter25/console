@@ -19,9 +19,29 @@ impl ConsoleDesktopApp {
     /// Store a fresh session list and bring the Dock badge in line with it.
     /// Every place that replaces the list goes through here, so the badge can
     /// never drift from what the sidebar shows.
-    pub(crate) fn set_session_list(&mut self, sessions: Vec<SessionHeader>) {
+    pub(crate) fn set_session_list(
+        &mut self,
+        sessions: Vec<SessionHeader>,
+        cx: &mut Context<Self>,
+    ) {
+        // Decided on the fresh list, before it replaces the local one: the
+        // server is the one that knows a chat finished while the app was away,
+        // and a stale local copy would hide exactly that.
+        let active = self
+            .active_pane_id
+            .as_deref()
+            .and_then(|pane| self.active_session_for_pane(pane));
+        let read_active = console_core::types::notification::fresh_list_needs_read(
+            &sessions,
+            active.as_deref(),
+            self.is_window_active,
+        );
         self.sessions = Rc::new(sessions);
         self.refresh_dock_badge();
+        if read_active && let Some(active) = active {
+            // The refresh this triggers returns the chat read, so it ends there.
+            self.force_session_read(&active, cx);
+        }
     }
 
     /// Recount the Dock badge from the current session list. Called after any
@@ -49,7 +69,7 @@ impl ConsoleDesktopApp {
                                     .sessions
                                     .iter()
                                     .any(|s| !known_at_request.contains(&s.id));
-                                this.set_session_list(sessions);
+                                this.set_session_list(sessions, cx);
                                 // Chats that no longer exist cannot be
                                 // restored to, so their remembered positions
                                 // are dropped.
@@ -1348,7 +1368,12 @@ impl ConsoleDesktopApp {
 
     /// The window just came to the front: the chat in the active pane is now in
     /// front of the user, so whatever finished while they were away is seen.
-    /// Reports a read for it. A no-op when the chat is already read.
+    ///
+    /// The read is forced rather than gated on the local list. A run that ended
+    /// while the window was in the background made the chat unread on the
+    /// server, but the app only heard "the run ended" and still holds
+    /// `unread: false`, so a gated report would skip it. One idempotent request
+    /// per window focus is cheap, and the server ignores it for a read chat.
     pub(crate) fn report_read_for_active_chat(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self
             .active_pane_id
@@ -1357,7 +1382,7 @@ impl ConsoleDesktopApp {
         else {
             return;
         };
-        self.report_session_read(&session_id, cx);
+        self.force_session_read(&session_id, cx);
     }
 
     /// Tell the server this chat was shown, which clears its unread dot (and a
@@ -1392,7 +1417,7 @@ impl ConsoleDesktopApp {
         let session_id = session_id.to_string();
         cx.spawn(async move |_entity, _cx| {
             if let Err(error) = client.sessions.mark_read(&session_id).await {
-                log::debug!("mark read failed for {session_id}: {error}");
+                log::warn!("mark read failed for {session_id}: {error}");
             }
         })
         .detach();
@@ -1445,15 +1470,18 @@ impl ConsoleDesktopApp {
         cx.notify();
         let client = self.client.clone();
         let session_id = session_id.to_string();
-        cx.spawn(async move |entity, cx| {
-            if client.sessions.mark_read(&session_id).await.is_ok() {
-                cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.load_sessions(cx));
-                    }
-                });
-            }
-        })
+        cx.spawn(
+            async move |entity, cx| match client.sessions.mark_read(&session_id).await {
+                Ok(()) => {
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| this.load_sessions(cx));
+                        }
+                    });
+                }
+                Err(error) => log::warn!("mark read failed for {session_id}: {error}"),
+            },
+        )
         .detach();
     }
 
