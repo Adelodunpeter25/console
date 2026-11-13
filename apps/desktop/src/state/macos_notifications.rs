@@ -180,20 +180,10 @@ mod imp {
         center.removeDeliveredNotificationsWithIdentifiers(&ids);
         center.removePendingNotificationRequestsWithIdentifiers(&ids);
     }
-
-    /// Remove every delivered banner. Like `clear_for_session`, this leaves the
-    /// Dock badge alone: focusing the window is not reading the chats.
-    pub(crate) fn clear_all() {
-        let center = UNUserNotificationCenter::currentNotificationCenter();
-        center.removeAllDeliveredNotifications();
-        center.removeAllPendingNotificationRequests();
-    }
 }
 
 #[cfg(target_os = "macos")]
-pub(crate) use imp::{
-    clear_all, clear_for_session, ensure_initialized, notify_session, set_dock_badge,
-};
+pub(crate) use imp::{clear_for_session, ensure_initialized, notify_session, set_dock_badge};
 
 #[cfg(not(target_os = "macos"))]
 mod stub {
@@ -204,11 +194,8 @@ mod stub {
     }
     pub(crate) fn notify_session(_session_id: &str, _title: &str, _subtitle: &str, _body: &str) {}
     pub(crate) fn clear_for_session(_session_id: &str) {}
-    pub(crate) fn clear_all() {}
     pub(crate) fn set_dock_badge(_count: usize) {}
 }
 
 #[cfg(not(target_os = "macos"))]
-pub(crate) use stub::{
-    clear_all, clear_for_session, ensure_initialized, notify_session, set_dock_badge,
-};
+pub(crate) use stub::{clear_for_session, ensure_initialized, notify_session, set_dock_badge};
