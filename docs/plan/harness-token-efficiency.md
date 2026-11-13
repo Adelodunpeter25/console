@@ -416,10 +416,11 @@ behavior until bench shows no drop in success and lower cost. Then flip the
 default in a separate commit.
 
 Put flag loading in a new `internal/agent/flags` package with a `Flags`
-struct. `bench --flags` sets it directly. **Not built yet (2026-11-13):** the
-only flag today is `CONSOLE_HARNESS_SPARSE_LINE_NUMBERS`, read directly in
-`internal/agent/tools/file_tools.go`. The bench already records active
-`CONSOLE_HARNESS_*` vars into results `flags`, which is a good base.
+struct. `bench --flags` sets it directly. **Package exists (2026-11-13):**
+`Flags` lives in `internal/agent/flags` with `FromEnv`; `sparse_line_numbers`
+already reads through it, and the bench keeps recording active
+`CONSOLE_HARNESS_*` vars into results `flags`. Future Phase 4 flags get a
+struct field + a `FromEnv` entry, and read through their tool constructors.
 
 ### Task 4.1: `prompt_trim`: rewrite the system prompt
 Label every line: **keep / rewrite / delete / move**. Planned changes:
@@ -621,7 +622,6 @@ Suggested order, ranked against the baseline-v2 token shares:
    `list_dir`/`glob` call counts (tree removal).
 
 - Use `bench/results/baseline-v2.json` as the baseline (3 runs per task).
-- Build the `internal/agent/flags` package before the Phase 4 A/B work;
-  only the raw `CONSOLE_HARNESS_SPARSE_LINE_NUMBERS` env read exists today.
+- ~~Build the `internal/agent/flags` package~~ done (2026-11-13).
 - The usage guard is off by default; don't pass `--max-usage-pct` unless you
   want it on. Use `--yes` to skip the cost prompt.
