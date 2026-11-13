@@ -3,7 +3,7 @@
 //! `editor-ui` owns the gutter interaction and reports the selected 1-based
 //! line range; the host mounts this card directly below that range. A draft
 //! becomes a staged comment (chip + card) that stays attached to the message
-//! until the user edits or removes it.
+//! until the user edits or deletes it.
 
 use std::rc::Rc;
 
@@ -42,6 +42,9 @@ pub struct FileCommentCard {
     on_cancel: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_edit: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_remove: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_send: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    /// Already attached to the next message; the send action then takes it back.
+    staged: bool,
 }
 
 impl FileCommentCard {
@@ -58,6 +61,8 @@ impl FileCommentCard {
         on_cancel: impl Fn(&mut Window, &mut App) + 'static,
         on_edit: impl Fn(&mut Window, &mut App) + 'static,
         on_remove: impl Fn(&mut Window, &mut App) + 'static,
+        on_send: impl Fn(&mut Window, &mut App) + 'static,
+        staged: bool,
     ) -> Self {
         Self {
             id,
@@ -71,6 +76,8 @@ impl FileCommentCard {
             on_cancel: Rc::new(on_cancel),
             on_edit: Rc::new(on_edit),
             on_remove: Rc::new(on_remove),
+            on_send: Rc::new(on_send),
+            staged,
         }
     }
 
@@ -107,6 +114,8 @@ impl RenderOnce for FileCommentCard {
         let edit = self.on_edit.clone();
         let edit_for_click = edit.clone();
         let remove = self.on_remove.clone();
+        let send = self.on_send.clone();
+        let staged = self.staged;
 
         let header = div()
             .px(px(11.0))
@@ -260,7 +269,34 @@ impl RenderOnce for FileCommentCard {
                             div()
                                 .text_size(px(11.5))
                                 .text_color(theme.text_tertiary)
-                                .child("Remove from chat"),
+                                .child("Delete"),
+                        ),
+                )
+                .child(div().flex_1())
+                .child(
+                    div()
+                        .id(("file-comment-send", self.id))
+                        .h(px(24.0))
+                        .px(px(8.0))
+                        .rounded(px(6.0))
+                        .flex()
+                        .items_center()
+                        .cursor_default()
+                        .hover(|style| style.bg(theme.overlay))
+                        .on_mouse_down(MouseButton::Left, |_, _: &mut Window, cx| {
+                            cx.stop_propagation()
+                        })
+                        .on_click(move |_, window, cx| (send)(window, cx))
+                        .child(
+                            div()
+                                .text_size(px(11.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(if staged {
+                                    theme.text_tertiary
+                                } else {
+                                    theme.text
+                                })
+                                .child(if staged { "Added to chat" } else { "Send to AI" }),
                         ),
                 ),
         };

@@ -9,13 +9,17 @@ use console_ui::workspace::TabStripFollow;
 use console_ui::{ComposerInput, ContextMenuHandle, PickerTab, TranscriptView};
 use gpui::Entity;
 
-/// One staged line comment in a pane. A draft is the card opened by a gutter
-/// drag; committing it keeps the same card in the `Added` state and stages it
-/// in the pane's composer.
+/// A line comment on a file or a diff. A draft is the card opened by a gutter
+/// drag; committing it saves it to the server and keeps the same card in the
+/// `Added` state. `staged` comments additionally ride the pane's next message.
 pub(crate) struct FileComment {
     pub(crate) id: u64,
-    /// Stable across devices: the key the synced draft identifies it by.
-    pub(crate) sync_id: String,
+    /// The server row; `None` until the first save lands.
+    pub(crate) server_id: Option<String>,
+    /// The lines are numbered in the pre-change file (a removed diff row).
+    pub(crate) old_side: bool,
+    /// Included in the next message sent from the pane.
+    pub(crate) staged: bool,
     /// Absolute path; prompts render it project-relative.
     pub(crate) path: String,
     pub(crate) start_line: u32,
@@ -92,9 +96,9 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) model_search: Entity<ComposerInput>,
     /// The session id whose messages are currently loaded in this pane's transcript.
     pub(crate) loaded_session_id: Option<String>,
-    /// Line comments staged for this pane's next message. They stay here
-    /// (with their inline cards) until removed, and every send includes the
-    /// committed ones.
+    /// The project whose saved comments `file_comments` holds.
+    pub(crate) comments_project: Option<String>,
+    /// The project's saved comments plus any card still being typed.
     pub(crate) file_comments: Vec<FileComment>,
     pub(crate) next_file_comment_id: u64,
     /// Retained tab strip scroll-follow state for this pane.

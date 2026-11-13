@@ -552,6 +552,7 @@ impl ConsoleDesktopApp {
                 .unwrap_or_else(|| (console_core::DiffResult::default(), String::new()));
             let theme = Theme::current(cx);
             let diff_view = self.get_or_build_diff_view(path, &diff_result, &raw_diff, &theme, cx);
+            self.sync_diff_comments(pane_id, path, &diff_view, window, cx);
             let composer = self.pane_composer_view(pane_id, true, true, window, cx);
             let collapse = self.composer_collapse_on_scroll(pane_id, cx);
             return div()

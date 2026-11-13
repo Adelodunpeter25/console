@@ -58,6 +58,8 @@ pub(crate) struct FileCommentRequest {
     pub path: String,
     pub start_line: u32,
     pub end_line: u32,
+    /// Picked on a removed diff row: the lines number the pre-change file.
+    pub old_side: bool,
 }
 
 /// A save handed off by an editor's save handler.

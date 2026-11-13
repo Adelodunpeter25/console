@@ -118,6 +118,7 @@ impl ConsoleDesktopApp {
                     path: comment_path.clone(),
                     start_line: target.start_line,
                     end_line: target.end_line,
+                    old_side: false,
                 });
             })));
             // The handler must not block, so it only enqueues the API write and
@@ -307,7 +308,20 @@ impl ConsoleDesktopApp {
             s.set_font(font_config);
             s
         });
-        let view = cx.new(|_| editor_ui::DiffView::new(&state));
+        let comment_tx = self.file_comment_tx.clone();
+        let comment_path = path.to_string();
+        let view = cx.new(|_| {
+            let mut view = editor_ui::DiffView::new(&state);
+            view.on_comment_target(move |target| {
+                let _ = comment_tx.send(super::types::FileCommentRequest {
+                    path: comment_path.clone(),
+                    start_line: target.start_line,
+                    end_line: target.end_line,
+                    old_side: target.side == editor_ui::DiffSide::Old,
+                });
+            });
+            view
+        });
         self.viewer_diff_views
             .insert(path.to_string(), (len, hash, state, view.clone()));
         view

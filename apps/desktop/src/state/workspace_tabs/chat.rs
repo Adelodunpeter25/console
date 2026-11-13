@@ -312,6 +312,7 @@ impl ConsoleDesktopApp {
                 branch_menu,
                 model_search,
                 loaded_session_id: None,
+                comments_project: None,
                 file_comments: Vec::new(),
                 next_file_comment_id: 1,
                 tab_strip_follow: console_ui::workspace::TabStripFollow::new(),

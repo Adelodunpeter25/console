@@ -1,5 +1,5 @@
-//! Server-synced chat drafts: composer text, mentions and staged file
-//! comments follow the chat across devices.
+//! Server-synced chat drafts: composer text and mentions follow the chat
+//! across devices. File comments are saved on their own, per project.
 //!
 //! Pull on open, push after a typing pause. The server keeps one draft per
 //! chat and the newest `updated_at` wins, so every push carries the whole
@@ -9,25 +9,17 @@
 
 use std::time::Duration;
 
-use console_proto::{ChatDraft, DraftFileComment, DraftMention};
+use console_proto::{ChatDraft, DraftMention};
 use console_ui::ComposerMention;
-use gpui::{Context, Window};
+use gpui::Context;
 
 use super::app::ConsoleDesktopApp;
 use crate::persistence;
-use crate::types::workspace::{FileComment, FileCommentState};
 
 /// Trailing delay before a draft goes to the server; typing bursts coalesce.
 const DRAFT_PUSH_DEBOUNCE: Duration = Duration::from_millis(800);
 
 impl ConsoleDesktopApp {
-    /// Push the draft of whichever chat `pane_id` is showing.
-    pub(crate) fn schedule_draft_push_for_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
-        if let Some(session_id) = self.active_session_for_pane(pane_id) {
-            self.schedule_draft_push(session_id, cx);
-        }
-    }
-
     pub(crate) fn schedule_draft_push(&mut self, session_id: String, cx: &mut Context<Self>) {
         if !self.drafts_push_pending.insert(session_id.clone()) {
             return;
@@ -59,9 +51,9 @@ impl ConsoleDesktopApp {
                     let Some(handle) = cx.active_window() else {
                         return;
                     };
-                    let _ = handle.update(cx, |_, window, cx| {
+                    let _ = handle.update(cx, |_, _window, cx| {
                         if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| this.adopt_remote_draft(remote, window, cx));
+                            app.update(cx, |this, cx| this.adopt_remote_draft(remote, cx));
                         }
                     });
                 });
@@ -84,29 +76,9 @@ impl ConsoleDesktopApp {
             .map(|leaf| leaf.id.clone())
     }
 
-    /// The draft as the server stores it. `None` when no pane shows the chat:
-    /// comments live in panes, and pushing without them would delete them.
+    /// The draft as the server stores it. `None` when the chat has no local draft state to push.
     fn build_server_draft(&self, session_id: &str) -> Option<ChatDraft> {
-        let pane_id = self.pane_showing_session(session_id)?;
         let local = self.drafts.get(session_id);
-        let comments = self
-            .workspace_pane_states
-            .get(&pane_id)
-            .map(|pane| {
-                pane.file_comments
-                    .iter()
-                    .filter(|comment| comment.state != FileCommentState::Draft)
-                    .map(|comment| DraftFileComment {
-                        id: comment.sync_id.clone(),
-                        path: comment.path.clone(),
-                        start_line: comment.start_line,
-                        end_line: comment.end_line,
-                        text: comment.text.clone(),
-                        snippet: self.comment_snippet(comment),
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
         Some(ChatDraft {
             session_id: session_id.to_string(),
             text: local.map(|draft| draft.prompt.clone()).unwrap_or_default(),
@@ -124,26 +96,9 @@ impl ConsoleDesktopApp {
                         .collect()
                 })
                 .unwrap_or_default(),
-            comments,
+            comments: Vec::new(),
             updated_at: chrono::Utc::now().timestamp_millis(),
         })
-    }
-
-    /// The commented lines as they are now, kept so a reader can tell the
-    /// comment was written against different text.
-    fn comment_snippet(&self, comment: &FileComment) -> String {
-        let Some(content) = self.open_file_contents.get(&comment.path) else {
-            return String::new();
-        };
-        let start = comment.start_line.saturating_sub(1) as usize;
-        let count = (comment.end_line.saturating_sub(comment.start_line) + 1).min(3) as usize;
-        let snippet = content
-            .lines()
-            .skip(start)
-            .take(count)
-            .collect::<Vec<_>>()
-            .join("\n");
-        snippet.chars().take(240).collect()
     }
 
     /// Fetch the chat's synced draft as it opens and adopt it when newer.
@@ -157,9 +112,9 @@ impl ConsoleDesktopApp {
                 let Some(handle) = cx.active_window() else {
                     return;
                 };
-                let _ = handle.update(cx, |_, window, cx| {
+                let _ = handle.update(cx, |_, _window, cx| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.adopt_remote_draft(remote, window, cx));
+                        app.update(cx, |this, cx| this.adopt_remote_draft(remote, cx));
                     }
                 });
             });
@@ -173,7 +128,6 @@ impl ConsoleDesktopApp {
     fn adopt_remote_draft(
         &mut self,
         remote: ChatDraft,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let session_id = remote.session_id.clone();
@@ -260,63 +214,6 @@ impl ConsoleDesktopApp {
                 cx.notify();
             });
         }
-        self.restore_synced_comments(&pane_id, &remote.comments, window, cx);
         cx.notify();
-    }
-
-    /// Make the pane's committed comments match the server's list. Cards the
-    /// user is still typing are left alone.
-    fn restore_synced_comments(
-        &mut self,
-        pane_id: &str,
-        remote: &[DraftFileComment],
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
-            return;
-        };
-        let mut touched_paths: Vec<String> = Vec::new();
-        pane.file_comments.retain(|comment| {
-            let keep = comment.state != FileCommentState::Added
-                || remote.iter().any(|r| r.id == comment.sync_id);
-            if !keep && !touched_paths.contains(&comment.path) {
-                touched_paths.push(comment.path.clone());
-            }
-            keep
-        });
-
-        for item in remote {
-            let Some(pane) = self.workspace_pane_states.get(pane_id) else {
-                return;
-            };
-            if pane.file_comments.iter().any(|c| c.sync_id == item.id) {
-                continue;
-            }
-            let id = pane.next_file_comment_id;
-            let (input, subscription) = self.new_comment_input(pane_id, id, window, cx);
-            let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
-                return;
-            };
-            pane.next_file_comment_id = id + 1;
-            pane.file_comments.push(FileComment {
-                id,
-                sync_id: item.id.clone(),
-                path: item.path.clone(),
-                start_line: item.start_line,
-                end_line: item.end_line,
-                text: item.text.clone(),
-                input,
-                state: FileCommentState::Added,
-                focus_pending: false,
-                _subscription: subscription,
-            });
-            if !touched_paths.contains(&item.path) {
-                touched_paths.push(item.path.clone());
-            }
-        }
-        for path in touched_paths {
-            self.sync_comment_selections(pane_id, &path, cx);
-        }
     }
 }
