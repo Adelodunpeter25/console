@@ -10,8 +10,9 @@ use super::{
 };
 
 impl ConsoleDesktopApp {
-    fn sync_inspector_webviews(&self, cx: &mut Context<Self>) {
-        let is_device = self.right_sidebar_visible
+    pub(super) fn sync_inspector_webviews(&self, cx: &mut Context<Self>) {
+        let is_device = !self.settings_open
+            && self.right_sidebar_visible
             && self.inspector_active_tab == InspectorTab::Auxiliary(AuxiliaryTab::Devices);
         if let Some(ref device) = self.device_view {
             let overlay_open = device.read(cx).overlay_open();

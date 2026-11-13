@@ -135,6 +135,12 @@ impl ConsoleDesktopApp {
             active_browser_ids.insert(id.clone());
         }
 
+        // Settings take over the window; native webviews paint above GPUI, so
+        // they must be hidden rather than left at their old bounds.
+        if self.settings_open {
+            active_browser_ids.clear();
+        }
+
         let palettes_open = self.any_palette_open(cx);
 
         for (browser_id, view) in &self.browser_views {
