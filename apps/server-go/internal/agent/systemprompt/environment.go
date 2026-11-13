@@ -37,6 +37,13 @@ func gitBranch(cwd string) string {
 	return branch
 }
 
+// Today returns the date as it appears in the workstation block. Shared with
+// the run service's prompt cache, which keys on it so a multi-day session
+// picks up the new date on the first message after midnight.
+func Today() string {
+	return time.Now().Format("2006-01-02")
+}
+
 // CollectEnvironmentInfo gathers date/cwd/OS/arch/git-branch for cwd.
 func CollectEnvironmentInfo(cwd, model string) EnvironmentInfo {
 	abs, err := filepath.Abs(cwd)
@@ -44,7 +51,7 @@ func CollectEnvironmentInfo(cwd, model string) EnvironmentInfo {
 		abs = cwd
 	}
 	return EnvironmentInfo{
-		Date:      time.Now().Format("2006-01-02"),
+		Date:      Today(),
 		Cwd:       abs,
 		OS:        runtime.GOOS,
 		Arch:      runtime.GOARCH,

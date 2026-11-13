@@ -3,8 +3,9 @@
 // turn so the provider's prompt cache stays warm: rebuilding it each turn
 // would change the date at midnight or the branch after a checkout and
 // invalidate the cached prefix. It is rebuilt only when cwd, model or
-// approval mode changes, or after compaction. In memory only: a server
-// restart rebuilds it once.
+// approval mode changes, when the date rolls over (a session can run for
+// days; the rebuild costs one cache miss per day), or after compaction.
+// In memory only: a server restart rebuilds it once.
 package run
 
 import (
@@ -14,8 +15,8 @@ import (
 )
 
 type promptKey struct {
-	cwd, model string
-	mode       systemprompt.ApprovalMode
+	cwd, model, date string
+	mode             systemprompt.ApprovalMode
 }
 
 type cachedPrompt struct {
@@ -29,9 +30,9 @@ type promptCache struct {
 }
 
 // get returns the session's cached prompt, building it when missing or
-// when cwd/model/mode differ from the cached build.
+// when cwd/model/mode/date differ from the cached build.
 func (c *promptCache) get(sessionID string, opts systemprompt.BuildOptions) systemprompt.Result {
-	key := promptKey{cwd: opts.Cwd, model: opts.Model, mode: opts.ApprovalMode}
+	key := promptKey{cwd: opts.Cwd, model: opts.Model, mode: opts.ApprovalMode, date: systemprompt.Today()}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if entry, ok := c.entries[sessionID]; ok && entry.key == key {
