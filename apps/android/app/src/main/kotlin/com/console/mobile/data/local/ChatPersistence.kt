@@ -30,6 +30,18 @@ data class PersistedSessionPartial(
     val draftUpdatedAt: Long? = null,
 )
 
+/** The pickers of an unsent new chat, kept beside its draft text. */
+@Serializable
+data class PersistedNewChatOptions(
+    val model: String? = null,
+    val provider: String? = null,
+    val approvalMode: String? = null,
+    val thinkingLevel: String? = null,
+    val worktreePending: Boolean = false,
+    val projectId: String? = null,
+    val cwd: String? = null,
+)
+
 @Serializable
 data class PersistedChatPayload(
     val version: Int = ChatPersistence.PERSIST_VERSION,
@@ -44,6 +56,7 @@ class ChatPersistence(
         const val PREFS_NAME = "console_chat_storage"
         const val PERSIST_KEY = "console-chat-cache"
         const val PERSIST_VERSION = 1
+        const val NEW_CHAT_OPTIONS_KEY = "console-new-chat-options"
         const val MAX_PERSISTED_SESSIONS = 25
         /**
          * Draft images kept in the on-disk cache. This is a storage bound, not
@@ -138,8 +151,20 @@ class ChatPersistence(
         }
     }
 
+    fun saveNewChatOptions(options: PersistedNewChatOptions?) {
+        prefs.edit().apply {
+            if (options == null) remove(NEW_CHAT_OPTIONS_KEY)
+            else putString(NEW_CHAT_OPTIONS_KEY, ConsoleJson.encodeToString(PersistedNewChatOptions.serializer(), options))
+        }.apply()
+    }
+
+    fun loadNewChatOptions(): PersistedNewChatOptions? {
+        val raw = prefs.getString(NEW_CHAT_OPTIONS_KEY, null) ?: return null
+        return try { ConsoleJson.decodeFromString(PersistedNewChatOptions.serializer(), raw) } catch (_: Exception) { null }
+    }
+
     fun clear() {
-        prefs.edit().remove(PERSIST_KEY).apply()
+        prefs.edit().remove(PERSIST_KEY).remove(NEW_CHAT_OPTIONS_KEY).apply()
     }
 
     private fun hasDraft(input: String, attachments: List<ImageAttachment>): Boolean =

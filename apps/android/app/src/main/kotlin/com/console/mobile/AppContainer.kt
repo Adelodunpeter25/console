@@ -312,6 +312,7 @@ object AppContainer {
             appState = appStateHolder,
             chats = chatStateHolder,
             chatRepo = chatRepository,
+            persistence = chatPersistence,
             onSessionGone = { chatRepository.discard(it) },
         )
         authRepository = AuthRepository(

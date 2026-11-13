@@ -37,6 +37,7 @@ class SessionRepository(
     private val appState: AppStateHolder,
     private val chats: ChatStateHolder,
     private val chatRepo: ChatRepository,
+    private val persistence: com.console.mobile.data.local.ChatPersistence? = null,
     /** Called once a session is gone for good, so chat state (and its draft) can be dropped. */
     private val onSessionGone: (String) -> Unit = {},
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
@@ -105,7 +106,20 @@ class SessionRepository(
     /** Open a new chat locally; nothing reaches the server until [commitNewChat]. */
     fun startNewChat(projectId: String?, cwd: String?): String {
         val id = com.console.mobile.core.chat.newChatId()
-        sessions.setView(id, SessionViewState(sessionCwd = cwd, projectId = projectId))
+        val saved = persistence?.loadNewChatOptions()
+        sessions.setView(
+            id,
+            SessionViewState(
+                sessionModelId = saved?.model,
+                sessionProvider = saved?.provider,
+                sessionCwd = cwd ?: saved?.cwd,
+                approvalMode = saved?.approvalMode ?: ApprovalMode.PlanMode.value,
+                thinkingLevel = saved?.thinkingLevel,
+                worktreePending = saved?.worktreePending == true,
+                worktreeBranch = if (saved?.worktreePending == true) "New worktree" else null,
+                projectId = projectId ?: saved?.projectId,
+            ),
+        )
         return id
     }
 
@@ -145,6 +159,7 @@ class SessionRepository(
             }
             discardNewChat(draftId)
             chats.remove(draftId)
+            persistence?.saveNewChatOptions(null)
         }
         return created.id
     }
@@ -164,13 +179,30 @@ class SessionRepository(
             )
         }
         sessions.setView(id, next)
+        saveNewChatOptions(next)
         return com.console.mobile.core.chat.createEphemeralDraftHeader(
             id, com.console.mobile.core.chat.createChatSessionState(), next.projectId, next.sessionCwd,
         )
     }
 
     fun requestNewChatWorktree(id: String) {
-        sessions.setView(id, sessions.getView(id).copy(worktreePending = true, worktreeBranch = "New worktree"))
+        val next = sessions.getView(id).copy(worktreePending = true, worktreeBranch = "New worktree")
+        sessions.setView(id, next)
+        saveNewChatOptions(next)
+    }
+
+    private fun saveNewChatOptions(v: SessionViewState) {
+        persistence?.saveNewChatOptions(
+            com.console.mobile.data.local.PersistedNewChatOptions(
+                model = v.sessionModelId,
+                provider = v.sessionProvider,
+                approvalMode = v.approvalMode,
+                thinkingLevel = v.thinkingLevel,
+                worktreePending = v.worktreePending,
+                projectId = v.projectId,
+                cwd = v.sessionCwd,
+            ),
+        )
     }
 
     suspend fun updateSession(id: String, dto: UpdateSessionDto): SessionHeader = withContext(Dispatchers.IO) {
