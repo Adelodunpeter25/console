@@ -811,6 +811,8 @@ impl DeviceViewer {
                             .flex_1()
                             .min_w_0()
                             .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
                             .text_size(px(12.0))
                             .text_color(theme.text)
                             .child(selected_label),
@@ -818,6 +820,8 @@ impl DeviceViewer {
                     .when_some(status, |el, s| {
                         el.child(
                             div()
+                                .flex_shrink_0()
+                                .whitespace_nowrap()
                                 .text_size(px(10.0))
                                 .px(px(6.0))
                                 .py(px(2.0))
