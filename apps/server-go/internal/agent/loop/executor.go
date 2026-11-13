@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
+	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
@@ -14,6 +15,7 @@ import (
 
 type Executor struct {
 	registry *tools.Registry
+	modeMu   sync.RWMutex
 	mode     permissions.Mode
 	// OnBeforeExecute, when set, runs after permission is granted and
 	// immediately before the tool executes — the last point where the
@@ -31,6 +33,20 @@ func NewExecutor(registry *tools.Registry, mode permissions.Mode) *Executor {
 	return &Executor{registry: registry, mode: mode}
 }
 
+// Mode is the executor's current permission mode.
+func (e *Executor) Mode() permissions.Mode {
+	e.modeMu.RLock()
+	defer e.modeMu.RUnlock()
+	return e.mode
+}
+
+// SetMode changes the mode mid-run; calls resolved afterwards use it.
+func (e *Executor) SetMode(mode permissions.Mode) {
+	e.modeMu.Lock()
+	defer e.modeMu.Unlock()
+	e.mode = mode
+}
+
 // Execute resolves permissions, runs the tool, and always returns a
 // ToolResult (tool failures become isError results; only abort failures
 // surface as errors).
@@ -40,10 +56,11 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 		return e.errResult(call, err.Error()), nil
 	}
 
-	decision := permissions.Resolve(e.mode, tool.Tier())
+	mode := e.Mode()
+	decision := permissions.Resolve(mode, tool.Tier())
 	// A plan-safe tool (writePlan) is the one write plan mode permits: it is
 	// confined to the plan folder, so it needs no approval and is not denied.
-	if e.mode == permissions.PlanMode {
+	if mode == permissions.PlanMode {
 		if safe, ok := tool.(tools.PlanSafe); ok && safe.PlanSafe() {
 			decision = permissions.Allow
 		}
@@ -52,7 +69,7 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 		return tools.ToolResult{
 			ToolCallID: call.ID,
 			ToolName:   call.Name,
-			Content:    deniedMessage(call.Name, e.mode),
+			Content:    deniedMessage(call.Name, mode),
 			IsError:    true,
 			Args:       call.Arguments,
 		}, nil
@@ -141,7 +158,7 @@ func newRequestID() string {
 // that worked a turn ago now fails.
 func deniedMessage(tool string, mode permissions.Mode) string {
 	if mode == permissions.PlanMode {
-		return tools.NewToolError("Tool '%s' is denied: plan mode is read-only. Describe the change in your plan; to save the plan as a file use writePlan. To make changes, ask the user to switch out of plan mode.", tool).Error()
+		return tools.NewToolError("Tool '%s' is denied: plan mode is read-only. Describe the change in your plan; to save the plan as a file use writePlan. To make changes, call requestFullAccess if the user asked you to implement; otherwise ask the user to switch out of plan mode.", tool).Error()
 	}
 	return tools.NewToolError("Tool '%s' is denied in %s mode.", tool, mode).Error()
 }

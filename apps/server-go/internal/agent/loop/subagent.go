@@ -39,6 +39,9 @@ type SubagentContext struct {
 	// act with more permission than the run that spawned it. Zero value means
 	// plan mode, which is the safe default for a run that did not say.
 	ApprovalMode permissions.Mode
+	// CurrentMode, when set, supplies the parent's mode at spawn time, so a
+	// mid-run upgrade reaches subagents started afterwards.
+	CurrentMode func() permissions.Mode
 	// Guard is the parent run's path guard. A subagent holds the same tools,
 	// so it must be confined to the same project root; nil means unguarded.
 	Guard *permissions.Guard
@@ -219,6 +222,9 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 		c.NestedTools(registry)
 	}
 	mode := c.ApprovalMode
+	if c.CurrentMode != nil {
+		mode = c.CurrentMode()
+	}
 	if mode == "" {
 		mode = permissions.PlanMode
 	}

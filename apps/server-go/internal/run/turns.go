@@ -396,6 +396,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	onTodoUpdate := func(items []types.TodoItem, action string) {
 		hub.Broadcast(loop.Event{Kind: loop.EventTodoUpdate, Items: items, Action: action})
 	}
+	// Bound before the tool list: requestFullAccess closes over both.
+	var registry *tools.Registry
+	var executor *loop.Executor
 	toolList := make([]tools.Tool, 0, len(tools.DefaultTools())+1)
 	for _, t := range tools.DefaultTools() {
 		switch t.Name() {
@@ -431,6 +434,15 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// read-only run may make, and in every other mode write_file does the job.
 	if mode == permissions.PlanMode {
 		toolList = append(toolList, tools.NewWritePlanTool(header.Cwd))
+		toolList = append(toolList, tools.NewRequestFullAccessTool(askHandler, func() error {
+			if err := s.sessions.UpdateApprovalMode(sessionID, string(permissions.FullAccess)); err != nil {
+				return err
+			}
+			// Bash is sandboxed read-only in plan mode; swap in the real one.
+			registry.Replace(tools.NewBashTool(s.bashJobManager(), sessionID, runID))
+			executor.SetMode(permissions.FullAccess)
+			return nil
+		}))
 	}
 	usage := &loop.UsageTracker{}
 	setup := prompt.Setup
@@ -455,7 +467,6 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			setup = strings.TrimSpace(setup + "\n\n" + refSetup)
 		}
 	}
-	var registry *tools.Registry
 	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
 		Provider: provider,
 		Model:    modelID,
@@ -483,6 +494,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		// A subagent inherits the parent run's mode: it holds the same tools,
 		// so it must hold the same authority over them.
 		ApprovalMode: mode,
+		CurrentMode:  func() permissions.Mode { return executor.Mode() },
 		Guard:        guard,
 		OnEvent:      hub.Broadcast,
 		Usage:        usage,
@@ -514,7 +526,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// readSkill is rebuilt per run so it can see which capabilities are on
 	// and, for the ones the agent may switch on, load their tools mid-turn.
 	registry.Replace(tools.NewReadSkillTool(s.readSkillCapabilities(loadCtx, registry)))
-	executor := loop.NewExecutor(registry, mode)
+	executor = loop.NewExecutor(registry, mode)
 	executor.Guard = guard
 	// Capture the pre-write content of every file a whole-file overwrite
 	// tool is about to touch, so the change diff recorded from the result
