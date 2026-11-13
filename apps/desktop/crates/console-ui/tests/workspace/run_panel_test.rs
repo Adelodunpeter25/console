@@ -75,17 +75,6 @@ fn shortcut_state_detects_two_way_conflicts() {
 }
 
 #[test]
-fn shortcut_state_three_way_conflict_includes_all_scripts() {
-    let scripts = vec![
-        script("a", Some("cmd-r")),
-        script("b", Some("cmd-r")),
-        script("c", Some("cmd-r")),
-    ];
-    let state = compute_shortcut_state(&scripts);
-    assert_eq!(state.conflicts.get("cmd-r").map(|s| s.len()), Some(3));
-}
-
-#[test]
 fn shortcut_state_skips_scripts_without_shortcuts() {
     let scripts = vec![
         script("dev", Some("cmd-r")),

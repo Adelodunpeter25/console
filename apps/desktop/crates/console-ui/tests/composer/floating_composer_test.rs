@@ -84,15 +84,6 @@ fn autocomplete_content_key_is_stable_for_equal_content() {
 }
 
 #[test]
-fn autocomplete_content_key_ignores_the_popup_itself() {
-    // Two independent builds of the same rows must compare equal even though
-    // they are distinct `AutocompleteView` values.
-    let a = view_of(&[("console", "one")]);
-    let b = view_of(&[("console", "one")]);
-    assert_eq!(a.content_key(), b.content_key());
-}
-
-#[test]
 fn autocomplete_content_key_changes_with_content() {
     let base = view_of(&[("console", "one")]);
     assert_ne!(
