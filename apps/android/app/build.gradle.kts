@@ -101,6 +101,11 @@ android {
     }
 
     sourceSets {
+        // The device player page has one source of truth: the server embeds
+        // it, and the app ships a build-time copy as an asset.
+        getByName("main") {
+            assets.srcDir(layout.buildDirectory.dir("generated/devicePlayer"))
+        }
         // Centralized unit tests live in apps/android/tests (single folder).
         // Keep the default src/test as well so IDE wizards still work.
         getByName("test") {
@@ -230,3 +235,11 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }
+
+val copyDevicePlayer by tasks.registering(Copy::class) {
+    from(rootProject.file("../server-go/internal/routes/device_player.html"))
+    into(layout.buildDirectory.dir("generated/devicePlayer/devices"))
+    rename { "player.html" }
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(copyDevicePlayer) }

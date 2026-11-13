@@ -242,7 +242,9 @@ func (s *DeviceService) OpenStream(ctx context.Context, platform, id string, qua
 // only from PumpStream's goroutine; ReadText is called from another.
 type StreamConn interface {
 	WriteText(data []byte) error
-	WriteBinary(data []byte) error
+	// WriteFrame sends tag followed by data as one binary message without
+	// copying data: it is shared between viewers.
+	WriteFrame(tag byte, data []byte) error
 	WritePing() error
 	WriteClose() error
 	// CloseConn tears the underlying websocket down (unblocking a blocked
@@ -269,6 +271,9 @@ type StreamConn interface {
 // recovers hard from its own panics as defense in depth: a goroutine panic
 // would take the whole daemon down.
 func PumpStream(conn StreamConn, st *sdk.Stream) {
+	device := st.Meta().Name
+	stats := newStreamStats(device)
+	defer func() { stats.flush(true) }()
 	var once sync.Once
 	detach := func() { once.Do(func() { _ = st.Close() }) }
 	defer detach()
@@ -287,6 +292,9 @@ func PumpStream(conn StreamConn, st *sdk.Stream) {
 			if err != nil {
 				return
 			}
+			if logClientStats(device, data) {
+				continue
+			}
 			var in sdk.Input
 			if json.Unmarshal(data, &in) != nil {
 				continue
@@ -299,6 +307,8 @@ func PumpStream(conn StreamConn, st *sdk.Stream) {
 
 	ping := time.NewTicker(deviceStreamPing)
 	defer ping.Stop()
+	statsTick := time.NewTicker(deviceStatsEvery)
+	defer statsTick.Stop()
 loop:
 	for {
 		select {
@@ -307,9 +317,20 @@ loop:
 				_ = conn.WriteClose()
 				break loop
 			}
+			queued := len(st.Packets())
+			began := time.Now()
 			if err := writePacket(conn, p); err != nil {
 				break loop
 			}
+			if p.Kind == sdk.PacketKeyFrame || p.Kind == sdk.PacketDelta {
+				var age time.Duration
+				if !p.At.IsZero() {
+					age = began.Sub(p.At)
+				}
+				stats.frame(p.Kind == sdk.PacketKeyFrame, len(p.Data), age, time.Since(began), queued)
+			}
+		case <-statsTick.C:
+			stats.flush(false)
 		case <-ping.C:
 			if err := conn.WritePing(); err != nil {
 				break loop
@@ -346,9 +367,5 @@ func writePacket(conn StreamConn, p sdk.Packet) error {
 	default:
 		return nil // unknown kinds are skipped, never fatal
 	}
-	// p.Data is shared between viewers: copy, never mutate.
-	out := make([]byte, 1+len(p.Data))
-	out[0] = tag
-	copy(out[1:], p.Data)
-	return conn.WriteBinary(out)
+	return conn.WriteFrame(tag, p.Data)
 }

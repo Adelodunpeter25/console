@@ -174,9 +174,24 @@ func (w *deviceWSConn) write(kind int, data []byte) error {
 	return w.conn.WriteMessage(kind, data)
 }
 
-func (w *deviceWSConn) WriteText(data []byte) error   { return w.write(websocket.TextMessage, data) }
-func (w *deviceWSConn) WriteBinary(data []byte) error { return w.write(websocket.BinaryMessage, data) }
-func (w *deviceWSConn) WritePing() error              { return w.write(websocket.PingMessage, nil) }
+func (w *deviceWSConn) WriteText(data []byte) error { return w.write(websocket.TextMessage, data) }
+func (w *deviceWSConn) WriteFrame(tag byte, data []byte) error {
+	_ = w.conn.SetWriteDeadline(time.Now().Add(deviceWriteWait))
+	mw, err := w.conn.NextWriter(websocket.BinaryMessage)
+	if err != nil {
+		return err
+	}
+	if _, err := mw.Write([]byte{tag}); err != nil {
+		_ = mw.Close()
+		return err
+	}
+	if _, err := mw.Write(data); err != nil {
+		_ = mw.Close()
+		return err
+	}
+	return mw.Close()
+}
+func (w *deviceWSConn) WritePing() error { return w.write(websocket.PingMessage, nil) }
 
 func (w *deviceWSConn) WriteClose() error {
 	return w.write(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))

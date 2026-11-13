@@ -87,3 +87,19 @@ Duplicated between the server-served desktop page (`/api/devices/player`) and
 
 Before step 6, add timing logs (capture -> send, send -> decode, decode -> draw) to see
 whether latency is server-side or in the player.
+
+## Status (2026-11-13)
+
+Implemented in sim-go and console: viewer queue + flush, GOP replay for late joiners,
+iOS no-drop video chunks, iOS live touch (repeated DOWN = move) + scroll coalescing,
+quality query params (4 Mbps default), Android rotation via SPS size, buffered scrcpy
+reads, control write deadline, zero-copy ws writes (sim-go and console), bytes.Index
+NAL scanning (Android + iOS), alloc-free broadcast, parallel scrcpy cold start, 2 min
+idle, player fixes (rAF paint, backlog guard, move coalescing + bufferedAmount, decoder
+reconfigure on same-codec description), one shared player page
+(`internal/routes/device_player.html`, embedded by the server and copied into the
+Android assets by Gradle), and backend timing logs (`device stream stats` per viewer
+every 10s, `device player stats` reported by the page).
+
+Left: clients do not yet send quality params (mobile still gets the 4 Mbps default at
+1280px/60fps); no live Android emulator run of rotation/scrcpy changes.

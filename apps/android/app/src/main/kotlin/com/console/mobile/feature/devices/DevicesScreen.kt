@@ -64,7 +64,6 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Home
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerPlay
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
-import java.io.ByteArrayInputStream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -370,7 +369,7 @@ fun DevicesScreen(
                             webViewClient = object : WebViewClient() {
                                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                                     if (request.url.toString() != DEVICES_PLAYER_URL) return null
-                                    return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(DEVICES_PLAYER_HTML.toByteArray()))
+                                    return WebResourceResponse("text/html", "utf-8", view.context.assets.open(DEVICES_PLAYER_ASSET))
                                 }
 
                                 override fun onPageFinished(view: WebView, url: String?) {
