@@ -525,6 +525,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	agent := loop.New(provider, executor, s.sessions)
 	agent.Usage = usage
 	agent.UserMessageID = turn.UserMessageID
+	agent.TodoReminders = mode != permissions.PlanMode
 	agent.ToolDefs = registry.Definitions
 	agent.SystemPrompt = prompt.StableSystem
 	agent.Setup = setup

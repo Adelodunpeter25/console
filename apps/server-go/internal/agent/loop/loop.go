@@ -213,6 +213,9 @@ type Agent struct {
 	// OnRequest, when set, receives an estimated per-source breakdown of
 	// every provider request just before it is sent.
 	OnRequest func(Breakdown)
+	// TodoReminders nudges the model to update a stale task list. Off for
+	// subagents (no session) and plan mode.
+	TodoReminders bool
 	// ToolStats counts calls, errors (by class), and result bytes per tool
 	// (never nil after New).
 	ToolStats *ToolStats
@@ -260,6 +263,7 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 
 	history = MaterializeHistory(history)
 	history = append(history, MaterializeUserMessage(user))
+	roundsSinceTodo := 0
 	for {
 		if a.ToolDefs != nil {
 			// Re-read each turn so lazily loaded tool groups become visible.
@@ -283,8 +287,16 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 			return
 		}
 
-		// Execute every tool call the model requested this turn.
-		results := make([]tools.ToolResult, 0, len(assistant.Content))
+		// Execute every tool call the model requested this turn. Results
+		// stream as they finish, except the last: a todo reminder may be
+		// appended to it, and the pushed copy must match the persisted one.
+		calls := 0
+		for _, part := range assistant.Content {
+			if _, ok := part.(ToolCallPart); ok {
+				calls++
+			}
+		}
+		results := make([]tools.ToolResult, 0, calls)
 		for _, part := range assistant.Content {
 			if callPart, ok := part.(ToolCallPart); ok {
 				result, err := a.executor.Execute(ctx, callPart.Call)
@@ -296,8 +308,16 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 				if a.ToolStats != nil {
 					a.ToolStats.Record(result)
 				}
-				events.Push(Event{Kind: EventToolResult, Result: &result})
+				if len(results) < calls {
+					events.Push(Event{Kind: EventToolResult, Result: &results[len(results)-1]})
+				}
 			}
+		}
+		if a.TodoReminders {
+			roundsSinceTodo = a.remindStaleTodos(sessionID, toolsList, results, roundsSinceTodo)
+		}
+		if calls > 0 {
+			events.Push(Event{Kind: EventToolResult, Result: &results[calls-1]})
 		}
 		resultMsg := ToolResultMessage{Role: RoleToolResult, Results: results}
 		resultBytes, err := ToProtoBytes(resultMsg)
@@ -507,4 +527,73 @@ func (a *Agent) persist(sessionID string, msg types.AgentMessage) error {
 		return nil
 	}
 	return a.sessions.AppendMessage(sessionID, msg)
+}
+
+// todoReminderRounds is how many tool rounds may pass without a todo call
+// before the model is reminded about unfinished tasks.
+const todoReminderRounds = 4
+
+// remindStaleTodos returns the updated rounds-since-todo count. Once it
+// reaches todoReminderRounds with tasks still open, one line is added to a
+// result before it is persisted, so replayed history is byte-identical and
+// the provider's prompt cache stays valid.
+func (a *Agent) remindStaleTodos(sessionID string, toolsList []tools.Definition, results []tools.ToolResult, rounds int) int {
+	if a.sessions == nil {
+		return 0
+	}
+	hasTodo := false
+	for _, def := range toolsList {
+		if def.Name == "todo" {
+			hasTodo = true
+			break
+		}
+	}
+	if !hasTodo {
+		return 0
+	}
+	for _, result := range results {
+		if result.ToolName == "todo" {
+			return 0
+		}
+	}
+	rounds++
+	if rounds < todoReminderRounds {
+		return rounds
+	}
+	items, err := a.sessions.GetSessionTodos(sessionID)
+	if err != nil {
+		return rounds
+	}
+	inProgress, pending := []string{}, 0
+	for _, item := range items {
+		switch item.Status {
+		case "in_progress":
+			inProgress = append(inProgress, fmt.Sprintf("#%d", item.ID))
+		case "pending":
+			pending++
+		}
+	}
+	if len(inProgress) == 0 && pending == 0 {
+		return rounds
+	}
+	for i := len(results) - 1; i >= 0; i-- {
+		parts, ok := results[i].Content.([]map[string]any)
+		if !ok {
+			continue
+		}
+		note := "Tasks:"
+		if len(inProgress) > 0 {
+			note += " " + strings.Join(inProgress, ", ") + " in progress"
+		}
+		if pending > 0 {
+			if len(inProgress) > 0 {
+				note += ","
+			}
+			note += fmt.Sprintf(" %d pending", pending)
+		}
+		note += ". Mark any finished with todo."
+		results[i].Content = append(parts, map[string]any{"type": "text", "text": note})
+		return 0
+	}
+	return rounds
 }
