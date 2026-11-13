@@ -52,3 +52,12 @@ fn ignores_unknown_fields() {
     .expect("unknown fields must be ignored");
     assert_eq!(n.session_id, "s");
 }
+
+#[test]
+fn decodes_golden_suggestions_fixture() {
+    let n: NotificationEvent =
+        serde_json::from_str(fixture("suggestions.json").trim()).expect("decode suggestions");
+    assert_eq!(n.kind, "suggestions");
+    assert_eq!(n.session_id, "s1");
+    assert_eq!(n.items, vec!["Run the tests", "Commit this"]);
+}

@@ -21,4 +21,6 @@ message NotificationEvent {
   string title = 4;
   string subtitle = 5;
   string body = 6;
+  // Follow-up prompt suggestions (kind "suggestions"); empty for every other kind.
+  repeated string items = 7;
 }
