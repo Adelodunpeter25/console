@@ -27,8 +27,6 @@ type PickHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 /// Follow-up prompts that fill the rest of the row and scroll sideways.
 pub struct SuggestionsPill {
     pub items: Vec<String>,
-    /// Owned by the caller so the scroll position survives re-renders.
-    pub scroll: ScrollHandle,
     pub on_pick: PickHandler,
 }
 
@@ -74,6 +72,7 @@ pub fn composer_pills(
     shells: Option<ShellsPill>,
     changes: Option<(ChangesSummary, ClickHandler)>,
     suggestions: Option<SuggestionsPill>,
+    scroll: &ScrollHandle,
     theme: Theme,
 ) -> Option<Div> {
     if tasks.is_none()
@@ -85,13 +84,19 @@ pub fn composer_pills(
         return None;
     }
 
+    // One sideways scroller holds every pill, so a narrow pane scrolls
+    // instead of cutting anything off. Popovers draw deferred, outside this
+    // scroller's clip, so they still open above their pill.
     let mut row = div()
+        .id(ElementId::Name(format!("{key}-scroll").into()))
         .w_full()
-        .max_w(px(768.0))
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(8.0));
+        .gap(px(8.0))
+        .overflow_x_scroll()
+        .restrict_scroll_to_axis()
+        .track_scroll(scroll);
 
     if let Some((summary, on_changes)) = changes {
         row = row.child(changes_pill(
@@ -166,79 +171,37 @@ pub fn composer_pills(
         ));
     }
 
-    // The status pills keep their size on the left; the chips take whatever
-    // room remains and scroll sideways. Kept outside the scroller so the
-    // status popovers are never clipped by it.
-    let reserve_for_controls = suggestions.is_some();
     if let Some(suggestions) = suggestions {
         let on_pick = suggestions.on_pick;
-        let scroll = suggestions.scroll;
-        let offset = scroll.offset().x;
-        let max = scroll.max_offset().x;
-        // Offsets run negative as the row scrolls right.
-        let more_left = offset < px(-0.5);
-        let more_right = max > px(0.5) && -offset < max - px(0.5);
-        let clear = theme.chat_canvas.opacity(0.0);
-        let fade = |angle: f32| {
-            linear_gradient(
-                angle,
-                linear_color_stop(theme.chat_canvas, 0.0),
-                linear_color_stop(clear, 1.0),
-            )
-        };
-        row = row.child(
-            div()
-                .relative()
-                .flex_1()
-                .min_w(px(0.0))
-                .child(
-                    div()
-                        .id(ElementId::Name(format!("{key}-suggestions").into()))
-                        .w_full()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(8.0))
-                        .overflow_x_scroll()
-                        .restrict_scroll_to_axis()
-                        .track_scroll(&scroll)
-                        .children(suggestions.items.into_iter().enumerate().map(
-                            |(index, text)| {
-                                suggestion_pill(
-                                    format!("{key}-suggestion-{index}"),
-                                    text,
-                                    on_pick.clone(),
-                                    theme,
-                                )
-                            },
-                        )),
-                )
-                // Soft edges so a chip fades out instead of being sliced
-                // against the status pills; shown only where there is more.
-                .when(more_left, |el| {
-                    el.child(
-                        div()
-                            .absolute()
-                            .left_0()
-                            .top_0()
-                            .bottom_0()
-                            .w(px(28.0))
-                            .bg(fade(90.0)),
-                    )
-                })
-                .when(more_right, |el| {
-                    el.child(
-                        div()
-                            .absolute()
-                            .right_0()
-                            .top_0()
-                            .bottom_0()
-                            .w(px(28.0))
-                            .bg(fade(270.0)),
+        row = row.children(
+            suggestions
+                .items
+                .into_iter()
+                .enumerate()
+                .map(|(index, text)| {
+                    suggestion_pill(
+                        format!("{key}-suggestion-{index}"),
+                        text,
+                        on_pick.clone(),
+                        theme,
                     )
                 }),
         );
     }
+
+    let offset = scroll.offset().x;
+    let max = scroll.max_offset().x;
+    // Offsets run negative as the row scrolls right.
+    let more_left = offset < px(-0.5);
+    let more_right = max > px(0.5) && -offset < max - px(0.5);
+    let clear = theme.chat_canvas.opacity(0.0);
+    let fade = |angle: f32| {
+        linear_gradient(
+            angle,
+            linear_color_stop(theme.chat_canvas, 0.0),
+            linear_color_stop(clear, 1.0),
+        )
+    };
 
     Some(
         div()
@@ -249,11 +212,41 @@ pub fn composer_pills(
             .w_full()
             .pl(px(20.0))
             // The transcript's jump / scroll-to-bottom pill floats at the
-            // bottom right (~67px wide, 16px in); keep chips out from under it.
-            .pr(px(if reserve_for_controls { 96.0 } else { 20.0 }))
+            // bottom right (~67px wide, 16px in); keep the row out from under it.
+            .pr(px(96.0))
             .flex()
             .justify_center()
-            .child(row),
+            .child(
+                div()
+                    .relative()
+                    .w_full()
+                    .max_w(px(768.0))
+                    .child(row)
+                    // Soft edges so a pill fades out instead of being sliced;
+                    // shown only where there is more to scroll to.
+                    .when(more_left, |el| {
+                        el.child(
+                            div()
+                                .absolute()
+                                .left_0()
+                                .top_0()
+                                .bottom_0()
+                                .w(px(28.0))
+                                .bg(fade(90.0)),
+                        )
+                    })
+                    .when(more_right, |el| {
+                        el.child(
+                            div()
+                                .absolute()
+                                .right_0()
+                                .top_0()
+                                .bottom_0()
+                                .w(px(28.0))
+                                .bg(fade(270.0)),
+                        )
+                    }),
+            ),
     )
 }
 

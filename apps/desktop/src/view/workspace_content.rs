@@ -656,7 +656,7 @@ impl ConsoleDesktopApp {
         let entity = cx.entity().downgrade();
         let queued_prompts = self.queued_prompts_for_pane(&pane_id);
         let suggestions = self.suggestions_for_pane(&pane_id);
-        let suggestion_scroll = self.suggestion_scroll_for_pane(&pane_id);
+        let pills_scroll = self.pills_scroll_for_pane(&pane_id);
         let error_message = self
             .error_for_pane(&pane_id)
             .map(|error| error.message.clone());
@@ -761,7 +761,6 @@ impl ConsoleDesktopApp {
             let pane_for_pick = pane_id.clone();
             SuggestionsPill {
                 items: suggestions.clone(),
-                scroll: suggestion_scroll.clone(),
                 on_pick: Rc::new(move |prompt, _window, cx| {
                     if let Some(app) = entity_pick.upgrade() {
                         let pid = pane_for_pick.clone();
@@ -780,6 +779,7 @@ impl ConsoleDesktopApp {
             shells_pill,
             changes_summary.zip(on_open_changes),
             suggestions_pill,
+            &pills_scroll,
             theme,
         );
 
