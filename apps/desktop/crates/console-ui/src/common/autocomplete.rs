@@ -10,8 +10,8 @@ use std::rc::Rc;
 
 use gpui::{
     Anchor, App, Bounds, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    Pixels, RenderOnce, StatefulInteractiveElement, Styled, Window, actions, anchored, canvas,
-    deferred, div, point, prelude::FluentBuilder, px,
+    Pixels, RenderOnce, ScrollHandle, StatefulInteractiveElement, Styled, Window, actions,
+    anchored, canvas, deferred, div, point, prelude::FluentBuilder, px,
 };
 
 use crate::primitives::{IconName, app_icon, file_type_icon};
@@ -439,6 +439,20 @@ impl RenderOnce for AutocompleteView {
         let Some(anchor_bounds) = self.anchor_bounds.get() else {
             return div().into_any_element();
         };
+        let key = self.content_key();
+        let scroll_state = window.use_keyed_state("composer-autocomplete-scroll", cx, |_, _| {
+            (
+                ScrollHandle::new(),
+                Rc::new(Cell::new(None::<(usize, u64)>)),
+            )
+        });
+        let (scroll, last_key) = scroll_state.read(cx).clone();
+        // Only follow the highlight when it or the list changed, so manual
+        // wheel scrolling isn't snapped back every frame.
+        if last_key.get() != Some((key.highlighted, key.ids)) && key.count > 0 {
+            scroll.scroll_to_item(key.highlighted);
+            last_key.set(Some((key.highlighted, key.ids)));
+        }
         let on_select = self.on_select;
         let highlighted = self.highlighted;
         let below = self.placement == AutocompletePlacement::Below;
@@ -469,6 +483,7 @@ impl RenderOnce for AutocompleteView {
             .bg(theme.menu)
             .shadow_xl()
             .overflow_y_scroll()
+            .track_scroll(&scroll)
             .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
             .p(px(4.0))
             .flex()
