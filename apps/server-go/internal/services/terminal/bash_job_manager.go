@@ -6,6 +6,7 @@ package terminal
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -56,6 +57,13 @@ type BashJobOutput struct {
 	Stderr     string
 	NextCursor int
 	Truncated  bool
+	// Chars each ring buffer has dropped so far, and the spill file holding
+	// everything that was dropped (empty when nothing was dropped or the
+	// spill write failed).
+	StdoutDropped int
+	StderrDropped int
+	StdoutSpill   string
+	StderrSpill   string
 }
 
 type bashJobRecord struct {
@@ -66,7 +74,11 @@ type bashJobRecord struct {
 	stderr                       strings.Builder
 	stdoutTotal, stderrTotal     int
 	stdoutDropped, stderrDropped int
-	stdoutDone, stderrDone       bool
+	// Spill files holding the bytes the ring buffers dropped. Created lazily
+	// on the first trim; appends arrive in stream order, so each file
+	// reconstructs the dropped prefix of its stream.
+	stdoutSpill, stderrSpill string
+	stdoutDone, stderrDone   bool
 	exited                       bool
 	rawExit                      int
 	timer                        *time.Timer
@@ -257,6 +269,7 @@ func (m *BashJobManager) append(rec *bashJobRecord, stream, text string) {
 		if rec.stdout.Len() > bashJobMaxOutputChars {
 			s := rec.stdout.String()
 			excess := len(s) - bashJobMaxOutputChars
+			rec.spillLocked(&rec.stdoutSpill, rec.JobID+".stdout.log", s[:excess])
 			rec.stdout.Reset()
 			rec.stdout.WriteString(s[excess:])
 			rec.stdoutDropped += excess
@@ -267,12 +280,25 @@ func (m *BashJobManager) append(rec *bashJobRecord, stream, text string) {
 		if rec.stderr.Len() > bashJobMaxOutputChars {
 			s := rec.stderr.String()
 			excess := len(s) - bashJobMaxOutputChars
+			rec.spillLocked(&rec.stderrSpill, rec.JobID+".stderr.log", s[:excess])
 			rec.stderr.Reset()
 			rec.stderr.WriteString(s[excess:])
 			rec.stderrDropped += excess
 		}
 	}
 	rec.signalLocked()
+}
+
+// spillLocked appends dropped text to the stream's spill file, creating it on
+// first use. The caller holds rec.mu. Failure leaves the path empty; the
+// dropped bytes are then lost as before, which beats failing the job.
+func (r *bashJobRecord) spillLocked(path *string, name, dropped string) {
+	if *path == "" {
+		*path = filepath.Join(utils.SpillDir(r.ownerSessionID), name)
+	}
+	if err := utils.SpillAppend(*path, dropped); err != nil {
+		*path = ""
+	}
 }
 
 func (m *BashJobManager) trackExit(rec *bashJobRecord) {
@@ -407,6 +433,8 @@ func (m *BashJobManager) Output(jobID, ownerSessionID string, cursor, limit int)
 	return BashJobOutput{
 		Snapshot: rec.snapshotLocked(), Stdout: out, Stderr: stderrTail,
 		NextCursor: nextCursor, Truncated: truncated,
+		StdoutDropped: rec.stdoutDropped, StderrDropped: rec.stderrDropped,
+		StdoutSpill: rec.stdoutSpill, StderrSpill: rec.stderrSpill,
 	}, nil
 }
 

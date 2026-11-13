@@ -49,8 +49,24 @@ func renderJobOutputBody(jobs *terminal.BashJobManager, jobID, ownerSessionID st
 	sections := []string{
 		fmt.Sprintf("cursor: %d -> nextCursor: %d", cursor, r.NextCursor),
 		fmt.Sprintf("truncated: %v", r.Truncated),
-		"", "stdout:",
 	}
+	// The ring buffers hold a bounded window (256 KB per stream); whatever
+	// they dropped is saved to a spill file the model can read or grep.
+	if r.StdoutDropped > 0 {
+		if r.StdoutSpill != "" {
+			sections = append(sections, fmt.Sprintf("stdout: %d chars dropped from the buffer so far; everything dropped is saved to %s (read it with read_file or grep)", r.StdoutDropped, r.StdoutSpill))
+		} else {
+			sections = append(sections, fmt.Sprintf("stdout: %d chars dropped from the buffer so far", r.StdoutDropped))
+		}
+	}
+	if r.StderrDropped > 0 {
+		if r.StderrSpill != "" {
+			sections = append(sections, fmt.Sprintf("stderr: %d chars dropped from the buffer so far; everything dropped is saved to %s", r.StderrDropped, r.StderrSpill))
+		} else {
+			sections = append(sections, fmt.Sprintf("stderr: %d chars dropped from the buffer so far", r.StderrDropped))
+		}
+	}
+	sections = append(sections, "", "stdout:")
 	if r.Stdout != "" {
 		sections = append(sections, r.Stdout)
 	} else {

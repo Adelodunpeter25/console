@@ -56,7 +56,7 @@ size, not as targets.
 | OpenCode cache | `internal/providers/opencode/stream.go` | Responses path sends `prompt_cache_key`. **The Chat path (`runChat`) sends no cache key.** |
 | Usage telemetry | `loop.TurnUsage` (`internal/agent/loop/message.go`), each provider's `NormalizeUsage` | Per-turn input, cache read/write and output are recorded on the assistant message, and Phase 1 added per-run totals and a breakdown; per-tool cost share is still partial. |
 | File reads | `internal/agent/tools/file_tools.go` | Task 3.0 capped default reads at 300 lines; every kept line is still numbered (`%*d: `). |
-| Bash output | `internal/agent/tools/bash_tools.go` | Task 3.1 (2026-11-13): over the 50 KB cap the full output is spilled to a file and the **tail** is shown. `bashJob` pages still head-truncate. |
+| Bash output | `internal/agent/tools/bash_tools.go` | Task 3.1 (2026-11-13): over the 50 KB cap the full output is spilled to a file and the **tail** is shown. bashJob ring-buffer drops are spilled too (2026-11-13). |
 | Firecrawl / webFetch | `internal/agent/tools/firecrawl.go`, `web_fetch_tool.go` | Task 3.1 (2026-11-13): webFetch spills bodies over 512 KB (reads up to 5 MB) and keeps the head; Firecrawl scrape spills markdown over 25 KB. |
 | Tools shipped | `internal/agent/tools` + memory | 17 tools with full schemas on every request (`webSearch`, `webFetch`, `bashJob`, `askMany`, `memory`, `batchWrite` are rarely used). |
 | Compaction | `internal/agent/compaction/llm.go` | Summary prompt is already short. The full history isn't saved anywhere the agent can search. |
@@ -378,7 +378,10 @@ results (26.7%) are handled before bash output (9.2%).
   ```
   The model can then `grep`, or use `read_file` with a line range, on the
   saved file. Keep the tail, not the head.
-- Do the same for `bashJob` output pages (not done yet).
+- bashJob pages: done (2026-11-13) — the job manager's ring buffers spill
+  whatever they drop to `<tmp>/console-tool-output/<session>/<jobID>.<stream>.log`,
+  and output pages report the dropped char count and spill path instead of a
+  bare `truncated: true`.
 - **Test:** `tests/tools/spill_test.go`. Check large output gives a file
   with the full contents, a tail, and the stated size; small output is
   unchanged.

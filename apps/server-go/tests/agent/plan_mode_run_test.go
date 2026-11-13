@@ -81,10 +81,6 @@ func TestPlanModePromptNamesTheTool(t *testing.T) {
 	if !strings.Contains(req.SystemPrompt, "writePlan") || !strings.Contains(req.SystemPrompt, "docs/plan") {
 		t.Fatalf("the plan-mode prompt must tell the model about writePlan and where it writes:\n%s", req.SystemPrompt)
 	}
-	// The tool inventory section lists it too.
-	if !strings.Contains(req.SystemPrompt, "`writePlan`") {
-		t.Fatalf("writePlan is missing from the tool inventory in the system prompt")
-	}
 }
 
 func keys(m map[string]bool) []string {

@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 const (
@@ -40,13 +42,13 @@ func renderScrapeMarkdown(url, text string) string {
 	if len(text) <= firecrawlMaxMarkdown {
 		return text
 	}
-	path, err := spillToFile(spillDir(""), spillURLName(url), ".md", text)
+	path, err := utils.SpillFile(utils.SpillDir(""), utils.SpillURLName(url), ".md", text)
 	if err != nil {
 		return truncateMarkdown(text)
 	}
 	return text[:firecrawlMaxMarkdown] + fmt.Sprintf(
 		"\n\n[...content truncated at %s: full markdown saved to %s...]",
-		humanBytes(firecrawlMaxMarkdown), path)
+		utils.HumanBytes(firecrawlMaxMarkdown), path)
 }
 
 func firecrawlBaseURL() string {

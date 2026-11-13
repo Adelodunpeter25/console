@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 type fetchInput struct {
@@ -117,15 +119,15 @@ var Fetch = NewTool("webFetch", "Fetch content from a URL or web page as markdow
 		// page is the useful side), spill the full body to a file it can
 		// re-read or grep.
 		if len(data) > maxBytes {
-			if path, spillErr := spillToFile(spillDir(""), spillURLName(in.URL), ".body.log", bodyText); spillErr == nil {
+			if path, spillErr := utils.SpillFile(utils.SpillDir(""), utils.SpillURLName(in.URL), ".body.log", bodyText); spillErr == nil {
 				bodyText = bodyText[:maxBytes] + fmt.Sprintf(
 					"\n\n[... response truncated: showing first %s of %s. Full body saved to %s ...]",
-					humanBytes(maxBytes), humanBytes(len(data)), path)
+					utils.HumanBytes(maxBytes), utils.HumanBytes(len(data)), path)
 			} else {
 				bodyText += fmt.Sprintf("\n\n[... response truncated: showing first %d bytes ...]", maxBytes)
 			}
 		} else if hardTruncated {
-			bodyText += fmt.Sprintf("\n\n[... response truncated at %s ...]", humanBytes(fetchSpillMaxBytes))
+			bodyText += fmt.Sprintf("\n\n[... response truncated at %s ...]", utils.HumanBytes(fetchSpillMaxBytes))
 		}
 
 		var formattedBody string

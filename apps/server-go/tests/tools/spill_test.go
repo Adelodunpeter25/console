@@ -10,8 +10,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 )
 
 func spillPathAfter(notice, marker string) string {
@@ -98,5 +100,47 @@ func TestWebFetchSpillsLargeBody(t *testing.T) {
 	}
 	if !strings.HasSuffix(string(data), end) {
 		t.Fatal("spill file does not hold the full body")
+	}
+}
+
+func TestBashJobSpillsRingBufferDrops(t *testing.T) {
+	jobs := terminal.NewBashJobManager(nil)
+	snap, err := jobs.Start(terminal.StartBashJobOptions{
+		Command:  "for i in $(seq 1 40000); do echo \"line $i\"; done; echo JOB-DONE",
+		TimeoutMs: 60_000,
+	})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer jobs.KillOwnedBy("")
+
+	// Poll until the ring buffer has dropped something (256 KB window).
+	var out terminal.BashJobOutput
+	for i := 0; i < 100; i++ {
+		out, err = jobs.Output(snap.JobID, "", 0, 50_000)
+		if err != nil {
+			t.Fatalf("output: %v", err)
+		}
+		if out.StdoutDropped > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if out.StdoutDropped == 0 {
+		t.Fatal("ring buffer never dropped output")
+	}
+	if out.StdoutSpill == "" {
+		t.Fatalf("no spill path for dropped output: %+v", out)
+	}
+	data, err := os.ReadFile(out.StdoutSpill)
+	if err != nil {
+		t.Fatalf("read spill file: %v", err)
+	}
+	// The spill file reconstructs the dropped prefix, in order.
+	if !strings.Contains(string(data), "line 1\n") {
+		t.Fatal("spill file missing the first dropped line")
+	}
+	if len(data) != out.StdoutDropped {
+		t.Fatalf("spill file holds %d bytes, dropped counter says %d", len(data), out.StdoutDropped)
 	}
 }

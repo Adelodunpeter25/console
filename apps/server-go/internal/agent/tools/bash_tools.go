@@ -41,7 +41,7 @@ func truncateOutput(output string, maxBytes int, label string) string {
 // spilled to a per-session file and the tail is shown (errors print at the
 // end), with secrets scrubbed before anything is written or returned.
 func bashSection(sessionID, label, output string) string {
-	return spilledSection(spillDir(sessionID), "bash", "."+label+".log", label, github.RedactSecrets(output), bashMaxOutputBytes)
+	return spilledSection(sessionID, "bash", "."+label+".log", label, github.RedactSecrets(output), bashMaxOutputBytes, truncateOutput)
 }
 
 func mergedEnv(overrides map[string]string) []string {
