@@ -263,7 +263,7 @@ What it tells us:
 Keep the reusable prefix byte-for-byte identical across turns, and as long
 as possible:
 
-`tools → stable system prompt → [breakpoint] → setup message (env, tree, skills, rules, AGENTS.md) → [breakpoint] → conversation`
+`tools → stable system prompt → [breakpoint] → setup message (skills, rules, commands, AGENTS.md, workstation) → [breakpoint] → conversation`
 
 ### Task 2.1: Split the system prompt into stable and volatile parts — **done**
 - **File:** `internal/agent/systemprompt/builder.go`.
@@ -271,8 +271,9 @@ as possible:
   - **Stable:** identity, approval-mode instructions, what skills are for,
     and the `<critical>` block (rewritten in Phase 4).
   - **Setup** (moved out of the system prompt): skills list, rules, slash
-    commands, AGENTS.md / context files, workspace tree, and workstation
-    info (date, cwd, OS, arch, branch, model).
+    commands, AGENTS.md / context files, and workstation info (cwd, OS,
+    arch, model — date and branch were removed on 2026-11-13; the model
+    runs `date` / `git branch` when needed).
   - Keep `SystemPrompt` as the joined string, so callers that haven't been
     changed keep working.
 - **Test:** `tests/agent/systemprompt_test.go`. Check that the stable part
@@ -287,8 +288,8 @@ as possible:
   (`<setup>…</setup>`) before the conversation. It's built once when the
   session starts and saved with the session, so it stays the same across
   turns and is only rebuilt when cwd, model or approval mode changes, or on
-  compaction. Rebuilding the date every turn would break the cache; a date
-  that's a few hours old is fine.
+  compaction. (Since 2026-11-13 the setup holds no volatile values at all —
+  date and branch are gone — so nothing invalidates it mid-day.)
 - **Where to cache it:** reuse the session header, or add an in-memory map
   keyed by session ID in `run`.
 - **Test:** provider tests check the order: system, then setup, then
@@ -443,7 +444,7 @@ Label every line: **keep / rewrite / delete / move**. Planned changes:
 | Plan-mode `<critical>` | keep, rewrite | The mode depends on it. → "Plan mode: discuss and ask questions; no file writes." |
 | "Today is X. Working directory is Y." | **deleted (2026-11-13)** | Repeated the workstation block. The workstation block itself now holds only session-stable facts: **date and git branch were removed too** (2026-11-13) — they went stale in the cached prompt over multi-day sessions, and the model can run `date` / `git branch` when a task needs them. No midnight cache invalidation needed. |
 | Skills header sentence | keep | Tells the model the skill lookup exists. |
-| Approval-mode text (`approvalModeInstructions`) | audit, rewrite | Remove emphasis; keep what each mode allows. |
+| Approval-mode text (`approvalModeInstructions`) | **done (2026-11-13)** | Full-access lecturing ("freedom is not a license…") removed; plan-mode text compressed, still names writePlan/docs/plan. |
 | Tool descriptions (`jsonschema` tags) | **done (2026-11-13)** — bash, bashJob and editFile tightened; bash's false-timeout line replaced with the real promotion behavior. Everything else was already tight; `todo` stays as expanded in 31158ec9. |
 
 Also audit `SYSTEM.md` handling and the subagent preamble in the same pass.
@@ -623,10 +624,16 @@ Suggested order, ranked against the baseline-v2 token shares:
    behind a flag.
 2. **Task 2.3 setup breakpoint.** Three breakpoints exist (last tool,
    stable system block, last message); the setup message has none.
-3. **Bench validation run** for the 2026-11-13 batch (tool inventory
-   removed, workspace tree removed, output spill) against
-   `bench/results/baseline-v2.json` — watch success rate, turns, and
-   `list_dir`/`glob` call counts (tree removal).
+3. **Bench validation run** for the 2026-11-13 batch (tool inventory and
+   workspace tree removed, output spill, prompt trim + date/branch removal,
+   tightened tool descriptions) against `bench/results/baseline-v2.json` —
+   watch success rate, turns, and `list_dir`/`glob` call counts (tree
+   removal).
+
+Also deferred from 2026-11-13: hardening bash file-edit tracking (bash
+edits bypass the session change log; plan is a conservative write-target
+parser feeding the existing snapshot/diff machinery) and the SYSTEM.md /
+subagent-preamble audit from Task 4.1.
 
 - Use `bench/results/baseline-v2.json` as the baseline (3 runs per task).
 - ~~Build the `internal/agent/flags` package~~ done (2026-11-13).
