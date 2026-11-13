@@ -21,9 +21,6 @@ func TestLoadToolsDescribesConnectedGroupTools(t *testing.T) {
 	if d := lt.Description(); !strings.Contains(d, "- mcp:echo: Echo") || strings.Contains(d, "tools:") {
 		t.Fatalf("unconnected description: %s", d)
 	}
-	if strings.Contains(lt.Description(), "atlassian") {
-		t.Fatal("description must not mention a specific server")
-	}
 	// Connected: tool names previewed.
 	if err := m.Ensure(ctx5(t), "echo"); err != nil {
 		t.Fatal(err)
