@@ -23,14 +23,16 @@ pub fn suggestion_chips(
             .max_w(px(728.0))
             .flex()
             .flex_row()
-            .flex_wrap()
+            .flex_nowrap()
             .gap(px(8.0))
             .children(items.into_iter().enumerate().map(|(index, text)| {
                 let on_pick = on_pick.clone();
                 let picked = text.clone();
                 div()
                     .id(format!("suggestion-chip-{index}"))
+                    .min_w(px(0.0))
                     .max_w(px(280.0))
+                    .flex_shrink(1.0)
                     .pl(px(6.0))
                     .pr(px(14.0))
                     .py(px(5.0))
