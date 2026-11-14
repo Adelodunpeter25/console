@@ -272,6 +272,10 @@ pub enum AgentSessionEvent {
     SessionTitleUpdated {
         title: String,
     },
+    SessionApprovalModeUpdated {
+        #[serde(default, rename = "approvalMode", alias = "approval_mode")]
+        approval_mode: String,
+    },
     Error {
         error: console_proto::ErrorPayload,
     },

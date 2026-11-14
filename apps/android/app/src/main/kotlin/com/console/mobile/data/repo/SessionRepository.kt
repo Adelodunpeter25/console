@@ -205,6 +205,10 @@ class SessionRepository(
         saveNewChatOptions(next)
     }
 
+    fun updateLocalApprovalMode(sessionId: String, mode: String) {
+        sessions.updateApprovalMode(sessionId, mode)
+    }
+
     private fun saveNewChatOptions(v: SessionViewState) {
         persistence?.saveNewChatOptions(
             com.console.mobile.data.local.PersistedNewChatOptions(

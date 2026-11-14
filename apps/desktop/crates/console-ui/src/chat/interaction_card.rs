@@ -70,8 +70,31 @@ impl RenderOnce for QuestionInteractionCard {
         let req = self.request.clone();
         let is_multi = req.is_multi_select.unwrap_or(false);
         let options = req.options.clone().unwrap_or_default();
+        let is_approve_deny = !is_multi
+            && options.len() == 2
+            && options
+                .iter()
+                .any(|o| o.eq_ignore_ascii_case("approve") || o.eq_ignore_ascii_case("allow"))
+            && options
+                .iter()
+                .any(|o| o.eq_ignore_ascii_case("deny") || o.eq_ignore_ascii_case("decline"));
+        let (positive_opt, negative_opt) = if is_approve_deny {
+            if options[0].eq_ignore_ascii_case("approve") || options[0].eq_ignore_ascii_case("allow")
+            {
+                (options[0].clone(), options[1].clone())
+            } else {
+                (options[1].clone(), options[0].clone())
+            }
+        } else {
+            (String::new(), String::new())
+        };
+
         let on_select = self.on_select.clone();
-        let custom_input = self.custom_input.clone();
+        let custom_input = if is_approve_deny {
+            None
+        } else {
+            self.custom_input.clone()
+        };
         let custom_answer = custom_input
             .as_ref()
             .map(|input| input.read(cx).content().trim().to_owned())
@@ -113,7 +136,7 @@ impl RenderOnce for QuestionInteractionCard {
                     ),
             )
             // Options
-            .when(!options.is_empty(), |el| {
+            .when(!is_approve_deny && !options.is_empty(), |el| {
                 el.child(div().pl(px(24.0)).flex().flex_col().gap(px(4.0)).children(
                     options.into_iter().enumerate().map(|(idx, opt)| {
                         let is_checked = self.selected.contains(&opt);
@@ -197,7 +220,69 @@ impl RenderOnce for QuestionInteractionCard {
                     .flex()
                     .items_center()
                     .gap(px(8.0))
-                    .child({
+                    .when(is_approve_deny, |el| {
+                        let on_ans_pos = self.on_answer.clone();
+                        let on_ans_neg = self.on_answer.clone();
+                        let pos_val = serde_json::Value::String(positive_opt.clone());
+                        let neg_val = serde_json::Value::String(negative_opt.clone());
+                        el.child(
+                            div()
+                                .id("question-approve")
+                                .h(px(28.0))
+                                .px(px(14.0))
+                                .rounded(px(6.0))
+                                .bg(if !self.submitting {
+                                    theme.inverse
+                                } else {
+                                    theme.overlay_strong
+                                })
+                                .when(!self.submitting, |b| {
+                                    b.cursor_default()
+                                        .hover(|s| s.opacity(0.85))
+                                        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                                            (on_ans_pos)(pos_val.clone(), window, cx);
+                                        })
+                                })
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(
+                                    div()
+                                        .text_size(px(12.0))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(theme.on_inverse)
+                                        .child(positive_opt),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .id("question-deny")
+                                .h(px(28.0))
+                                .px(px(14.0))
+                                .rounded(px(6.0))
+                                .border_1()
+                                .border_color(theme.border)
+                                .bg(theme.raised)
+                                .when(!self.submitting, |b| {
+                                    b.cursor_default()
+                                        .hover(|s| s.bg(theme.overlay))
+                                        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                                            (on_ans_neg)(neg_val.clone(), window, cx);
+                                        })
+                                })
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(
+                                    div()
+                                        .text_size(px(12.0))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(theme.text_secondary)
+                                        .child(negative_opt),
+                                ),
+                        )
+                    })
+                    .when(!is_approve_deny, |el| {
                         let on_ans = self.on_answer;
                         let answer_val = if !custom_answer.is_empty() {
                             serde_json::Value::String(custom_answer)
@@ -210,45 +295,23 @@ impl RenderOnce for QuestionInteractionCard {
                             )
                             .unwrap_or_default()
                         };
-                        div()
-                            .id("question-submit")
-                            .h(px(28.0))
-                            .px(px(14.0))
-                            .rounded(px(6.0))
-                            .bg(if has_answer && !self.submitting {
-                                theme.inverse
-                            } else {
-                                theme.overlay_strong
-                            })
-                            .when(has_answer && !self.submitting, |el| {
-                                el.cursor_default()
-                                    .hover(|s| s.opacity(0.85))
-                                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                        (on_ans)(answer_val.clone(), window, cx);
-                                    })
-                            })
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(
-                                div()
-                                    .text_size(px(12.0))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(theme.on_inverse)
-                                    .child(if self.is_last { "Submit" } else { "Continue" }),
-                            )
-                    })
-                    .when_some(self.on_skip, |el, on_skip| {
                         el.child(
                             div()
-                                .id("question-skip")
+                                .id("question-submit")
                                 .h(px(28.0))
-                                .px(px(12.0))
+                                .px(px(14.0))
                                 .rounded(px(6.0))
-                                .cursor_default()
-                                .hover(|s| s.bg(theme.overlay))
-                                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                    (on_skip)(window, cx)
+                                .bg(if has_answer && !self.submitting {
+                                    theme.inverse
+                                } else {
+                                    theme.overlay_strong
+                                })
+                                .when(has_answer && !self.submitting, |b| {
+                                    b.cursor_default()
+                                        .hover(|s| s.opacity(0.85))
+                                        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                                            (on_ans)(answer_val.clone(), window, cx);
+                                        })
                                 })
                                 .flex()
                                 .items_center()
@@ -256,10 +319,34 @@ impl RenderOnce for QuestionInteractionCard {
                                 .child(
                                     div()
                                         .text_size(px(12.0))
-                                        .text_color(theme.text_tertiary)
-                                        .child("Skip"),
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(theme.on_inverse)
+                                        .child(if self.is_last { "Submit" } else { "Continue" }),
                                 ),
                         )
+                        .when_some(self.on_skip, |b, on_skip| {
+                            b.child(
+                                div()
+                                    .id("question-skip")
+                                    .h(px(28.0))
+                                    .px(px(12.0))
+                                    .rounded(px(6.0))
+                                    .cursor_default()
+                                    .hover(|s| s.bg(theme.overlay))
+                                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                                        (on_skip)(window, cx)
+                                    })
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(
+                                        div()
+                                            .text_size(px(12.0))
+                                            .text_color(theme.text_tertiary)
+                                            .child("Skip"),
+                                    ),
+                            )
+                        })
                     }),
             )
     }
