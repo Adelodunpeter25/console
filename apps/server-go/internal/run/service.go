@@ -201,6 +201,15 @@ func (s *Service) BashJobs() *terminalsvc.BashJobManager {
 func (s *Service) bashJobManager() *terminalsvc.BashJobManager {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.bashJobs == nil {
+		// Self-healing default: a service nobody wired with SetBashJobs
+		// still gets working background jobs, so background=true and the
+		// lazy bashJob auto-load behave the same everywhere. The daemon
+		// always sets a manager (with the port registry) before the first
+		// run; this fallback only covers bare constructions. nil ports just
+		// disables live dev-server detection.
+		s.bashJobs = terminalsvc.NewBashJobManager(nil)
+	}
 	return s.bashJobs
 }
 

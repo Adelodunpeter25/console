@@ -15,7 +15,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
@@ -132,7 +131,8 @@ func TestLazyToolsAutoLoadBashJobOnBackgroundStart(t *testing.T) {
 		{{Kind: loop.EventText, Text: "ok"}},
 	}}
 	svc, header := newLazyService(t, provider)
-	svc.SetBashJobs(terminal.NewBashJobManager(nil))
+	// No SetBashJobs: the service self-heals a manager, and the auto-load
+	// must work on a bare construction too.
 	settleRun(t, svc, header, "start a job")
 
 	provider.mu.Lock()
