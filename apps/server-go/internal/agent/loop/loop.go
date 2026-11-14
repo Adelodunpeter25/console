@@ -75,6 +75,8 @@ const (
 	EventQueueUpdated EventKind = "queueUpdated"
 	// EventSessionTitleUpdated carries a freshly generated title.
 	EventSessionTitleUpdated EventKind = "sessionTitleUpdated"
+	// EventSessionApprovalModeUpdated carries an updated approval mode.
+	EventSessionApprovalModeUpdated EventKind = "sessionApprovalModeUpdated"
 	// EventSubagentStart/Activity/End carry subagent lifecycle payloads.
 	EventSubagentStart    EventKind = "subagentStart"
 	EventSubagentActivity EventKind = "subagentActivity"
@@ -134,8 +136,9 @@ type Event struct {
 	Drained bool `json:"drained,omitempty"`
 	// QueuedAll is the whole queue (next-to-run first) on EventQueueUpdated.
 	QueuedAll []types.QueuedPrompt `json:"queuedPrompts,omitempty"`
-	Title     string               `json:"title,omitempty"`
-	Subagent  any                  `json:"subagent,omitempty"`
+	Title        string               `json:"title,omitempty"`
+	ApprovalMode string               `json:"approvalMode,omitempty"`
+	Subagent     any                  `json:"subagent,omitempty"`
 	// Items/Action carry the session todo list for EventTodoUpdate.
 	Items  []types.TodoItem `json:"items,omitempty"`
 	Action string           `json:"action,omitempty"`

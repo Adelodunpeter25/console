@@ -60,6 +60,10 @@ class SessionStateHolder {
 
     fun getView(id: String): SessionViewState = _views.value[id] ?: EMPTY_SESSION_VIEW
     fun setView(id: String, view: SessionViewState) { _views.value = _views.value + (id to view) }
+    fun updateApprovalMode(id: String, mode: String) {
+        val cur = _views.value[id] ?: EMPTY_SESSION_VIEW
+        _views.value = _views.value + (id to cur.copy(approvalMode = mode))
+    }
     fun removeView(id: String) { _views.value = _views.value - id }
     fun applyHeader(id: String, modelId: String?, provider: String?, cwd: String?, approvalMode: String?, status: SessionStatus?) {
         setView(id, SessionViewState(modelId, provider, cwd, approvalMode ?: "plan-mode"))

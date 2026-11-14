@@ -643,6 +643,16 @@ impl ConsoleDesktopApp {
         self.clear_question_selected_for_session(&session_id);
         self.clear_question_inputs_for_session(&session_id, cx);
         self.clear_error_for_session(&session_id, cx);
+        if let Some(ans_str) = answer.as_str() {
+            if ans_str == "Approve" && question.question.contains("Full Access") {
+                let pane_ids: Vec<String> = self.workspace_pane_states.keys().cloned().collect();
+                for pane_id in pane_ids {
+                    if self.active_session_for_pane(&pane_id).as_deref() == Some(&session_id) {
+                        self.set_pane_approval_mode(&pane_id, console_core::ApprovalMode::FullAccess);
+                    }
+                }
+            }
+        }
         cx.notify();
 
         let client = self.client.clone();

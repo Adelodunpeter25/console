@@ -8,6 +8,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
@@ -349,6 +350,12 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if req.ApprovalMode != nil && *req.ApprovalMode != "" {
 			if err := sessions.UpdateApprovalMode(id, *req.ApprovalMode); err != nil {
 				return sessionError(c, fiber.StatusInternalServerError, err.Error())
+			}
+			if runs != nil {
+				runs.Broadcast(id, loop.Event{
+					Kind:         loop.EventSessionApprovalModeUpdated,
+					ApprovalMode: *req.ApprovalMode,
+				})
 			}
 		}
 		if req.ThinkingLevel != nil && *req.ThinkingLevel != "" {

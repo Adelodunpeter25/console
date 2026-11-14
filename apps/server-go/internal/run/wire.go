@@ -327,6 +327,12 @@ func WireFrame(e loop.Event) (string, any, bool) {
 		return "sessionEnd", map[string]any{"type": "sessionEnd"}, false
 	case loop.EventSessionTitleUpdated:
 		return "sessionTitleUpdated", map[string]any{"type": "sessionTitleUpdated", "title": e.Title}, false
+	case loop.EventSessionApprovalModeUpdated:
+		return "sessionApprovalModeUpdated", map[string]any{
+			"type":          "sessionApprovalModeUpdated",
+			"approvalMode":  e.ApprovalMode,
+			"approval_mode": e.ApprovalMode,
+		}, false
 	case loop.EventQueueUpdated:
 		data, err := QueuedPromptData(e.Queued)
 		if err != nil {

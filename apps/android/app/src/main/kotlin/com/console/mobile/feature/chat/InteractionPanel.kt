@@ -92,6 +92,9 @@ private fun QuestionWizard(questions: List<AskQuestionRequest>, sessionId: Strin
     fun submit(answer: kotlinx.serialization.json.JsonElement) {
         submitting = true
         scope.launch {
+            if (answer is JsonPrimitive && (answer.content.equals("approve", ignoreCase = true) || answer.content.equals("allow", ignoreCase = true)) && current.question.contains("Full Access", ignoreCase = true)) {
+                AppContainer.sessionRepository.updateLocalApprovalMode(sessionId, com.console.mobile.data.model.ApprovalMode.FullAccess.value)
+            }
             AppContainer.chatRepository.answerQuestion(sessionId, current.requestId, answer)
             submitting = false
             if (!isLast) index += 1
@@ -124,6 +127,20 @@ private fun QuestionPanel(
     var selected by remember(request.requestId) { mutableStateOf(setOf<String>()) }
     var custom by remember(request.requestId) { mutableStateOf("") }
     val hasOptions = request.options.isNotEmpty()
+    val isApproveDeny = !request.isMultiSelect && request.options.size == 2 &&
+        request.options.any { it.equals("approve", ignoreCase = true) || it.equals("allow", ignoreCase = true) } &&
+        request.options.any { it.equals("deny", ignoreCase = true) || it.equals("decline", ignoreCase = true) }
+
+    val positiveOpt = if (isApproveDeny) {
+        if (request.options[0].equals("approve", ignoreCase = true) || request.options[0].equals("allow", ignoreCase = true)) {
+            request.options[0]
+        } else {
+            request.options[1]
+        }
+    } else ""
+    val negativeOpt = if (isApproveDeny) {
+        if (positiveOpt == request.options[0]) request.options[1] else request.options[0]
+    } else ""
     val hasAnswer = custom.trim().isNotEmpty() || selected.isNotEmpty()
 
     // --- Keyboard avoiding ---------------------------------------------------
@@ -160,7 +177,7 @@ private fun QuestionPanel(
                         Text("$index of $total", color = NewTheme.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily)
                     }
                 }
-                if (hasOptions) {
+                if (hasOptions && !isApproveDeny) {
                     Column(modifier = Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         request.options.forEach { option ->
                             val isSelected = selected.contains(option)
@@ -194,32 +211,52 @@ private fun QuestionPanel(
                         }
                     }
                 }
-                InlineTextInput(
-                    value = custom,
-                    onValueChange = { custom = it },
-                    placeholder = if (hasOptions) "Or type your own answer…" else "Type your answer…",
-                    modifier = Modifier.padding(top = 12.dp)
-                        .bringIntoViewRequester(fieldRequester)
-                        .onFocusChanged { fieldFocused = it.isFocused },
-                )
+                if (!isApproveDeny) {
+                    InlineTextInput(
+                        value = custom,
+                        onValueChange = { custom = it },
+                        placeholder = if (hasOptions) "Or type your own answer…" else "Type your answer…",
+                        modifier = Modifier.padding(top = 12.dp)
+                            .bringIntoViewRequester(fieldRequester)
+                            .onFocusChanged { fieldFocused = it.isFocused },
+                    )
+                }
             }
             Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (request.skippable) {
-                    ActionButton(text = "Skip", onClick = onSkip, enabled = !submitting, surface = NewTheme.Raised, modifier = Modifier.weight(1f))
+                if (isApproveDeny) {
+                    ActionButton(
+                        text = negativeOpt,
+                        onClick = { onAnswerText(negativeOpt) },
+                        surface = NewTheme.Raised,
+                        enabled = !submitting,
+                        modifier = Modifier.weight(1f),
+                    )
+                    ActionButton(
+                        text = positiveOpt,
+                        onClick = { onAnswerText(positiveOpt) },
+                        kind = ActionButtonKind.Primary,
+                        enabled = !submitting,
+                        loading = submitting,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    if (request.skippable) {
+                        ActionButton(text = "Skip", onClick = onSkip, enabled = !submitting, surface = NewTheme.Raised, modifier = Modifier.weight(1f))
+                    }
+                    ActionButton(
+                        text = if (isLast) (if (total > 1) "Submit all" else "Submit") else "Next",
+                        onClick = {
+                            if (custom.trim().isNotEmpty()) onAnswerText(custom.trim())
+                            else if (selected.isNotEmpty()) {
+                                if (request.isMultiSelect) onAnswerList(selected.toList()) else onAnswerText(selected.first())
+                            }
+                        },
+                        kind = ActionButtonKind.Primary,
+                        enabled = hasAnswer && !submitting,
+                        loading = submitting,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
-                ActionButton(
-                    text = if (isLast) (if (total > 1) "Submit all" else "Submit") else "Next",
-                    onClick = {
-                        if (custom.trim().isNotEmpty()) onAnswerText(custom.trim())
-                        else if (selected.isNotEmpty()) {
-                            if (request.isMultiSelect) onAnswerList(selected.toList()) else onAnswerText(selected.first())
-                        }
-                    },
-                    kind = ActionButtonKind.Primary,
-                    enabled = hasAnswer && !submitting,
-                    loading = submitting,
-                    modifier = Modifier.weight(1f),
-                )
             }
         }
     }

@@ -295,6 +295,13 @@ func (s *Service) Hub(sessionID string) *Hub {
 	return nil
 }
 
+// Broadcast sends an event to the session's active run hub, if any.
+func (s *Service) Broadcast(sessionID string, event loop.Event) {
+	if hub := s.Hub(sessionID); hub != nil {
+		hub.Broadcast(event)
+	}
+}
+
 // unsettleOnSend clears the settled mark when a prompt arrives (decision 3 of
 // settled-chats.md): a conversation you are still using must never sit in the
 // collapsed Settled section. Best-effort — a failure here is logged, never

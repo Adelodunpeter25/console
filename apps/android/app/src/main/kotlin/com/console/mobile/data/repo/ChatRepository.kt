@@ -431,6 +431,13 @@ class ChatRepository(
                 }
                 return
             }
+            "sessionApprovalModeUpdated" -> {
+                val mode = event.approvalMode?.trim()
+                if (!mode.isNullOrEmpty()) {
+                    sessions.updateApprovalMode(sessionId, mode)
+                }
+                return
+            }
             else -> chats.update(sessionId) { applyChatEvent(it, event) }
         }
     }

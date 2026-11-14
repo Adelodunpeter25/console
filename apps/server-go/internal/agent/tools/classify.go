@@ -85,6 +85,8 @@ func builtinLabel(name string) string {
 		return "Reset Computer"
 	case "writePlan":
 		return "Write Plan"
+	case "requestFullAccess":
+		return "Request Full Access"
 	default:
 		return ""
 	}
@@ -164,7 +166,7 @@ func ToolIconKey(name string) string {
 	switch name {
 	case "bash", "bashJob":
 		return "terminal"
-	case "editFile", "write_file", "batchWrite":
+	case "editFile", "write_file", "batchWrite", "requestFullAccess":
 		return "pencil"
 	case "read_file":
 		return "file"

@@ -302,11 +302,18 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	if modelID == "" {
 		modelID = header.ModelID
 	}
+	headerMode := permissions.Normalize(header.ApprovalMode)
 	approval := dto.ApprovalMode
 	if approval == "" {
 		approval = header.ApprovalMode
 	}
 	mode := permissions.Normalize(approval)
+	// Stale-mode guard: if the session has already been upgraded to full-access,
+	// do not let a prompt payload carrying a stale plan-mode demote it.
+	// Intentional mode changes update the session header directly via PATCH /sessions/:id.
+	if headerMode == permissions.FullAccess && mode == permissions.PlanMode {
+		mode = permissions.FullAccess
+	}
 
 	if providerID != *currentID {
 		switched, err := s.Lookup(providerID)
@@ -398,6 +405,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	onTodoUpdate := func(items []types.TodoItem, action string) {
 		hub.Broadcast(loop.Event{Kind: loop.EventTodoUpdate, Items: items, Action: action})
 	}
+	// Bound before the tool list: requestFullAccess closes over both.
+	var registry *tools.Registry
+	var executor *loop.Executor
 	toolList := make([]tools.Tool, 0, len(tools.DefaultTools())+1)
 	for _, t := range tools.DefaultTools() {
 		switch t.Name() {
@@ -433,6 +443,19 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// read-only run may make, and in every other mode write_file does the job.
 	if mode == permissions.PlanMode {
 		toolList = append(toolList, tools.NewWritePlanTool(header.Cwd))
+		toolList = append(toolList, tools.NewRequestFullAccessTool(askHandler, func() error {
+			if err := s.sessions.UpdateApprovalMode(sessionID, string(permissions.FullAccess)); err != nil {
+				return err
+			}
+			// Bash is sandboxed read-only in plan mode; swap in the real one.
+			registry.Replace(tools.NewBashTool(s.bashJobManager(), sessionID, runID))
+			executor.SetMode(permissions.FullAccess)
+			hub.Broadcast(loop.Event{
+				Kind:         loop.EventSessionApprovalModeUpdated,
+				ApprovalMode: string(permissions.FullAccess),
+			})
+			return nil
+		}))
 	}
 	// Lazy built-in tools (CONSOLE_HARNESS_LAZY_TOOLS): the deferred six are
 	// held back; the loadTools loader itself is added once the registry
@@ -476,7 +499,6 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			setup = strings.TrimSpace(setup + "\n\n" + refSetup)
 		}
 	}
-	var registry *tools.Registry
 	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
 		Provider: provider,
 		Model:    modelID,
@@ -516,6 +538,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		// A subagent inherits the parent run's mode: it holds the same tools,
 		// so it must hold the same authority over them.
 		ApprovalMode: mode,
+		CurrentMode:  func() permissions.Mode { return executor.Mode() },
 		Guard:        guard,
 		OnEvent:      hub.Broadcast,
 		Usage:        usage,
@@ -569,7 +592,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			}
 		}
 	}
-	executor := loop.NewExecutor(registry, mode)
+	executor = loop.NewExecutor(registry, mode)
 	executor.Guard = guard
 	// Capture the pre-write content of every file a whole-file overwrite
 	// tool is about to touch, so the change diff recorded from the result

@@ -1255,6 +1255,23 @@ impl ConsoleDesktopApp {
                 }
                 self.update_session_title_in_panes(run_session_id, &title, cx);
             }
+            AgentSessionEvent::SessionApprovalModeUpdated { approval_mode } => {
+                let mode = console_core::ApprovalMode::from_value(&approval_mode);
+                if let Some(session) = Rc::make_mut(&mut self.sessions)
+                    .iter_mut()
+                    .find(|session| session.id == run_session_id)
+                {
+                    session.approval_mode = Some(mode.value().to_string());
+                }
+                self.set_pane_approval_mode(run_pane_id, mode);
+                let pane_ids: Vec<String> = self.workspace_pane_states.keys().cloned().collect();
+                for pane_id in pane_ids {
+                    if self.active_session_for_pane(&pane_id).as_deref() == Some(run_session_id) {
+                        self.set_pane_approval_mode(&pane_id, mode);
+                    }
+                }
+                cx.notify();
+            }
             AgentSessionEvent::QueueUpdated {
                 queued_prompts,
                 drained,
