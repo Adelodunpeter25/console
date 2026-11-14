@@ -1,5 +1,10 @@
 package com.console.mobile.ui.code
 
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import com.console.mobile.ui.theme.ConsoleColors
+
 /**
  * The token vocabulary and per-language rules the code viewer highlights with.
  * This is the only highlighter in the app — it runs inside Sora's
@@ -55,3 +60,68 @@ fun languageForPath(path: String?): String {
     }
     return name.substring(dot + 1).lowercase()
 }
+
+private val KEYWORD_STYLE = SpanStyle(color = ConsoleColors.Syntax.Keyword)
+private val STRING_STYLE = SpanStyle(color = ConsoleColors.Syntax.String)
+private val NUMBER_STYLE = SpanStyle(color = ConsoleColors.Syntax.Number)
+private val COMMENT_STYLE = SpanStyle(color = ConsoleColors.Syntax.Comment)
+private val BUILTIN_STYLE = SpanStyle(color = ConsoleColors.Syntax.Builtin)
+private val CLASS_NAME_STYLE = SpanStyle(color = ConsoleColors.Syntax.ClassName)
+
+fun highlightCodeLine(line: String, language: String = ""): AnnotatedString {
+    val displayText = line.ifEmpty { " " }
+    if (line.isEmpty()) return AnnotatedString(displayText)
+
+    return buildAnnotatedString {
+        append(displayText)
+
+        if (language in SECTION_LANGUAGES && line.trim().startsWith("[") && line.trim().endsWith("]")) {
+            addStyle(CLASS_NAME_STYLE, 0, line.length)
+            return@buildAnnotatedString
+        }
+
+        var cursor = 0
+        if (language in KEY_LANGUAGES) {
+            val keyMatch = KEY_LINE_REGEX.find(line)
+            if (keyMatch != null) {
+                val keyStart = keyMatch.groupValues[1].length
+                val keyLen = keyMatch.groupValues[2].length
+                addStyle(BUILTIN_STYLE, keyStart, keyStart + keyLen)
+                cursor = keyMatch.range.last + 1
+            }
+        }
+
+        CODE_TOKEN_REGEX.findAll(line, startIndex = cursor).forEach { m ->
+            val token = m.value
+            val tokenStart = m.range.first
+            val tokenEnd = m.range.last + 1
+
+            val style = when {
+                token.startsWith("//") || token.startsWith("#") || token.startsWith("/*") -> COMMENT_STYLE
+                token.startsWith("\"") || token.startsWith("'") || token.startsWith("`") -> STRING_STYLE
+                token.firstOrNull()?.isDigit() == true -> NUMBER_STYLE
+                token in CODE_KEYWORDS -> KEYWORD_STYLE
+                token.firstOrNull()?.isUpperCase() == true -> CLASS_NAME_STYLE
+                else -> {
+                    var j = m.range.last + 1
+                    while (j < line.length && line[j].isWhitespace()) j++
+                    if (j < line.length && line[j] == '(') BUILTIN_STYLE else null
+                }
+            }
+            if (style != null) {
+                addStyle(style, tokenStart, tokenEnd)
+            }
+        }
+    }
+}
+
+fun highlightCode(code: String, language: String = ""): AnnotatedString {
+    val lines = code.split("\n")
+    return buildAnnotatedString {
+        lines.forEachIndexed { index, line ->
+            if (index > 0) append("\n")
+            append(highlightCodeLine(line, language))
+        }
+    }
+}
+

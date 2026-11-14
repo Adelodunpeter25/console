@@ -75,11 +75,7 @@ import com.console.mobile.core.util.filePathOrNull
 import com.console.mobile.ui.components.Favicon
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleMonoFamily
-import com.console.mobile.ui.code.CODE_KEYWORDS
-import com.console.mobile.ui.code.CODE_TOKEN_REGEX
-import com.console.mobile.ui.code.KEY_LANGUAGES
-import com.console.mobile.ui.code.KEY_LINE_REGEX
-import com.console.mobile.ui.code.SECTION_LANGUAGES
+import com.console.mobile.ui.code.highlightCode
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
@@ -308,63 +304,6 @@ private fun TableRowView(cells: List<AnnotatedString>, widths: List<Dp>, align: 
                 textAlign = when (align.getOrNull(c)) { TableAlign.CENTER -> TextAlign.Center; TableAlign.RIGHT -> TextAlign.End; else -> TextAlign.Start },
                 modifier = Modifier.width(width).fillMaxHeight().border(0.5.dp, NewTheme.Divider).padding(horizontal = 10.dp, vertical = 7.dp),
             )
-        }
-    }
-}
-
-private fun highlightCode(code: String, language: String): AnnotatedString {
-    val syntax = ConsoleColors.Syntax
-    val keywordStyle = SpanStyle(color = syntax.Keyword)
-    val stringStyle = SpanStyle(color = syntax.String)
-    val numberStyle = SpanStyle(color = syntax.Number)
-    val commentStyle = SpanStyle(color = syntax.Comment)
-    val builtinStyle = SpanStyle(color = syntax.Builtin)
-    val classNameStyle = SpanStyle(color = syntax.ClassName)
-
-    val lines = code.split("\n")
-    return buildAnnotatedString {
-        lines.forEachIndexed { lineIndex, line ->
-            if (lineIndex > 0) append("\n")
-            val lineStart = length
-            append(line)
-
-            if (language in SECTION_LANGUAGES && line.trim().startsWith("[") && line.trim().endsWith("]")) {
-                addStyle(classNameStyle, lineStart, lineStart + line.length)
-                return@forEachIndexed
-            }
-
-            var cursor = 0
-            if (language in KEY_LANGUAGES) {
-                val keyMatch = KEY_LINE_REGEX.find(line)
-                if (keyMatch != null) {
-                    val keyStart = keyMatch.groupValues[1].length
-                    val keyLen = keyMatch.groupValues[2].length
-                    addStyle(builtinStyle, lineStart + keyStart, lineStart + keyStart + keyLen)
-                    cursor = keyMatch.range.last + 1
-                }
-            }
-
-            CODE_TOKEN_REGEX.findAll(line, startIndex = cursor).forEach { m ->
-                val token = m.value
-                val tokenStart = lineStart + m.range.first
-                val tokenEnd = lineStart + m.range.last + 1
-
-                val style = when {
-                    token.startsWith("//") || token.startsWith("#") || token.startsWith("/*") -> commentStyle
-                    token.startsWith("\"") || token.startsWith("'") || token.startsWith("`") -> stringStyle
-                    token.firstOrNull()?.isDigit() == true -> numberStyle
-                    token in CODE_KEYWORDS -> keywordStyle
-                    token.firstOrNull()?.isUpperCase() == true -> classNameStyle
-                    else -> {
-                        var j = m.range.last + 1
-                        while (j < line.length && line[j].isWhitespace()) j++
-                        if (j < line.length && line[j] == '(') builtinStyle else null
-                    }
-                }
-                if (style != null) {
-                    addStyle(style, tokenStart, tokenEnd)
-                }
-            }
         }
     }
 }

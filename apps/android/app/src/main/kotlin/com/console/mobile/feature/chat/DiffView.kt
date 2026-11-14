@@ -36,6 +36,8 @@ import com.console.mobile.SharedNative.Diff
 import com.console.mobile.SharedNative.DiffKind
 import com.console.mobile.SharedNative.DiffLine
 import com.console.mobile.core.util.getFileName
+import com.console.mobile.ui.code.highlightCodeLine
+import com.console.mobile.ui.code.languageForPath
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.NewTheme
@@ -57,6 +59,7 @@ fun DiffView(
     showFileHeader: Boolean = true,
 ) {
     var expanded by remember(filePath, diff.lines.size) { mutableStateOf(false) }
+    val language = remember(filePath) { languageForPath(filePath) }
     Column(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -86,7 +89,7 @@ fun DiffView(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         ) {
             visible.forEach { line ->
-                DiffLineRow(line)
+                DiffLineRow(line, language)
             }
         }
         if (!expanded && diff.lines.size > maxCollapsedLines) {
@@ -112,7 +115,7 @@ fun DiffView(
 }
 
 @Composable
-private fun DiffLineRow(line: DiffLine) {
+private fun DiffLineRow(line: DiffLine, language: String) {
     val (gutter, fg, bg) = when (line.kind) {
         DiffKind.Added -> Triple("+", NewTheme.Success, AddedLineBg)
         DiffKind.Removed -> Triple("-", NewTheme.Danger, RemovedLineBg)
@@ -122,6 +125,9 @@ private fun DiffLineRow(line: DiffLine) {
         DiffKind.Added -> line.newNo?.toString() ?: ""
         DiffKind.Removed -> line.oldNo?.toString() ?: ""
         DiffKind.Context -> line.newNo?.toString() ?: ""
+    }
+    val highlighted = remember(line.text, language) {
+        highlightCodeLine(line.text, language)
     }
 
     Row(
@@ -150,10 +156,10 @@ private fun DiffLineRow(line: DiffLine) {
             textAlign = TextAlign.Center,
             modifier = Modifier.width(16.dp),
         )
-        // Column 3: Code text with matching color
+        // Column 3: Syntax-highlighted code text
         Text(
-            text = line.text.ifEmpty { " " },
-            color = fg,
+            text = highlighted,
+            color = ConsoleColors.Syntax.Plain,
             fontSize = 12.sp,
             fontFamily = ConsoleMonoFamily,
             lineHeight = 17.sp,
