@@ -106,10 +106,22 @@ internal fun SessionRow(
                 Text(draftPreview, color = NewTheme.Warning, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 1.dp)) {
-                Text(projectName, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (branch != null) {
-                    Text(" • ", color = NewTheme.TextMuted, fontSize = 13.sp)
-                    Text(branch, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                // The instant worktree launch's live state outranks the
+                // project line for as long as it lasts.
+                when (session.launch_state) {
+                    "provisioning" -> {
+                        Text("Creating worktree…", color = NewTheme.Accent, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    }
+                    "failed" -> {
+                        Text("Worktree failed", color = NewTheme.Danger, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    }
+                    else -> {
+                        Text(projectName, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        if (branch != null) {
+                            Text(" • ", color = NewTheme.TextMuted, fontSize = 13.sp)
+                            Text(branch, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        }
+                    }
                 }
             }
         }

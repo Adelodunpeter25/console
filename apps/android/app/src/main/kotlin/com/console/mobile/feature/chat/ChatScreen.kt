@@ -97,6 +97,10 @@ fun ChatScreen(
     }
 
     val chat: ChatSessionState = chatSessions[sessionId] ?: createChatSessionState()
+    // The instant worktree launch's live state rides on the header.
+    val launchHeader = projectState.sessions.firstOrNull { it.id == sessionId }
+    val worktreeLaunchState = launchHeader?.launch_state
+    val worktreeLaunchError = launchHeader?.launch_error
     // The session-detail request owns the initial transcript load. Auxiliary
     // requests may update the surrounding UI, but must not decide when the
     // initial skeleton is replaced.
@@ -416,6 +420,19 @@ fun ChatScreen(
                         projectLocked = hasMessages,
                         onAddProject = onAddProject,
                         onConnectGithub = onConnectGithub,
+                        topBanner = worktreeLaunchState?.let { state -> {
+                            WorktreeLaunchBanner(
+                                state = state,
+                                error = worktreeLaunchError,
+                                onRetry = { AppContainer.sessionRepository.retryWorktreeLaunch(sessionId) },
+                                onDiscard = {
+                                    scope.launch {
+                                        AppContainer.sessionRepository.deleteSession(sessionId)
+                                        leave()
+                                    }
+                                },
+                            )
+                        } },
                         onSend = {
                             subagentPanelOpen = false
                             keyboardController?.hide()
@@ -424,9 +441,14 @@ fun ChatScreen(
                                     sending = true
                                     scope.launch {
                                         try {
-                                            val realId = AppContainer.sessionRepository.commitNewChat(sessionId)
-                                            AppContainer.chatRepository.sendMessage(realId)
-                                            AppContainer.appStateHolder.setSelectedSessionId(realId)
+                                            val result = AppContainer.sessionRepository.commitNewChat(sessionId)
+                                            AppContainer.appStateHolder.setSelectedSessionId(result.sessionId)
+                                            // A worktree launch runs the prompt server-side
+                                            // once the worktree exists; only a plain chat
+                                            // sends its message from here.
+                                            if (!result.worktreeLaunched) {
+                                                AppContainer.chatRepository.sendMessage(result.sessionId)
+                                            }
                                         } catch (_: Exception) {
                                             com.console.mobile.ui.components.confirmAlert("Unable to start chat", "Check the backend connection and try again.")
                                         } finally {

@@ -83,6 +83,75 @@ fun todoCounts(items: List<TodoItem>): Pair<Int, Int> {
 }
 
 /**
+ * The instant worktree launch's state banner, above the composer:
+ * "Creating worktree…" while the server cuts the worktree (the prompt
+ * auto-runs the moment it exists), and a persistent error with Retry and
+ * Discard once the launch has failed.
+ */
+@Composable
+fun WorktreeLaunchBanner(
+    state: String?,
+    error: String?,
+    onRetry: () -> Unit,
+    onDiscard: () -> Unit,
+) {
+    when (state) {
+        "provisioning" -> Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(NewTheme.Raised)
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(NewTheme.Accent))
+            Spacer(modifier = Modifier.size(8.dp))
+            Text("Creating worktree…", color = NewTheme.TextSecondary, fontSize = 12.sp)
+        }
+        "failed" -> Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(NewTheme.Raised)
+                .border(1.dp, NewTheme.Danger.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                error?.takeIf { it.isNotBlank() } ?: "Worktree launch failed",
+                color = NewTheme.Danger,
+                fontSize = 12.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                "Retry",
+                color = NewTheme.TextPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { onRetry() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+            Text(
+                "Discard",
+                color = NewTheme.TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { onDiscard() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+/**
  * The counts floating above the composer: one compact pill each for tasks,
  * subagents and shells. Tasks and shells open their sheet; subagents toggle
  * the floating panel above the pill. The icon takes the accent while that
