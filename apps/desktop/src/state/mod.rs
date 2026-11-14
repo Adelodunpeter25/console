@@ -56,6 +56,7 @@ mod app;
 pub mod types;
 
 pub use types::{ConsoleDesktopApp, ImageFileState};
+pub(crate) use workspace_snapshot::PaneChatSnapshot;
 // Shared by the sibling handler modules (`layout`, `sessions`, `run`).
 pub(crate) use app::{
     RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT, RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT, RIGHT_SIDEBAR_MAX_WIDTH,

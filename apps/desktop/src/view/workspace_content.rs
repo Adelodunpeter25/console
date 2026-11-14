@@ -11,6 +11,7 @@ use gpui::{
 };
 use std::rc::Rc;
 
+use crate::state::PaneChatSnapshot;
 use crate::state::{ConsoleDesktopApp, ImageFileState};
 
 impl ConsoleDesktopApp {
@@ -614,14 +615,6 @@ impl ConsoleDesktopApp {
     ) -> gpui::AnyElement {
         self.ensure_workspace_pane_state(pane_id, window, cx);
         let pane_transcript = self.transcript_for_pane(pane_id);
-        let pane_project_id = self.pane_real_project_id(pane_id);
-        let pane_branches = self.pane_branches(pane_id);
-        let pane_branch_loaded = self.pane_branch_loaded(pane_id);
-        let pane_is_git_repository = self.pane_is_git_repository(pane_id);
-        let pane_branch_pending = self.pane_branch_pending(pane_id);
-        let pane_project_menu = self.pane_project_menu(pane_id);
-        let pane_branch_menu = self.pane_branch_menu(pane_id);
-        let pane_usage_menu = self.pane_usage_menu(pane_id);
 
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
@@ -753,46 +746,6 @@ impl ConsoleDesktopApp {
                 |el, error| {
                     let (error, error_persistent) = error;
                     let entity = entity.clone();
-                    // Retry/Discard only make sense on a persistent error (the
-                    // failed worktree launch), not on every transient one.
-                    let actions = if error_persistent {
-                        {
-                            let retry_entity = entity.clone();
-                            let retry_session = pane_session_id.clone().unwrap_or_default();
-                            let discard_entity = entity.clone();
-                            let discard_session = pane_session_id.clone().unwrap_or_default();
-                            vec![
-                                console_ui::common::BannerAction {
-                                    label: "Retry".into(),
-                                    on_click: Rc::new(move |cx: &mut App| {
-                                        if let Some(app) = retry_entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.retry_worktree_launch(
-                                                    retry_session.clone(),
-                                                    cx,
-                                                );
-                                            });
-                                        }
-                                    }),
-                                },
-                                console_ui::common::BannerAction {
-                                    label: "Discard".into(),
-                                    on_click: Rc::new(move |cx: &mut App| {
-                                        if let Some(app) = discard_entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.discard_worktree_launch(
-                                                    discard_session.clone(),
-                                                    cx,
-                                                );
-                                            });
-                                        }
-                                    }),
-                                },
-                            ]
-                        }
-                    } else {
-                        Default::default()
-                    };
                     let error_pane_id = pane_id.to_owned();
                     el.child(error_banner(
                         error,
@@ -805,7 +758,14 @@ impl ConsoleDesktopApp {
                                 });
                             }
                         })),
-                        actions,
+                        // Retry/Discard only make sense on a persistent error
+                        // (the failed worktree launch), not on every
+                        // transient one.
+                        if error_persistent {
+                            Self::worktree_launch_actions(pane_session_id.clone(), cx)
+                        } else {
+                            Vec::new()
+                        },
                         cx,
                     ))
                 },
@@ -837,228 +797,33 @@ impl ConsoleDesktopApp {
             })
             .when(!snapshot.queued_prompts.is_empty(), |el| {
                 let theme = Theme::current(cx);
-                let entity_edit = entity.clone();
-                let entity_delete = entity.clone();
-                let entity_steer = entity.clone();
-                let pane_for_edit = pane_id.to_owned();
-                let pane_for_delete = pane_id.to_owned();
-                let pane_for_steer = pane_id.to_owned();
                 el.child(queued_prompts_stack(
                     snapshot.queued_prompts.clone(),
-                    Some(Rc::new(move |prompt_id, _window, cx| {
-                        if let Some(app) = entity_edit.upgrade() {
-                            let pid = pane_for_edit.clone();
-                            app.update(cx, |this, cx| {
-                                this.edit_queued_prompt_for_pane(pid, prompt_id, cx);
-                            });
-                        }
-                    })),
-                    Some(Rc::new(move |prompt_id, _window, cx| {
-                        if let Some(app) = entity_delete.upgrade() {
-                            let pid = pane_for_delete.clone();
-                            app.update(cx, |this, cx| {
-                                this.delete_queued_prompt_for_pane(pid, prompt_id, cx);
-                            });
-                        }
-                    })),
-                    Some(Rc::new(move |prompt_id, _window, cx| {
-                        if let Some(app) = entity_steer.upgrade() {
-                            let pid = pane_for_steer.clone();
-                            app.update(cx, |this, cx| {
-                                this.steer_queued_prompt_for_pane(pid, prompt_id, cx);
-                            });
-                        }
-                    })),
+                    Some(Self::queued_prompt_action(
+                        pane_id.to_owned(),
+                        ConsoleDesktopApp::edit_queued_prompt_for_pane,
+                        cx,
+                    )),
+                    Some(Self::queued_prompt_action(
+                        pane_id.to_owned(),
+                        ConsoleDesktopApp::delete_queued_prompt_for_pane,
+                        cx,
+                    )),
+                    Some(Self::queued_prompt_action(
+                        pane_id.to_owned(),
+                        ConsoleDesktopApp::steer_queued_prompt_for_pane,
+                        cx,
+                    )),
                     theme,
                 ))
             })
             .when_some(snapshot.pending_question.clone(), |el, question| {
-                let entity_for_answer = entity.clone();
-                let question_input = self.question_input_for_pane(pane_id);
-                let selected = self.question_selected_for_pane(pane_id);
-                let is_multi = question.is_multi_select.unwrap_or(false);
-                let skippable = question.skippable != Some(false);
-                let answer_sid = selected_sid.clone();
-                let skip_sid = selected_sid.clone();
-                let entity_for_skip = entity.clone();
-                let question_card = QuestionInteractionCard::new(
-                    question,
-                    true,
-                    false,
-                    move |answer, _window, cx| {
-                        let Some(sid) = answer_sid.clone() else {
-                            return;
-                        };
-                        if let Some(app) = entity_for_answer.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.answer_pending_question_for_session(sid, answer, cx);
-                            });
-                        }
-                    },
-                )
-                .custom_input(question_input.clone())
-                .selected(selected);
-                let question_card = if skippable {
-                    question_card.on_skip(move |_window, cx| {
-                        let Some(sid) = skip_sid.clone() else {
-                            return;
-                        };
-                        if let Some(app) = entity_for_skip.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.skip_pending_question_for_session(sid, cx);
-                            });
-                        }
-                    })
-                } else {
-                    question_card
-                };
-                let question_card = question_card.on_select({
-                    // Toggle against the session that owns this card, not whichever
-                    // pane holds focus at click time.
-                    let entity = entity.clone();
-                    let answer_sid = selected_sid.clone();
-                    move |option, _window, cx| {
-                        let Some(sid) = answer_sid.clone() else {
-                            return;
-                        };
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                if is_multi {
-                                    let mut sel = this.question_selected_for_session(&sid);
-                                    if !sel.insert(option.clone()) {
-                                        sel.remove(&option);
-                                    }
-                                    this.set_question_selected_for_session(&sid, sel);
-                                } else {
-                                    let mut sel = std::collections::HashSet::new();
-                                    sel.insert(option);
-                                    this.set_question_selected_for_session(&sid, sel);
-                                }
-                                cx.notify();
-                            });
-                        }
-                    }
-                });
-                el.child(centered_stripe(question_card, 8.0))
+                let card = self.build_question_card(pane_id, question, selected_sid.clone(), cx);
+                el.child(centered_stripe(card, 8.0))
             })
             .when(selected_sid.is_some(), |el| {
                 el.child({
-                    let project_pane_id = pane_id.to_owned();
-                    let clear_project_pane_id = pane_id.to_owned();
-                    let branch_pane_id = pane_id.to_owned();
-                    let new_worktree_pane_id = pane_id.to_owned();
-
-                    let workspace_footer = WorkspaceFooter::new(
-                        self.projects.clone(),
-                        pane_project_id.clone(),
-                        pane_branches.clone(),
-                        pane_branch_loaded,
-                        pane_is_git_repository,
-                        pane_branch_pending,
-                        pane_project_menu.clone(),
-                        pane_branch_menu.clone(),
-                        pane_usage_menu.clone(),
-                        snapshot.usage_report.clone(),
-                        snapshot.usage_loading,
-                        snapshot.context_snapshot.clone(),
-                        {
-                            let entity = entity.clone();
-                            move |id: String, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    let pane_id = project_pane_id.clone();
-                                    app.update(cx, |this, cx| {
-                                        this.select_project_for_pane(pane_id, id, cx)
-                                    });
-                                }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    // Open the ⌘O directory browser palette — it
-                                    // works against remote backends, where the
-                                    // native dialog can't see the host filesystem.
-                                    app.update(cx, |this, cx| this.open_project_browse(window, cx));
-                                }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    let pane_id = clear_project_pane_id.clone();
-                                    app.update(cx, |this, cx| {
-                                        this.clear_project_for_pane(pane_id, cx)
-                                    });
-                                }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |repo: console_core::GithubRepo, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| this.open_repo_task(repo, cx));
-                                }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| this.refresh_github_repos(cx));
-                                }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        // Not open_settings: it toggles, and
-                                        // closing settings the user already had
-                                        // open would be a surprise from a menu
-                                        // row.
-                                        this.open_settings_tab(
-                                            console_ui::settings::SettingsTab::Providers,
-                                            window,
-                                            cx,
-                                        );
-                                    });
-                                }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |name: String, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    let pane_id = branch_pane_id.clone();
-                                    app.update(cx, |this, cx| {
-                                        this.checkout_branch_for_pane(pane_id, name, cx)
-                                    });
-                                }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    let pane_id = new_worktree_pane_id.clone();
-                                    app.update(cx, |this, cx| {
-                                        this.new_worktree_for_pane(pane_id, cx)
-                                    });
-                                }
-                            }
-                        },
-                    )
-                    .project_locked(snapshot.session_has_messages)
-                    .github_section(
-                        self.github_repos.clone(),
-                        self.github_repos_loading,
-                        self.github_repos_error.clone(),
-                    )
-                    .repo_cloning(self.repo_task_cloning.clone());
-
+                    let footer = self.build_workspace_footer(pane_id, &snapshot, cx);
                     div()
                         .relative()
                         .w_full()
@@ -1067,11 +832,260 @@ impl ConsoleDesktopApp {
                         .flex_col()
                         .items_center()
                         .child(pane_composer_element)
-                        .child(workspace_footer)
+                        .child(footer)
                 })
             })
             .into_any_element()
     }
+    /// The docked workspace footer: project/branch pickers, usage meter, and
+    /// its eight callbacks. Owns every read it needs, so `render_chat_tab`
+    /// stays element assembly.
+    fn build_workspace_footer(
+        &mut self,
+        pane_id: &str,
+        snapshot: &PaneChatSnapshot,
+        cx: &mut Context<Self>,
+    ) -> WorkspaceFooter {
+        let entity = cx.entity().downgrade();
+        let pane_project_id = self.pane_real_project_id(pane_id);
+        let pane_branches = self.pane_branches(pane_id);
+        let pane_branch_loaded = self.pane_branch_loaded(pane_id);
+        let pane_is_git_repository = self.pane_is_git_repository(pane_id);
+        let pane_branch_pending = self.pane_branch_pending(pane_id);
+        let pane_project_menu = self.pane_project_menu(pane_id);
+        let pane_branch_menu = self.pane_branch_menu(pane_id);
+        let pane_usage_menu = self.pane_usage_menu(pane_id);
+        let project_pane_id = pane_id.to_owned();
+        let clear_project_pane_id = pane_id.to_owned();
+        let branch_pane_id = pane_id.to_owned();
+        let new_worktree_pane_id = pane_id.to_owned();
+
+        WorkspaceFooter::new(
+            self.projects.clone(),
+            pane_project_id,
+            pane_branches,
+            pane_branch_loaded,
+            pane_is_git_repository,
+            pane_branch_pending,
+            pane_project_menu,
+            pane_branch_menu,
+            pane_usage_menu,
+            snapshot.usage_report.clone(),
+            snapshot.usage_loading,
+            snapshot.context_snapshot.clone(),
+            {
+                let entity = entity.clone();
+                move |id: String, _w, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        let pane_id = project_pane_id.clone();
+                        app.update(cx, |this, cx| this.select_project_for_pane(pane_id, id, cx));
+                    }
+                }
+            },
+            {
+                let entity = entity.clone();
+                move |window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        // Open the ⌘O directory browser palette — it
+                        // works against remote backends, where the
+                        // native dialog can't see the host filesystem.
+                        app.update(cx, |this, cx| this.open_project_browse(window, cx));
+                    }
+                }
+            },
+            {
+                let entity = entity.clone();
+                move |_w, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        let pane_id = clear_project_pane_id.clone();
+                        app.update(cx, |this, cx| this.clear_project_for_pane(pane_id, cx));
+                    }
+                }
+            },
+            {
+                let entity = entity.clone();
+                move |repo: console_core::GithubRepo, _w, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.open_repo_task(repo, cx));
+                    }
+                }
+            },
+            {
+                let entity = entity.clone();
+                move |_w, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.refresh_github_repos(cx));
+                    }
+                }
+            },
+            {
+                let entity = entity.clone();
+                move |window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            // Not open_settings: it toggles, and
+                            // closing settings the user already had
+                            // open would be a surprise from a menu
+                            // row.
+                            this.open_settings_tab(
+                                console_ui::settings::SettingsTab::Providers,
+                                window,
+                                cx,
+                            );
+                        });
+                    }
+                }
+            },
+            {
+                let entity = entity.clone();
+                move |name: String, _w, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        let pane_id = branch_pane_id.clone();
+                        app.update(cx, |this, cx| {
+                            this.checkout_branch_for_pane(pane_id, name, cx)
+                        });
+                    }
+                }
+            },
+            {
+                let entity = entity.clone();
+                move |_w, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        let pane_id = new_worktree_pane_id.clone();
+                        app.update(cx, |this, cx| this.new_worktree_for_pane(pane_id, cx));
+                    }
+                }
+            },
+        )
+        .project_locked(snapshot.session_has_messages)
+        .github_section(
+            self.github_repos.clone(),
+            self.github_repos_loading,
+            self.github_repos_error.clone(),
+        )
+        .repo_cloning(self.repo_task_cloning.clone())
+    }
+
+    /// The agent's pending question card, wired to the session that owns it
+    /// (not whichever pane holds focus when an option is clicked).
+    fn build_question_card(
+        &self,
+        pane_id: &str,
+        question: console_core::types::agent::AskQuestionRequest,
+        session_id: Option<String>,
+        cx: &Context<Self>,
+    ) -> QuestionInteractionCard {
+        let entity = cx.entity().downgrade();
+        let question_input = self.question_input_for_pane(pane_id);
+        let selected = self.question_selected_for_pane(pane_id);
+        let is_multi = question.is_multi_select.unwrap_or(false);
+        let skippable = question.skippable != Some(false);
+        let answer_sid = session_id.clone();
+        let skip_sid = session_id.clone();
+        let entity_for_answer = entity.clone();
+        let entity_for_skip = entity.clone();
+        let question_card =
+            QuestionInteractionCard::new(question, true, false, move |answer, _window, cx| {
+                let Some(sid) = answer_sid.clone() else {
+                    return;
+                };
+                if let Some(app) = entity_for_answer.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.answer_pending_question_for_session(sid, answer, cx);
+                    });
+                }
+            })
+            .custom_input(question_input)
+            .selected(selected);
+        let question_card = if skippable {
+            question_card.on_skip(move |_window, cx| {
+                let Some(sid) = skip_sid.clone() else {
+                    return;
+                };
+                if let Some(app) = entity_for_skip.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.skip_pending_question_for_session(sid, cx);
+                    });
+                }
+            })
+        } else {
+            question_card
+        };
+        question_card.on_select(move |option, _window, cx| {
+            let Some(sid) = session_id.clone() else {
+                return;
+            };
+            if let Some(app) = entity.upgrade() {
+                app.update(cx, |this, cx| {
+                    if is_multi {
+                        let mut sel = this.question_selected_for_session(&sid);
+                        if !sel.insert(option.clone()) {
+                            sel.remove(&option);
+                        }
+                        this.set_question_selected_for_session(&sid, sel);
+                    } else {
+                        let mut sel = std::collections::HashSet::new();
+                        sel.insert(option);
+                        this.set_question_selected_for_session(&sid, sel);
+                    }
+                    cx.notify();
+                });
+            }
+        })
+    }
+
+    /// The Retry/Discard pair a persistent (failed worktree launch) banner
+    /// carries; empty for transient errors.
+    fn worktree_launch_actions(
+        session_id: Option<String>,
+        cx: &Context<Self>,
+    ) -> Vec<console_ui::common::BannerAction> {
+        let session_id = session_id.unwrap_or_default();
+        let entity = cx.entity().downgrade();
+        let retry_entity = entity.clone();
+        let retry_session = session_id.clone();
+        let discard_entity = entity;
+        let discard_session = session_id;
+        vec![
+            console_ui::common::BannerAction {
+                label: "Retry".into(),
+                on_click: Rc::new(move |cx: &mut App| {
+                    if let Some(app) = retry_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.retry_worktree_launch(retry_session.clone(), cx);
+                        });
+                    }
+                }),
+            },
+            console_ui::common::BannerAction {
+                label: "Discard".into(),
+                on_click: Rc::new(move |cx: &mut App| {
+                    if let Some(app) = discard_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.discard_worktree_launch(discard_session.clone(), cx);
+                        });
+                    }
+                }),
+            },
+        ]
+    }
+
+    /// The upgrade-entity ceremony every queued-prompt callback shares; the
+    /// three actions differ only in which state method they call.
+    fn queued_prompt_action(
+        pane_id: String,
+        action: fn(&mut ConsoleDesktopApp, String, String, &mut Context<ConsoleDesktopApp>),
+        cx: &Context<Self>,
+    ) -> Rc<dyn Fn(String, &mut Window, &mut App) + 'static> {
+        let entity = cx.entity().downgrade();
+        Rc::new(move |prompt_id, _window, cx| {
+            if let Some(app) = entity.upgrade() {
+                let pid = pane_id.clone();
+                app.update(cx, |this, cx| action(this, pid, prompt_id, cx));
+            }
+        })
+    }
+
     /// The pane's chat composer, used both as the docked footer in chat tabs
     /// and as a floating card over file/diff tabs.
     /// Wheel scrolling over a file/diff collapses the floating composer back
