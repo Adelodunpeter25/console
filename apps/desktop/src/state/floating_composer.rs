@@ -1121,7 +1121,8 @@ impl ConsoleDesktopApp {
                     let Some(app) = entity.upgrade() else {
                         return true;
                     };
-                    let outcome = app.update(cx, |this, cx| match state.as_deref() {
+
+                    app.update(cx, |this, cx| match state.as_deref() {
                         Some("failed") => {
                             this.set_persistent_error_for_session(
                                 &session_id,
@@ -1143,8 +1144,7 @@ impl ConsoleDesktopApp {
                             );
                             true
                         }
-                    });
-                    outcome
+                    })
                 });
                 if finished {
                     return;

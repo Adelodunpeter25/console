@@ -181,23 +181,21 @@ impl ConsoleDesktopApp {
                     .cloned()
                     .unwrap_or(ImageFileState::Loading);
                 match state {
-                    ImageFileState::Loading => {
-                        return div()
-                            .size_full()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .gap(px(8.0))
-                            .text_color(theme.text_tertiary)
-                            .text_size(px(13.0))
-                            .child(console_ui::app_icon(
-                                console_ui::IconName::LoaderCircle,
-                                16.0,
-                                theme.text_tertiary,
-                            ))
-                            .child("Loading image...")
-                            .into_any_element();
-                    }
+                    ImageFileState::Loading => div()
+                        .size_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .gap(px(8.0))
+                        .text_color(theme.text_tertiary)
+                        .text_size(px(13.0))
+                        .child(console_ui::app_icon(
+                            console_ui::IconName::LoaderCircle,
+                            16.0,
+                            theme.text_tertiary,
+                        ))
+                        .child("Loading image...")
+                        .into_any_element(),
                     ImageFileState::Loaded {
                         image,
                         w,
@@ -213,7 +211,7 @@ impl ConsoleDesktopApp {
                         };
                         let zoom_img = image.clone();
                         let entity = cx.entity().downgrade();
-                        return console_ui::ImagePreview::new(path.clone(), image)
+                        console_ui::ImagePreview::new(path.clone(), image)
                             .meta(meta)
                             .on_zoom(move |_w, cx| {
                                 let img = zoom_img.clone();
@@ -224,12 +222,12 @@ impl ConsoleDesktopApp {
                                     });
                                 }
                             })
-                            .into_any_element();
+                            .into_any_element()
                     }
                     ImageFileState::Failed { message } => {
                         let retry_path = path.clone();
                         let entity = cx.entity().downgrade();
-                        return console_ui::BlockedFilePanel::new("Failed to load image", message)
+                        console_ui::BlockedFilePanel::new("Failed to load image", message)
                             .icon(console_ui::IconName::TriangleAlert)
                             .on_retry(move |_w, cx| {
                                 if let Some(app) = entity.upgrade() {
@@ -238,12 +236,12 @@ impl ConsoleDesktopApp {
                                     });
                                 }
                             })
-                            .into_any_element();
+                            .into_any_element()
                     }
                     ImageFileState::Blocked { title, message } => {
-                        return console_ui::BlockedFilePanel::new(title, message)
+                        console_ui::BlockedFilePanel::new(title, message)
                             .icon(console_ui::IconName::File)
-                            .into_any_element();
+                            .into_any_element()
                     }
                 }
             }
@@ -257,32 +255,30 @@ impl ConsoleDesktopApp {
                     .cloned()
                     .unwrap_or(ImageFileState::Loading);
                 match state {
-                    ImageFileState::Loading => {
-                        return div()
-                            .size_full()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .gap(px(8.0))
-                            .text_color(theme.text_tertiary)
-                            .text_size(px(13.0))
-                            .child(console_ui::app_icon(
-                                console_ui::IconName::LoaderCircle,
-                                16.0,
-                                theme.text_tertiary,
-                            ))
-                            .child("Checking file...")
-                            .into_any_element();
-                    }
+                    ImageFileState::Loading => div()
+                        .size_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .gap(px(8.0))
+                        .text_color(theme.text_tertiary)
+                        .text_size(px(13.0))
+                        .child(console_ui::app_icon(
+                            console_ui::IconName::LoaderCircle,
+                            16.0,
+                            theme.text_tertiary,
+                        ))
+                        .child("Checking file...")
+                        .into_any_element(),
                     ImageFileState::Blocked { title, message } => {
-                        return console_ui::BlockedFilePanel::new(title, message)
+                        console_ui::BlockedFilePanel::new(title, message)
                             .icon(console_ui::IconName::File)
-                            .into_any_element();
+                            .into_any_element()
                     }
                     ImageFileState::Failed { message } => {
                         let retry_path = path.clone();
                         let entity = cx.entity().downgrade();
-                        return console_ui::BlockedFilePanel::new("Preview unavailable", message)
+                        console_ui::BlockedFilePanel::new("Preview unavailable", message)
                             .icon(console_ui::IconName::TriangleAlert)
                             .on_retry(move |_w, cx| {
                                 if let Some(app) = entity.upgrade() {
@@ -291,19 +287,17 @@ impl ConsoleDesktopApp {
                                     });
                                 }
                             })
-                            .into_any_element();
+                            .into_any_element()
                     }
-                    _ => {
-                        return console_ui::BlockedFilePanel::new(
-                            "Binary file",
-                            format!(
-                                "\"{}\" isn't a text file, so there's nothing to preview here.",
-                                path
-                            ),
-                        )
-                        .icon(console_ui::IconName::File)
-                        .into_any_element();
-                    }
+                    _ => console_ui::BlockedFilePanel::new(
+                        "Binary file",
+                        format!(
+                            "\"{}\" isn't a text file, so there's nothing to preview here.",
+                            path
+                        ),
+                    )
+                    .icon(console_ui::IconName::File)
+                    .into_any_element(),
                 }
             }
             console_core::FileKind::Svg => {
@@ -323,23 +317,21 @@ impl ConsoleDesktopApp {
                             .cloned()
                             .unwrap_or(ImageFileState::Loading);
                         match state {
-                            ImageFileState::Loading => {
-                                return div()
-                                    .size_full()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .gap(px(8.0))
-                                    .text_color(theme.text_tertiary)
-                                    .text_size(px(13.0))
-                                    .child(console_ui::app_icon(
-                                        console_ui::IconName::LoaderCircle,
-                                        16.0,
-                                        theme.text_tertiary,
-                                    ))
-                                    .child("Loading SVG preview...")
-                                    .into_any_element();
-                            }
+                            ImageFileState::Loading => div()
+                                .size_full()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .gap(px(8.0))
+                                .text_color(theme.text_tertiary)
+                                .text_size(px(13.0))
+                                .child(console_ui::app_icon(
+                                    console_ui::IconName::LoaderCircle,
+                                    16.0,
+                                    theme.text_tertiary,
+                                ))
+                                .child("Loading SVG preview...")
+                                .into_any_element(),
                             ImageFileState::Loaded {
                                 image,
                                 w,
@@ -356,7 +348,7 @@ impl ConsoleDesktopApp {
                                 let zoom_img = image.clone();
                                 let toggle_path = path.clone();
                                 let entity = cx.entity().downgrade();
-                                return console_ui::ImagePreview::new(path.clone(), image)
+                                console_ui::ImagePreview::new(path.clone(), image)
                                     .meta(meta)
                                     .is_svg(true)
                                     .svg_mode(console_ui::SvgViewMode::Preview)
@@ -381,29 +373,26 @@ impl ConsoleDesktopApp {
                                             }
                                         }
                                     })
-                                    .into_any_element();
+                                    .into_any_element()
                             }
                             ImageFileState::Failed { message } => {
                                 let retry_path = path.clone();
                                 let entity = cx.entity().downgrade();
-                                return console_ui::BlockedFilePanel::new(
-                                    "Failed to render SVG",
-                                    message,
-                                )
-                                .icon(console_ui::IconName::TriangleAlert)
-                                .on_retry(move |_w, cx| {
-                                    if let Some(app) = entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            this.fetch_file_tab_content(retry_path.clone(), cx);
-                                        });
-                                    }
-                                })
-                                .into_any_element();
+                                console_ui::BlockedFilePanel::new("Failed to render SVG", message)
+                                    .icon(console_ui::IconName::TriangleAlert)
+                                    .on_retry(move |_w, cx| {
+                                        if let Some(app) = entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.fetch_file_tab_content(retry_path.clone(), cx);
+                                            });
+                                        }
+                                    })
+                                    .into_any_element()
                             }
                             ImageFileState::Blocked { title, message } => {
-                                return console_ui::BlockedFilePanel::new(title, message)
+                                console_ui::BlockedFilePanel::new(title, message)
                                     .icon(console_ui::IconName::File)
-                                    .into_any_element();
+                                    .into_any_element()
                             }
                         }
                     }
@@ -439,13 +428,13 @@ impl ConsoleDesktopApp {
                             })),
                         );
 
-                        return div()
+                        div()
                             .size_full()
                             .flex()
                             .flex_col()
                             .child(header)
                             .child(div().flex_1().min_h_0().size_full().child(file_viewer))
-                            .into_any_element();
+                            .into_any_element()
                     }
                 }
             }
@@ -532,13 +521,13 @@ impl ConsoleDesktopApp {
                     .selection(selection)
                     .scrollbar_state(scrollbar_state)
                     .link_handler(link_handler);
-                return div()
+                div()
                     .size_full()
                     .flex()
                     .flex_col()
                     .child(header)
                     .child(div().flex_1().min_h_0().size_full().child(viewer))
-                    .into_any_element();
+                    .into_any_element()
             }
             console_core::FileKind::Text => {
                 if !self.open_file_contents.contains_key(&path) {
@@ -561,13 +550,13 @@ impl ConsoleDesktopApp {
                     .comments(comment_cards);
                 let composer = self.pane_composer_view(pane_id, true, true, window, cx);
                 let collapse = self.composer_collapse_on_scroll(pane_id, cx);
-                return div()
+                div()
                     .relative()
                     .size_full()
                     .child(viewer)
                     .child(collapse)
                     .child(composer)
-                    .into_any_element();
+                    .into_any_element()
             }
         }
     }
@@ -592,7 +581,7 @@ impl ConsoleDesktopApp {
         self.sync_diff_comments(pane_id, &path, &diff_view, window, cx);
         let composer = self.pane_composer_view(pane_id, true, true, window, cx);
         let collapse = self.composer_collapse_on_scroll(pane_id, cx);
-        return div()
+        div()
             .relative()
             .size_full()
             .child(
@@ -601,7 +590,7 @@ impl ConsoleDesktopApp {
             )
             .child(collapse)
             .child(composer)
-            .into_any_element();
+            .into_any_element()
     }
 
     /// Changes review tab: every changed file in the tab's scope, stacked
@@ -662,14 +651,14 @@ impl ConsoleDesktopApp {
             )
         };
 
-        return console_ui::ReviewTab::new(
+        console_ui::ReviewTab::new(
             scope,
             changes,
             collapsed,
             on_toggle_collapsed,
             on_toggle_reviewed,
         )
-        .into_any_element();
+        .into_any_element()
     }
     /// The chat tab: transcript, status pills, banners, and the docked
     /// composer + workspace footer. All state derivation lives in
@@ -824,8 +813,8 @@ impl ConsoleDesktopApp {
                     let entity = entity.clone();
                     // Retry/Discard only make sense on a persistent error (the
                     // failed worktree launch), not on every transient one.
-                    let actions = error_persistent
-                        .then(|| {
+                    let actions = if error_persistent {
+                        {
                             let retry_entity = entity.clone();
                             let retry_session = pane_session_id.clone().unwrap_or_default();
                             let discard_entity = entity.clone();
@@ -858,8 +847,10 @@ impl ConsoleDesktopApp {
                                     }),
                                 },
                             ]
-                        })
-                        .unwrap_or_default();
+                        }
+                    } else {
+                        Default::default()
+                    };
                     let error_pane_id = pane_id.to_owned();
                     el.child(error_banner(
                         error,

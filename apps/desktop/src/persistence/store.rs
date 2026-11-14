@@ -215,10 +215,10 @@ fn read_state_file() -> StorageDocument {
 /// that is what the app read before the merge; the layout-only fields stay as
 /// the state document has them.
 fn fold_legacy_files(document: &mut StorageDocument) {
-    if document.workspaces.is_none() {
-        if let Some(workspaces) = super::workspace::read_legacy() {
-            document.workspaces = Some(workspaces);
-        }
+    if document.workspaces.is_none()
+        && let Some(workspaces) = super::workspace::read_legacy()
+    {
+        document.workspaces = Some(workspaces);
     }
 
     let Some(legacy) = workspace_state::read_legacy() else {
