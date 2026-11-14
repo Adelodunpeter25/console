@@ -49,7 +49,12 @@ func New(manager *db.DB) *Service {
 
 // SetBusyCheck wires the run-in-flight probe used by Settle. Called once at
 // startup, after the run service exists; nil (tests) means never busy.
-func (s *Service) SetBusyCheck(fn func(id string) bool) { s.isBusy = fn }
+func (s *Service) SetBusyCheck(fn func(id string) bool) {
+	s.isBusy = fn
+	if s.manager != nil {
+		s.manager.SetBusyCheck(fn)
+	}
+}
 
 // Fallback model and provider used when Create is not given one.
 const (
