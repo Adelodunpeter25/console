@@ -3,6 +3,8 @@
 package compaction
 
 import (
+	"unicode/utf8"
+
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
@@ -65,11 +67,16 @@ func shakeResults(results []tools.ToolResult, maxChars int) ([]tools.ToolResult,
 			continue
 		}
 		content, ok := r.Content.(string)
-		if !ok || r.IsError || len([]rune(content)) <= maxChars {
+		if !ok || r.IsError || utf8.RuneCountInString(content) <= maxChars {
 			continue
 		}
 		truncated = true
-		out[i].Content = string([]rune(content)[:maxChars]) + shakenMarker
+		cut := 0
+		for count := 0; count < maxChars && cut < len(content); count++ {
+			_, size := utf8.DecodeRuneInString(content[cut:])
+			cut += size
+		}
+		out[i].Content = content[:cut] + shakenMarker
 	}
 	if !truncated {
 		return nil, false

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"math"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
@@ -55,7 +56,7 @@ func (b Breakdown) Total() int {
 }
 
 func proseTokens(s string) int {
-	return int(math.Ceil(float64(len([]rune(s))) / breakdownProseChars))
+	return int(math.Ceil(float64(utf8.RuneCountInString(s)) / breakdownProseChars))
 }
 
 func codeTokens(n int) int {
