@@ -292,7 +292,13 @@ impl ConsoleDesktopApp {
             || card.mic_transcribing != mic.3
             || card.mic_error != mic.4;
         if mic_changed {
-            (card.mic_enabled, card.mic_recording, card.mic_elapsed_secs, card.mic_transcribing, card.mic_error) = mic;
+            (
+                card.mic_enabled,
+                card.mic_recording,
+                card.mic_elapsed_secs,
+                card.mic_transcribing,
+                card.mic_error,
+            ) = mic;
         }
         if changed || mic_changed {
             cx.notify();
@@ -937,7 +943,10 @@ impl ConsoleDesktopApp {
         }
         Rc::make_mut(&mut self.sessions).insert(0, new_session.clone());
         self.switch_workspace_for_session(&new_session.id, pane_id, cx);
-        let target_pane = self.active_pane_id.clone().unwrap_or_else(|| pane_id.to_string());
+        let target_pane = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| pane_id.to_string());
         // The new chat replaces this pane's transcript, so the
         // chat it was showing keeps its position.
         self.save_pane_scroll_position(&target_pane, cx);
@@ -1094,12 +1103,7 @@ impl ConsoleDesktopApp {
     /// auto-started run — the same reattach used when opening a session that
     /// already has a run. Failed → persistent error in the pane; its Retry
     /// and Discard render from the banner.
-    fn watch_worktree_launch(
-        &mut self,
-        pane_id: &str,
-        session_id: String,
-        cx: &mut Context<Self>,
-    ) {
+    fn watch_worktree_launch(&mut self, pane_id: &str, session_id: String, cx: &mut Context<Self>) {
         let client = self.client.clone();
         let pane_id = pane_id.to_string();
         cx.spawn(async move |entity, cx| {
@@ -1114,7 +1118,9 @@ impl ConsoleDesktopApp {
                 let state = detail.header.launch_state.clone();
                 let launch_error = detail.header.launch_error.clone();
                 let finished = cx.update(|cx| {
-                    let Some(app) = entity.upgrade() else { return true };
+                    let Some(app) = entity.upgrade() else {
+                        return true;
+                    };
                     let outcome = app.update(cx, |this, cx| match state.as_deref() {
                         Some("failed") => {
                             this.set_persistent_error_for_session(

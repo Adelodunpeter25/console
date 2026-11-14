@@ -6,8 +6,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 fn shared_tunnels() -> &'static tokio::sync::RwLock<HashMap<String, Arc<console_iroh::Tunnel>>> {
-    static TUNNELS: std::sync::OnceLock<tokio::sync::RwLock<HashMap<String, Arc<console_iroh::Tunnel>>>> =
-        std::sync::OnceLock::new();
+    static TUNNELS: std::sync::OnceLock<
+        tokio::sync::RwLock<HashMap<String, Arc<console_iroh::Tunnel>>>,
+    > = std::sync::OnceLock::new();
     TUNNELS.get_or_init(Default::default)
 }
 

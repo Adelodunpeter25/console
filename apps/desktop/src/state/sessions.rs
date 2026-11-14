@@ -446,15 +446,11 @@ impl ConsoleDesktopApp {
         self.refresh_dock_badge();
         // The chat is gone, so its remembered position is too.
         self.forget_transcript_scroll_position(&id, cx);
-        self.close_matching_workspace_tabs(
-            |t| t.id() == format!("chat:{}", id),
-            cx,
-        );
+        self.close_matching_workspace_tabs(|t| t.id() == format!("chat:{}", id), cx);
         for root in self.project_workspace_roots.values_mut() {
-            console_ui::workspace::ops::close_matching_tabs(
-                root,
-                |t| t.id() == format!("chat:{}", id),
-            );
+            console_ui::workspace::ops::close_matching_tabs(root, |t| {
+                t.id() == format!("chat:{}", id)
+            });
         }
         // Deleting a worktree's last chat removes the worktree's workspace with it.
         self.sweep_dead_worktree_workspaces(cx);
@@ -507,11 +503,7 @@ impl ConsoleDesktopApp {
     /// Delete the currently focused chat session. If the session is running
     /// an active task/agent, presents a confirmation dialog first to prevent
     /// unintentional interruption; otherwise soft-deletes it immediately.
-    pub(crate) fn delete_selected_session(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn delete_selected_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(session_id) = self.focused_session_id() else {
             return;
         };

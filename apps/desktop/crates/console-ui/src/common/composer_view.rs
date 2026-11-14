@@ -2,9 +2,8 @@ use std::rc::Rc;
 
 use console_core::{ApprovalMode, ImageAttachment, SelectedModel, ThinkingLevel};
 use gpui::{
-    App, Div, ElementId, Entity, ExternalPaths, InteractiveElement, IntoElement,
-    ParentElement, RenderOnce, StatefulInteractiveElement, Styled, Window, div, img,
-    prelude::FluentBuilder, px,
+    App, Div, ElementId, Entity, ExternalPaths, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, StatefulInteractiveElement, Styled, Window, div, img, prelude::FluentBuilder, px,
 };
 
 use crate::common::{

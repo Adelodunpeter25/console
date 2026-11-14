@@ -465,10 +465,9 @@ impl SessionService {
             body.data
                 .ok_or_else(|| anyhow!("Launched session data is missing"))
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to launch worktree session".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to launch worktree session".into()
+            })))
         }
     }
 
@@ -488,18 +487,17 @@ impl SessionService {
             .await
             .context("Failed to retry worktree launch")?;
 
-        let body: ApiResponse<Option<serde_json::Value>> = self
-            .transport
-            .decode_json(resp)
-            .await
-            .context("Failed to parse worktree retry response")?;
+        let body: ApiResponse<Option<serde_json::Value>> =
+            self.transport
+                .decode_json(resp)
+                .await
+                .context("Failed to parse worktree retry response")?;
         if body.success {
             Ok(())
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to retry worktree launch".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to retry worktree launch".into()
+            })))
         }
     }
 

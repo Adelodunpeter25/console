@@ -6,11 +6,11 @@
 
 use std::rc::Rc;
 
-use gpui::{
-    App, AnyElement, FontWeight, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
-    Styled, Window, div, px,
-};
 use gpui::prelude::FluentBuilder;
+use gpui::{
+    AnyElement, App, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    StatefulInteractiveElement, Styled, Window, div, px,
+};
 
 use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
@@ -95,8 +95,9 @@ pub fn mic_button(
                 })
         })
         .when(!state.enabled, |el| {
-            el.opacity(0.35)
-                .tooltip(Tooltip::text("Set up Speech to Text in Settings › Providers"))
+            el.opacity(0.35).tooltip(Tooltip::text(
+                "Set up Speech to Text in Settings › Providers",
+            ))
         })
         .child(app_icon(IconName::Mic, 13.0, theme.text_tertiary));
     button.into_any_element()

@@ -9,7 +9,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, IntoElement, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled, div,
+    App, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled, div,
     px,
 };
 

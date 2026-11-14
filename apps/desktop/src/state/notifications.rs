@@ -129,7 +129,10 @@ impl ConsoleDesktopApp {
                                         let _ = cx.update(|cx| {
                                             if let Some(app) = entity.upgrade() {
                                                 app.update(cx, |this, cx| {
-                                                    this.load_background_work(session_id.clone(), cx);
+                                                    this.load_background_work(
+                                                        session_id.clone(),
+                                                        cx,
+                                                    );
                                                 });
                                             }
                                         });
