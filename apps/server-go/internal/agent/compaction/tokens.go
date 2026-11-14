@@ -144,19 +144,7 @@ func assistantSplit(content []any) (prose, code int) {
 }
 
 func argsChars(args json.RawMessage) int {
-	if len(args) == 0 {
-		return 0
-	}
-	// Raw JSON counts as code chars; invalid JSON gets a fixed fallback estimate.
-	var v any
-	if err := json.Unmarshal(args, &v); err != nil {
-		return 50
-	}
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return 50
-	}
-	return len(raw)
+	return len(args)
 }
 
 // resultChars returns the character count of a tool result's content with
