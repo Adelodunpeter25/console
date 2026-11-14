@@ -3,10 +3,11 @@
 package mcp
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -324,7 +325,9 @@ func (m *Manager) Status() ([]ServerStatus, error) {
 		}
 		out = append(out, s)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	slices.SortFunc(out, func(a, b ServerStatus) int {
+		return cmp.Compare(a.ID, b.ID)
+	})
 	return out, nil
 }
 

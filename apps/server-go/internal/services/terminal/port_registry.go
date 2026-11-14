@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -341,12 +342,7 @@ func (r *PortRegistry) DetectListening() []int {
 		}(p)
 	}
 	wg.Wait()
-
-	for i := 1; i < len(active); i++ {
-		for j := i; j > 0 && active[j] < active[j-1]; j-- {
-			active[j], active[j-1] = active[j-1], active[j]
-		}
-	}
+	slices.Sort(active)
 	return active
 }
 
