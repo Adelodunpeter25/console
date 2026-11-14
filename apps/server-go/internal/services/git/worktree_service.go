@@ -7,6 +7,7 @@
 package git
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -80,8 +81,18 @@ func (s *WorktreeService) WorktreeAdd(repoDir, path, branch, base string) error 
 	}
 	if base == "" {
 		base = resolveDefaultBranch(repoDir)
-	} else if _, err := RunGit(repoDir, "rev-parse", "--verify", base+"^{commit}"); err != nil {
-		return fmt.Errorf("%w: base branch %q", ErrUnknownBaseBranch, base)
+	} else {
+		if remote, remoteBranch, ok := s.parseRemoteBranch(repoDir, base); ok {
+			if err := s.fetchRemoteBranch(repoDir, remote, remoteBranch); err != nil {
+				slog.Warn("fetch remote branch failed", "remote", remote, "branch", remoteBranch, "err", err)
+				if _, revErr := RunGit(repoDir, "rev-parse", "--verify", base+"^{commit}"); revErr != nil {
+					return fmt.Errorf("fetch %s/%s: %w", remote, remoteBranch, err)
+				}
+			}
+		}
+		if _, err := RunGit(repoDir, "rev-parse", "--verify", base+"^{commit}"); err != nil {
+			return fmt.Errorf("%w: base branch %q", ErrUnknownBaseBranch, base)
+		}
 	}
 	_, err := RunGit(repoDir, "worktree", "add", "-b", branch, path, base)
 	if err != nil {
@@ -112,6 +123,37 @@ func resolveDefaultBranch(repoDir string) string {
 		}
 	}
 	return "HEAD"
+}
+
+func (s *WorktreeService) parseRemoteBranch(repoDir, ref string) (string, string, bool) {
+	ref = strings.TrimPrefix(ref, "refs/remotes/")
+	out, err := RunGit(repoDir, "remote")
+	if err != nil {
+		return "", "", false
+	}
+	for _, remote := range strings.Split(out, "\n") {
+		remote = strings.TrimSpace(remote)
+		if remote == "" {
+			continue
+		}
+		prefix := remote + "/"
+		if strings.HasPrefix(ref, prefix) {
+			branch := strings.TrimPrefix(ref, prefix)
+			branch = strings.TrimPrefix(branch, "refs/heads/")
+			if branch != "" && branch != "HEAD" && !strings.HasSuffix(branch, "/HEAD") {
+				return remote, branch, true
+			}
+		}
+	}
+	return "", "", false
+}
+
+func (s *WorktreeService) fetchRemoteBranch(repoDir, remote, branch string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	refspec := fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", branch, remote, branch)
+	_, err := runGitCtx(ctx, repoDir, "fetch", remote, refspec)
+	return err
 }
 
 // WorktreeList parses `git worktree list --porcelain` for repoDir.
