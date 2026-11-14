@@ -24,6 +24,7 @@ type Manager struct {
 	scripts  *projectssvc.ProjectScriptsService
 	sessions *services.SessionService
 	projects *projectssvc.ProjectService
+	pulls    *services.PullRequestService
 	mcp      *mcp.Manager
 	active   func(string) bool
 	start    func(string, string, string, string, string, string) error
@@ -74,6 +75,19 @@ func (m *Manager) SetMCP(manager *mcp.Manager) {
 	m.mu.Unlock()
 }
 
+// SetPullRequests attaches the pull-request service used by console.pr.*.
+func (m *Manager) SetPullRequests(pulls *services.PullRequestService) {
+	m.mu.Lock()
+	m.pulls = pulls
+	m.mu.Unlock()
+}
+
+func (m *Manager) pullRequestService() *services.PullRequestService {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.pulls
+}
+
 func (m *Manager) mcpManager() *mcp.Manager {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -119,6 +133,9 @@ func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, er
 		runtime, err := NewRuntime(ports, scripts, sessions, projects, mcpManager, active, start, abort, prompt, queue, projectID, cwd)
 		if err != nil {
 			return nil, err
+		}
+		if pulls := m.pullRequestService(); pulls != nil {
+			runtime.SetPullRequests(pulls)
 		}
 		runtime.sessionID = sessionID
 		runtime.work = m.backgroundWork()

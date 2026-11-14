@@ -116,4 +116,33 @@ read and connection methods work everywhere.
 
 `console.mcp.call({id, tool, args?})` — run one tool on a server directly, connecting first if needed. Prefer the server's real tools (available through `loadTools`) for ordinary use; `call` is for batching many remote calls in one turn. Returns `{content, is_error}`.
 
+### Pull requests
+
+GitHub pull-request actions on the current project's repository (or another
+one — pass `owner` and `repo`, otherwise they resolve from the session's
+project). Reads are cached briefly; every write invalidates the cache, so a
+read after a write sees the new state.
+
+`console.pr.list({scope?, state?, project_id?, draft?})` — list pull requests. `scope` is `"mine"` (default, authored by you), `"review"` (awaiting your review) or `"repo"` (everything on the project's repository). `state` is `"open"` (default), `"closed"` or `"all"`. `draft` filters drafts when given.
+
+`console.pr.read({owner?, repo?, number, project_id?})` — one pull request's full detail: title, author, state, draft flag, checks state, merge state, `merge_blocker` (a one-line reason it cannot merge, empty when clean) and `allowed_merge_methods`. Pass this head `sha` to a later `pr.merge` as `expected_head`.
+
+`console.pr.create({owner?, repo?, project_id?, title, head, base, body?, draft?})` — open a pull request. `draft` defaults to **true**: a PR starts as a draft until marked ready with `pr.ready`. Never merge right after creating.
+
+`console.pr.update({owner?, repo?, number, title?, body?, base?, state?, draft?})` — patch whichever fields are given; `state` is `"open"` or `"closed"`. Returns the refreshed detail.
+
+`console.pr.comment({owner?, repo?, number, body})` — add one top-level comment.
+
+`console.pr.merge({owner?, repo?, number, method?, expected_head?})` — merge. `method` is `"merge"`, `"squash"` or `"rebase"` (default `"merge"`) and must be one of the repository's `allowed_merge_methods`. `expected_head` defaults to the head SHA from the cached read, so a branch that moved after your read is refused with a 409 and you re-read instead of landing unreviewed code. A draft is refused with its `merge_blocker` — mark it ready first.
+
+`console.pr.close({owner?, repo?, number})` — close the pull request without merging.
+
+`console.pr.reopen({owner?, repo?, number})` — reopen a closed one.
+
+`console.pr.ready({owner?, repo?, number})` — mark a draft ready for review.
+
+Like every `console` method, these run under the run's own approval mode: the
+tool is exec-tier, so writes happen when the run may execute commands — there
+is no extra per-method gate.
+
 

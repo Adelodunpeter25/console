@@ -100,6 +100,8 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	// the same cache the usage routes read from.
 	usageSvc := usage.NewService()
 	RegisterUsageRoutes(app, usageSvc)
+	prSvc := services.NewPullRequestService(projects)
+	RegisterPullRequestRoutes(app, prSvc)
 	authSvc := auth.NewAuthService()
 	authSvc.Usage = usageSvc
 	RegisterAuthRoutes(app, authSvc)
@@ -118,6 +120,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	runSvc.SetPorts(cfg.Ports)
 	runSvc.SetProjectScripts(scriptsSvc)
 	runSvc.SetConsoleServices(projects)
+	runSvc.SetPullRequests(prSvc)
 	mcpManager := mcp.NewManager(mcp.NewConfigStore(""), mcp.NewCredentialStore(""), nil)
 	runSvc.SetMCP(mcpManager)
 	go mcpManager.AutoConnect()

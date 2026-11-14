@@ -264,6 +264,17 @@ func (s *Service) SetMCP(m *mcp.Manager) {
 	}
 }
 
+// SetPullRequests attaches the pull-request service backing the console
+// kernel's pr methods (the HTTP routes serve the same service).
+func (s *Service) SetPullRequests(pulls *services.PullRequestService) {
+	s.mu.Lock()
+	manager := s.consoleManager
+	s.mu.Unlock()
+	if manager != nil {
+		manager.SetPullRequests(pulls)
+	}
+}
+
 func (s *Service) mcpManager() *mcp.Manager {
 	s.mu.Lock()
 	defer s.mu.Unlock()
