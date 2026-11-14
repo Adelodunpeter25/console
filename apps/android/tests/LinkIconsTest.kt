@@ -19,6 +19,8 @@ import org.junit.Test
 class LinkIconsTest {
     @Test
     fun recognisesFilePaths() {
+        assertEquals("~/Downloads", filePathOrNull("~/Downloads"))
+        assertEquals("~/Downloads/file.txt", filePathOrNull("~/Downloads/file.txt"))
         // "known file type" comes from the shared icon table, which lives in the
         // native library; a JVM run has none (Rust `icons_test` covers the table).
         assumeTrue(SharedNative.available)
