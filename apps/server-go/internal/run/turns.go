@@ -300,11 +300,18 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	if modelID == "" {
 		modelID = header.ModelID
 	}
+	headerMode := permissions.Normalize(header.ApprovalMode)
 	approval := dto.ApprovalMode
 	if approval == "" {
 		approval = header.ApprovalMode
 	}
 	mode := permissions.Normalize(approval)
+	// Stale-mode guard: if the session has already been upgraded to full-access,
+	// do not let a prompt payload carrying a stale plan-mode demote it.
+	// Intentional mode changes update the session header directly via PATCH /sessions/:id.
+	if headerMode == permissions.FullAccess && mode == permissions.PlanMode {
+		mode = permissions.FullAccess
+	}
 
 	if providerID != *currentID {
 		switched, err := s.Lookup(providerID)
@@ -441,6 +448,10 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			// Bash is sandboxed read-only in plan mode; swap in the real one.
 			registry.Replace(tools.NewBashTool(s.bashJobManager(), sessionID, runID))
 			executor.SetMode(permissions.FullAccess)
+			hub.Broadcast(loop.Event{
+				Kind:         loop.EventSessionApprovalModeUpdated,
+				ApprovalMode: string(permissions.FullAccess),
+			})
 			return nil
 		}))
 	}
