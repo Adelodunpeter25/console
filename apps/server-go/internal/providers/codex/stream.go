@@ -42,7 +42,7 @@ func (p *Provider) httpClient() *http.Client {
 	if p.HTTPClient != nil {
 		return p.HTTPClient
 	}
-	return shared.Client
+	return &http.Client{Transport: shared.Transport, Timeout: 0}
 }
 
 func (p *Provider) loadCredential(accountID string) (ParsedCredential, error) {
