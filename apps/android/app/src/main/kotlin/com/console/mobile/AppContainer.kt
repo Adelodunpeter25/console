@@ -3,6 +3,7 @@ package com.console.mobile
 import android.content.Context
 import com.console.mobile.core.forward.LocalForwardManager
 import com.console.mobile.core.notification.LocalNotificationPresenter
+import com.console.mobile.core.notification.NotificationCoordinator
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
 import com.console.mobile.data.api.HttpTransport
@@ -165,6 +166,9 @@ object AppContainer {
         private set
 
     lateinit var notificationRepository: NotificationRepository
+        private set
+
+    lateinit var notificationCoordinator: NotificationCoordinator
         private set
 
     lateinit var setupRepository: SetupRepository
@@ -397,73 +401,12 @@ object AppContainer {
             )
         }
 
-        val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-        // notifications() is a one-shot callbackFlow: the server closing the SSE
-        // connection (idle timeout, restart, brief network drop) completes the flow
-        // and collect() simply returns. Without this loop the app would go silent
-        // for the rest of the process lifetime, so reconnect with backoff.
-        appScope.launch {
-            var backoffMs = 1_000L
-            while (isActive) {
-                try {
-                    // A push sent while the stream was down is gone, but the server
-                    // kept the set, so ask for the open chat's again.
-                    appStateHolder.state.value.selectedSessionId?.let { chatRepository.loadSuggestions(it) }
-                    notificationRepository.notifications().collect { event ->
-                        if (event.kind == "suggestions") {
-                            // Silent: chips for the chat that just finished, no banner.
-                            chatRepository.setSuggestions(event.session_id, event.items)
-                            return@collect
-                        }
-                        if (event.kind == "resumed") {
-                            // Silent: an idle session woke itself for finished background
-                            // work. The old run stream ended, so re-attach to the new run
-                            // (after a beat, so the old run's sessionEnd lands first).
-                            launch {
-                                delay(400)
-                                chatRepository.attachServerRun(event.session_id)
-                            }
-                            return@collect
-                        }
-                        if (event.kind == "read_state") {
-                            // Silent: another device read or unread a chat. Refresh the
-                            // list so the dot follows without waiting for the next poll.
-                            sessionRepository.loadSessions()
-                            return@collect
-                        }
-                        if (event.kind == "session_deleted") {
-                            // Silent: the chat was deleted elsewhere or by the
-                            // settled-chat sweep. Drop it locally, no banner.
-                            sessionRepository.onSessionDeletedRemotely(event.session_id)
-                            return@collect
-                        }
-                        if (event.kind == "background_work") {
-                            // Silent: detached shell started, stopped or finished in the background.
-                            chatRepository.loadBackgroundWork(event.session_id)
-                            return@collect
-                        }
-                        if (event.kind == "done") {
-                            // Refresh sessions so the unread dot appears on Home immediately.
-                            sessionRepository.loadSessions()
-                        }
-                        val viewingSame = appStateHolder.state.value.activeTab == MobileTab.Chat &&
-                            appStateHolder.state.value.selectedSessionId == event.session_id
-                        if (!viewingSame) {
-                            LocalNotificationPresenter.showNotification(
-                                app,
-                                event.title,
-                                event.body,
-                                event.session_id,
-                                event.subtitle,
-                            )
-                        }
-                    }
-                    backoffMs = 1_000L // a clean end-of-stream shouldn't escalate
-                } catch (_: Exception) {
-                }
-                delay(backoffMs)
-                backoffMs = (backoffMs * 2).coerceAtMost(30_000L)
-            }
-        }
+        notificationCoordinator = NotificationCoordinator(
+            context = app,
+            notificationRepository = notificationRepository,
+            chatRepository = chatRepository,
+            sessionRepository = sessionRepository,
+            appStateHolder = appStateHolder,
+        ).apply { start() }
     }
 }
