@@ -411,9 +411,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			if mode == permissions.PlanMode {
 				// Plan mode keeps bash, but sandboxed read-only (writePlan is
 				// the only file write). bashJob stays denied by its tier.
-				toolList = append(toolList, tools.NewPlanModeBashTool(s.bashJobManager(), sessionID, runID))
+				toolList = append(toolList, tools.NewPlanModeBashToolWithCwd(s.bashJobManager(), header.Cwd, sessionID, runID))
 			} else {
-				toolList = append(toolList, tools.NewBashTool(s.bashJobManager(), sessionID, runID))
+				toolList = append(toolList, tools.NewBashToolWithCwd(s.bashJobManager(), header.Cwd, sessionID, runID))
 			}
 		case "bashJob":
 			toolList = append(toolList, tools.NewBashJobTool(s.bashJobManager(), sessionID))
