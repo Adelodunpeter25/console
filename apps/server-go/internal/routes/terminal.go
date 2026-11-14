@@ -133,8 +133,11 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *terminalsvc.PtyManager
 			}
 		}
 		connMu.Unlock()
-		*bufPtr = buf[:0]
-		terminalFramePool.Put(bufPtr)
+		const maxPooledFrameBytes = 64*1024 + 1
+		if cap(buf) <= maxPooledFrameBytes {
+			*bufPtr = buf[:0]
+			terminalFramePool.Put(bufPtr)
+		}
 	}
 
 	var session *terminalsvc.PtySession
