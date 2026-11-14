@@ -407,9 +407,13 @@ pub extern "system" fn Java_com_console_mobile_SharedNative_nativeIrohTunnel(
         let url = read(&mut env, &node_id).and_then(|id| {
             let mut map = tunnels().lock().ok()?;
             if let Some(existing) = map.get(&id) {
+                let _guard = runtime().enter();
+                existing.warm_up();
                 return Some(existing.base_url());
             }
+            let _guard = runtime().enter();
             let tunnel = runtime().block_on(console_iroh::Tunnel::new(&id)).ok()?;
+            tunnel.warm_up();
             let url = tunnel.base_url();
             map.insert(id, tunnel);
             Some(url)

@@ -5,12 +5,34 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+fn shared_tunnels() -> &'static tokio::sync::RwLock<HashMap<String, Arc<console_iroh::Tunnel>>> {
+    static TUNNELS: std::sync::OnceLock<tokio::sync::RwLock<HashMap<String, Arc<console_iroh::Tunnel>>>> =
+        std::sync::OnceLock::new();
+    TUNNELS.get_or_init(Default::default)
+}
+
+/// Retrieve or create a long-lived loopback tunnel for an iroh node ID.
+///
+/// Tunnels are shared across the desktop process (probing, pairing, regular
+/// requests) so that dialing happens once and the live connection is reused.
+pub async fn get_or_create_tunnel(node_id: &str) -> Result<Arc<console_iroh::Tunnel>> {
+    let registry = shared_tunnels();
+    if let Some(tunnel) = registry.read().await.get(node_id) {
+        tunnel.warm_up();
+        return Ok(tunnel.clone());
+    }
+    let tunnel = Arc::new(console_iroh::Tunnel::new(node_id).await?);
+    tunnel.warm_up();
+    registry
+        .write()
+        .await
+        .insert(node_id.to_string(), tunnel.clone());
+    Ok(tunnel)
+}
+
 #[derive(Clone)]
 pub struct HttpTransport {
     base_url: Arc<RwLock<String>>,
-    // One tunnel per node ID, kept so switching back to a server reuses its
-    // live connection instead of building a new endpoint.
-    tunnels: Arc<RwLock<HashMap<String, Arc<console_iroh::Tunnel>>>>,
     auth_token: Arc<RwLock<Option<String>>>,
     http: reqwest::Client,
 }
@@ -27,7 +49,6 @@ impl HttpTransport {
 
         Self {
             base_url: Arc::new(RwLock::new(resolved_url)),
-            tunnels: Arc::new(RwLock::new(HashMap::new())),
             auth_token: Arc::new(RwLock::new(auth_token)),
             http: reqwest::Client::builder().build().unwrap(),
         }
@@ -46,10 +67,6 @@ impl HttpTransport {
         let resolved = match console_shared::pairing::iroh_node_id(&url) {
             Some(node_id) => match self.tunnel_for(node_id).await {
                 Ok(tunnel) => {
-                    // Start dialling now so the relay wait overlaps with app
-                    // startup instead of stalling the first request (e.g. the
-                    // sidebar session list). The dial result is cached and
-                    // concurrent first requests wait on the same dial.
                     tunnel.warm_up();
                     tunnel.base_url()
                 }
@@ -64,15 +81,7 @@ impl HttpTransport {
     }
 
     async fn tunnel_for(&self, node_id: &str) -> Result<Arc<console_iroh::Tunnel>> {
-        if let Some(tunnel) = self.tunnels.read().await.get(node_id) {
-            return Ok(tunnel.clone());
-        }
-        let tunnel = Arc::new(console_iroh::Tunnel::new(node_id).await?);
-        self.tunnels
-            .write()
-            .await
-            .insert(node_id.to_string(), tunnel.clone());
-        Ok(tunnel)
+        get_or_create_tunnel(node_id).await
     }
 
     pub async fn base_url(&self) -> String {
@@ -163,14 +172,14 @@ where
 pub async fn probe_backend(url: &str, timeout: std::time::Duration) -> Result<()> {
     let trimmed = url.trim_end_matches('/');
     anyhow::ensure!(!trimmed.is_empty(), "Backend URL is empty.");
-    // An iroh address is probed through a short-lived tunnel.
     let _tunnel;
     let iroh_base;
     let trimmed = if let Some(node_id) = console_shared::pairing::iroh_node_id(trimmed) {
-        _tunnel = console_iroh::Tunnel::connect(node_id)
+        let tunnel = get_or_create_tunnel(node_id)
             .await
             .context("Could not reach the server over iroh.")?;
-        iroh_base = _tunnel.base_url();
+        iroh_base = tunnel.base_url();
+        _tunnel = tunnel;
         iroh_base.as_str()
     } else {
         trimmed

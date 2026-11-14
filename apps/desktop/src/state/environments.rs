@@ -206,7 +206,7 @@ impl ConsoleDesktopApp {
         cx.notify();
 
         cx.spawn(async move |entity, cx| {
-            let ok = console_core::utils::probe_backend(&url, Duration::from_secs(3)).await;
+            let ok = console_core::utils::probe_backend(&url, Duration::from_secs(6)).await;
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {

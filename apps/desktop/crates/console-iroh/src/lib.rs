@@ -10,7 +10,6 @@
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use iroh::endpoint::{Connection, RecvStream, SendStream, presets};
@@ -23,9 +22,6 @@ use tokio::task::JoinHandle;
 /// The protocol the device API speaks over iroh. Must match the server.
 pub const ALPN: &[u8] = b"console-device/1";
 
-/// How long to wait for the relay before dialling anyway.
-const ONLINE_WAIT: Duration = Duration::from_secs(10);
-
 struct Shared {
     endpoint: Endpoint,
     addr: EndpointAddr,
@@ -34,28 +30,34 @@ struct Shared {
 }
 
 impl Shared {
-    async fn open(&self) -> Result<(SendStream, RecvStream)> {
+    async fn ensure_conn(&self) -> Result<Connection> {
         let mut guard = self.conn.lock().await;
         if let Some(conn) = guard.as_ref() {
-            match conn.open_bi().await {
-                Ok(stream) => return Ok(stream),
-                Err(err) => {
-                    log::debug!("iroh connection lost, redialling: {err}");
-                    *guard = None;
-                }
-            }
+            return Ok(conn.clone());
         }
-        // The relay path needs us registered before it can find the peer;
-        // offline this can hang, so cap it and dial anyway.
-        let _ = tokio::time::timeout(ONLINE_WAIT, self.endpoint.online()).await;
         let conn = self
             .endpoint
             .connect(self.addr.clone(), ALPN)
             .await
             .context("connect to the server over iroh")?;
-        let stream = conn.open_bi().await.context("open stream")?;
-        *guard = Some(conn);
-        Ok(stream)
+        *guard = Some(conn.clone());
+        Ok(conn)
+    }
+
+    async fn open(&self) -> Result<(SendStream, RecvStream)> {
+        let conn = self.ensure_conn().await?;
+        match conn.open_bi().await {
+            Ok(stream) => Ok(stream),
+            Err(err) => {
+                log::debug!("iroh connection lost, redialling: {err}");
+                let mut guard = self.conn.lock().await;
+                *guard = None;
+                drop(guard);
+                let conn = self.ensure_conn().await?;
+                let stream = conn.open_bi().await.context("open stream")?;
+                Ok(stream)
+            }
+        }
     }
 }
 
@@ -83,7 +85,7 @@ impl Tunnel {
     /// unreachable server fails here rather than on the first request.
     pub async fn connect(node_id: &str) -> Result<Self> {
         let tunnel = Self::new(node_id).await?;
-        tunnel.shared.open().await?;
+        tunnel.shared.ensure_conn().await?;
         Ok(tunnel)
     }
 
@@ -93,7 +95,7 @@ impl Tunnel {
     pub fn warm_up(&self) {
         let shared = self.shared.clone();
         tokio::spawn(async move {
-            if let Err(err) = shared.open().await {
+            if let Err(err) = shared.ensure_conn().await {
                 log::debug!("iroh warm-up dial failed: {err:#}");
             }
         });
