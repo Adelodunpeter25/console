@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use console_core::{ApprovalMode, ImageAttachment, SelectedModel, ThinkingLevel};
 use gpui::{
-    App, Div, ElementId, Entity, ExternalPaths, FontWeight, InteractiveElement, IntoElement,
+    App, Div, ElementId, Entity, ExternalPaths, InteractiveElement, IntoElement,
     ParentElement, RenderOnce, StatefulInteractiveElement, Styled, Window, div, img,
     prelude::FluentBuilder, px,
 };
@@ -903,83 +903,20 @@ impl RenderOnce for ComposerView {
                                     .when_some(thinking_control, |el, thinking| el.child(thinking))
                                     .child(div().flex_1())
                                     .child({
-                                        // Speech-to-text dictation. Idle: the mic
-                                        // starts a take. Recording: the stop
-                                        // control takes its place with the live
-                                        // elapsed label. Unconfigured: disabled
-                                        // with a tooltip naming the fix.
-                                        let on_mic = self.on_mic_click.clone();
-                                        if self.mic_recording {
-                                            div()
-                                                .id("btn-mic-stop")
-                                                .flex()
-                                                .items_center()
-                                                .gap(px(4.0))
-                                                .p(px(4.0))
-                                                .rounded(px(6.0))
-                                                .bg(theme.danger_soft)
-                                                .cursor_default()
-                                                .hover(|style| style.opacity(0.8))
-                                                .on_click(move |_, window, cx| {
-                                                    if let Some(on_mic) = &on_mic {
-                                                        (on_mic)(window, cx);
-                                                    }
-                                                })
-                                                .child(app_icon(
-                                                    IconName::StopFilled,
-                                                    13.0,
-                                                    theme.danger,
-                                                ))
-                                                .child(
-                                                    div()
-                                                        .text_size(px(11.5))
-                                                        .font_weight(FontWeight::MEDIUM)
-                                                        .text_color(theme.danger)
-                                                        .child(format!(
-                                                            "{}:{:02}",
-                                                            self.mic_elapsed_secs / 60,
-                                                            self.mic_elapsed_secs % 60
-                                                        )),
-                                                )
-                                                .into_any_element()
-                                        } else if self.mic_transcribing {
-                                            div()
-                                                .id("btn-mic-transcribing")
-                                                .p(px(5.0))
-                                                .rounded(px(6.0))
-                                                .child(crate::primitives::motion::spin(app_icon(
-                                                    IconName::LoaderCircle,
-                                                    13.0,
-                                                    theme.text_tertiary,
-                                                )))
-                                                .into_any_element()
-                                        } else {
-                                            let button = div()
-                                                .id("btn-mic")
-                                                .p(px(5.0))
-                                                .rounded(px(6.0))
-                                                .when(self.mic_enabled, |el| {
-                                                    el.cursor_default()
-                                                        .hover(|style| style.bg(theme.overlay))
-                                                        .on_click(move |_, window, cx| {
-                                                            if let Some(on_mic) = &on_mic {
-                                                                (on_mic)(window, cx);
-                                                            }
-                                                        })
-                                                })
-                                                .when(!self.mic_enabled, |el| {
-                                                    el.opacity(0.35)
-                                                        .tooltip(Tooltip::text(
-                                                            "Set up Speech to Text in Settings › Providers",
-                                                        ))
-                                                })
-                                                .child(app_icon(
-                                                    IconName::Mic,
-                                                    13.0,
-                                                    theme.text_tertiary,
-                                                ));
-                                            button.into_any_element()
-                                        }
+                                        // Speech-to-text dictation, the shared
+                                        // three-state mic control (idle /
+                                        // recording / transcribing).
+                                        super::mic_button::mic_button(
+                                            "btn",
+                                            super::mic_button::MicState {
+                                                enabled: self.mic_enabled,
+                                                recording: self.mic_recording,
+                                                elapsed_secs: self.mic_elapsed_secs,
+                                                transcribing: self.mic_transcribing,
+                                            },
+                                            self.on_mic_click.clone(),
+                                            &theme,
+                                        )
                                     })
                                     .when_some(self.mic_error.clone(), |el, error| {
                                         el.child(

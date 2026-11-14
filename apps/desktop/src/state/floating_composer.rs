@@ -267,7 +267,33 @@ impl ConsoleDesktopApp {
             | self
                 .floating_composer
                 .set_model_catalog(providers, models_by_provider, favorites);
-        if changed {
+        // Dictation state: mirrored like the attachments, so a take started
+        // from the card (or a failure text) shows live. Only a take targeted
+        // at the card lights its recording state; the elapsed ticker bumps
+        // stt_recording_secs, which lands here on the next frame.
+        let mic_recording =
+            self.stt_recorder.is_some() && self.stt_recording_pane.as_deref() == Some(FLOATING_KEY);
+        let mic = (
+            self.stt_enabled(),
+            mic_recording,
+            if mic_recording {
+                self.stt_recording_secs
+            } else {
+                0
+            },
+            self.stt_transcribing,
+            self.stt_mic_error.clone(),
+        );
+        let card = &mut self.floating_composer;
+        let mic_changed = card.mic_enabled != mic.0
+            || card.mic_recording != mic.1
+            || card.mic_elapsed_secs != mic.2
+            || card.mic_transcribing != mic.3
+            || card.mic_error != mic.4;
+        if mic_changed {
+            (card.mic_enabled, card.mic_recording, card.mic_elapsed_secs, card.mic_transcribing, card.mic_error) = mic;
+        }
+        if changed || mic_changed {
             cx.notify();
         }
     }
@@ -582,6 +608,18 @@ impl ConsoleDesktopApp {
                         this.floating_composer.thinking_level = Some(level);
                         this.thinking_level = Some(level);
                         cx.notify();
+                    });
+                }
+            }
+        })
+        .on_toggle_mic({
+            let entity = entity.clone();
+            move |_window: &mut Window, cx: &mut App| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        // The card dictates into its own draft: the reserved
+                        // key routes the transcript back to the card's input.
+                        this.toggle_stt_recording(FLOATING_KEY.to_string(), cx);
                     });
                 }
             }

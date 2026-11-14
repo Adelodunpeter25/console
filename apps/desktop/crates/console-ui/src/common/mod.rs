@@ -11,6 +11,7 @@ pub mod github_menu;
 pub mod global_search_panel;
 pub mod image_viewer;
 pub mod input;
+pub mod mic_button;
 pub mod model_picker;
 pub mod notice_banner;
 pub mod palette;

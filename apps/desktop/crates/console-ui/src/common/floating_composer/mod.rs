@@ -250,6 +250,14 @@ pub struct FloatingComposerState {
     /// Staged images, mirrored from the app so the card can paint chips.
     pub attachments: Rc<Vec<ImageAttachment>>,
     pub pending_pastes: Vec<PendingPaste>,
+    /// Dictation state, mirrored from the app's STT flow each frame: enabled
+    /// (credentials configured), live take (with elapsed secs), transcribing
+    /// spinner, and the failure text shown like the docked composers'.
+    pub mic_enabled: bool,
+    pub mic_recording: bool,
+    pub mic_elapsed_secs: u32,
+    pub mic_transcribing: bool,
+    pub mic_error: Option<String>,
     next_paste_id: usize,
     /// The @-file / slash-command popup for the prompt field, if any.
     pub autocomplete: Option<AutocompleteView>,
@@ -313,6 +321,11 @@ impl FloatingComposerState {
             approval_mode: ApprovalMode::default(),
             attachments: Rc::new(Vec::new()),
             pending_pastes: Vec::new(),
+            mic_enabled: false,
+            mic_recording: false,
+            mic_elapsed_secs: 0,
+            mic_transcribing: false,
+            mic_error: None,
             next_paste_id: 0,
             autocomplete: None,
             autocomplete_key: None,
@@ -469,6 +482,11 @@ impl FloatingComposerState {
             supported_thinking_levels: self.supported_thinking_levels.clone(),
             approval_mode: self.approval_mode,
             attachments: self.attachments.clone(),
+            mic_enabled: self.mic_enabled,
+            mic_recording: self.mic_recording,
+            mic_elapsed_secs: self.mic_elapsed_secs,
+            mic_transcribing: self.mic_transcribing,
+            mic_error: self.mic_error.clone(),
             autocomplete: self.autocomplete.clone(),
             submitting: self.submitting,
             error: self.error.clone(),
