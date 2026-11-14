@@ -180,6 +180,9 @@ func (s *Service) backgroundWorkListener(event background.Event) {
 	if ar != nil {
 		ar.hub.Broadcast(loop.Event{Kind: loop.EventBackgroundWork, Message: event})
 	}
+	if bus := s.notifier(); bus != nil {
+		bus.Push(BackgroundWorkNotification(event.Work.SessionID))
+	}
 	switch event.Work.Status {
 	case background.StatusCompleted, background.StatusFailed, background.StatusTimedOut:
 		s.wakeIfIdle(event.Work.SessionID)
