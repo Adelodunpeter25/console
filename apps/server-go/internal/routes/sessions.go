@@ -100,6 +100,16 @@ func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {
 		out.SettledAt = h.SettledAt
 	}
 	out.Unread = h.Unread
+	// Worktree launch state lives in the in-memory registry, not the session
+	// row, so it rides along on every header serialization. Absent entry =
+	// no launch pending or failed.
+	if launch := services.WorktreeLaunches.Get(h.ID); launch != nil {
+		state := launch.State
+		out.LaunchState = &state
+		if launch.Error != "" {
+			out.LaunchError = &launch.Error
+		}
+	}
 	if h.Worktree != nil {
 		out.Worktree = &consolev1.SessionWorktree{
 			Path: h.Worktree.Path, Branch: h.Worktree.Branch, Repo: h.Worktree.Repo,

@@ -17,7 +17,8 @@ use std::rc::Rc;
 use crate::persistence::store::{PersistedBranchChoice, PersistedFloatingChoices};
 
 use console_core::{
-    ApprovalMode, CreateSessionDto, CreateWorktreeSpec, SelectedModel, ThinkingLevel,
+    ApprovalMode, CreateSessionDto, CreateWorktreeSpec, ImageAttachment, LaunchPromptDto,
+    LaunchWorktreeDto, SelectedModel, SessionHeader, ThinkingLevel,
 };
 use console_ui::common::{
     BranchChoice, FloatingComposerView, FloatingSnapshot, FloatingSubmit, ModelDropdownMenu,
@@ -771,6 +772,27 @@ impl ConsoleDesktopApp {
         let card_model = submit.model.clone();
         let card_thinking = submit.thinking_level;
 
+        // "New worktree" with no live pastes takes the instant launch: the
+        // server creates the session now, provisions the worktree and runs
+        // the prompt in the background, so the card closes this frame. Live
+        // pastes must reach the per-session paste endpoint before the prompt
+        // runs, which the instant launch can't wait for — those fall back to
+        // the synchronous path below.
+        if submit.branch.creates_worktree() && live_pastes.is_empty() {
+            self.launch_worktree_instant(
+                pane_id,
+                submit,
+                prompt,
+                context_files,
+                staged_attachments,
+                card_model,
+                card_thinking,
+                approval_mode,
+                cx,
+            );
+            return;
+        }
+
         // Only "New worktree" provisions anything; a plain project session
         // sends no worktree key at all. Picking an existing branch works in
         // the project folder on that branch (checked out first below). The
@@ -854,47 +876,15 @@ impl ConsoleDesktopApp {
                         if this.drafts.remove(FLOATING_KEY).is_some() {
                             this.schedule_drafts_save(cx);
                         }
-                        this.apply_session_header_for_pane(&pane_id, &new_session, cx);
-                        this.clear_error_for_pane(&pane_id, cx);
-                        if this.active_pane_id.as_deref() == Some(pane_id.as_str()) {
-                            this.selected_session_id = Some(new_session.id.clone());
-                        }
-                        Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
-                        this.switch_workspace_for_session(&new_session.id, &pane_id, cx);
-                        let target_pane = this.active_pane_id.clone().unwrap_or(pane_id);
-                        // The new chat replaces this pane's transcript, so the
-                        // chat it was showing keeps its position.
-                        this.save_pane_scroll_position(&target_pane, cx);
-                        this.open_chat_tab_in_pane(
-                            &target_pane,
-                            new_session.id.clone(),
-                            "Generating title…",
+                        this.open_floating_session(
+                            &pane_id,
+                            &new_session,
+                            card_model.clone(),
+                            card_thinking,
+                            approval_mode,
+                            checkout.clone(),
+                            cx,
                         );
-                        // The project folder's branch just changed, so the
-                        // footer's branch list is stale until it reloads.
-                        if let Some((_, cwd)) = checkout.clone() {
-                            this.reload_branches_for_pane(target_pane.clone(), cwd, cx);
-                        }
-                        this.sync_workspace_webviews(cx);
-                        this.transcript_for_pane(&target_pane).update(cx, |t, cx| {
-                            t.set_messages(Vec::new(), cx);
-                            t.clear_session_changes(cx);
-                        });
-                        // Adopt the card's selections for this pane so the run
-                        // below — and the composer it leaves behind — agree
-                        // with what the user chose in the card.
-                        if let Some(model) = card_model.clone() {
-                            this.set_pane_model(&target_pane, Some(model));
-                        }
-                        this.set_pane_thinking_level(&target_pane, card_thinking);
-                        // Same for approval mode: the composer the launch
-                        // leaves behind must show the mode the session is
-                        // actually running in, not the pane's previous one.
-                        this.set_pane_approval_mode(&target_pane, approval_mode);
-                        // The run targets the active pane, so make sure the
-                        // pane the session just opened in is the active one.
-                        this.active_pane_id = Some(target_pane.clone());
-                        this.selected_session_id = this.active_session_for_pane(&target_pane);
                         // Auto-send: the prompt that described the task *is*
                         // the task, so it goes straight to the agent instead of
                         // waiting for a second Enter. This also clears the
@@ -922,6 +912,238 @@ impl ConsoleDesktopApp {
                 });
                 let _ = mentions;
             });
+        })
+        .detach();
+    }
+
+    /// Open the chat a launch just created in `pane_id`: header, tab,
+    /// workspace, transcript, and the card's model/thinking/approval adopted
+    /// for the pane. Shared by the synchronous and instant-launch paths;
+    /// neither hides the card nor sends the prompt here.
+    fn open_floating_session(
+        &mut self,
+        pane_id: &str,
+        new_session: &SessionHeader,
+        card_model: Option<SelectedModel>,
+        card_thinking: Option<ThinkingLevel>,
+        approval_mode: ApprovalMode,
+        checkout: Option<(String, String)>,
+        cx: &mut Context<Self>,
+    ) {
+        self.apply_session_header_for_pane(pane_id, new_session, cx);
+        self.clear_error_for_pane(pane_id, cx);
+        if self.active_pane_id.as_deref() == Some(pane_id) {
+            self.selected_session_id = Some(new_session.id.clone());
+        }
+        Rc::make_mut(&mut self.sessions).insert(0, new_session.clone());
+        self.switch_workspace_for_session(&new_session.id, pane_id, cx);
+        let target_pane = self.active_pane_id.clone().unwrap_or_else(|| pane_id.to_string());
+        // The new chat replaces this pane's transcript, so the
+        // chat it was showing keeps its position.
+        self.save_pane_scroll_position(&target_pane, cx);
+        self.open_chat_tab_in_pane(&target_pane, new_session.id.clone(), "Generating title…");
+        // The project folder's branch just changed, so the
+        // footer's branch list is stale until it reloads.
+        if let Some((_, cwd)) = checkout {
+            self.reload_branches_for_pane(target_pane.clone(), cwd, cx);
+        }
+        self.sync_workspace_webviews(cx);
+        self.transcript_for_pane(&target_pane).update(cx, |t, cx| {
+            t.set_messages(Vec::new(), cx);
+            t.clear_session_changes(cx);
+        });
+        // Adopt the card's selections for this pane so the run
+        // below — and the composer it leaves behind — agree
+        // with what the user chose in the card.
+        if let Some(model) = card_model {
+            self.set_pane_model(&target_pane, Some(model));
+        }
+        self.set_pane_thinking_level(&target_pane, card_thinking);
+        // Same for approval mode: the composer the launch
+        // leaves behind must show the mode the session is
+        // actually running in, not the pane's previous one.
+        self.set_pane_approval_mode(&target_pane, approval_mode);
+        // The run targets the active pane, so make sure the
+        // pane the session just opened in is the active one.
+        self.active_pane_id = Some(target_pane.clone());
+        self.selected_session_id = self.active_session_for_pane(&target_pane);
+    }
+
+    /// Instant worktree launch: `POST /api/sessions/with-worktree` creates
+    /// the session immediately; the server provisions the worktree and runs
+    /// the prompt in the background. The card closes this frame and the pane
+    /// opens on the new chat; the run attaches once the launch reports ready.
+    fn launch_worktree_instant(
+        &mut self,
+        pane_id: String,
+        submit: FloatingSubmit,
+        prompt: String,
+        context_files: Vec<String>,
+        staged_attachments: Vec<ImageAttachment>,
+        card_model: Option<SelectedModel>,
+        card_thinking: Option<ThinkingLevel>,
+        approval_mode: ApprovalMode,
+        cx: &mut Context<Self>,
+    ) {
+        let client = self.client.clone();
+        let launch = LaunchWorktreeDto {
+            cwd: submit.cwd.clone(),
+            project_id: submit.project_id.clone(),
+            title: None,
+            model_id: submit.model.as_ref().map(|m| m.model_id.clone()),
+            provider: submit.model.as_ref().map(|m| m.provider.clone()),
+            approval_mode: Some(approval_mode.value().to_string()),
+            thinking_level: submit.thinking_level,
+            worktree: CreateWorktreeSpec {
+                branch: None,
+                base_branch: submit.worktree_base.clone(),
+            },
+            prompt: LaunchPromptDto {
+                prompt,
+                context_files,
+                attachments: staged_attachments,
+                model_id: submit.model.as_ref().map(|m| m.model_id.clone()),
+                provider: submit.model.as_ref().map(|m| m.provider.clone()),
+                approval_mode: Some(approval_mode.value().to_string()),
+                thinking_level: submit.thinking_level,
+            },
+        };
+        cx.spawn(async move |entity, cx| {
+            let result = client.sessions.launch_with_worktree(launch).await;
+            cx.update(|cx| {
+                let Some(app) = entity.upgrade() else { return };
+                app.update(cx, |this, cx| match result {
+                    Ok(new_session) => {
+                        this.floating_composer.hide();
+                        if this.drafts.remove(FLOATING_KEY).is_some() {
+                            this.schedule_drafts_save(cx);
+                        }
+                        this.open_floating_session(
+                            &pane_id,
+                            &new_session,
+                            card_model,
+                            card_thinking,
+                            approval_mode,
+                            None,
+                            cx,
+                        );
+                        // The server starts the run once the worktree exists;
+                        // watch the launch state and attach when it lands.
+                        this.watch_worktree_launch(&pane_id, new_session.id.clone(), cx);
+                        cx.notify();
+                    }
+                    Err(error) => {
+                        // Nothing was created; the card stays open with the
+                        // prompt intact so a failed launch costs one retry.
+                        this.floating_composer
+                            .set_error(Some(format!("Unable to create a session: {error}")));
+                        cx.notify();
+                    }
+                });
+            });
+        })
+        .detach();
+    }
+
+    /// Retry a failed worktree launch from the pane's banner. The server
+    /// re-runs the stored payload; this re-arms the launch watcher.
+    pub(crate) fn retry_worktree_launch(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let client = self.client.clone();
+        self.clear_error_for_session(&session_id, cx);
+        let pane_id = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| {
+                leaf.tabs
+                    .iter()
+                    .any(|t| t.id() == format!("chat:{session_id}"))
+            })
+            .map(|leaf| leaf.id.clone());
+        cx.spawn(async move |entity, cx| {
+            let result = client.sessions.retry_worktree_launch(&session_id).await;
+            cx.update(|cx| {
+                let Some(app) = entity.upgrade() else { return };
+                app.update(cx, |this, cx| match (&result, pane_id) {
+                    (Ok(()), Some(pane_id)) => {
+                        this.watch_worktree_launch(&pane_id, session_id, cx);
+                    }
+                    (Err(error), _) => {
+                        this.set_persistent_error_for_session(
+                            &session_id,
+                            format!("Worktree launch failed: {error}"),
+                            cx,
+                        );
+                    }
+                    (Ok(()), None) => {}
+                });
+            });
+        })
+        .detach();
+    }
+
+    /// Discard a failed worktree launch: delete the dead session (which
+    /// closes its tab, drops its state, and removes it server-side).
+    pub(crate) fn discard_worktree_launch(&mut self, session_id: String, cx: &mut Context<Self>) {
+        self.clear_error_for_session(&session_id, cx);
+        self.delete_session(session_id, cx);
+    }
+
+    /// Poll a pending worktree launch until it leaves provisioning. Ready →
+    /// refresh the header (the worktree re-pointed the cwd) and attach to the
+    /// auto-started run — the same reattach used when opening a session that
+    /// already has a run. Failed → persistent error in the pane; its Retry
+    /// and Discard render from the banner.
+    fn watch_worktree_launch(
+        &mut self,
+        pane_id: &str,
+        session_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let client = self.client.clone();
+        let pane_id = pane_id.to_string();
+        cx.spawn(async move |entity, cx| {
+            // The launch rarely outlives a few seconds (one `git worktree
+            // add`); five minutes is a generous ceiling before giving up on
+            // the attach — the session itself stays usable via refresh.
+            for _ in 0..300 {
+                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                let Ok(detail) = client.sessions.get(&session_id, None).await else {
+                    continue;
+                };
+                let state = detail.header.launch_state.clone();
+                let launch_error = detail.header.launch_error.clone();
+                let finished = cx.update(|cx| {
+                    let Some(app) = entity.upgrade() else { return true };
+                    let outcome = app.update(cx, |this, cx| match state.as_deref() {
+                        Some("failed") => {
+                            this.set_persistent_error_for_session(
+                                &session_id,
+                                format!(
+                                    "Worktree launch failed: {}",
+                                    launch_error.unwrap_or_default()
+                                ),
+                                cx,
+                            );
+                            true
+                        }
+                        Some(_) => false,
+                        None => {
+                            this.apply_session_header_for_pane(&pane_id, &detail.header, cx);
+                            this.attach_session_run_for_pane(
+                                pane_id.clone(),
+                                session_id.clone(),
+                                cx,
+                            );
+                            true
+                        }
+                    });
+                    outcome
+                });
+                if finished {
+                    return;
+                }
+            }
         })
         .detach();
     }

@@ -9,7 +9,7 @@ pub struct SessionPageOptions {
     pub before: Option<i64>,
 }
 
-use super::agent::AgentMessage;
+use super::agent::{AgentMessage, ImageAttachment};
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
 
@@ -129,6 +129,50 @@ pub struct CreateWorktreeSpec {
     /// branch's name — git rejects `worktree add -b <existing>`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_branch: Option<String>,
+}
+
+/// Request body for `POST /api/sessions/with-worktree` — the instant launch:
+/// the server creates the session immediately and provisions the worktree +
+/// runs `prompt` in the background. The response header carries
+/// launchState ("provisioning" / "failed") until the prompt is running.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchWorktreeDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    pub project_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub approval_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_level: Option<ThinkingLevel>,
+    pub worktree: CreateWorktreeSpec,
+    pub prompt: LaunchPromptDto,
+}
+
+/// The stored first prompt of a worktree launch; the server runs it once the
+/// worktree exists.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchPromptDto {
+    pub prompt: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<ImageAttachment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub approval_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_level: Option<ThinkingLevel>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

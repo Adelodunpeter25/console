@@ -22,6 +22,8 @@ fn header(title: &str, message_count: u64) -> SessionHeader {
         pinned_at: None,
         settled_at: None,
         unread: false,
+        launch_state: None,
+        launch_error: None,
         worktree: None,
     }
 }

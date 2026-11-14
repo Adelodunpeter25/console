@@ -657,9 +657,17 @@ impl ConsoleDesktopApp {
         let queued_prompts = self.queued_prompts_for_pane(&pane_id);
         let suggestions = self.suggestions_for_pane(&pane_id);
         let pills_scroll = self.pills_scroll_for_pane(&pane_id);
-        let error_message = self
-            .error_for_pane(&pane_id)
-            .map(|error| error.message.clone());
+        let error_message = self.error_for_pane(&pane_id).map(|error| {
+            let persistent = error.persistent;
+            (error.message.clone(), persistent)
+        });
+        // Worktree launch state rides on the session header: "provisioning"
+        // shows progress in the pane, "failed" turns the error banner's
+        // actions into Retry/Discard.
+        let pane_launch_state = pane_session_id
+            .as_deref()
+            .and_then(|sid| self.sessions.iter().find(|s| s.id == sid))
+            .and_then(|s| s.launch_state.clone());
         let error_pane_id = pane_id.clone();
         let error_selection = self.error_selection.clone();
         let agent_notice = self.agent_notice_for_pane(&pane_id);
@@ -812,7 +820,44 @@ impl ConsoleDesktopApp {
                     .when_some(composer_pills_row, |el, pills| el.child(pills)),
             )
             .when_some(error_message, |el, error| {
+                let (error, error_persistent) = error;
                 let entity = entity.clone();
+                // Retry/Discard only make sense on a persistent error (the
+                // failed worktree launch), not on every transient one.
+                let actions = error_persistent.then(|| {
+                    let retry_entity = entity.clone();
+                    let retry_session = pane_session_id.clone().unwrap_or_default();
+                    let discard_entity = entity.clone();
+                    let discard_session = pane_session_id.clone().unwrap_or_default();
+                    vec![
+                        console_ui::common::BannerAction {
+                            label: "Retry".into(),
+                            on_click: Rc::new(move |cx: &mut App| {
+                                if let Some(app) = retry_entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.retry_worktree_launch(
+                                            retry_session.clone(),
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }),
+                        },
+                        console_ui::common::BannerAction {
+                            label: "Discard".into(),
+                            on_click: Rc::new(move |cx: &mut App| {
+                                if let Some(app) = discard_entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.discard_worktree_launch(
+                                            discard_session.clone(),
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }),
+                        },
+                    ]
+                }).unwrap_or_default();
                 el.child(error_banner(
                     error,
                     theme,
@@ -824,7 +869,27 @@ impl ConsoleDesktopApp {
                             });
                         }
                     })),
+                    actions,
                     cx,
+                ))
+            })
+            .when(pane_launch_state.as_deref() == Some("provisioning"), |el| {
+                // The server is cutting the worktree for this brand-new chat;
+                // the prompt auto-runs the moment it exists.
+                el.child(console_ui::common::centered_stripe(
+                    div()
+                        .w_full()
+                        .max_w(px(768.0))
+                        .px(px(10.0))
+                        .py(px(7.0))
+                        .rounded(px(6.0))
+                        .bg(theme.composer)
+                        .border_1()
+                        .border_color(theme.border)
+                        .text_size(px(11.5))
+                        .text_color(theme.text_secondary)
+                        .child("Creating worktree…"),
+                    6.0,
                 ))
             })
             .when_some(agent_notice, |el, notice| {

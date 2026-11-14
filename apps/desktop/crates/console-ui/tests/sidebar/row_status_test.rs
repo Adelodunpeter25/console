@@ -11,6 +11,8 @@ fn header(status: &str, unread: bool) -> SessionHeader {
     SessionHeader {
         status: status.to_string(),
         unread,
+        launch_state: None,
+        launch_error: None,
         ..Default::default()
     }
 }
