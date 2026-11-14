@@ -43,9 +43,9 @@ import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
-/** Subtle row wash matching desktop's hsla values (0.08 alpha) */
-private val AddedLineBg = Color(0x1534D399)
-private val RemovedLineBg = Color(0x15F87171)
+/** Visible row wash matching ConsoleColors for added/removed diff lines */
+private val AddedLineBg = ConsoleColors.Syntax.DiffAddedBg
+private val RemovedLineBg = ConsoleColors.Syntax.DiffRemovedBg
 
 /**
  * Port of desktop's `DiffView` (`apps/desktop/.../chat/diff_view.rs`).

@@ -42,6 +42,39 @@ val KEY_LANGUAGES = setOf("toml", "yaml", "yml", "env", "ini", "cfg", "sh", "bas
 /** Languages with `[section]` headers. */
 val SECTION_LANGUAGES = setOf("toml", "ini", "cfg")
 
+/** Programming, scripting, configuration, and data languages that support syntax highlighting.
+ * Natural language / documentation / plain text formats (e.g. md, txt, log, csv) are intentionally
+ * omitted so normal English prose words ("is", "as", "for", capitalized words) do not get false-positive
+ * keyword or class styling. */
+val HIGHLIGHTABLE_LANGUAGES = setOf(
+    // JVM / Mobile
+    "kt", "kts", "kotlin", "java", "scala", "groovy", "dart", "swift",
+    // Systems
+    "c", "cpp", "cc", "cxx", "h", "hpp", "hh", "hxx", "rs", "rust", "go", "golang", "zig",
+    // Web / Scripting
+    "js", "jsx", "mjs", "cjs", "javascript",
+    "ts", "tsx", "mts", "cts", "typescript",
+    "py", "pyw", "python",
+    "rb", "ruby", "php", "lua", "r", "pl", "pm", "perl",
+    // Shell
+    "sh", "bash", "zsh", "fish", "bat", "cmd", "ps1", "powershell",
+    // Data / Config / Markup
+    "json", "jsonc", "json5",
+    "yaml", "yml",
+    "toml", "ini", "cfg", "conf", "env", "properties",
+    "xml", "html", "htm", "svg", "css", "scss", "sass", "less",
+    "sql", "graphql", "gql", "proto", "protobuf",
+    // Build / Ops
+    "docker", "dockerfile", "make", "makefile", "cmake", "gradle",
+    // Other
+    "sol", "ex", "exs", "erl", "hs", "ml", "clj", "vim",
+)
+
+fun isHighlightableLanguage(language: String?): Boolean {
+    if (language.isNullOrBlank()) return false
+    return language.lowercase() in HIGHLIGHTABLE_LANGUAGES
+}
+
 /**
  * Path -> the short language tag the analyser keys its rules off. The tag is
  * the file extension, with the two common extensionless filenames resolved.
@@ -70,7 +103,7 @@ private val CLASS_NAME_STYLE = SpanStyle(color = ConsoleColors.Syntax.ClassName)
 
 fun highlightCodeLine(line: String, language: String = ""): AnnotatedString {
     val displayText = line.ifEmpty { " " }
-    if (line.isEmpty()) return AnnotatedString(displayText)
+    if (line.isEmpty() || !isHighlightableLanguage(language)) return AnnotatedString(displayText)
 
     return buildAnnotatedString {
         append(displayText)
@@ -116,6 +149,7 @@ fun highlightCodeLine(line: String, language: String = ""): AnnotatedString {
 }
 
 fun highlightCode(code: String, language: String = ""): AnnotatedString {
+    if (!isHighlightableLanguage(language)) return AnnotatedString(code)
     val lines = code.split("\n")
     return buildAnnotatedString {
         lines.forEachIndexed { index, line ->

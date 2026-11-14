@@ -2,13 +2,47 @@ package com.console.mobile
 
 import com.console.mobile.ui.code.highlightCode
 import com.console.mobile.ui.code.highlightCodeLine
+import com.console.mobile.ui.code.isHighlightableLanguage
 import com.console.mobile.ui.code.languageForPath
 import com.console.mobile.ui.theme.ConsoleColors
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DiffHighlightTest {
+
+    @Test
+    fun isHighlightableLanguageFiltersProseAndRecognizesCode() {
+        assertTrue(isHighlightableLanguage("kt"))
+        assertTrue(isHighlightableLanguage("go"))
+        assertTrue(isHighlightableLanguage("rs"))
+        assertTrue(isHighlightableLanguage("ts"))
+        assertTrue(isHighlightableLanguage("python"))
+        assertTrue(isHighlightableLanguage("json"))
+        assertTrue(isHighlightableLanguage("toml"))
+
+        assertFalse(isHighlightableLanguage("md"))
+        assertFalse(isHighlightableLanguage("markdown"))
+        assertFalse(isHighlightableLanguage("txt"))
+        assertFalse(isHighlightableLanguage("log"))
+        assertFalse(isHighlightableLanguage(""))
+        assertFalse(isHighlightableLanguage(null))
+    }
+
+    @Test
+    fun doesNotHighlightMarkdownOrPlainText() {
+        val line = "A requested policy is not the same thing as what a platform requires"
+        val mdHighlighted = highlightCodeLine(line, "md")
+        assertTrue("Markdown lines should not contain code token spans", mdHighlighted.spanStyles.isEmpty())
+        assertEquals(line, mdHighlighted.text)
+
+        val txtHighlighted = highlightCodeLine(line, "txt")
+        assertTrue("Plain text lines should not contain code token spans", txtHighlighted.spanStyles.isEmpty())
+
+        val noLangHighlighted = highlightCodeLine(line, "")
+        assertTrue("Lines with no language should not contain code token spans", noLangHighlighted.spanStyles.isEmpty())
+    }
 
     @Test
     fun languageForPathResolvesExtensionsAndSpecialNames() {
