@@ -49,7 +49,6 @@ impl Render for ConsoleDesktopApp {
 
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
-        let client = self.client.clone();
 
         let workspace_root = self.workspace_root.clone();
         let active_pane = self.active_pane_id.clone();
@@ -904,86 +903,10 @@ impl Render for ConsoleDesktopApp {
                             },
                             {
                                 let entity = entity.clone();
-                                let client = client.clone();
                                 move |id: String, _w, cx| {
-                                    let client = client.clone();
-                                    let del_id = id.clone();
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
-                                            Rc::make_mut(&mut this.sessions).retain(|s| s.id != id);
-                                            this.refresh_dock_badge();
-                                            // The chat is gone, so its remembered
-                                            // position is too.
-                                            this.forget_transcript_scroll_position(&id, cx);
-                                            this.close_matching_workspace_tabs(
-                                                |t| t.id() == format!("chat:{}", id),
-                                                cx,
-                                            );
-                                            for root in this.project_workspace_roots.values_mut() {
-                                                console_ui::workspace::ops::close_matching_tabs(
-                                                    root,
-                                                    |t| t.id() == format!("chat:{}", id),
-                                                );
-                                            }
-                                            // Deleting a worktree's last chat removes the
-                                            // worktree's workspace with it.
-                                            this.sweep_dead_worktree_workspaces(cx);
-                                            // The chat's agent browser tabs go with it.
-                                            this.close_session_browser_tabs(&id, cx);
-                                            // Drop all run-derived state for the deleted
-                                            // session, now keyed by session id.
-                                            this.running_sessions.remove(&id);
-                                            this.pending_questions.remove(&id);
-                                            this.question_selected.remove(&id);
-                                            this.todo_items.remove(&id);
-                                            this.agent_notices.remove(&id);
-                                            if this.selected_session_id.as_deref() == Some(&id) {
-                                                this.selected_session_id = this
-                                                    .active_pane_id
-                                                    .as_deref()
-                                                    .and_then(|pane_id| {
-                                                        this.active_session_for_pane(pane_id)
-                                                    });
-                                                let pane_id = this
-                                                    .active_pane_id
-                                                    .clone()
-                                                    .unwrap_or_else(|| "pane-main".to_string());
-                                                let composer = this.composer_for_pane(&pane_id);
-                                                let transcript = this.transcript_for_pane(&pane_id);
-                                                composer.update(cx, |input, cx| {
-                                                    input.set_prompt_history(Vec::new(), cx);
-                                                });
-                                                transcript.update(cx, |t, cx| {
-                                                    t.set_messages(Vec::new(), cx);
-                                                });
-                                                if let Some(next_id) =
-                                                    this.selected_session_id.clone()
-                                                {
-                                                    this.load_session_messages_for_pane(
-                                                        pane_id, next_id, cx,
-                                                    );
-                                                }
-                                            }
-                                            this.maybe_refresh_inspector(cx);
-                                            cx.notify();
-
-                                            cx.spawn(async move |entity, cx| {
-                                                if let Err(error) =
-                                                    client.sessions.delete(&del_id).await
-                                                {
-                                                    let message = format!(
-                                                        "Unable to delete the session: {error}"
-                                                    );
-                                                    cx.update(|cx| {
-                                                        if let Some(app) = entity.upgrade() {
-                                                            app.update(cx, |this, cx| {
-                                                                this.set_error(message, cx)
-                                                            });
-                                                        }
-                                                    });
-                                                }
-                                            })
-                                            .detach();
+                                            this.delete_session(id, cx);
                                         });
                                     }
                                 }

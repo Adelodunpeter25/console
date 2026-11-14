@@ -398,25 +398,11 @@ impl ConsoleDesktopApp {
         self.set_settled(session_id, false, cx);
     }
 
-    /// Toggle the settled mark on the chat the user is looking at: the active
-    /// pane's chat, falling back to the last session picked in the sidebar.
-    /// A settled chat comes back to active; an active one files away.
-    pub(crate) fn toggle_settle_selected_session(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.settle_target_session_id() else {
-            return;
-        };
-        let settled = self
-            .sessions
-            .iter()
-            .find(|session| session.id == session_id)
-            .is_some_and(|session| session.settled_at.is_some());
-        self.set_settled(session_id, !settled, cx);
-    }
-
-    /// The chat a settle shortcut acts on. Drafts are excluded: the sidebar
-    /// offers no settle affordance on them, and settling one would list it
-    /// in the Drafts and the Settled section at once.
-    fn settle_target_session_id(&self) -> Option<String> {
+    /// The focused chat a session shortcut acts on: the active pane's chat,
+    /// falling back to the last session picked in the sidebar. Drafts are
+    /// excluded: the sidebar and workspace treat them differently from
+    /// saved sessions.
+    pub(crate) fn focused_session_id(&self) -> Option<String> {
         let pane_id = self
             .active_pane_id
             .clone()
@@ -428,6 +414,132 @@ impl ConsoleDesktopApp {
             return None;
         }
         Some(session_id)
+    }
+
+    /// Toggle the pinned mark on the chat the user is looking at.
+    pub(crate) fn toggle_pin_selected_session(&mut self, cx: &mut Context<Self>) {
+        if let Some(session_id) = self.focused_session_id() {
+            self.toggle_pin_session(session_id, cx);
+        }
+    }
+
+    /// Toggle the settled mark on the chat the user is looking at: the active
+    /// pane's chat, falling back to the last session picked in the sidebar.
+    /// A settled chat comes back to active; an active one files away.
+    pub(crate) fn toggle_settle_selected_session(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self.focused_session_id() else {
+            return;
+        };
+        let settled = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .is_some_and(|session| session.settled_at.is_some());
+        self.set_settled(session_id, !settled, cx);
+    }
+
+    /// Delete a session: tear down its open tabs, cleanup in-memory state,
+    /// select the next appropriate session, and notify the backend to soft-delete.
+    pub(crate) fn delete_session(&mut self, id: String, cx: &mut Context<Self>) {
+        let del_id = id.clone();
+        Rc::make_mut(&mut self.sessions).retain(|s| s.id != id);
+        self.refresh_dock_badge();
+        // The chat is gone, so its remembered position is too.
+        self.forget_transcript_scroll_position(&id, cx);
+        self.close_matching_workspace_tabs(
+            |t| t.id() == format!("chat:{}", id),
+            cx,
+        );
+        for root in self.project_workspace_roots.values_mut() {
+            console_ui::workspace::ops::close_matching_tabs(
+                root,
+                |t| t.id() == format!("chat:{}", id),
+            );
+        }
+        // Deleting a worktree's last chat removes the worktree's workspace with it.
+        self.sweep_dead_worktree_workspaces(cx);
+        // The chat's agent browser tabs go with it.
+        self.close_session_browser_tabs(&id, cx);
+        // Drop all run-derived state for the deleted session, now keyed by session id.
+        self.running_sessions.remove(&id);
+        self.pending_questions.remove(&id);
+        self.question_selected.remove(&id);
+        self.todo_items.remove(&id);
+        self.agent_notices.remove(&id);
+        if self.selected_session_id.as_deref() == Some(&id) {
+            self.selected_session_id = self
+                .active_pane_id
+                .as_deref()
+                .and_then(|pane_id| self.active_session_for_pane(pane_id));
+            let pane_id = self
+                .active_pane_id
+                .clone()
+                .unwrap_or_else(|| "pane-main".to_string());
+            let composer = self.composer_for_pane(&pane_id);
+            let transcript = self.transcript_for_pane(&pane_id);
+            composer.update(cx, |input, cx| {
+                input.set_prompt_history(Vec::new(), cx);
+            });
+            transcript.update(cx, |t, cx| {
+                t.set_messages(Vec::new(), cx);
+            });
+            if let Some(next_id) = self.selected_session_id.clone() {
+                self.load_session_messages_for_pane(pane_id, next_id, cx);
+            }
+        }
+        self.maybe_refresh_inspector(cx);
+        cx.notify();
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            if let Err(error) = client.sessions.delete(&del_id).await {
+                let message = format!("Unable to delete the session: {error}");
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.set_error(message, cx));
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Delete the currently focused chat session. If the session is running
+    /// an active task/agent, presents a confirmation dialog first to prevent
+    /// unintentional interruption; otherwise soft-deletes it immediately.
+    pub(crate) fn delete_selected_session(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(session_id) = self.focused_session_id() else {
+            return;
+        };
+
+        if self.is_session_running(&session_id) {
+            let session_title = self
+                .sessions
+                .iter()
+                .find(|s| s.id == session_id)
+                .map(|s| s.title.clone())
+                .unwrap_or_else(|| "Untitled".to_string());
+            let to_delete = session_id;
+            let entity = cx.entity().downgrade();
+            crate::window::confirm_then(
+                window,
+                cx,
+                &format!("Delete \"{session_title}\"?"),
+                move |_window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.delete_session(to_delete, cx);
+                        });
+                    }
+                },
+            );
+        } else {
+            self.delete_session(session_id, cx);
+        }
     }
 
     fn set_settled(&mut self, session_id: String, settled: bool, cx: &mut Context<Self>) {

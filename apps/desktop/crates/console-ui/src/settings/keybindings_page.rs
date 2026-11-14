@@ -88,6 +88,16 @@ const ACTION_META: &[ActionMeta] = &[
         description: "Settle the selected chat / move it back to active",
     },
     ActionMeta {
+        action: "PinSession",
+        category: "Global & Window",
+        description: "Pin or unpin the selected chat",
+    },
+    ActionMeta {
+        action: "DeleteSession",
+        category: "Global & Window",
+        description: "Delete the selected chat",
+    },
+    ActionMeta {
         action: "NewTerminal",
         category: "Global & Window",
         description: "New terminal tab",
