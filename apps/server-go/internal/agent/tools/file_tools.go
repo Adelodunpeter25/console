@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	agentflags "github.com/Adelodunpeter25/console/apps/server-go/internal/agent/flags"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 	imageutil "github.com/Adelodunpeter25/console/apps/server-go/internal/utils/image"
@@ -45,9 +46,9 @@ const (
 )
 
 // sparseLineNumbers reports whether read_file should number only the first
-// line, every 10th line and the last line (CONSOLE_HARNESS_SPARSE_LINE_NUMBERS=1).
+// line, every 10th line and the last line (see the agent flags package).
 func sparseLineNumbers() bool {
-	return os.Getenv("CONSOLE_HARNESS_SPARSE_LINE_NUMBERS") == "1"
+	return agentflags.FromEnv(os.Getenv).SparseLineNumbers
 }
 
 // textResult wraps a formatted string as the MCP-style content array that is

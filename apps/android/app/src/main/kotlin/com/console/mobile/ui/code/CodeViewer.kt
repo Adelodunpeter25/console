@@ -102,29 +102,31 @@ class ConsoleAnalyzeManager(
         val builder = MappedSpans.Builder()
         val raw = text.toString()
         val lines = raw.split("\n")
-        lines.forEachIndexed { index, line ->
-            if (index % 200 == 0 && delegate.isCancelled) return@forEachIndexed
-            // TOML/INI section header: whole line in type color.
-            if (language in SECTION_LANGUAGES &&
-                line.trim().startsWith("[") && line.trim().endsWith("]")
-            ) {
-                builder.addIfNeeded(index, 0, TextStyle.makeStyle(EditorColorScheme.IDENTIFIER_NAME))
-                return@forEachIndexed
-            }
-            var cursor = 0
-            if (language in KEY_LANGUAGES) {
-                val keyMatch = KEY_LINE_REGEX.find(line)
-                if (keyMatch != null) {
-                    val keyStart = keyMatch.groupValues[1].length
-                    builder.addIfNeeded(index, keyStart, TextStyle.makeStyle(EditorColorScheme.FUNCTION_NAME))
-                    builder.addIfNeeded(index, keyStart + keyMatch.groupValues[2].length, TextStyle.makeStyle(EditorColorScheme.TEXT_NORMAL))
-                    cursor = keyMatch.range.last + 1
+        if (isHighlightableLanguage(language)) {
+            lines.forEachIndexed { index, line ->
+                if (index % 200 == 0 && delegate.isCancelled) return@forEachIndexed
+                // TOML/INI section header: whole line in type color.
+                if (language in SECTION_LANGUAGES &&
+                    line.trim().startsWith("[") && line.trim().endsWith("]")
+                ) {
+                    builder.addIfNeeded(index, 0, TextStyle.makeStyle(EditorColorScheme.IDENTIFIER_NAME))
+                    return@forEachIndexed
                 }
-            }
-            CODE_TOKEN_REGEX.findAll(line, startIndex = cursor).forEach { m ->
-                val id = soraColorId(m.value, line, m.range.last + 1)
-                if (id != EditorColorScheme.TEXT_NORMAL) {
-                    builder.addIfNeeded(index, m.range.first, TextStyle.makeStyle(id))
+                var cursor = 0
+                if (language in KEY_LANGUAGES) {
+                    val keyMatch = KEY_LINE_REGEX.find(line)
+                    if (keyMatch != null) {
+                        val keyStart = keyMatch.groupValues[1].length
+                        builder.addIfNeeded(index, keyStart, TextStyle.makeStyle(EditorColorScheme.FUNCTION_NAME))
+                        builder.addIfNeeded(index, keyStart + keyMatch.groupValues[2].length, TextStyle.makeStyle(EditorColorScheme.TEXT_NORMAL))
+                        cursor = keyMatch.range.last + 1
+                    }
+                }
+                CODE_TOKEN_REGEX.findAll(line, startIndex = cursor).forEach { m ->
+                    val id = soraColorId(m.value, line, m.range.last + 1)
+                    if (id != EditorColorScheme.TEXT_NORMAL) {
+                        builder.addIfNeeded(index, m.range.first, TextStyle.makeStyle(id))
+                    }
                 }
             }
         }

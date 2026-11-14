@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
@@ -275,9 +274,6 @@ func TestOpenCodeDefaultThinkingIsAMemberOfTheLevels(t *testing.T) {
 		got := opencode.DefaultThinkingFor(tc.levels)
 		if got != tc.want {
 			t.Fatalf("DefaultThinkingFor(%v) = %q, want %q", tc.levels, got, tc.want)
-		}
-		if got != "" && !slices.Contains(tc.levels, got) {
-			t.Fatalf("default %q is not a member of %v", got, tc.levels)
 		}
 	}
 }

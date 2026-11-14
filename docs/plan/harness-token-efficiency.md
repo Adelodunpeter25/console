@@ -50,7 +50,7 @@ size, not as targets.
 |---|---|---|
 | Prompt assembly | `internal/agent/systemprompt/builder.go`, called from `internal/run/turns.go` | Was one flat string. Tasks 2.1/2.2 split it into a stable `StableSystem` and a per-session `Setup` sent as a leading user message, so volatile values (date, branch, tree, model) no longer sit in the cached system prefix. |
 | Tool inventory | **removed (2026-11-13)** | The `renderTools` name list duplicated the tool schemas; it is gone from the stable prompt. |
-| Emphasis | `renderContextFiles`, `renderWorkstation` | "You MUST follow…", "Do not waste tools…", `<critical>` "MUST advance the task". |
+| Emphasis | `renderContextFiles`, `renderWorkstation` | Prompt-side Task 4.1 lines landed 2026-11-13: MUST/scolding lines rewritten or deleted. Remaining: tool-description tightening. |
 | Workspace tree | **removed (2026-11-13)** | The tree section and `workspacetree.go` are gone; the model discovers structure with `glob`/`list_dir`. Watch turns on the next bench run. |
 | Claude cache | `internal/providers/claude/convert.go` (last message, last tool), `stream.go` (stable system block) | Breakpoints on the stable system block, the last tool, and the last message. The setup user message still has **no** breakpoint (Task 2.3). |
 | OpenCode cache | `internal/providers/opencode/stream.go` | Responses path sends `prompt_cache_key`. **The Chat path (`runChat`) sends no cache key.** |
@@ -263,7 +263,7 @@ What it tells us:
 Keep the reusable prefix byte-for-byte identical across turns, and as long
 as possible:
 
-`tools → stable system prompt → [breakpoint] → setup message (env, tree, skills, rules, AGENTS.md) → [breakpoint] → conversation`
+`tools → stable system prompt → [breakpoint] → setup message (skills, rules, commands, AGENTS.md, workstation) → [breakpoint] → conversation`
 
 ### Task 2.1: Split the system prompt into stable and volatile parts — **done**
 - **File:** `internal/agent/systemprompt/builder.go`.
@@ -271,8 +271,9 @@ as possible:
   - **Stable:** identity, approval-mode instructions, what skills are for,
     and the `<critical>` block (rewritten in Phase 4).
   - **Setup** (moved out of the system prompt): skills list, rules, slash
-    commands, AGENTS.md / context files, workspace tree, and workstation
-    info (date, cwd, OS, arch, branch, model).
+    commands, AGENTS.md / context files, and workstation info (cwd, OS,
+    arch, model — date and branch were removed on 2026-11-13; the model
+    runs `date` / `git branch` when needed).
   - Keep `SystemPrompt` as the joined string, so callers that haven't been
     changed keep working.
 - **Test:** `tests/agent/systemprompt_test.go`. Check that the stable part
@@ -287,8 +288,8 @@ as possible:
   (`<setup>…</setup>`) before the conversation. It's built once when the
   session starts and saved with the session, so it stays the same across
   turns and is only rebuilt when cwd, model or approval mode changes, or on
-  compaction. Rebuilding the date every turn would break the cache; a date
-  that's a few hours old is fine.
+  compaction. (Since 2026-11-13 the setup holds no volatile values at all —
+  date and branch are gone — so nothing invalidates it mid-day.)
 - **Where to cache it:** reuse the session header, or add an in-memory map
   keyed by session ID in `run`.
 - **Test:** provider tests check the order: system, then setup, then
@@ -416,12 +417,20 @@ behavior until bench shows no drop in success and lower cost. Then flip the
 default in a separate commit.
 
 Put flag loading in a new `internal/agent/flags` package with a `Flags`
-struct. `bench --flags` sets it directly. **Not built yet (2026-11-13):** the
-only flag today is `CONSOLE_HARNESS_SPARSE_LINE_NUMBERS`, read directly in
-`internal/agent/tools/file_tools.go`. The bench already records active
-`CONSOLE_HARNESS_*` vars into results `flags`, which is a good base.
+struct. `bench --flags` sets it directly. **Package exists (2026-11-13):**
+`Flags` lives in `internal/agent/flags` with `FromEnv`; `sparse_line_numbers`
+already reads through it, and the bench keeps recording active
+`CONSOLE_HARNESS_*` vars into results `flags`. Future Phase 4 flags get a
+struct field + a `FromEnv` entry, and read through their tool constructors.
 
 ### Task 4.1: `prompt_trim`: rewrite the system prompt
+**Prompt-side changes landed 2026-11-13 (no flag, direct change):** identity
+no longer asks for brevity; "Each response MUST advance the task" deleted;
+informed-action line rewritten as a plain fact; plan-mode critical compressed
+to one line (still names writePlan/docs/plan via the approval-mode section);
+full-access lecturing removed; repo-rules header and grep line rewritten;
+workstation duplicate "Today is / Working directory" line deleted.
+
 Label every line: **keep / rewrite / delete / move**. Planned changes:
 
 | Line / section | Action | Reason |
@@ -433,10 +442,10 @@ Label every line: **keep / rewrite / delete / move**. Planned changes:
 | `<critical>` "Each response MUST advance the task." | delete | Capable models do this already; emphasis. |
 | `<critical>` "Default to informed action; do not ask for confirmation…" | rewrite, keep | Real quirk (stopping to ask permission). → "When tools or the repo can answer a question, use them instead of asking the user." |
 | Plan-mode `<critical>` | keep, rewrite | The mode depends on it. → "Plan mode: discuss and ask questions; no file writes." |
-| "Today is X. Working directory is Y." | delete | Repeats the workstation block (which moves to setup in Phase 2). |
+| "Today is X. Working directory is Y." | **deleted (2026-11-13)** | Repeated the workstation block. The workstation block itself now holds only session-stable facts: **date and git branch were removed too** (2026-11-13) — they went stale in the cached prompt over multi-day sessions, and the model can run `date` / `git branch` when a task needs them. No midnight cache invalidation needed. |
 | Skills header sentence | keep | Tells the model the skill lookup exists. |
-| Approval-mode text (`approvalModeInstructions`) | audit, rewrite | Remove emphasis; keep what each mode allows. |
-| Tool descriptions (`jsonschema` tags) | tighten | Describe behavior and arguments; remove usage lectures (for example, bash's "not for reading or editing files" → keep one short line, since that's a real quirk). |
+| Approval-mode text (`approvalModeInstructions`) | **done (2026-11-13)** | Full-access lecturing ("freedom is not a license…") removed; plan-mode text compressed, still names writePlan/docs/plan. |
+| Tool descriptions (`jsonschema` tags) | **done (2026-11-13)** — bash, bashJob and editFile tightened; bash's false-timeout line replaced with the real promotion behavior. Everything else was already tight; `todo` stays as expanded in 31158ec9. |
 
 Also audit `SYSTEM.md` handling and the subagent preamble in the same pass.
 **Measure:** static tokens per request, success, turns.
@@ -481,28 +490,24 @@ The Factory article reinforces several principles for this plan:
   codemode requirements. Bounded autonomy and model-specific tuning are also
   later validation work.
 
-### Task 4.4: `lazy_tools`: load rarely used tools on demand
+### Task 4.4: `lazy_tools`: load rarely used tools on demand — **done (2026-11-13), behind `CONSOLE_HARNESS_LAZY_TOOLS=1` (default off)**
 - **Always sent:** `read_file`, `list_dir`, `glob`, `grep`, `editFile`,
-  `write_file`, `bash`, `todo`, `ask` (models call it even when it's
-  missing), `subagent`, `readSkill`.
-- **Loaded when needed:** `webSearch`, `webFetch`, `bashJob`, `askMany`,
-  `memory`, `batchWrite`.
-- **Revised 2026-11-13:** a `loadTools` tool already exists for MCP servers
-  (`internal/services/mcp/adapter.go`, wired in `internal/run/tool_groups.go`
-  and `internal/run/turns.go`) with the right semantics: append-only into the
-  tool list, group descriptions, `OnLoad` tracking. This task **extends that
-  existing loader to built-in tools** instead of building a new one — keep
-  the same append-at-the-end behavior so the earlier tool prefix stays
-  cached. Status notes (for example, "firecrawl key missing") go on the
-  deferred-tools list line.
-- `bashJob` exception: when `bash` starts a background job, load `bashJob`
-  automatically, so the model never calls a tool it can't see.
-- **Files:** `internal/run/turns.go` (tool list),
-  `internal/services/mcp/adapter.go` (generalize `loadTools` beyond MCP),
-  `internal/agent/loop/loop.go` (tool list can change during a run).
-- **Watch:** calls to unknown tools (count them in Task 1.3), turns, and
-  cost. Try 2 configurations (the list above, and the list above with
-  `webFetch` always sent).
+  `write_file`, `bash`, `todo`, `ask`, `subagent`, `readSkill`.
+- **Held back:** `webSearch`, `webFetch`, `bashJob`, `askMany`, `memory`,
+  `batchWrite`.
+- **What landed** (`internal/run/lazy_tools.go`, wired in `turns.go`): one
+  combined `loadTools` tool — `names` loads deferred built-ins, `group`
+  delegates to the standard MCP loader (the registry can't hold two tools
+  with the same name, so MCP's own loadTools is not added under the flag).
+  Loads append at the end of the tool list; the cached prefix never changes.
+  Loads persist per session (`s.lazyLoaded`, mirroring the MCP group
+  restore) and subagents get their own combined loader. The setup message
+  lists the deferred tools. `bashJob` auto-load: a bash tool wrapper loads
+  it the moment a job starts (background=true) or a foreground command is
+  promoted at timeout. Tests: `tests/agent/lazy_tools_test.go`.
+- **Validate:** bench A/B against baseline-v2 before flipping the default.
+  Watch calls to unknown tools, turns, and cost. Try a second configuration
+  with `webFetch` always sent.
 
 ### Task 4.5: `compaction_v2`
 - Before compacting, save the full history to
@@ -615,13 +620,18 @@ Suggested order, ranked against the baseline-v2 token shares:
    behind a flag.
 2. **Task 2.3 setup breakpoint.** Three breakpoints exist (last tool,
    stable system block, last message); the setup message has none.
-3. **Bench validation run** for the 2026-11-13 batch (tool inventory
-   removed, workspace tree removed, output spill) against
-   `bench/results/baseline-v2.json` — watch success rate, turns, and
-   `list_dir`/`glob` call counts (tree removal).
+3. **Bench validation run** for the 2026-11-13 batch (tool inventory and
+   workspace tree removed, output spill, prompt trim + date/branch removal,
+   tightened tool descriptions) against `bench/results/baseline-v2.json` —
+   watch success rate, turns, and `list_dir`/`glob` call counts (tree
+   removal).
+
+Also deferred from 2026-11-13: hardening bash file-edit tracking (bash
+edits bypass the session change log; plan is a conservative write-target
+parser feeding the existing snapshot/diff machinery) and the SYSTEM.md /
+subagent-preamble audit from Task 4.1.
 
 - Use `bench/results/baseline-v2.json` as the baseline (3 runs per task).
-- Build the `internal/agent/flags` package before the Phase 4 A/B work;
-  only the raw `CONSOLE_HARNESS_SPARSE_LINE_NUMBERS` env read exists today.
+- ~~Build the `internal/agent/flags` package~~ done (2026-11-13).
 - The usage guard is off by default; don't pass `--max-usage-pct` unless you
   want it on. Use `--yes` to skip the cost prompt.

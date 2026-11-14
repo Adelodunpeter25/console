@@ -1,5 +1,10 @@
 package com.console.mobile.ui.code
 
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import com.console.mobile.ui.theme.ConsoleColors
+
 /**
  * The token vocabulary and per-language rules the code viewer highlights with.
  * This is the only highlighter in the app — it runs inside Sora's
@@ -37,6 +42,39 @@ val KEY_LANGUAGES = setOf("toml", "yaml", "yml", "env", "ini", "cfg", "sh", "bas
 /** Languages with `[section]` headers. */
 val SECTION_LANGUAGES = setOf("toml", "ini", "cfg")
 
+/** Programming, scripting, configuration, and data languages that support syntax highlighting.
+ * Natural language / documentation / plain text formats (e.g. md, txt, log, csv) are intentionally
+ * omitted so normal English prose words ("is", "as", "for", capitalized words) do not get false-positive
+ * keyword or class styling. */
+val HIGHLIGHTABLE_LANGUAGES = setOf(
+    // JVM / Mobile
+    "kt", "kts", "kotlin", "java", "scala", "groovy", "dart", "swift",
+    // Systems
+    "c", "cpp", "cc", "cxx", "h", "hpp", "hh", "hxx", "rs", "rust", "go", "golang", "zig",
+    // Web / Scripting
+    "js", "jsx", "mjs", "cjs", "javascript",
+    "ts", "tsx", "mts", "cts", "typescript",
+    "py", "pyw", "python",
+    "rb", "ruby", "php", "lua", "r", "pl", "pm", "perl",
+    // Shell
+    "sh", "bash", "zsh", "fish", "bat", "cmd", "ps1", "powershell",
+    // Data / Config / Markup
+    "json", "jsonc", "json5",
+    "yaml", "yml",
+    "toml", "ini", "cfg", "conf", "env", "properties",
+    "xml", "html", "htm", "svg", "css", "scss", "sass", "less",
+    "sql", "graphql", "gql", "proto", "protobuf",
+    // Build / Ops
+    "docker", "dockerfile", "make", "makefile", "cmake", "gradle",
+    // Other
+    "sol", "ex", "exs", "erl", "hs", "ml", "clj", "vim",
+)
+
+fun isHighlightableLanguage(language: String?): Boolean {
+    if (language.isNullOrBlank()) return false
+    return language.lowercase() in HIGHLIGHTABLE_LANGUAGES
+}
+
 /**
  * Path -> the short language tag the analyser keys its rules off. The tag is
  * the file extension, with the two common extensionless filenames resolved.
@@ -55,3 +93,69 @@ fun languageForPath(path: String?): String {
     }
     return name.substring(dot + 1).lowercase()
 }
+
+private val KEYWORD_STYLE = SpanStyle(color = ConsoleColors.Syntax.Keyword)
+private val STRING_STYLE = SpanStyle(color = ConsoleColors.Syntax.String)
+private val NUMBER_STYLE = SpanStyle(color = ConsoleColors.Syntax.Number)
+private val COMMENT_STYLE = SpanStyle(color = ConsoleColors.Syntax.Comment)
+private val BUILTIN_STYLE = SpanStyle(color = ConsoleColors.Syntax.Builtin)
+private val CLASS_NAME_STYLE = SpanStyle(color = ConsoleColors.Syntax.ClassName)
+
+fun highlightCodeLine(line: String, language: String = ""): AnnotatedString {
+    val displayText = line.ifEmpty { " " }
+    if (line.isEmpty() || !isHighlightableLanguage(language)) return AnnotatedString(displayText)
+
+    return buildAnnotatedString {
+        append(displayText)
+
+        if (language in SECTION_LANGUAGES && line.trim().startsWith("[") && line.trim().endsWith("]")) {
+            addStyle(CLASS_NAME_STYLE, 0, line.length)
+            return@buildAnnotatedString
+        }
+
+        var cursor = 0
+        if (language in KEY_LANGUAGES) {
+            val keyMatch = KEY_LINE_REGEX.find(line)
+            if (keyMatch != null) {
+                val keyStart = keyMatch.groupValues[1].length
+                val keyLen = keyMatch.groupValues[2].length
+                addStyle(BUILTIN_STYLE, keyStart, keyStart + keyLen)
+                cursor = keyMatch.range.last + 1
+            }
+        }
+
+        CODE_TOKEN_REGEX.findAll(line, startIndex = cursor).forEach { m ->
+            val token = m.value
+            val tokenStart = m.range.first
+            val tokenEnd = m.range.last + 1
+
+            val style = when {
+                token.startsWith("//") || token.startsWith("#") || token.startsWith("/*") -> COMMENT_STYLE
+                token.startsWith("\"") || token.startsWith("'") || token.startsWith("`") -> STRING_STYLE
+                token.firstOrNull()?.isDigit() == true -> NUMBER_STYLE
+                token in CODE_KEYWORDS -> KEYWORD_STYLE
+                token.firstOrNull()?.isUpperCase() == true -> CLASS_NAME_STYLE
+                else -> {
+                    var j = m.range.last + 1
+                    while (j < line.length && line[j].isWhitespace()) j++
+                    if (j < line.length && line[j] == '(') BUILTIN_STYLE else null
+                }
+            }
+            if (style != null) {
+                addStyle(style, tokenStart, tokenEnd)
+            }
+        }
+    }
+}
+
+fun highlightCode(code: String, language: String = ""): AnnotatedString {
+    if (!isHighlightableLanguage(language)) return AnnotatedString(code)
+    val lines = code.split("\n")
+    return buildAnnotatedString {
+        lines.forEachIndexed { index, line ->
+            if (index > 0) append("\n")
+            append(highlightCodeLine(line, language))
+        }
+    }
+}
+

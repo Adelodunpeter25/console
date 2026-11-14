@@ -2,53 +2,32 @@
 package systemprompt
 
 import (
-	"context"
-	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
-	"time"
 )
 
 // EnvironmentInfo is the host/environment summary shown in the workstation
-// block of the system prompt.
+// block of the system prompt. Only session-stable facts belong here: the
+// date and git branch are omitted on purpose — they go stale in a cached
+// prompt, and the model can look both up with `date` and `git branch`
+// whenever a task actually needs them.
 type EnvironmentInfo struct {
-	Date      string
-	Cwd       string
-	OS        string
-	Arch      string
-	GitBranch string
-	Model     string
+	Cwd   string
+	OS    string
+	Arch  string
+	Model string
 }
 
-func gitBranch(cwd string) string {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = cwd
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	branch := strings.TrimSpace(string(out))
-	if branch == "" || branch == "HEAD" {
-		return ""
-	}
-	return branch
-}
-
-// CollectEnvironmentInfo gathers date/cwd/OS/arch/git-branch for cwd.
+// CollectEnvironmentInfo gathers cwd/OS/arch for the workstation block.
 func CollectEnvironmentInfo(cwd, model string) EnvironmentInfo {
 	abs, err := filepath.Abs(cwd)
 	if err != nil {
 		abs = cwd
 	}
 	return EnvironmentInfo{
-		Date:      time.Now().Format("2006-01-02"),
-		Cwd:       abs,
-		OS:        runtime.GOOS,
-		Arch:      runtime.GOARCH,
-		GitBranch: gitBranch(abs),
-		Model:     model,
+		Cwd:   abs,
+		OS:    runtime.GOOS,
+		Arch:  runtime.GOARCH,
+		Model: model,
 	}
 }

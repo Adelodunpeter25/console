@@ -26,7 +26,7 @@ const (
 )
 
 const defaultIdentity = `You are a coding agent.
-Use the available tools to explore the codebase, edit files, run shell commands, and accomplish user tasks correctly and concisely.`
+Use the available tools to explore the codebase, edit files, run shell commands, and accomplish user tasks.`
 
 // DiscoveredContext is everything discovery found for one build.
 type DiscoveredContext struct {
@@ -185,24 +185,20 @@ func renderContextFiles(files []ContextFile) string {
 	if len(files) == 0 {
 		return ""
 	}
-	lines := []string{"# Repo rules", "You MUST follow the context files below for all tasks:", "<repo-rules>"}
+	lines := []string{"# Repo rules", "Project rules from AGENTS.md and similar files:", "<repo-rules>"}
 	for _, f := range files {
 		lines = append(lines, fmt.Sprintf("<file path=%q>\n%s\n</file>", f.Path, strings.TrimSpace(f.Content)))
 	}
 	lines = append(lines, "</repo-rules>",
-		"Context files above are loaded automatically. Do not waste tools grepping for AGENTS.md / CLAUDE.md unless the user asks.")
+		"These files are already loaded.")
 	return strings.Join(lines, "\n")
 }
 
 func renderWorkstation(env EnvironmentInfo) string {
 	lines := []string{
-		fmt.Sprintf("Date: %s", env.Date),
 		fmt.Sprintf("CWD: %s", env.Cwd),
 		fmt.Sprintf("OS: %s", env.OS),
 		fmt.Sprintf("Arch: %s", env.Arch),
-	}
-	if env.GitBranch != "" {
-		lines = append(lines, fmt.Sprintf("Git branch: %s", env.GitBranch))
 	}
 	if env.Model != "" {
 		lines = append(lines, fmt.Sprintf("Model: %s", env.Model))
@@ -212,7 +208,7 @@ func renderWorkstation(env EnvironmentInfo) string {
 	for _, l := range lines {
 		out = append(out, "- "+l)
 	}
-	out = append(out, "</workstation>", fmt.Sprintf("Today is %s. Working directory is '%s'.", env.Date, env.Cwd))
+	out = append(out, "</workstation>")
 	return strings.Join(out, "\n")
 }
 
@@ -220,15 +216,13 @@ func renderCritical(mode ApprovalMode) string {
 	if mode == PlanMode {
 		return strings.Join([]string{
 			"<critical>",
-			"- Each response MUST advance the task.",
-			"- Default to discussion and questions; do not write files or implement features.",
+			"- Plan mode: discuss and ask questions; do not write files or implement features.",
 			"</critical>",
 		}, "\n")
 	}
 	return strings.Join([]string{
 		"<critical>",
-		"- Each response MUST advance the task.",
-		"- Default to informed action; do not ask for confirmation when tools or repo context can answer.",
+		"- When tools or the repo can answer a question, use them instead of asking the user.",
 		"</critical>",
 	}, "\n")
 }
@@ -269,7 +263,6 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 		return strings.Join([]string{
 			heading, tag,
 			"You are in Full Access mode. Execute all necessary tools directly without asking for approval.",
-			"You remain responsible for avoiding unrelated or destructive work; freedom is not a license to be careless.",
 			"Report every action you take accurately so the user can audit what happened.",
 			"</approval-mode-instructions>",
 		}, "\n")

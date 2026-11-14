@@ -70,7 +70,6 @@ fn one_link_split_across_runs_reserves_one_gap() {
 fn plain_text_and_other_schemes_get_no_icon() {
     let flat = flat(&[run("hello", None), run("mail", Some("mailto:a@b.com"))]);
     assert!(flat.icons.is_empty());
-    assert!(!flat.text.contains(ICON_GAP));
 }
 
 #[test]

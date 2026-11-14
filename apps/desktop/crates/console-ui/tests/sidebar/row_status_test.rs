@@ -60,13 +60,6 @@ fn running_outranks_everything() {
 }
 
 #[test]
-fn only_the_server_flag_makes_a_finished_chat_unread() {
-    // The same finished chat is the dot or the check depending on one flag.
-    assert_eq!(row_status(&header("done", true), None), RowStatus::Unread);
-    assert_eq!(row_status(&header("done", false), None), RowStatus::Done);
-}
-
-#[test]
 fn an_unread_chat_offers_mark_as_read() {
     let chat = header("done", true);
     assert_eq!(

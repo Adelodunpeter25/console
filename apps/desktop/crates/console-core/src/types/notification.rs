@@ -29,6 +29,35 @@ pub fn needs_read_report(session: &crate::types::session::SessionHeader) -> bool
     session.unread || session.status == "needs_attention"
 }
 
+/// Whether a freshly fetched session list means the chat in front of the user
+/// must be reported read. The list is the server's word, so this reads the fresh
+/// copy and never the app's older local one: a run that ended while the window
+/// was in the background is unread on the server before the app has heard of
+/// it. Only the active chat in a focused window counts; every other chat keeps
+/// its mark until it is opened.
+///
+/// This looks at the server's `unread` flag only, never at `needs_attention`.
+/// A chat waiting on a pending question stays `needs_attention` on the server
+/// even once read, because its run is still active; treating that status as
+/// "needs a report" here would report, refresh, see it again, and loop for as
+/// long as the question is open.
+pub fn fresh_list_needs_read(
+    fresh: &[crate::types::session::SessionHeader],
+    active_session_id: Option<&str>,
+    window_active: bool,
+) -> bool {
+    if !window_active {
+        return false;
+    }
+    let Some(active) = active_session_id else {
+        return false;
+    };
+    fresh
+        .iter()
+        .find(|session| session.id == active)
+        .is_some_and(|session| session.unread)
+}
+
 /// How many chats the Dock badge counts: the ones that finished unseen, plus
 /// the ones waiting on the user (a pending question, or an errored run not yet
 /// opened). Read from the session headers, so it survives a restart and agrees

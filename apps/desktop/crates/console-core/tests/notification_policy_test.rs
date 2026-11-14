@@ -6,8 +6,8 @@
 
 use console_core::types::notification::{
     NOTIFICATION_THREAD_ID, NotificationDecision, badge_count, decide_notification,
-    dock_badge_label, needs_read_report, normalize_notification_title, notification_ident,
-    parse_session_id_from_ident,
+    dock_badge_label, fresh_list_needs_read, needs_read_report, normalize_notification_title,
+    notification_ident, parse_session_id_from_ident,
 };
 
 #[test]
@@ -144,4 +144,60 @@ fn a_read_chat_needs_no_report() {
     assert!(!needs_read_report(&session("done", false)));
     assert!(!needs_read_report(&session("idle", false)));
     assert!(!needs_read_report(&session("working", false)));
+}
+
+fn named(id: &str, status: &str, unread: bool) -> console_core::SessionHeader {
+    console_core::SessionHeader {
+        id: id.to_string(),
+        status: status.to_string(),
+        unread,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn a_fresh_list_with_the_active_chat_unread_needs_a_read() {
+    // The background-finish case: the server says unread, the app never knew.
+    let fresh = vec![named("a", "done", true), named("b", "done", false)];
+    assert!(fresh_list_needs_read(&fresh, Some("a"), true));
+}
+
+#[test]
+fn only_the_active_chat_counts() {
+    // Another chat's mark must survive: it has not been opened.
+    let fresh = vec![named("a", "done", true), named("b", "done", true)];
+    assert!(!fresh_list_needs_read(&fresh, Some("c"), true));
+    assert!(fresh_list_needs_read(&fresh, Some("b"), true));
+}
+
+#[test]
+fn an_unfocused_window_never_reads_anything() {
+    let fresh = vec![named("a", "done", true)];
+    assert!(!fresh_list_needs_read(&fresh, Some("a"), false));
+}
+
+#[test]
+fn no_active_chat_or_a_read_active_chat_needs_no_read() {
+    let fresh = vec![named("a", "done", false), named("b", "done", true)];
+    assert!(!fresh_list_needs_read(&fresh, None, true));
+    assert!(!fresh_list_needs_read(&fresh, Some("a"), true));
+    assert!(!fresh_list_needs_read(&[], Some("a"), true));
+}
+
+#[test]
+fn a_pending_question_on_the_active_chat_does_not_loop() {
+    // The server keeps a chat `needs_attention` while its question is open,
+    // even after it is read. The refresh rule must not treat that as unread,
+    // or it would report, refresh, and report again for as long as the
+    // question stays open.
+    let fresh = vec![named("a", "needs_attention", false)];
+    assert!(!fresh_list_needs_read(&fresh, Some("a"), true));
+}
+
+#[test]
+fn an_errored_unread_active_chat_is_read_once() {
+    // An errored run is `needs_attention` AND unread: the unread flag is what
+    // triggers the read, and reading it clears both on the server.
+    let fresh = vec![named("a", "needs_attention", true)];
+    assert!(fresh_list_needs_read(&fresh, Some("a"), true));
 }

@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 
+	agentflags "github.com/Adelodunpeter25/console/apps/server-go/internal/agent/flags"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/roles"
@@ -419,9 +421,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			if mode == permissions.PlanMode {
 				// Plan mode keeps bash, but sandboxed read-only (writePlan is
 				// the only file write). bashJob stays denied by its tier.
-				toolList = append(toolList, tools.NewPlanModeBashTool(s.bashJobManager(), sessionID, runID))
+				toolList = append(toolList, tools.NewPlanModeBashToolWithCwd(s.bashJobManager(), header.Cwd, sessionID, runID))
 			} else {
-				toolList = append(toolList, tools.NewBashTool(s.bashJobManager(), sessionID, runID))
+				toolList = append(toolList, tools.NewBashToolWithCwd(s.bashJobManager(), header.Cwd, sessionID, runID))
 			}
 		case "bashJob":
 			toolList = append(toolList, tools.NewBashJobTool(s.bashJobManager(), sessionID))
@@ -455,11 +457,30 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			return nil
 		}))
 	}
+	// Lazy built-in tools (CONSOLE_HARNESS_LAZY_TOOLS): the deferred six are
+	// held back; the loadTools loader itself is added once the registry
+	// exists (it needs to know whether MCP groups are in play). The ensure
+	// closure resolves lazyLoaderInst at call time.
+	lazy := agentflags.FromEnv(os.Getenv).LazyTools
+	var lazyLoaderInst *lazyLoader
+	var held []tools.Tool
+	if lazy {
+		toolList, held = holdBackDeferredTools(toolList)
+		for i, t := range toolList {
+			if t.Name() == "bash" {
+				toolList[i] = &bashJobAutoLoader{Tool: t, ensure: func() { lazyLoaderInst.ensure("bashJob") }}
+				break
+			}
+		}
+	}
 	usage := &loop.UsageTracker{}
 	setup := prompt.Setup
 	mcpManager := s.mcpManager()
 	if mcpManager != nil && len(mcp.EnabledServers(mcpManager)) > 0 {
 		setup = strings.TrimSpace(setup + "\n\n" + mcpSetupHint)
+	}
+	if lazy && len(held) > 0 {
+		setup = strings.TrimSpace(setup + "\n\n" + lazyToolsSetupHint(held))
 	}
 	// Capability references ride setup rather than the user message: setup is
 	// sent every turn but never persisted, so the chat history keeps exactly
@@ -488,10 +509,22 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		// summary, so a visual made there would have no card to render into.
 		ToolSource: func() []tools.Tool { return withoutTool(registry.Tools(), "visualize") },
 		NestedTools: func(nested *tools.Registry) {
-			if mcpManager != nil {
-				if lt := mcp.NewLoadToolsTool(mcpManager, nested); lt != nil {
-					nested.Add(lt)
+			if !lazy {
+				if mcpManager != nil {
+					if lt := mcp.NewLoadToolsTool(mcpManager, nested); lt != nil {
+						nested.Add(lt)
+					}
 				}
+				return
+			}
+			// Lazy runs give subagents their own combined loader over the
+			// same held built-ins, so they can load what they need.
+			var mcpTool tools.Tool
+			if mcpManager != nil {
+				mcpTool = mcp.NewLoadToolsTool(mcpManager, nested)
+			}
+			if lt, _ := newLazyToolsLoader(nested, held, mcpTool, nil); lt != nil {
+				nested.Add(lt)
 			}
 		},
 		SystemPrompt:   prompt.StableSystem,
@@ -513,19 +546,31 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	registry = tools.NewRegistry(toolList...)
 	// MCP servers load lazily: only a small loadTools entry is in the list
 	// until the model asks for a group, which then appends that server's
-	// tools (visible from the next turn via agent.ToolDefs). Groups loaded
-	// earlier in this session are restored up front, in load order.
+	// tools (visible from the next turn via agent.ToolDefs). Under the lazy
+	// flag the combined loader wraps it, so built-in names and MCP groups
+	// share the one loadTools tool.
+	var mcpLoadTool tools.Tool
 	if mcpManager != nil {
-		if lt := mcp.NewLoadToolsTool(mcpManager, registry, mcp.LoadToolsOptions{
+		mcpLoadTool = mcp.NewLoadToolsTool(mcpManager, registry, mcp.LoadToolsOptions{
 			OnLoad: func(group string) { s.groups.add(sessionID, group) },
-		}); lt != nil {
-			registry.Add(lt)
-			for _, group := range s.groups.list(sessionID) {
-				if _, _, err := mcp.LoadGroup(ctx, mcpManager, registry, group); err != nil {
-					slog.Warn("restore tool group failed", "session", sessionID, "group", group, "error", err)
+		})
+	}
+	if lazy {
+		var loaderTool tools.Tool
+		loaderTool, lazyLoaderInst = newLazyToolsLoader(registry, held, mcpLoadTool,
+			func(names []string) {
+				for _, name := range names {
+					s.lazyLoaded.add(sessionID, name)
 				}
-			}
+			})
+		registry.Add(loaderTool)
+		// Tools loaded in earlier runs of this session are restored right
+		// after the loader, in load order — mirroring the MCP group restore.
+		for _, name := range s.lazyLoaded.list(sessionID) {
+			lazyLoaderInst.ensure(name)
 		}
+	} else if mcpLoadTool != nil {
+		registry.Add(mcpLoadTool)
 	}
 	// Capabilities that are on restore here, appended after everything else so
 	// the provider's cached tool prefix stays stable. A failed load is
@@ -537,6 +582,16 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// readSkill is rebuilt per run so it can see which capabilities are on
 	// and, for the ones the agent may switch on, load their tools mid-turn.
 	registry.Replace(tools.NewReadSkillTool(s.readSkillCapabilities(loadCtx, registry)))
+	// Groups loaded earlier in this session are restored last, in load order —
+	// the same position an in-run loadTools call appends them, so the tool
+	// order matches the previous run's turns.
+	if mcpManager != nil {
+		for _, group := range s.groups.list(sessionID) {
+			if _, _, err := mcp.LoadGroup(ctx, mcpManager, registry, group); err != nil {
+				slog.Warn("restore tool group failed", "session", sessionID, "group", group, "error", err)
+			}
+		}
+	}
 	executor = loop.NewExecutor(registry, mode)
 	executor.Guard = guard
 	// Capture the pre-write content of every file a whole-file overwrite

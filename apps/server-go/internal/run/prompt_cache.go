@@ -1,10 +1,10 @@
 // Per-session system prompt cache (docs/plan/harness-token-efficiency.md,
 // Task 2.2). The prompt is built once per session and reused on every
 // turn so the provider's prompt cache stays warm: rebuilding it each turn
-// would change the date at midnight or the branch after a checkout and
-// invalidate the cached prefix. It is rebuilt only when cwd, model or
-// approval mode changes, or after compaction. In memory only: a server
-// restart rebuilds it once.
+// would invalidate the cached prefix. The prompt holds only session-stable
+// facts (no date, no git branch — the model looks those up when needed), so
+// it is rebuilt only when cwd, model or approval mode changes, or after
+// compaction. In memory only: a server restart rebuilds it once.
 package run
 
 import (

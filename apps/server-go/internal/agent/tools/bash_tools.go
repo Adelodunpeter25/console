@@ -25,7 +25,7 @@ const (
 
 type bashInput struct {
 	Command      string            `json:"command" jsonschema:"required,description=Shell command to execute"`
-	Cwd          string            `json:"cwd,omitempty" jsonschema:"description=Working directory for the command. Defaults to the current directory."`
+	Cwd          string            `json:"cwd,omitempty" jsonschema:"description=Working directory for the command. Defaults to the project directory."`
 	TimeoutMs    int               `json:"timeoutMs,omitempty" jsonschema:"description=Foreground: how long to wait for the command (default 30s, max 20min); if it is still running then, it keeps running as a background job and you are notified when it finishes. Background: optional cap on the job lifetime; omit it for dev servers and other open-ended jobs."`
 	Env          map[string]string `json:"env,omitempty" jsonschema:"description=Additional environment variables for this command"`
 	Background   bool              `json:"background,omitempty" jsonschema:"description=Start as a background job and return immediately with a jobId. You are notified automatically with the exit code and output when it finishes, so do not poll or wait: keep working on other things, or end your turn and tell the user what you are waiting on. The start response is NOT an exit result."`
@@ -112,11 +112,21 @@ func NewBashTool(jobs *terminal.BashJobManager, ownerSessionID string, parentIDs
 	return NewSandboxedBashTool(SandboxOff, jobs, ownerSessionID, parentIDs...)
 }
 
+// NewBashToolWithCwd builds the "bash" tool with a session default working directory.
+func NewBashToolWithCwd(jobs *terminal.BashJobManager, defaultCwd, ownerSessionID string, parentIDs ...string) Tool {
+	return NewSandboxedBashToolWithCwd(SandboxOff, jobs, defaultCwd, ownerSessionID, parentIDs...)
+}
+
 // NewSandboxedBashTool is NewBashTool for a given sandbox mode. Plan mode passes
 // SandboxReadOnly. Background jobs are refused in that mode: a job outlives the
 // call, which is hard to justify in a read-only plan, and the job manager is
 // not sandbox-aware.
 func NewSandboxedBashTool(mode SandboxMode, jobs *terminal.BashJobManager, ownerSessionID string, parentIDs ...string) Tool {
+	return NewSandboxedBashToolWithCwd(mode, jobs, "", ownerSessionID, parentIDs...)
+}
+
+// NewSandboxedBashToolWithCwd is NewSandboxedBashTool with a default working directory fallback.
+func NewSandboxedBashToolWithCwd(mode SandboxMode, jobs *terminal.BashJobManager, defaultCwd, ownerSessionID string, parentIDs ...string) Tool {
 	parentRunID, parentCallID := "", ""
 	if len(parentIDs) > 0 {
 		parentRunID = parentIDs[0]
@@ -124,16 +134,20 @@ func NewSandboxedBashTool(mode SandboxMode, jobs *terminal.BashJobManager, owner
 	if len(parentIDs) > 1 {
 		parentCallID = parentIDs[1]
 	}
-	return NewTool("bash", "Run a shell command and return output. Use for builds, tests, or git — not for reading or editing files. Builds, installs, test suites and dev servers should use background=true: it returns immediately and you are notified with the result when it finishes, even if you end your turn. A foreground command that is still running after its timeout (default 30s) is not killed; it continues as a background job.", TierExec,
+	return NewTool("bash", "Run a shell command and return output. For file access prefer read_file/grep/editFile. Long-running commands (builds, test suites, dev servers): background=true returns immediately and the result is delivered when it finishes. A foreground command still running at its timeout keeps running as a background job — you're notified when it finishes.", TierExec,
 		func(ctx context.Context, in bashInput) (any, error) {
 			if in.Command == "" {
 				return nil, NewToolError("command is required")
 			}
 			cwd := in.Cwd
 			if cwd != "" {
-				if abs, err := filepath.Abs(cwd); err == nil {
+				if !filepath.IsAbs(cwd) && defaultCwd != "" {
+					cwd = filepath.Join(defaultCwd, cwd)
+				} else if abs, err := filepath.Abs(cwd); err == nil {
 					cwd = abs
 				}
+			} else if defaultCwd != "" {
+				cwd = defaultCwd
 			} else if wd, err := os.Getwd(); err == nil {
 				cwd = wd
 			}

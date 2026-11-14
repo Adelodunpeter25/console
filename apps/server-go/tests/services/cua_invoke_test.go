@@ -66,8 +66,11 @@ func TestSkillTextCarriesTheContract(t *testing.T) {
 			t.Errorf("skill does not mention %q", want)
 		}
 	}
-	if !strings.Contains(strings.ToLower(skill), "async") {
-		t.Error("skill must state the sync-only rule")
+	// The kernel supports async/await since the moejs migration, so there is
+	// no sync-only rule anymore; the surviving contract is that every method
+	// waits for its result.
+	if !strings.Contains(skill, "Every method waits for its result") {
+		t.Error("skill must state that every method waits for its result")
 	}
 	// The model sees the raw "/computer-use <task>" message (never rewritten),
 	// so the skill must explain the invocation form.

@@ -261,9 +261,6 @@ func TestCompactHistoryThreshold(t *testing.T) {
 	if !compaction.ShouldCompact(history, 272_000, opts, "", nil) {
 		t.Fatal("tiny threshold must trigger")
 	}
-	if compaction.ShouldCompact(history, 272_000, opts, "", nil) != true {
-		t.Fatal("unreachable")
-	}
 	disabled := compaction.Options{TokenThreshold: 1}
 	off := false
 	disabled.Enabled = &off

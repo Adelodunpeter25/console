@@ -44,7 +44,6 @@ class ComposerHoldTest {
         assertTrue(hold.held)
         hold.release()
         assertFalse(hold.held)
-        assertEquals(false, hold.held)
     }
 }
 
