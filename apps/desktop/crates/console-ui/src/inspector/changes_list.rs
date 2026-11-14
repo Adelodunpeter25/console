@@ -5,7 +5,7 @@ use std::rc::Rc;
 use console_core::types::{ChangesScope, SessionFileChange};
 use gpui::{
     App, InteractiveElement, IntoElement, ParentElement, RenderOnce, StatefulInteractiveElement,
-    Styled, Window, div, prelude::FluentBuilder, px,
+    Styled, Window, div, prelude::FluentBuilder, px, uniform_list,
 };
 
 use crate::markdown::render::MONO_FAMILY;
@@ -178,7 +178,7 @@ impl RenderOnce for ChangesListView {
                         ),
                 )
             })
-            .child(
+            .child(if !has_changes {
                 div()
                     .id("changes-list-scroll")
                     .flex_1()
@@ -186,7 +186,7 @@ impl RenderOnce for ChangesListView {
                     .min_h_0()
                     .overflow_y_scroll()
                     .p(px(6.0))
-                    .child(if !has_changes {
+                    .child(
                         div()
                             .flex_1()
                             .flex()
@@ -195,133 +195,163 @@ impl RenderOnce for ChangesListView {
                             .py(px(32.0))
                             .text_size(px(12.0))
                             .text_color(theme.text_tertiary)
-                            .child("No session changes")
-                            .into_any_element()
-                    } else {
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(2.0))
-                            .children(scoped_session_changes.iter().map(|entry| {
-                                let on_select = on_select.clone();
-                                let path = entry.path.clone();
-                                let is_selected = selected_path.as_deref() == Some(&path);
+                            .child("No session changes"),
+                    )
+                    .into_any_element()
+            } else {
+                let scoped = Rc::new(scoped_session_changes);
+                uniform_list(
+                    "changes-list-scroll",
+                    scoped.len(),
+                    move |range, _window, cx| {
+                        let theme = Theme::current(cx);
+                        range
+                            .map(|ix| {
+                                let entry = &scoped[ix];
+                                render_change_row(
+                                    entry,
+                                    selected_path.as_deref(),
+                                    &on_select,
+                                    &theme,
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                    },
+                )
+                .flex_1()
+                .w_full()
+                .p(px(6.0))
+                .into_any_element()
+            })
+    }
+}
 
-                                let (status_label, status_color) = match entry.status.as_str() {
-                                    "modified" => ("M", theme.warning),
-                                    "added" => ("A", theme.success),
-                                    "deleted" => ("D", theme.danger),
-                                    _ => ("?", theme.text_tertiary),
-                                };
+fn render_change_row(
+    entry: &SessionFileChange,
+    selected_path: Option<&str>,
+    on_select: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    theme: &Theme,
+) -> gpui::AnyElement {
+    let path = entry.path.clone();
+    let is_selected = selected_path == Some(entry.path.as_str());
 
-                                let file_name = base_name(&entry.path).to_string();
-                                let short_dir = short_parent_dir(&entry.path);
-                                let tooltip_path = entry.path.clone();
+    let (status_label, status_color) = match entry.status.as_str() {
+        "modified" => ("M", theme.warning),
+        "added" => ("A", theme.success),
+        "deleted" => ("D", theme.danger),
+        _ => ("?", theme.text_tertiary),
+    };
 
-                                div()
-                                    .id(format!(
-                                        "session-change-row-{}-{}",
-                                        entry.path, entry.turn_index
-                                    ))
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .h(px(28.0))
-                                    .w_full()
-                                    .px(px(8.0))
-                                    .rounded(px(4.0))
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(theme.overlay))
-                                    .when(is_selected, |s| s.bg(theme.overlay_strong))
-                                    .tooltip(Tooltip::text(tooltip_path))
-                                    .on_click(move |_, window, cx| {
-                                        (on_select)(path.clone(), window, cx);
-                                    })
-                                    .child(
+    let file_name = base_name(&entry.path);
+    let short_dir = short_parent_dir(&entry.path);
+    let tooltip_path = entry.path.clone();
+    let on_select = on_select.clone();
+
+    div()
+        .w_full()
+        .h(px(30.0))
+        .pb(px(2.0))
+        .child(
+            div()
+                .id(gpui::ElementId::Name(
+                    format!("session-change-row-{}-{}", entry.path, entry.turn_index).into(),
+                ))
+                .flex()
+                .items_center()
+                .justify_between()
+                .h(px(28.0))
+                .w_full()
+                .px(px(8.0))
+                .rounded(px(4.0))
+                .cursor_pointer()
+                .hover(|s| s.bg(theme.overlay))
+                .when(is_selected, |s| s.bg(theme.overlay_strong))
+                .tooltip(Tooltip::text(tooltip_path))
+                .on_click(move |_, window, cx| {
+                    (on_select)(path.clone(), window, cx);
+                })
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.0))
+                        .min_w_0()
+                        .flex_1()
+                        .child(
+                            div()
+                                .text_size(px(11.0))
+                                .font_weight(gpui::FontWeight::BOLD)
+                                .text_color(status_color)
+                                .w(px(14.0))
+                                .flex_none()
+                                .child(status_label),
+                        )
+                        .child(file_icon(file_icon_for_name(file_name), 14.0))
+                        .child(
+                            div()
+                                .flex()
+                                .items_baseline()
+                                .gap(px(6.0))
+                                .min_w_0()
+                                .flex_1()
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .min_w_0()
+                                        .text_size(px(12.0))
+                                        .text_color(if is_selected {
+                                            theme.text
+                                        } else {
+                                            theme.text_secondary
+                                        })
+                                        .child(file_name.to_string()),
+                                )
+                                .when(!short_dir.is_empty(), |el| {
+                                    el.child(
                                         div()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(6.0))
+                                            .truncate()
                                             .min_w_0()
                                             .flex_1()
-                                            .child(
-                                                div()
-                                                    .text_size(px(11.0))
-                                                    .font_weight(gpui::FontWeight::BOLD)
-                                                    .text_color(status_color)
-                                                    .w(px(14.0))
-                                                    .flex_none()
-                                                    .child(status_label),
-                                            )
-                                            .child(file_icon(file_icon_for_name(&file_name), 14.0))
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .items_baseline()
-                                                    .gap(px(6.0))
-                                                    .min_w_0()
-                                                    .flex_1()
-                                                    .child(
-                                                        div()
-                                                            .truncate()
-                                                            .min_w_0()
-                                                            .text_size(px(12.0))
-                                                            .text_color(if is_selected {
-                                                                theme.text
-                                                            } else {
-                                                                theme.text_secondary
-                                                            })
-                                                            .child(file_name),
-                                                    )
-                                                    .when(!short_dir.is_empty(), |el| {
-                                                        el.child(
-                                                            div()
-                                                                .truncate()
-                                                                .min_w_0()
-                                                                .flex_1()
-                                                                .text_size(px(10.5))
-                                                                .font_family(MONO_FAMILY)
-                                                                .text_color(theme.text_ghost)
-                                                                .child(short_dir.clone()),
-                                                        )
-                                                    }),
-                                            ),
+                                            .text_size(px(10.5))
+                                            .font_family(MONO_FAMILY)
+                                            .text_color(theme.text_ghost)
+                                            .child(short_dir),
                                     )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(4.0))
-                                            .flex_none()
-                                            .when(entry.reviewed, |el| {
-                                                el.child(crate::primitives::icons::app_icon(
-                                                    crate::primitives::icons::IconName::Check,
-                                                    11.0,
-                                                    theme.success,
-                                                ))
-                                            })
-                                            .when(entry.additions > 0, |el| {
-                                                el.child(
-                                                    div()
-                                                        .text_size(px(10.0))
-                                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                                        .text_color(theme.success)
-                                                        .child(format!("+{}", entry.additions)),
-                                                )
-                                            })
-                                            .when(entry.deletions > 0, |el| {
-                                                el.child(
-                                                    div()
-                                                        .text_size(px(10.0))
-                                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                                        .text_color(theme.danger)
-                                                        .child(format!("-{}", entry.deletions)),
-                                                )
-                                            }),
-                                    )
-                            }))
-                            .into_any_element()
-                    }),
-            )
-    }
+                                }),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.0))
+                        .flex_none()
+                        .when(entry.reviewed, |el| {
+                            el.child(crate::primitives::icons::app_icon(
+                                crate::primitives::icons::IconName::Check,
+                                11.0,
+                                theme.success,
+                            ))
+                        })
+                        .when(entry.additions > 0, |el| {
+                            el.child(
+                                div()
+                                    .text_size(px(10.0))
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(theme.success)
+                                    .child(format!("+{}", entry.additions)),
+                            )
+                        })
+                        .when(entry.deletions > 0, |el| {
+                            el.child(
+                                div()
+                                    .text_size(px(10.0))
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(theme.danger)
+                                    .child(format!("-{}", entry.deletions)),
+                            )
+                        }),
+                ),
+        )
+        .into_any_element()
 }

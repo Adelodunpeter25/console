@@ -389,6 +389,8 @@ impl ConsoleDesktopApp {
                 if !still_referenced {
                     self.changes_review_data.remove(&tab_id);
                     self.changes_review_collapsed.remove(&tab_id);
+                    self.viewer_list_states
+                        .remove(&format!("changes-review:{}", tab_id));
                 }
             }
         }

@@ -594,6 +594,19 @@ impl ConsoleDesktopApp {
             )
         };
 
+        let list_key = format!("changes-review:{}", tab_id);
+        let count = console_core::types::count_changes_for_scope(&changes, scope);
+        let list_state = self
+            .viewer_list_states
+            .entry(list_key)
+            .or_insert_with(|| {
+                gpui::ListState::new(count, gpui::ListAlignment::Top, gpui::px(120.0))
+            });
+        if list_state.item_count() != count {
+            list_state.reset(count);
+        }
+        let list_state = list_state.clone();
+
         console_ui::ReviewTab::new(
             scope,
             changes,
@@ -601,6 +614,7 @@ impl ConsoleDesktopApp {
             on_toggle_collapsed,
             on_toggle_reviewed,
         )
+        .list_state(list_state)
         .into_any_element()
     }
     /// The chat tab: transcript, status pills, banners, and the docked

@@ -237,6 +237,45 @@ impl ChangesScope {
     }
 }
 
+/// Count items in a change list for the given scope without cloning or
+/// allocating `Vec<SessionFileChange>` or diff text.
+pub fn count_changes_for_scope(
+    changes: &[SessionFileChange],
+    scope: ChangesScope,
+) -> usize {
+    if changes.is_empty() {
+        return 0;
+    }
+    let latest_turn = changes.iter().map(|c| c.turn_index).max().unwrap_or(0);
+    match scope {
+        ChangesScope::AllTurns => {
+            let mut paths = std::collections::HashSet::new();
+            for change in changes {
+                paths.insert(change.path.as_str());
+            }
+            paths.len()
+        }
+        ChangesScope::ThisTurn => changes
+            .iter()
+            .filter(|c| c.turn_index == latest_turn)
+            .count(),
+        ChangesScope::PreviousTurn => {
+            let previous_turn = changes
+                .iter()
+                .map(|c| c.turn_index)
+                .filter(|&t| t < latest_turn)
+                .max();
+            match previous_turn {
+                Some(previous) => changes
+                    .iter()
+                    .filter(|c| c.turn_index == previous)
+                    .count(),
+                None => 0,
+            }
+        }
+    }
+}
+
 /// Filter a full (all-turns) change list down to the given scope.
 ///
 /// `AllTurns` aggregates per-turn rows to one entry per unique path,
