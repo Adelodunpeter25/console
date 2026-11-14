@@ -102,469 +102,14 @@ impl ConsoleDesktopApp {
             });
             return div().size_full().child(view).into_any_element();
         }
-
         // File tab: render full-page MarkdownViewer, FileViewer, ImagePreview, or BlockedFilePanel
         if let Some(console_core::WorkspaceTabConfig::File { path, .. }) = active_tab {
-            let theme = Theme::current(cx);
-            let kind = console_core::file_kind_for_path(path);
-
-            // A text/markdown file that could not be read shows why, with a
-            // retry, instead of the loading placeholder it would otherwise sit
-            // on forever.
-            if matches!(
-                kind,
-                console_core::FileKind::Markdown | console_core::FileKind::Text
-            ) && !self.open_file_contents.contains_key(path)
-                && let Some(message) = self.open_file_errors.get(path).cloned()
-            {
-                let retry_path = path.clone();
-                let entity = cx.entity().downgrade();
-                return console_ui::BlockedFilePanel::new("Couldn't open file", message)
-                    .icon(console_ui::IconName::TriangleAlert)
-                    .on_retry(move |_w, cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.open_file_errors.remove(&retry_path);
-                                this.fetch_file_tab_content(retry_path.clone(), cx);
-                                cx.notify();
-                            });
-                        }
-                    })
-                    .into_any_element();
-            }
-
-            match kind {
-                console_core::FileKind::RasterImage => {
-                    if !self.open_image_contents.contains_key(path) {
-                        self.fetch_file_tab_content(path.clone(), cx);
-                    }
-                    let state = self
-                        .open_image_contents
-                        .get(path)
-                        .cloned()
-                        .unwrap_or(ImageFileState::Loading);
-                    match state {
-                        ImageFileState::Loading => {
-                            return div()
-                                .size_full()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .gap(px(8.0))
-                                .text_color(theme.text_tertiary)
-                                .text_size(px(13.0))
-                                .child(console_ui::app_icon(
-                                    console_ui::IconName::LoaderCircle,
-                                    16.0,
-                                    theme.text_tertiary,
-                                ))
-                                .child("Loading image...")
-                                .into_any_element();
-                        }
-                        ImageFileState::Loaded {
-                            image,
-                            w,
-                            h,
-                            size_bytes,
-                            mime,
-                        } => {
-                            let meta = console_ui::ImageMeta {
-                                width: w,
-                                height: h,
-                                size_bytes: Some(size_bytes),
-                                mime_type: Some(mime),
-                            };
-                            let zoom_img = image.clone();
-                            let entity = cx.entity().downgrade();
-                            return console_ui::ImagePreview::new(path.clone(), image)
-                                .meta(meta)
-                                .on_zoom(move |_w, cx| {
-                                    let img = zoom_img.clone();
-                                    if let Some(app) = entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            this.zoomed_image = Some(img);
-                                            cx.notify();
-                                        });
-                                    }
-                                })
-                                .into_any_element();
-                        }
-                        ImageFileState::Failed { message } => {
-                            let retry_path = path.clone();
-                            let entity = cx.entity().downgrade();
-                            return console_ui::BlockedFilePanel::new(
-                                "Failed to load image",
-                                message,
-                            )
-                            .icon(console_ui::IconName::TriangleAlert)
-                            .on_retry(move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.fetch_file_tab_content(retry_path.clone(), cx);
-                                    });
-                                }
-                            })
-                            .into_any_element();
-                        }
-                        ImageFileState::Blocked { title, message } => {
-                            return console_ui::BlockedFilePanel::new(title, message)
-                                .icon(console_ui::IconName::File)
-                                .into_any_element();
-                        }
-                    }
-                }
-                console_core::FileKind::Blocked => {
-                    if !self.open_image_contents.contains_key(path) {
-                        self.fetch_file_tab_content(path.clone(), cx);
-                    }
-                    let state = self
-                        .open_image_contents
-                        .get(path)
-                        .cloned()
-                        .unwrap_or(ImageFileState::Loading);
-                    match state {
-                        ImageFileState::Loading => {
-                            return div()
-                                .size_full()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .gap(px(8.0))
-                                .text_color(theme.text_tertiary)
-                                .text_size(px(13.0))
-                                .child(console_ui::app_icon(
-                                    console_ui::IconName::LoaderCircle,
-                                    16.0,
-                                    theme.text_tertiary,
-                                ))
-                                .child("Checking file...")
-                                .into_any_element();
-                        }
-                        ImageFileState::Blocked { title, message } => {
-                            return console_ui::BlockedFilePanel::new(title, message)
-                                .icon(console_ui::IconName::File)
-                                .into_any_element();
-                        }
-                        ImageFileState::Failed { message } => {
-                            let retry_path = path.clone();
-                            let entity = cx.entity().downgrade();
-                            return console_ui::BlockedFilePanel::new(
-                                "Preview unavailable",
-                                message,
-                            )
-                            .icon(console_ui::IconName::TriangleAlert)
-                            .on_retry(move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.fetch_file_tab_content(retry_path.clone(), cx);
-                                    });
-                                }
-                            })
-                            .into_any_element();
-                        }
-                        _ => {
-                            return console_ui::BlockedFilePanel::new(
-                                "Binary file",
-                                format!(
-                                    "\"{}\" isn't a text file, so there's nothing to preview here.",
-                                    path
-                                ),
-                            )
-                            .icon(console_ui::IconName::File)
-                            .into_any_element();
-                        }
-                    }
-                }
-                console_core::FileKind::Svg => {
-                    let mode = self
-                        .svg_preview_mode
-                        .get(path)
-                        .copied()
-                        .unwrap_or(console_ui::SvgViewMode::Preview);
-                    match mode {
-                        console_ui::SvgViewMode::Preview => {
-                            if !self.open_image_contents.contains_key(path) {
-                                self.fetch_file_tab_content(path.clone(), cx);
-                            }
-                            let state = self
-                                .open_image_contents
-                                .get(path)
-                                .cloned()
-                                .unwrap_or(ImageFileState::Loading);
-                            match state {
-                                ImageFileState::Loading => {
-                                    return div()
-                                        .size_full()
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .gap(px(8.0))
-                                        .text_color(theme.text_tertiary)
-                                        .text_size(px(13.0))
-                                        .child(console_ui::app_icon(
-                                            console_ui::IconName::LoaderCircle,
-                                            16.0,
-                                            theme.text_tertiary,
-                                        ))
-                                        .child("Loading SVG preview...")
-                                        .into_any_element();
-                                }
-                                ImageFileState::Loaded {
-                                    image,
-                                    w,
-                                    h,
-                                    size_bytes,
-                                    mime,
-                                } => {
-                                    let meta = console_ui::ImageMeta {
-                                        width: w,
-                                        height: h,
-                                        size_bytes: Some(size_bytes),
-                                        mime_type: Some(mime),
-                                    };
-                                    let zoom_img = image.clone();
-                                    let toggle_path = path.clone();
-                                    let entity = cx.entity().downgrade();
-                                    return console_ui::ImagePreview::new(path.clone(), image)
-                                        .meta(meta)
-                                        .is_svg(true)
-                                        .svg_mode(console_ui::SvgViewMode::Preview)
-                                        .on_toggle_svg_mode(move |new_mode, _w, cx| {
-                                            if let Some(app) = entity.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    this.svg_preview_mode
-                                                        .insert(toggle_path.clone(), new_mode);
-                                                    cx.notify();
-                                                });
-                                            }
-                                        })
-                                        .on_zoom({
-                                            let entity = cx.entity().downgrade();
-                                            move |_w, cx| {
-                                                let img = zoom_img.clone();
-                                                if let Some(app) = entity.upgrade() {
-                                                    app.update(cx, |this, cx| {
-                                                        this.zoomed_image = Some(img);
-                                                        cx.notify();
-                                                    });
-                                                }
-                                            }
-                                        })
-                                        .into_any_element();
-                                }
-                                ImageFileState::Failed { message } => {
-                                    let retry_path = path.clone();
-                                    let entity = cx.entity().downgrade();
-                                    return console_ui::BlockedFilePanel::new(
-                                        "Failed to render SVG",
-                                        message,
-                                    )
-                                    .icon(console_ui::IconName::TriangleAlert)
-                                    .on_retry(move |_w, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.fetch_file_tab_content(retry_path.clone(), cx);
-                                            });
-                                        }
-                                    })
-                                    .into_any_element();
-                                }
-                                ImageFileState::Blocked { title, message } => {
-                                    return console_ui::BlockedFilePanel::new(title, message)
-                                        .icon(console_ui::IconName::File)
-                                        .into_any_element();
-                                }
-                            }
-                        }
-                        console_ui::SvgViewMode::Source => {
-                            if !self.open_file_contents.contains_key(path) {
-                                self.fetch_file_tab_content(path.clone(), cx);
-                            }
-                            let Some(content) = self.open_file_contents.get(path).cloned() else {
-                                return console_ui::BlockedFilePanel::new(
-                                    "Loading file…",
-                                    "The file content is still loading.",
-                                )
-                                .icon(console_ui::IconName::File)
-                                .into_any_element();
-                            };
-
-                            let editor_view =
-                                self.get_or_build_editor_view(path, &content, &theme, cx);
-                            let file_viewer = console_ui::FileViewer::new(editor_view)
-                                .path(self.comment_display_path(pane_id, path));
-
-                            let toggle_path = path.clone();
-                            let entity = cx.entity().downgrade();
-                            let header = console_ui::svg_source_header(
-                                theme,
-                                Some(Rc::new(move |new_mode, _w, cx| {
-                                    if let Some(app) = entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            this.svg_preview_mode
-                                                .insert(toggle_path.clone(), new_mode);
-                                            cx.notify();
-                                        });
-                                    }
-                                })),
-                            );
-
-                            return div()
-                                .size_full()
-                                .flex()
-                                .flex_col()
-                                .child(header)
-                                .child(div().flex_1().min_h_0().size_full().child(file_viewer))
-                                .into_any_element();
-                        }
-                    }
-                }
-                console_core::FileKind::Markdown => {
-                    if !self.open_file_contents.contains_key(path) {
-                        self.fetch_file_tab_content(path.clone(), cx);
-                    }
-
-                    let mode = self
-                        .svg_preview_mode
-                        .get(path)
-                        .copied()
-                        .unwrap_or(console_ui::SvgViewMode::Preview);
-                    let toggle_path = path.clone();
-                    let toggle_entity = cx.entity().downgrade();
-                    let header = console_ui::view_header(
-                        theme,
-                        "Markdown",
-                        mode,
-                        Some(Rc::new(move |new_mode, _w, cx| {
-                            if let Some(app) = toggle_entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.svg_preview_mode.insert(toggle_path.clone(), new_mode);
-                                    cx.notify();
-                                });
-                            }
-                        })),
-                    );
-
-                    if mode == console_ui::SvgViewMode::Source {
-                        let Some(content) = self.open_file_contents.get(path).cloned() else {
-                            return console_ui::BlockedFilePanel::new(
-                                "Loading file…",
-                                "The file content is still loading.",
-                            )
-                            .icon(console_ui::IconName::File)
-                            .into_any_element();
-                        };
-                        let editor_view = self.get_or_build_editor_view(path, &content, &theme, cx);
-                        let file_viewer = console_ui::FileViewer::new(editor_view)
-                            .path(self.comment_display_path(pane_id, path));
-                        return div()
-                            .size_full()
-                            .flex()
-                            .flex_col()
-                            .child(header)
-                            .child(div().flex_1().min_h_0().size_full().child(file_viewer))
-                            .into_any_element();
-                    }
-
-                    let content = self
-                        .open_file_contents
-                        .get(path)
-                        .cloned()
-                        .or_else(|| std::fs::read_to_string(path).ok())
-                        .unwrap_or_else(|| "Loading file content...".to_string());
-
-                    let view = self.get_or_build_markdown_view(path, &content);
-                    let selection = self.viewer_markdown_selection(path);
-                    let block_count = view.borrow().block_count();
-                    let list_state =
-                        self.viewer_list_state(&format!("md:{}", path), block_count, 60.0);
-                    let scrollbar_state = self.viewer_scrollbar_state(&format!("md:{}", path));
-                    // Clicked links route like the transcript's: file paths open
-                    // as workspace tabs, web URLs open in the embedded browser.
-                    // Without a handler links fall through to the OS URL opener,
-                    // which rejects bare file paths (macOS error -50).
-                    let pane = pane_id.to_owned();
-                    let entity: gpui::WeakEntity<ConsoleDesktopApp> = cx.entity().downgrade();
-                    let link_handler: console_ui::markdown::render::LinkHandler =
-                        std::rc::Rc::new(move |url: &str, window, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                if console_shared::markdown::file_links::is_http_url(url) {
-                                    app.update(cx, |this, cx| {
-                                        this.open_chat_url_in_browser(url.to_owned(), window, cx);
-                                    });
-                                } else if console_shared::markdown::file_links::is_file_link(url) {
-                                    app.update(cx, |this, cx| {
-                                        this.open_file_link(url.to_owned(), &pane.clone(), cx);
-                                    });
-                                }
-                            }
-                        });
-                    let viewer = console_ui::MarkdownViewer::new(path.clone(), view, list_state)
-                        .selection(selection)
-                        .scrollbar_state(scrollbar_state)
-                        .link_handler(link_handler);
-                    return div()
-                        .size_full()
-                        .flex()
-                        .flex_col()
-                        .child(header)
-                        .child(div().flex_1().min_h_0().size_full().child(viewer))
-                        .into_any_element();
-                }
-                console_core::FileKind::Text => {
-                    if !self.open_file_contents.contains_key(path) {
-                        self.fetch_file_tab_content(path.clone(), cx);
-                    }
-
-                    let Some(content) = self.open_file_contents.get(path).cloned() else {
-                        return console_ui::BlockedFilePanel::new(
-                            "Loading file…",
-                            "The file content is still loading.",
-                        )
-                        .icon(console_ui::IconName::File)
-                        .into_any_element();
-                    };
-
-                    let editor_view = self.get_or_build_editor_view(path, &content, &theme, cx);
-                    let comment_cards = self.file_comment_cards(pane_id, path, window, cx);
-                    let viewer = console_ui::FileViewer::new(editor_view)
-                        .path(self.comment_display_path(pane_id, path))
-                        .comments(comment_cards);
-                    let composer = self.pane_composer_view(pane_id, true, true, window, cx);
-                    let collapse = self.composer_collapse_on_scroll(pane_id, cx);
-                    return div()
-                        .relative()
-                        .size_full()
-                        .child(viewer)
-                        .child(collapse)
-                        .child(composer)
-                        .into_any_element();
-                }
-            }
+            return self.render_file_tab(pane_id, path, window, cx);
         }
 
         // Diff tab: render full-page DiffViewer
         if let Some(console_core::WorkspaceTabConfig::Diff { path, .. }) = active_tab {
-            let (diff_result, raw_diff) = self
-                .open_diff_contents
-                .get(path)
-                .cloned()
-                .unwrap_or_else(|| (console_core::DiffResult::default(), String::new()));
-            let theme = Theme::current(cx);
-            let diff_view = self.get_or_build_diff_view(path, &diff_result, &raw_diff, &theme, cx);
-            self.sync_diff_comments(pane_id, path, &diff_view, window, cx);
-            let composer = self.pane_composer_view(pane_id, true, true, window, cx);
-            let collapse = self.composer_collapse_on_scroll(pane_id, cx);
-            return div()
-                .relative()
-                .size_full()
-                .child(
-                    console_ui::DiffViewer::new(diff_view)
-                        .path(self.comment_display_path(pane_id, path)),
-                )
-                .child(collapse)
-                .child(composer)
-                .into_any_element();
+            return self.render_diff_tab(pane_id, path, window, cx);
         }
 
         // Changes review tab: every changed file in the tab's scope, stacked
@@ -573,127 +118,589 @@ impl ConsoleDesktopApp {
             session_id, scope, ..
         }) = active_tab
         {
-            let tab_id = active_tab.map(|tab| tab.id()).unwrap_or_default();
-            let changes = self
-                .changes_review_data
-                .get(&tab_id)
-                .cloned()
-                .unwrap_or_else(|| Rc::new(Vec::new()));
-            let collapsed = self
-                .changes_review_collapsed
-                .get(&tab_id)
-                .cloned()
-                .unwrap_or_default();
-
-            let entity = cx.entity().downgrade();
-            let tab_id_for_collapse = tab_id.clone();
-            let on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut gpui::App)> = {
-                let entity = entity.clone();
-                let tab_id = tab_id_for_collapse;
-                Rc::new(
-                    move |path: String, _window: &mut Window, cx: &mut gpui::App| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.toggle_changes_review_collapsed(&tab_id, &path, cx);
-                            });
-                        }
-                    },
-                )
-            };
-            let tab_id_for_reviewed = tab_id.clone();
-            let session_id_for_reviewed = session_id.clone();
-            let on_toggle_reviewed: Rc<dyn Fn(String, u32, &mut Window, &mut gpui::App)> = {
-                let entity = entity.clone();
-                let tab_id = tab_id_for_reviewed;
-                let session_id = session_id_for_reviewed;
-                Rc::new(
-                    move |path: String,
-                          turn_index: u32,
-                          _window: &mut Window,
-                          cx: &mut gpui::App| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.toggle_change_reviewed(
-                                    &tab_id,
-                                    session_id.clone(),
-                                    path,
-                                    turn_index,
-                                    cx,
-                                );
-                            });
-                        }
-                    },
-                )
-            };
-
-            return console_ui::ReviewTab::new(
+            return self.render_changes_review_tab(
+                session_id.clone(),
                 *scope,
-                changes,
-                collapsed,
-                on_toggle_collapsed,
-                on_toggle_reviewed,
-            )
-            .into_any_element();
+                active_tab.map(|tab| tab.id()).unwrap_or_default(),
+                cx,
+            );
         }
 
-        let pane_id = pane_id.to_owned();
-        self.ensure_workspace_pane_state(&pane_id, window, cx);
-        let pane_transcript = self.transcript_for_pane(&pane_id);
-        let pane_project_id = self.pane_real_project_id(&pane_id);
-        let pane_branches = self.pane_branches(&pane_id);
-        let pane_branch_loaded = self.pane_branch_loaded(&pane_id);
-        let pane_is_git_repository = self.pane_is_git_repository(&pane_id);
-        let pane_branch_pending = self.pane_branch_pending(&pane_id);
-        let pane_project_menu = self.pane_project_menu(&pane_id);
-        let pane_branch_menu = self.pane_branch_menu(&pane_id);
-        let pane_usage_menu = self.pane_usage_menu(&pane_id);
-        let pane_session_id = active_tab.and_then(|tab| match tab {
-            console_core::WorkspaceTabConfig::Chat { session_id, .. } => Some(session_id.clone()),
-            _ => None,
-        });
+        // Chat tab: transcript, pills, banners, composer and footer.
+        self.render_chat_tab(pane_id, window, cx)
+    }
+
+    /// File tab: full-page MarkdownViewer, FileViewer, ImagePreview, or
+    /// BlockedFilePanel, per the file's kind. Split out of
+    /// `render_workspace_content`; each arm renders one preview shape.
+    fn render_file_tab(
+        &mut self,
+        pane_id: &str,
+        path: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let path = path.to_owned();
+
+        let theme = Theme::current(cx);
+        let kind = console_core::file_kind_for_path(&path);
+
+        // A text/markdown file that could not be read shows why, with a
+        // retry, instead of the loading placeholder it would otherwise sit
+        // on forever.
+        if matches!(
+            kind,
+            console_core::FileKind::Markdown | console_core::FileKind::Text
+        ) && !self.open_file_contents.contains_key(&path)
+            && let Some(message) = self.open_file_errors.get(&path).cloned()
+        {
+            let retry_path = path.clone();
+            let entity = cx.entity().downgrade();
+            return console_ui::BlockedFilePanel::new("Couldn't open file", message)
+                .icon(console_ui::IconName::TriangleAlert)
+                .on_retry(move |_w, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.open_file_errors.remove(&retry_path);
+                            this.fetch_file_tab_content(retry_path.clone(), cx);
+                            cx.notify();
+                        });
+                    }
+                })
+                .into_any_element();
+        }
+
+        match kind {
+            console_core::FileKind::RasterImage => {
+                if !self.open_image_contents.contains_key(&path) {
+                    self.fetch_file_tab_content(path.clone(), cx);
+                }
+                let state = self
+                    .open_image_contents
+                    .get(&path)
+                    .cloned()
+                    .unwrap_or(ImageFileState::Loading);
+                match state {
+                    ImageFileState::Loading => {
+                        return div()
+                            .size_full()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .gap(px(8.0))
+                            .text_color(theme.text_tertiary)
+                            .text_size(px(13.0))
+                            .child(console_ui::app_icon(
+                                console_ui::IconName::LoaderCircle,
+                                16.0,
+                                theme.text_tertiary,
+                            ))
+                            .child("Loading image...")
+                            .into_any_element();
+                    }
+                    ImageFileState::Loaded {
+                        image,
+                        w,
+                        h,
+                        size_bytes,
+                        mime,
+                    } => {
+                        let meta = console_ui::ImageMeta {
+                            width: w,
+                            height: h,
+                            size_bytes: Some(size_bytes),
+                            mime_type: Some(mime),
+                        };
+                        let zoom_img = image.clone();
+                        let entity = cx.entity().downgrade();
+                        return console_ui::ImagePreview::new(path.clone(), image)
+                            .meta(meta)
+                            .on_zoom(move |_w, cx| {
+                                let img = zoom_img.clone();
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.zoomed_image = Some(img);
+                                        cx.notify();
+                                    });
+                                }
+                            })
+                            .into_any_element();
+                    }
+                    ImageFileState::Failed { message } => {
+                        let retry_path = path.clone();
+                        let entity = cx.entity().downgrade();
+                        return console_ui::BlockedFilePanel::new("Failed to load image", message)
+                            .icon(console_ui::IconName::TriangleAlert)
+                            .on_retry(move |_w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.fetch_file_tab_content(retry_path.clone(), cx);
+                                    });
+                                }
+                            })
+                            .into_any_element();
+                    }
+                    ImageFileState::Blocked { title, message } => {
+                        return console_ui::BlockedFilePanel::new(title, message)
+                            .icon(console_ui::IconName::File)
+                            .into_any_element();
+                    }
+                }
+            }
+            console_core::FileKind::Blocked => {
+                if !self.open_image_contents.contains_key(&path) {
+                    self.fetch_file_tab_content(path.clone(), cx);
+                }
+                let state = self
+                    .open_image_contents
+                    .get(&path)
+                    .cloned()
+                    .unwrap_or(ImageFileState::Loading);
+                match state {
+                    ImageFileState::Loading => {
+                        return div()
+                            .size_full()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .gap(px(8.0))
+                            .text_color(theme.text_tertiary)
+                            .text_size(px(13.0))
+                            .child(console_ui::app_icon(
+                                console_ui::IconName::LoaderCircle,
+                                16.0,
+                                theme.text_tertiary,
+                            ))
+                            .child("Checking file...")
+                            .into_any_element();
+                    }
+                    ImageFileState::Blocked { title, message } => {
+                        return console_ui::BlockedFilePanel::new(title, message)
+                            .icon(console_ui::IconName::File)
+                            .into_any_element();
+                    }
+                    ImageFileState::Failed { message } => {
+                        let retry_path = path.clone();
+                        let entity = cx.entity().downgrade();
+                        return console_ui::BlockedFilePanel::new("Preview unavailable", message)
+                            .icon(console_ui::IconName::TriangleAlert)
+                            .on_retry(move |_w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.fetch_file_tab_content(retry_path.clone(), cx);
+                                    });
+                                }
+                            })
+                            .into_any_element();
+                    }
+                    _ => {
+                        return console_ui::BlockedFilePanel::new(
+                            "Binary file",
+                            format!(
+                                "\"{}\" isn't a text file, so there's nothing to preview here.",
+                                path
+                            ),
+                        )
+                        .icon(console_ui::IconName::File)
+                        .into_any_element();
+                    }
+                }
+            }
+            console_core::FileKind::Svg => {
+                let mode = self
+                    .svg_preview_mode
+                    .get(&path)
+                    .copied()
+                    .unwrap_or(console_ui::SvgViewMode::Preview);
+                match mode {
+                    console_ui::SvgViewMode::Preview => {
+                        if !self.open_image_contents.contains_key(&path) {
+                            self.fetch_file_tab_content(path.clone(), cx);
+                        }
+                        let state = self
+                            .open_image_contents
+                            .get(&path)
+                            .cloned()
+                            .unwrap_or(ImageFileState::Loading);
+                        match state {
+                            ImageFileState::Loading => {
+                                return div()
+                                    .size_full()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .gap(px(8.0))
+                                    .text_color(theme.text_tertiary)
+                                    .text_size(px(13.0))
+                                    .child(console_ui::app_icon(
+                                        console_ui::IconName::LoaderCircle,
+                                        16.0,
+                                        theme.text_tertiary,
+                                    ))
+                                    .child("Loading SVG preview...")
+                                    .into_any_element();
+                            }
+                            ImageFileState::Loaded {
+                                image,
+                                w,
+                                h,
+                                size_bytes,
+                                mime,
+                            } => {
+                                let meta = console_ui::ImageMeta {
+                                    width: w,
+                                    height: h,
+                                    size_bytes: Some(size_bytes),
+                                    mime_type: Some(mime),
+                                };
+                                let zoom_img = image.clone();
+                                let toggle_path = path.clone();
+                                let entity = cx.entity().downgrade();
+                                return console_ui::ImagePreview::new(path.clone(), image)
+                                    .meta(meta)
+                                    .is_svg(true)
+                                    .svg_mode(console_ui::SvgViewMode::Preview)
+                                    .on_toggle_svg_mode(move |new_mode, _w, cx| {
+                                        if let Some(app) = entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.svg_preview_mode
+                                                    .insert(toggle_path.clone(), new_mode);
+                                                cx.notify();
+                                            });
+                                        }
+                                    })
+                                    .on_zoom({
+                                        let entity = cx.entity().downgrade();
+                                        move |_w, cx| {
+                                            let img = zoom_img.clone();
+                                            if let Some(app) = entity.upgrade() {
+                                                app.update(cx, |this, cx| {
+                                                    this.zoomed_image = Some(img);
+                                                    cx.notify();
+                                                });
+                                            }
+                                        }
+                                    })
+                                    .into_any_element();
+                            }
+                            ImageFileState::Failed { message } => {
+                                let retry_path = path.clone();
+                                let entity = cx.entity().downgrade();
+                                return console_ui::BlockedFilePanel::new(
+                                    "Failed to render SVG",
+                                    message,
+                                )
+                                .icon(console_ui::IconName::TriangleAlert)
+                                .on_retry(move |_w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.fetch_file_tab_content(retry_path.clone(), cx);
+                                        });
+                                    }
+                                })
+                                .into_any_element();
+                            }
+                            ImageFileState::Blocked { title, message } => {
+                                return console_ui::BlockedFilePanel::new(title, message)
+                                    .icon(console_ui::IconName::File)
+                                    .into_any_element();
+                            }
+                        }
+                    }
+                    console_ui::SvgViewMode::Source => {
+                        if !self.open_file_contents.contains_key(&path) {
+                            self.fetch_file_tab_content(path.clone(), cx);
+                        }
+                        let Some(content) = self.open_file_contents.get(&path).cloned() else {
+                            return console_ui::BlockedFilePanel::new(
+                                "Loading file…",
+                                "The file content is still loading.",
+                            )
+                            .icon(console_ui::IconName::File)
+                            .into_any_element();
+                        };
+
+                        let editor_view =
+                            self.get_or_build_editor_view(&path, &content, &theme, cx);
+                        let file_viewer = console_ui::FileViewer::new(editor_view)
+                            .path(self.comment_display_path(pane_id, &path));
+
+                        let toggle_path = path.clone();
+                        let entity = cx.entity().downgrade();
+                        let header = console_ui::svg_source_header(
+                            theme,
+                            Some(Rc::new(move |new_mode, _w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.svg_preview_mode.insert(toggle_path.clone(), new_mode);
+                                        cx.notify();
+                                    });
+                                }
+                            })),
+                        );
+
+                        return div()
+                            .size_full()
+                            .flex()
+                            .flex_col()
+                            .child(header)
+                            .child(div().flex_1().min_h_0().size_full().child(file_viewer))
+                            .into_any_element();
+                    }
+                }
+            }
+            console_core::FileKind::Markdown => {
+                if !self.open_file_contents.contains_key(&path) {
+                    self.fetch_file_tab_content(path.clone(), cx);
+                }
+
+                let mode = self
+                    .svg_preview_mode
+                    .get(&path)
+                    .copied()
+                    .unwrap_or(console_ui::SvgViewMode::Preview);
+                let toggle_path = path.clone();
+                let toggle_entity = cx.entity().downgrade();
+                let header = console_ui::view_header(
+                    theme,
+                    "Markdown",
+                    mode,
+                    Some(Rc::new(move |new_mode, _w, cx| {
+                        if let Some(app) = toggle_entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.svg_preview_mode.insert(toggle_path.clone(), new_mode);
+                                cx.notify();
+                            });
+                        }
+                    })),
+                );
+
+                if mode == console_ui::SvgViewMode::Source {
+                    let Some(content) = self.open_file_contents.get(&path).cloned() else {
+                        return console_ui::BlockedFilePanel::new(
+                            "Loading file…",
+                            "The file content is still loading.",
+                        )
+                        .icon(console_ui::IconName::File)
+                        .into_any_element();
+                    };
+                    let editor_view = self.get_or_build_editor_view(&path, &content, &theme, cx);
+                    let file_viewer = console_ui::FileViewer::new(editor_view)
+                        .path(self.comment_display_path(pane_id, &path));
+                    return div()
+                        .size_full()
+                        .flex()
+                        .flex_col()
+                        .child(header)
+                        .child(div().flex_1().min_h_0().size_full().child(file_viewer))
+                        .into_any_element();
+                }
+
+                let content = self
+                    .open_file_contents
+                    .get(&path)
+                    .cloned()
+                    .or_else(|| std::fs::read_to_string(&path).ok())
+                    .unwrap_or_else(|| "Loading file content...".to_string());
+
+                let view = self.get_or_build_markdown_view(&path, &content);
+                let selection = self.viewer_markdown_selection(&path);
+                let block_count = view.borrow().block_count();
+                let list_state = self.viewer_list_state(&format!("md:{}", path), block_count, 60.0);
+                let scrollbar_state = self.viewer_scrollbar_state(&format!("md:{}", path));
+                // Clicked links route like the transcript's: file paths open
+                // as workspace tabs, web URLs open in the embedded browser.
+                // Without a handler links fall through to the OS URL opener,
+                // which rejects bare file paths (macOS error -50).
+                let pane = pane_id.to_owned();
+                let entity: gpui::WeakEntity<ConsoleDesktopApp> = cx.entity().downgrade();
+                let link_handler: console_ui::markdown::render::LinkHandler =
+                    std::rc::Rc::new(move |url: &str, window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            if console_shared::markdown::file_links::is_http_url(url) {
+                                app.update(cx, |this, cx| {
+                                    this.open_chat_url_in_browser(url.to_owned(), window, cx);
+                                });
+                            } else if console_shared::markdown::file_links::is_file_link(url) {
+                                app.update(cx, |this, cx| {
+                                    this.open_file_link(url.to_owned(), &pane.clone(), cx);
+                                });
+                            }
+                        }
+                    });
+                let viewer = console_ui::MarkdownViewer::new(path.clone(), view, list_state)
+                    .selection(selection)
+                    .scrollbar_state(scrollbar_state)
+                    .link_handler(link_handler);
+                return div()
+                    .size_full()
+                    .flex()
+                    .flex_col()
+                    .child(header)
+                    .child(div().flex_1().min_h_0().size_full().child(viewer))
+                    .into_any_element();
+            }
+            console_core::FileKind::Text => {
+                if !self.open_file_contents.contains_key(&path) {
+                    self.fetch_file_tab_content(path.clone(), cx);
+                }
+
+                let Some(content) = self.open_file_contents.get(&path).cloned() else {
+                    return console_ui::BlockedFilePanel::new(
+                        "Loading file…",
+                        "The file content is still loading.",
+                    )
+                    .icon(console_ui::IconName::File)
+                    .into_any_element();
+                };
+
+                let editor_view = self.get_or_build_editor_view(&path, &content, &theme, cx);
+                let comment_cards = self.file_comment_cards(pane_id, &path, window, cx);
+                let viewer = console_ui::FileViewer::new(editor_view)
+                    .path(self.comment_display_path(pane_id, &path))
+                    .comments(comment_cards);
+                let composer = self.pane_composer_view(pane_id, true, true, window, cx);
+                let collapse = self.composer_collapse_on_scroll(pane_id, cx);
+                return div()
+                    .relative()
+                    .size_full()
+                    .child(viewer)
+                    .child(collapse)
+                    .child(composer)
+                    .into_any_element();
+            }
+        }
+    }
+
+    /// Diff tab: full-page DiffViewer with the floating composer.
+    fn render_diff_tab(
+        &mut self,
+        pane_id: &str,
+        path: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let path = path.to_owned();
+
+        let (diff_result, raw_diff) = self
+            .open_diff_contents
+            .get(&path)
+            .cloned()
+            .unwrap_or_else(|| (console_core::DiffResult::default(), String::new()));
+        let theme = Theme::current(cx);
+        let diff_view = self.get_or_build_diff_view(&path, &diff_result, &raw_diff, &theme, cx);
+        self.sync_diff_comments(pane_id, &path, &diff_view, window, cx);
+        let composer = self.pane_composer_view(pane_id, true, true, window, cx);
+        let collapse = self.composer_collapse_on_scroll(pane_id, cx);
+        return div()
+            .relative()
+            .size_full()
+            .child(
+                console_ui::DiffViewer::new(diff_view)
+                    .path(self.comment_display_path(pane_id, &path)),
+            )
+            .child(collapse)
+            .child(composer)
+            .into_any_element();
+    }
+
+    /// Changes review tab: every changed file in the tab's scope, stacked
+    /// with per-file mark-as-reviewed state.
+    fn render_changes_review_tab(
+        &mut self,
+        session_id: String,
+        scope: ChangesScope,
+        tab_id: String,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let changes = self
+            .changes_review_data
+            .get(&tab_id)
+            .cloned()
+            .unwrap_or_else(|| Rc::new(Vec::new()));
+        let collapsed = self
+            .changes_review_collapsed
+            .get(&tab_id)
+            .cloned()
+            .unwrap_or_default();
+
+        let entity = cx.entity().downgrade();
+        let tab_id_for_collapse = tab_id.clone();
+        let on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut gpui::App)> = {
+            let entity = entity.clone();
+            let tab_id = tab_id_for_collapse;
+            Rc::new(
+                move |path: String, _window: &mut Window, cx: &mut gpui::App| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.toggle_changes_review_collapsed(&tab_id, &path, cx);
+                        });
+                    }
+                },
+            )
+        };
+        let tab_id_for_reviewed = tab_id.clone();
+        let session_id_for_reviewed = session_id.clone();
+        let on_toggle_reviewed: Rc<dyn Fn(String, u32, &mut Window, &mut gpui::App)> = {
+            let entity = entity.clone();
+            let tab_id = tab_id_for_reviewed;
+            let session_id = session_id_for_reviewed;
+            Rc::new(
+                move |path: String, turn_index: u32, _window: &mut Window, cx: &mut gpui::App| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.toggle_change_reviewed(
+                                &tab_id,
+                                session_id.clone(),
+                                path,
+                                turn_index,
+                                cx,
+                            );
+                        });
+                    }
+                },
+            )
+        };
+
+        return console_ui::ReviewTab::new(
+            scope,
+            changes,
+            collapsed,
+            on_toggle_collapsed,
+            on_toggle_reviewed,
+        )
+        .into_any_element();
+    }
+    /// The chat tab: transcript, status pills, banners, and the docked
+    /// composer + workspace footer. All state derivation lives in
+    /// `state::workspace_snapshot` (`ConsoleDesktopApp::pane_chat_snapshot`);
+    /// this maps the snapshot to elements and wires the element callbacks.
+    fn render_chat_tab(
+        &mut self,
+        pane_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        self.ensure_workspace_pane_state(pane_id, window, cx);
+        let pane_transcript = self.transcript_for_pane(pane_id);
+        let pane_project_id = self.pane_real_project_id(pane_id);
+        let pane_branches = self.pane_branches(pane_id);
+        let pane_branch_loaded = self.pane_branch_loaded(pane_id);
+        let pane_is_git_repository = self.pane_is_git_repository(pane_id);
+        let pane_branch_pending = self.pane_branch_pending(pane_id);
+        let pane_project_menu = self.pane_project_menu(pane_id);
+        let pane_branch_menu = self.pane_branch_menu(pane_id);
+        let pane_usage_menu = self.pane_usage_menu(pane_id);
 
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
-        let queued_prompts = self.queued_prompts_for_pane(&pane_id);
-        let suggestions = self.suggestions_for_pane(&pane_id);
-        let pills_scroll = self.pills_scroll_for_pane(&pane_id);
-        let error_message = self.error_for_pane(&pane_id).map(|error| {
-            let persistent = error.persistent;
-            (error.message.clone(), persistent)
-        });
-        // Worktree launch state rides on the session header: "provisioning"
-        // shows progress in the pane, "failed" turns the error banner's
-        // actions into Retry/Discard.
-        let pane_launch_state = pane_session_id
-            .as_deref()
-            .and_then(|sid| self.sessions.iter().find(|s| s.id == sid))
-            .and_then(|s| s.launch_state.clone());
-        let error_pane_id = pane_id.clone();
-        let error_selection = self.error_selection.clone();
-        let agent_notice = self.agent_notice_for_pane(&pane_id);
-        let todo_items = self.todo_items_for_pane(&pane_id);
-        let todo_total = todo_items.len();
-        let todo_completed = todo_items
-            .iter()
-            .filter(|item| {
-                matches!(
-                    item.status.to_ascii_lowercase().as_str(),
-                    "done" | "completed" | "complete"
-                )
-            })
-            .count();
-        let has_active_todos = todo_total > 0 && todo_completed < todo_total;
-        let subagents = pane_session_id
-            .as_deref()
-            .and_then(|sid| self.session_subagents.get(sid))
-            .cloned()
-            .unwrap_or_default();
-        let subagent_count = subagents.len();
-        let subagents_running = subagents.iter().any(|sub| sub.status == "running");
-        let running_shells = pane_session_id
-            .as_deref()
-            .map(|sid| self.running_shells_for_session(sid))
-            .unwrap_or_default();
+        let pills_scroll = self.pills_scroll_for_pane(pane_id);
+        // One pass over app state for everything the chat chrome needs.
+        let snapshot = self.pane_chat_snapshot(pane_id);
+        // Popovers for pills that just vanished cannot close themselves.
+        self.gc_pane_pill_menus(pane_id, &snapshot, window, cx);
+
+        let pane_session_id = snapshot.session_id.clone();
         let selected_sid = pane_session_id.clone();
         let changes_summary = pane_transcript.read(cx).changes_summary();
         let on_open_changes: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>> =
@@ -715,32 +722,18 @@ impl ConsoleDesktopApp {
                 handler
             });
 
-        let tasks_menu = self.pane_tasks_menu(&pane_id);
-        if !has_active_todos && tasks_menu.is_open() {
-            // The pill disappears with the last unfinished task; drop its
-            // popover too so it cannot reopen stale on the next run.
-            tasks_menu.close(window, cx);
-        }
-        let subagents_menu = self.pane_subagents_menu(&pane_id);
-        if subagent_count == 0 && subagents_menu.is_open() {
-            subagents_menu.close(window, cx);
-        }
-        let shells_menu = self.pane_shells_menu(&pane_id);
-        if running_shells.is_empty() && shells_menu.is_open() {
-            shells_menu.close(window, cx);
-        }
-        let tasks = has_active_todos.then(|| TasksPill {
-            completed: todo_completed,
-            total: todo_total,
-            menu: tasks_menu,
-            items: Rc::new(todo_items.clone()),
+        let tasks = snapshot.todos_active.then(|| TasksPill {
+            completed: snapshot.todos_completed,
+            total: snapshot.todos.len(),
+            menu: self.pane_tasks_menu(pane_id),
+            items: snapshot.todos.clone(),
         });
-        let subagents_pill = (subagent_count > 0).then(|| SubagentsPill {
-            running: subagents_running,
-            menu: subagents_menu,
-            items: subagents.clone(),
+        let subagents_pill = (!snapshot.subagents.is_empty()).then(|| SubagentsPill {
+            running: snapshot.subagents_running,
+            menu: self.pane_subagents_menu(pane_id),
+            items: snapshot.subagents.clone(),
         });
-        let shells_pill = (!running_shells.is_empty()).then(|| {
+        let shells_pill = (!snapshot.shells.is_empty()).then(|| {
             let pane_session_id = pane_session_id.clone();
             let entity = entity.clone();
             let on_stop: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> =
@@ -750,9 +743,10 @@ impl ConsoleDesktopApp {
                     }
                 });
             ShellsPill {
-                menu: shells_menu,
+                menu: self.pane_shells_menu(pane_id),
                 shells: Rc::new(
-                    running_shells
+                    snapshot
+                        .shells
                         .iter()
                         .map(|work| ShellEntry {
                             id: work.id.clone(),
@@ -764,21 +758,22 @@ impl ConsoleDesktopApp {
             }
         });
         // Chips yield to queued prompts, which the user has already committed.
-        let suggestions_pill = (!suggestions.is_empty() && queued_prompts.is_empty()).then(|| {
-            let entity_pick = entity.clone();
-            let pane_for_pick = pane_id.clone();
-            SuggestionsPill {
-                items: suggestions.clone(),
-                on_pick: Rc::new(move |prompt, _window, cx| {
-                    if let Some(app) = entity_pick.upgrade() {
-                        let pid = pane_for_pick.clone();
-                        app.update(cx, |this, cx| {
-                            this.send_suggestion_for_pane(&pid, prompt, cx);
-                        });
-                    }
-                }),
-            }
-        });
+        let suggestions_pill =
+            (!snapshot.suggestions.is_empty() && snapshot.queued_prompts.is_empty()).then(|| {
+                let entity_pick = entity.clone();
+                let pane_for_pick = pane_id.to_owned();
+                SuggestionsPill {
+                    items: snapshot.suggestions.clone(),
+                    on_pick: Rc::new(move |prompt, _window, cx| {
+                        if let Some(app) = entity_pick.upgrade() {
+                            let pid = pane_for_pick.clone();
+                            app.update(cx, |this, cx| {
+                                this.send_suggestion_for_pane(&pid, prompt, cx);
+                            });
+                        }
+                    }),
+                }
+            });
         let pills_key = format!("composer-pills-{pane_id}");
         let composer_pills_row = composer_pills(
             &pills_key,
@@ -793,7 +788,7 @@ impl ConsoleDesktopApp {
 
         // Built before the composer's `.when` closure so the closure only
         // captures the finished element, not `&mut self`.
-        let pane_composer_element = self.pane_composer_view(&pane_id, false, false, window, cx);
+        let pane_composer_element = self.pane_composer_view(pane_id, false, false, window, cx);
 
         div()
             .flex_1()
@@ -819,92 +814,104 @@ impl ConsoleDesktopApp {
                     // matching bottom inset so the last row can scroll clear.
                     .when_some(composer_pills_row, |el, pills| el.child(pills)),
             )
-            .when_some(error_message, |el, error| {
-                let (error, error_persistent) = error;
-                let entity = entity.clone();
-                // Retry/Discard only make sense on a persistent error (the
-                // failed worktree launch), not on every transient one.
-                let actions = error_persistent.then(|| {
-                    let retry_entity = entity.clone();
-                    let retry_session = pane_session_id.clone().unwrap_or_default();
-                    let discard_entity = entity.clone();
-                    let discard_session = pane_session_id.clone().unwrap_or_default();
-                    vec![
-                        console_ui::common::BannerAction {
-                            label: "Retry".into(),
-                            on_click: Rc::new(move |cx: &mut App| {
-                                if let Some(app) = retry_entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.retry_worktree_launch(
-                                            retry_session.clone(),
-                                            cx,
-                                        );
-                                    });
-                                }
-                            }),
-                        },
-                        console_ui::common::BannerAction {
-                            label: "Discard".into(),
-                            on_click: Rc::new(move |cx: &mut App| {
-                                if let Some(app) = discard_entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.discard_worktree_launch(
-                                            discard_session.clone(),
-                                            cx,
-                                        );
-                                    });
-                                }
-                            }),
-                        },
-                    ]
-                }).unwrap_or_default();
-                el.child(error_banner(
-                    error,
-                    theme,
-                    error_selection.clone(),
-                    Some(Rc::new(move |cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.clear_error_for_pane(&error_pane_id, cx)
-                            });
-                        }
-                    })),
-                    actions,
-                    cx,
-                ))
-            })
-            .when(pane_launch_state.as_deref() == Some("provisioning"), |el| {
-                // The server is cutting the worktree for this brand-new chat;
-                // the prompt auto-runs the moment it exists.
-                el.child(console_ui::common::centered_stripe(
-                    div()
-                        .w_full()
-                        .max_w(px(768.0))
-                        .px(px(10.0))
-                        .py(px(7.0))
-                        .rounded(px(6.0))
-                        .bg(theme.composer)
-                        .border_1()
-                        .border_color(theme.border)
-                        .text_size(px(11.5))
-                        .text_color(theme.text_secondary)
-                        .child("Creating worktree…"),
-                    6.0,
-                ))
-            })
-            .when_some(agent_notice, |el, notice| {
+            .when_some(
+                snapshot
+                    .error
+                    .as_ref()
+                    .map(|error| (error.message.clone(), error.persistent)),
+                |el, error| {
+                    let (error, error_persistent) = error;
+                    let entity = entity.clone();
+                    // Retry/Discard only make sense on a persistent error (the
+                    // failed worktree launch), not on every transient one.
+                    let actions = error_persistent
+                        .then(|| {
+                            let retry_entity = entity.clone();
+                            let retry_session = pane_session_id.clone().unwrap_or_default();
+                            let discard_entity = entity.clone();
+                            let discard_session = pane_session_id.clone().unwrap_or_default();
+                            vec![
+                                console_ui::common::BannerAction {
+                                    label: "Retry".into(),
+                                    on_click: Rc::new(move |cx: &mut App| {
+                                        if let Some(app) = retry_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.retry_worktree_launch(
+                                                    retry_session.clone(),
+                                                    cx,
+                                                );
+                                            });
+                                        }
+                                    }),
+                                },
+                                console_ui::common::BannerAction {
+                                    label: "Discard".into(),
+                                    on_click: Rc::new(move |cx: &mut App| {
+                                        if let Some(app) = discard_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.discard_worktree_launch(
+                                                    discard_session.clone(),
+                                                    cx,
+                                                );
+                                            });
+                                        }
+                                    }),
+                                },
+                            ]
+                        })
+                        .unwrap_or_default();
+                    let error_pane_id = pane_id.to_owned();
+                    el.child(error_banner(
+                        error,
+                        theme,
+                        self.error_selection.clone(),
+                        Some(Rc::new(move |cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.clear_error_for_pane(&error_pane_id, cx)
+                                });
+                            }
+                        })),
+                        actions,
+                        cx,
+                    ))
+                },
+            )
+            .when(
+                snapshot.launch_state.as_deref() == Some("provisioning"),
+                |el| {
+                    // The server is cutting the worktree for this brand-new chat;
+                    // the prompt auto-runs the moment it exists.
+                    el.child(centered_stripe(
+                        div()
+                            .w_full()
+                            .max_w(px(768.0))
+                            .px(px(10.0))
+                            .py(px(7.0))
+                            .rounded(px(6.0))
+                            .bg(theme.composer)
+                            .border_1()
+                            .border_color(theme.border)
+                            .text_size(px(11.5))
+                            .text_color(theme.text_secondary)
+                            .child("Creating worktree…"),
+                        6.0,
+                    ))
+                },
+            )
+            .when_some(snapshot.notice.clone(), |el, notice| {
                 el.child(notice_banner(notice, theme))
             })
-            .when(!queued_prompts.is_empty(), |el| {
+            .when(!snapshot.queued_prompts.is_empty(), |el| {
                 let theme = Theme::current(cx);
                 let entity_edit = entity.clone();
                 let entity_delete = entity.clone();
                 let entity_steer = entity.clone();
-                let pane_for_edit = pane_id.clone();
-                let pane_for_delete = pane_id.clone();
-                let pane_for_steer = pane_id.clone();
+                let pane_for_edit = pane_id.to_owned();
+                let pane_for_delete = pane_id.to_owned();
+                let pane_for_steer = pane_id.to_owned();
                 el.child(queued_prompts_stack(
-                    queued_prompts,
+                    snapshot.queued_prompts.clone(),
                     Some(Rc::new(move |prompt_id, _window, cx| {
                         if let Some(app) = entity_edit.upgrade() {
                             let pid = pane_for_edit.clone();
@@ -932,10 +939,10 @@ impl ConsoleDesktopApp {
                     theme,
                 ))
             })
-            .when_some(self.pending_question_for_pane(&pane_id), |el, question| {
+            .when_some(snapshot.pending_question.clone(), |el, question| {
                 let entity_for_answer = entity.clone();
-                let question_input = self.question_input_for_pane(&pane_id);
-                let selected = self.question_selected_for_pane(&pane_id);
+                let question_input = self.question_input_for_pane(pane_id);
+                let selected = self.question_selected_for_pane(pane_id);
                 let is_multi = question.is_multi_select.unwrap_or(false);
                 let skippable = question.skippable != Some(false);
                 let answer_sid = selected_sid.clone();
@@ -1003,31 +1010,10 @@ impl ConsoleDesktopApp {
             })
             .when(selected_sid.is_some(), |el| {
                 el.child({
-                    let project_pane_id = pane_id.clone();
-                    let clear_project_pane_id = pane_id.clone();
-                    let branch_pane_id = pane_id.clone();
-                    let new_worktree_pane_id = pane_id.clone();
-                    // Get current provider from active session
-                    let current_provider = self
-                        .active_session_for_pane(&pane_id)
-                        .and_then(|sid| {
-                            self.sessions
-                                .iter()
-                                .find(|s| s.id == sid)
-                                .map(|s| s.provider.clone())
-                        })
-                        .unwrap_or_else(|| "claude".to_string());
-
-                    // Get usage report for current provider
-                    let usage_report = self
-                        .usage_reports
-                        .as_ref()
-                        .and_then(|reports| reports.get(&current_provider).cloned().flatten());
-
-                    // Estimated context occupancy for the active session
-                    let context_snapshot = self
-                        .active_session_for_pane(&pane_id)
-                        .and_then(|sid| self.context_usage.get(&sid).cloned());
+                    let project_pane_id = pane_id.to_owned();
+                    let clear_project_pane_id = pane_id.to_owned();
+                    let branch_pane_id = pane_id.to_owned();
+                    let new_worktree_pane_id = pane_id.to_owned();
 
                     let workspace_footer = WorkspaceFooter::new(
                         self.projects.clone(),
@@ -1039,9 +1025,9 @@ impl ConsoleDesktopApp {
                         pane_project_menu.clone(),
                         pane_branch_menu.clone(),
                         pane_usage_menu.clone(),
-                        usage_report,
-                        self.usage_loading,
-                        context_snapshot,
+                        snapshot.usage_report.clone(),
+                        snapshot.usage_loading,
+                        snapshot.context_snapshot.clone(),
                         {
                             let entity = entity.clone();
                             move |id: String, _w, cx| {
@@ -1132,7 +1118,7 @@ impl ConsoleDesktopApp {
                             }
                         },
                     )
-                    .project_locked(self.session_has_messages(&pane_id))
+                    .project_locked(snapshot.session_has_messages)
                     .github_section(
                         self.github_repos.clone(),
                         self.github_repos_loading,
@@ -1153,7 +1139,6 @@ impl ConsoleDesktopApp {
             })
             .into_any_element()
     }
-
     /// The pane's chat composer, used both as the docked footer in chat tabs
     /// and as a floating card over file/diff tabs.
     /// Wheel scrolling over a file/diff collapses the floating composer back

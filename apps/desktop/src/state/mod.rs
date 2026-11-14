@@ -49,6 +49,7 @@ mod transcript_wiring;
 pub mod updates;
 mod usage;
 mod workspace_panes;
+mod workspace_snapshot;
 mod workspace_tabs;
 
 mod app;
