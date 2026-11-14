@@ -172,133 +172,39 @@ impl ConsoleDesktopApp {
 
         match kind {
             console_core::FileKind::RasterImage => {
-                if !self.open_image_contents.contains_key(&path) {
-                    self.fetch_file_tab_content(path.clone(), cx);
-                }
-                let state = self
-                    .open_image_contents
-                    .get(&path)
-                    .cloned()
-                    .unwrap_or(ImageFileState::Loading);
-                match state {
-                    ImageFileState::Loading => div()
-                        .size_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .gap(px(8.0))
-                        .text_color(theme.text_tertiary)
-                        .text_size(px(13.0))
-                        .child(console_ui::app_icon(
-                            console_ui::IconName::LoaderCircle,
-                            16.0,
-                            theme.text_tertiary,
-                        ))
-                        .child("Loading image...")
-                        .into_any_element(),
-                    ImageFileState::Loaded {
-                        image,
-                        w,
-                        h,
-                        size_bytes,
-                        mime,
-                    } => {
-                        let meta = console_ui::ImageMeta {
-                            width: w,
-                            height: h,
-                            size_bytes: Some(size_bytes),
-                            mime_type: Some(mime),
-                        };
-                        let zoom_img = image.clone();
-                        let entity = cx.entity().downgrade();
-                        console_ui::ImagePreview::new(path.clone(), image)
-                            .meta(meta)
-                            .on_zoom(move |_w, cx| {
-                                let img = zoom_img.clone();
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.zoomed_image = Some(img);
-                                        cx.notify();
-                                    });
-                                }
-                            })
-                            .into_any_element()
-                    }
-                    ImageFileState::Failed { message } => {
-                        let retry_path = path.clone();
-                        let entity = cx.entity().downgrade();
-                        console_ui::BlockedFilePanel::new("Failed to load image", message)
-                            .icon(console_ui::IconName::TriangleAlert)
-                            .on_retry(move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.fetch_file_tab_content(retry_path.clone(), cx);
-                                    });
-                                }
-                            })
-                            .into_any_element()
-                    }
-                    ImageFileState::Blocked { title, message } => {
-                        console_ui::BlockedFilePanel::new(title, message)
-                            .icon(console_ui::IconName::File)
-                            .into_any_element()
-                    }
-                }
+                let state = self.ensure_image_file_state(&path, cx);
+                self.render_image_file(
+                    path,
+                    state,
+                    false,
+                    "Loading image...",
+                    "Failed to load image",
+                    &theme,
+                    cx,
+                )
             }
             console_core::FileKind::Blocked => {
-                if !self.open_image_contents.contains_key(&path) {
-                    self.fetch_file_tab_content(path.clone(), cx);
-                }
-                let state = self
-                    .open_image_contents
-                    .get(&path)
-                    .cloned()
-                    .unwrap_or(ImageFileState::Loading);
-                match state {
-                    ImageFileState::Loading => div()
-                        .size_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .gap(px(8.0))
-                        .text_color(theme.text_tertiary)
-                        .text_size(px(13.0))
-                        .child(console_ui::app_icon(
-                            console_ui::IconName::LoaderCircle,
-                            16.0,
-                            theme.text_tertiary,
-                        ))
-                        .child("Checking file...")
-                        .into_any_element(),
-                    ImageFileState::Blocked { title, message } => {
-                        console_ui::BlockedFilePanel::new(title, message)
-                            .icon(console_ui::IconName::File)
-                            .into_any_element()
-                    }
-                    ImageFileState::Failed { message } => {
-                        let retry_path = path.clone();
-                        let entity = cx.entity().downgrade();
-                        console_ui::BlockedFilePanel::new("Preview unavailable", message)
-                            .icon(console_ui::IconName::TriangleAlert)
-                            .on_retry(move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.fetch_file_tab_content(retry_path.clone(), cx);
-                                    });
-                                }
-                            })
-                            .into_any_element()
-                    }
-                    _ => console_ui::BlockedFilePanel::new(
-                        "Binary file",
-                        format!(
-                            "\"{}\" isn't a text file, so there's nothing to preview here.",
-                            path
+                // A binary file never becomes an image: a Loaded answer here
+                // means the type sniffer could not classify it, so it renders
+                // as the blocked panel the other arms never see.
+                let state = match self.ensure_image_file_state(&path, cx) {
+                    ImageFileState::Loaded { .. } => ImageFileState::Blocked {
+                        title: "Binary file".to_string(),
+                        message: format!(
+                            "\"{path}\" isn't a text file, so there's nothing to preview here."
                         ),
-                    )
-                    .icon(console_ui::IconName::File)
-                    .into_any_element(),
-                }
+                    },
+                    state => state,
+                };
+                self.render_image_file(
+                    path,
+                    state,
+                    false,
+                    "Checking file...",
+                    "Preview unavailable",
+                    &theme,
+                    cx,
+                )
             }
             console_core::FileKind::Svg => {
                 let mode = self
@@ -308,126 +214,27 @@ impl ConsoleDesktopApp {
                     .unwrap_or(console_ui::SvgViewMode::Preview);
                 match mode {
                     console_ui::SvgViewMode::Preview => {
-                        if !self.open_image_contents.contains_key(&path) {
-                            self.fetch_file_tab_content(path.clone(), cx);
-                        }
-                        let state = self
-                            .open_image_contents
-                            .get(&path)
-                            .cloned()
-                            .unwrap_or(ImageFileState::Loading);
-                        match state {
-                            ImageFileState::Loading => div()
-                                .size_full()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .gap(px(8.0))
-                                .text_color(theme.text_tertiary)
-                                .text_size(px(13.0))
-                                .child(console_ui::app_icon(
-                                    console_ui::IconName::LoaderCircle,
-                                    16.0,
-                                    theme.text_tertiary,
-                                ))
-                                .child("Loading SVG preview...")
-                                .into_any_element(),
-                            ImageFileState::Loaded {
-                                image,
-                                w,
-                                h,
-                                size_bytes,
-                                mime,
-                            } => {
-                                let meta = console_ui::ImageMeta {
-                                    width: w,
-                                    height: h,
-                                    size_bytes: Some(size_bytes),
-                                    mime_type: Some(mime),
-                                };
-                                let zoom_img = image.clone();
-                                let toggle_path = path.clone();
-                                let entity = cx.entity().downgrade();
-                                console_ui::ImagePreview::new(path.clone(), image)
-                                    .meta(meta)
-                                    .is_svg(true)
-                                    .svg_mode(console_ui::SvgViewMode::Preview)
-                                    .on_toggle_svg_mode(move |new_mode, _w, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.svg_preview_mode
-                                                    .insert(toggle_path.clone(), new_mode);
-                                                cx.notify();
-                                            });
-                                        }
-                                    })
-                                    .on_zoom({
-                                        let entity = cx.entity().downgrade();
-                                        move |_w, cx| {
-                                            let img = zoom_img.clone();
-                                            if let Some(app) = entity.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    this.zoomed_image = Some(img);
-                                                    cx.notify();
-                                                });
-                                            }
-                                        }
-                                    })
-                                    .into_any_element()
-                            }
-                            ImageFileState::Failed { message } => {
-                                let retry_path = path.clone();
-                                let entity = cx.entity().downgrade();
-                                console_ui::BlockedFilePanel::new("Failed to render SVG", message)
-                                    .icon(console_ui::IconName::TriangleAlert)
-                                    .on_retry(move |_w, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.fetch_file_tab_content(retry_path.clone(), cx);
-                                            });
-                                        }
-                                    })
-                                    .into_any_element()
-                            }
-                            ImageFileState::Blocked { title, message } => {
-                                console_ui::BlockedFilePanel::new(title, message)
-                                    .icon(console_ui::IconName::File)
-                                    .into_any_element()
-                            }
-                        }
+                        let state = self.ensure_image_file_state(&path, cx);
+                        self.render_image_file(
+                            path,
+                            state,
+                            true,
+                            "Loading SVG preview...",
+                            "Failed to render SVG",
+                            &theme,
+                            cx,
+                        )
                     }
                     console_ui::SvgViewMode::Source => {
-                        if !self.open_file_contents.contains_key(&path) {
-                            self.fetch_file_tab_content(path.clone(), cx);
-                        }
-                        let Some(content) = self.open_file_contents.get(&path).cloned() else {
-                            return console_ui::BlockedFilePanel::new(
-                                "Loading file…",
-                                "The file content is still loading.",
-                            )
-                            .icon(console_ui::IconName::File)
-                            .into_any_element();
+                        let Some(content) = self.ensure_text_file_state(&path, cx) else {
+                            return Self::file_loading_content_panel();
                         };
-
-                        let editor_view =
-                            self.get_or_build_editor_view(&path, &content, &theme, cx);
-                        let file_viewer = console_ui::FileViewer::new(editor_view)
-                            .path(self.comment_display_path(pane_id, &path));
-
-                        let toggle_path = path.clone();
-                        let entity = cx.entity().downgrade();
+                        let file_viewer =
+                            self.file_editor_viewer(pane_id, &path, &content, &theme, cx);
                         let header = console_ui::svg_source_header(
                             theme,
-                            Some(Rc::new(move |new_mode, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.svg_preview_mode.insert(toggle_path.clone(), new_mode);
-                                        cx.notify();
-                                    });
-                                }
-                            })),
+                            Some(Rc::new(Self::svg_mode_toggled(path, cx))),
                         );
-
                         div()
                             .size_full()
                             .flex()
@@ -439,43 +246,23 @@ impl ConsoleDesktopApp {
                 }
             }
             console_core::FileKind::Markdown => {
-                if !self.open_file_contents.contains_key(&path) {
-                    self.fetch_file_tab_content(path.clone(), cx);
-                }
-
                 let mode = self
                     .svg_preview_mode
                     .get(&path)
                     .copied()
                     .unwrap_or(console_ui::SvgViewMode::Preview);
-                let toggle_path = path.clone();
-                let toggle_entity = cx.entity().downgrade();
                 let header = console_ui::view_header(
                     theme,
                     "Markdown",
                     mode,
-                    Some(Rc::new(move |new_mode, _w, cx| {
-                        if let Some(app) = toggle_entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.svg_preview_mode.insert(toggle_path.clone(), new_mode);
-                                cx.notify();
-                            });
-                        }
-                    })),
+                    Some(Rc::new(Self::svg_mode_toggled(path.clone(), cx))),
                 );
 
                 if mode == console_ui::SvgViewMode::Source {
-                    let Some(content) = self.open_file_contents.get(&path).cloned() else {
-                        return console_ui::BlockedFilePanel::new(
-                            "Loading file…",
-                            "The file content is still loading.",
-                        )
-                        .icon(console_ui::IconName::File)
-                        .into_any_element();
+                    let Some(content) = self.ensure_text_file_state(&path, cx) else {
+                        return Self::file_loading_content_panel();
                     };
-                    let editor_view = self.get_or_build_editor_view(&path, &content, &theme, cx);
-                    let file_viewer = console_ui::FileViewer::new(editor_view)
-                        .path(self.comment_display_path(pane_id, &path));
+                    let file_viewer = self.file_editor_viewer(pane_id, &path, &content, &theme, cx);
                     return div()
                         .size_full()
                         .flex()
@@ -485,6 +272,9 @@ impl ConsoleDesktopApp {
                         .into_any_element();
                 }
 
+                if !self.open_file_contents.contains_key(&path) {
+                    self.fetch_file_tab_content(path.clone(), cx);
+                }
                 let content = self
                     .open_file_contents
                     .get(&path)
@@ -517,7 +307,7 @@ impl ConsoleDesktopApp {
                             }
                         }
                     });
-                let viewer = console_ui::MarkdownViewer::new(path.clone(), view, list_state)
+                let viewer = console_ui::MarkdownViewer::new(path, view, list_state)
                     .selection(selection)
                     .scrollbar_state(scrollbar_state)
                     .link_handler(link_handler);
@@ -530,23 +320,13 @@ impl ConsoleDesktopApp {
                     .into_any_element()
             }
             console_core::FileKind::Text => {
-                if !self.open_file_contents.contains_key(&path) {
-                    self.fetch_file_tab_content(path.clone(), cx);
-                }
-
-                let Some(content) = self.open_file_contents.get(&path).cloned() else {
-                    return console_ui::BlockedFilePanel::new(
-                        "Loading file…",
-                        "The file content is still loading.",
-                    )
-                    .icon(console_ui::IconName::File)
-                    .into_any_element();
+                let Some(content) = self.ensure_text_file_state(&path, cx) else {
+                    return Self::file_loading_content_panel();
                 };
 
-                let editor_view = self.get_or_build_editor_view(&path, &content, &theme, cx);
                 let comment_cards = self.file_comment_cards(pane_id, &path, window, cx);
-                let viewer = console_ui::FileViewer::new(editor_view)
-                    .path(self.comment_display_path(pane_id, &path))
+                let viewer = self
+                    .file_editor_viewer(pane_id, &path, &content, &theme, cx)
                     .comments(comment_cards);
                 let composer = self.pane_composer_view(pane_id, true, true, window, cx);
                 let collapse = self.composer_collapse_on_scroll(pane_id, cx);
@@ -559,6 +339,168 @@ impl ConsoleDesktopApp {
                     .into_any_element()
             }
         }
+    }
+
+    /// Fetch-on-demand the decoded image for `path`, answering the current
+    /// state (Loading until the fetch lands).
+    fn ensure_image_file_state(&mut self, path: &str, cx: &mut Context<Self>) -> ImageFileState {
+        if !self.open_image_contents.contains_key(path) {
+            self.fetch_file_tab_content(path.to_owned(), cx);
+        }
+        self.open_image_contents
+            .get(path)
+            .cloned()
+            .unwrap_or(ImageFileState::Loading)
+    }
+
+    /// Fetch-on-demand the decoded text for `path`; None while the fetch is
+    /// in flight (or failed outside the read-error path the caller handles).
+    fn ensure_text_file_state(&mut self, path: &str, cx: &mut Context<Self>) -> Option<String> {
+        if !self.open_file_contents.contains_key(path) {
+            self.fetch_file_tab_content(path.to_owned(), cx);
+        }
+        self.open_file_contents.get(path).cloned()
+    }
+
+    /// One image-file preview covering every [`ImageFileState`]: the loading
+    /// spinner, the zoomable ImagePreview (SVG-decorated when `is_svg`), the
+    /// retry panel, and the blocked panel. The kind-specific bits — labels
+    /// and titles — arrive as parameters.
+    fn render_image_file(
+        &mut self,
+        path: String,
+        state: ImageFileState,
+        is_svg: bool,
+        loading_label: &str,
+        failed_title: &str,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        match state {
+            ImageFileState::Loading => Self::file_loading_panel(loading_label, theme),
+            ImageFileState::Loaded {
+                image,
+                w,
+                h,
+                size_bytes,
+                mime,
+            } => {
+                let meta = console_ui::ImageMeta {
+                    width: w,
+                    height: h,
+                    size_bytes: Some(size_bytes),
+                    mime_type: Some(mime),
+                };
+                let zoom_img = image.clone();
+                let toggle_path = path.clone();
+                let mut preview = console_ui::ImagePreview::new(path, image).meta(meta);
+                if is_svg {
+                    preview = preview
+                        .is_svg(true)
+                        .svg_mode(console_ui::SvgViewMode::Preview)
+                        .on_toggle_svg_mode(Self::svg_mode_toggled(toggle_path, cx));
+                }
+                let entity = cx.entity().downgrade();
+                preview
+                    .on_zoom(move |_w, cx| {
+                        let img = zoom_img.clone();
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.zoomed_image = Some(img);
+                                cx.notify();
+                            });
+                        }
+                    })
+                    .into_any_element()
+            }
+            ImageFileState::Failed { message } => {
+                Self::file_retry_panel(failed_title, message, path, cx)
+            }
+            ImageFileState::Blocked { title, message } => {
+                console_ui::BlockedFilePanel::new(title, message)
+                    .icon(console_ui::IconName::File)
+                    .into_any_element()
+            }
+        }
+    }
+
+    /// The spinner row every file-preview loading state shares.
+    fn file_loading_panel(label: &str, theme: &Theme) -> gpui::AnyElement {
+        div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .gap(px(8.0))
+            .text_color(theme.text_tertiary)
+            .text_size(px(13.0))
+            .child(console_ui::app_icon(
+                console_ui::IconName::LoaderCircle,
+                16.0,
+                theme.text_tertiary,
+            ))
+            .child(label.to_owned())
+            .into_any_element()
+    }
+
+    /// The "still decoding" panel shown while a text/markdown fetch is in
+    /// flight (no spinner — identical to the original placeholder).
+    fn file_loading_content_panel() -> gpui::AnyElement {
+        console_ui::BlockedFilePanel::new("Loading file…", "The file content is still loading.")
+            .icon(console_ui::IconName::File)
+            .into_any_element()
+    }
+
+    /// The "failed" panel whose retry refetches the tab content.
+    fn file_retry_panel(
+        title: &str,
+        message: String,
+        path: String,
+        cx: &Context<Self>,
+    ) -> gpui::AnyElement {
+        let entity = cx.entity().downgrade();
+        console_ui::BlockedFilePanel::new(title, message)
+            .icon(console_ui::IconName::TriangleAlert)
+            .on_retry(move |_w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.fetch_file_tab_content(path.clone(), cx);
+                    });
+                }
+            })
+            .into_any_element()
+    }
+
+    /// The store-then-notify closure every SVG preview-mode toggle shares
+    /// (preview header, source header, markdown header). Callers wrap it in
+    /// `Rc` where the builder wants a trait object.
+    fn svg_mode_toggled(
+        path: String,
+        cx: &Context<Self>,
+    ) -> impl Fn(console_ui::SvgViewMode, &mut Window, &mut App) + 'static {
+        let entity = cx.entity().downgrade();
+        move |new_mode, _w, cx| {
+            if let Some(app) = entity.upgrade() {
+                app.update(cx, |this, cx| {
+                    this.svg_preview_mode.insert(path.clone(), new_mode);
+                    cx.notify();
+                });
+            }
+        }
+    }
+
+    /// The editor-backed FileViewer the SVG-source, Markdown-source, and
+    /// text tabs share.
+    fn file_editor_viewer(
+        &mut self,
+        pane_id: &str,
+        path: &str,
+        content: &str,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> console_ui::FileViewer {
+        let editor_view = self.get_or_build_editor_view(path, content, theme, cx);
+        console_ui::FileViewer::new(editor_view).path(self.comment_display_path(pane_id, path))
     }
 
     /// Diff tab: full-page DiffViewer with the floating composer.
