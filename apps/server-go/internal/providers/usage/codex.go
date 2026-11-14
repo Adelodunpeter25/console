@@ -288,7 +288,7 @@ func FetchCodexUsage(ctx context.Context, client *http.Client, baseURL, accessTo
 		return nil, nil
 	}
 	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Second}
+		client = shared.PooledClient(5 * time.Second)
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", CodexUsageURL(baseURL), nil)
 	if err != nil {

@@ -75,7 +75,7 @@ func TokenError(provider string, status int, body string) error {
 // PostTokenForm POSTs a form to a token endpoint and returns the raw body.
 func PostTokenForm(client *http.Client, tokenURL string, body url.Values) ([]byte, error) {
 	if client == nil {
-		client = &http.Client{Timeout: 15 * time.Second}
+		client = PooledClient(15 * time.Second)
 	}
 	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(body.Encode()))
 	if err != nil {

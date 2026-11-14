@@ -71,7 +71,7 @@ func (p *Provider) httpClient() *http.Client {
 	if p.HTTPClient != nil {
 		return p.HTTPClient
 	}
-	return &http.Client{Timeout: 0}
+	return shared.Client
 }
 
 func (p *Provider) loadCredential(accountID string) (ParsedCredential, error) {

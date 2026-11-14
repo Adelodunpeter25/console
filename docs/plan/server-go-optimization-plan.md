@@ -12,6 +12,6 @@ Plan for Go concurrency, data structures, and performance fixes across `apps/ser
 - [x] **Task 6: Eliminate `[]rune` Allocations for Token Checks** (`internal/agent/compaction/tokens.go`, `internal/agent/loop/breakdown.go`, `internal/agent/compaction/shake.go`)
 - [x] **Task 7: Eliminate Redundant JSON Marshal in `argsChars`** (`internal/agent/compaction/tokens.go`)
 - [x] **Task 8: Prevent Backing Array Memory Leaks in Slices** (`internal/run/hub.go`, `internal/services/terminal/pty_manager.go`, `internal/tunnel/opentunnel/bridge.go`)
-- [ ] **Task 9: Reuse HTTP Transport with Tuned Connection Pooling** (`internal/providers/*`, `internal/services/stt`, `internal/providers/usage/*`)
+- [x] **Task 9: Reuse HTTP Transport with Tuned Connection Pooling** (`internal/providers/*`, `internal/services/stt`, `internal/providers/usage/*`)
 - [ ] **Task 10: Cap `sync.Pool` Slice Sizes in Terminal Routes** (`internal/routes/terminal.go`)
 - [ ] **Task 11: Modernize `sort.Slice` to `slices.Sort` / `slices.SortFunc`** (selected hot paths across `internal/`)
