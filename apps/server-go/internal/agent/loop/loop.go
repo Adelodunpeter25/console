@@ -420,6 +420,13 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 		}, turnStream)
 	}()
 
+	var textBuilder strings.Builder
+	var thinkingBuilder strings.Builder
+	var lastThoughtSig string
+	hasText := false
+	hasThinking := false
+	var toolCalls []ToolCallPart
+
 	for {
 		event, err, ok := turnStream.Next()
 		if !ok {
@@ -433,56 +440,20 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 			if event.Text == "" {
 				break
 			}
-			// Coalesce text deltas into TextPart. If thinking intervened mid-stream,
-			// append to the existing TextPart so words and markdown spans stay intact.
-			coalesced := false
-			for i := len(assistant.Content) - 1; i >= 0; i-- {
-				if last, ok := assistant.Content[i].(TextPart); ok {
-					last.Text += event.Text
-					if event.ThoughtSignature != "" {
-						last.ThoughtSignature = event.ThoughtSignature
-					}
-					assistant.Content[i] = last
-					coalesced = true
-					break
-				}
-			}
-			if !coalesced {
-				assistant.Content = append(assistant.Content, TextPart{Type: "text", Text: event.Text, ThoughtSignature: event.ThoughtSignature})
+			hasText = true
+			textBuilder.WriteString(event.Text)
+			if event.ThoughtSignature != "" {
+				lastThoughtSig = event.ThoughtSignature
 			}
 		case EventThinking:
 			if event.Text == "" {
 				break
 			}
-			// Coalesce thinking deltas into ThinkingPart.
-			coalesced := false
-			for i := len(assistant.Content) - 1; i >= 0; i-- {
-				if last, ok := assistant.Content[i].(ThinkingPart); ok {
-					last.Text += event.Text
-					assistant.Content[i] = last
-					coalesced = true
-					break
-				}
-			}
-			if !coalesced {
-				insertIdx := 0
-				for idx, part := range assistant.Content {
-					if _, ok := part.(TextPart); ok {
-						insertIdx = idx
-						break
-					}
-					insertIdx = idx + 1
-				}
-				if insertIdx < len(assistant.Content) {
-					assistant.Content = append(assistant.Content[:insertIdx+1], assistant.Content[insertIdx:]...)
-					assistant.Content[insertIdx] = ThinkingPart{Type: "thinking", Text: event.Text}
-				} else {
-					assistant.Content = append(assistant.Content, ThinkingPart{Type: "thinking", Text: event.Text})
-				}
-			}
+			hasThinking = true
+			thinkingBuilder.WriteString(event.Text)
 		case EventToolCall:
 			if event.Call != nil {
-				assistant.Content = append(assistant.Content, ToolCallPart{Type: "toolCall", Call: *event.Call})
+				toolCalls = append(toolCalls, ToolCallPart{Type: "toolCall", Call: *event.Call})
 				assistant.StopReason = StopToolUse
 			}
 		case EventUsage:
@@ -494,6 +465,25 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 		}
 		events.Push(event)
 	}
+
+	var content []any
+	if hasThinking {
+		content = append(content, ThinkingPart{
+			Type: "thinking",
+			Text: thinkingBuilder.String(),
+		})
+	}
+	if hasText {
+		content = append(content, TextPart{
+			Type:             "text",
+			Text:             textBuilder.String(),
+			ThoughtSignature: lastThoughtSig,
+		})
+	}
+	for _, tc := range toolCalls {
+		content = append(content, tc)
+	}
+	assistant.Content = content
 	if err := <-done; err != nil {
 		return assistant, err
 	}
