@@ -934,6 +934,24 @@ impl ConsoleDesktopApp {
             .map(|leaf| leaf.id.clone())
     }
 
+    /// The active workspace's chat when it is the only one open, as
+    /// `(pane_id, session_id)`. With a terminal, file, or browser tab in
+    /// front no chat is selected, but a single-chat workspace still has an
+    /// unambiguous chat: the sidebar keeps it highlighted and browser
+    /// annotations land on its composer, the way file comments do.
+    pub fn sole_workspace_chat(&self) -> Option<(String, String)> {
+        let mut chats = self.workspace_root.leaves().into_iter().flat_map(|leaf| {
+            leaf.tabs.iter().filter_map(move |tab| match tab {
+                WorkspaceTabConfig::Chat { session_id, .. } => {
+                    Some((leaf.id.clone(), session_id.clone()))
+                }
+                _ => None,
+            })
+        });
+        let only = chats.next()?;
+        chats.next().is_none().then_some(only)
+    }
+
     /// Target pane for secondary subtabs (Files, Diffs, Terminals, Browsers).
     /// If a chat is open, opens or targets the right-hand split so the chat stays pinned left.
     pub fn target_subtab_pane_id(&mut self) -> String {

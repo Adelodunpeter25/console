@@ -101,9 +101,16 @@ impl ConsoleDesktopApp {
         annotation: BrowserElementAnnotation,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(pane_id) = self.active_chat_pane_id() else {
-            // No chat on screen: the legacy fallback — the browser keeps its
-            // own keyboard focus, nothing to route to.
+        // The chat this annotation belongs to: the selected chat, or — while a
+        // browser tab is in front — the workspace's only chat, so annotation
+        // chips land in that composer just like file comments do.
+        let chat = self
+            .active_chat_pane_id()
+            .zip(self.selected_session_id.clone())
+            .or_else(|| self.sole_workspace_chat());
+        let Some((pane_id, session_id)) = chat else {
+            // No chat to route to: the legacy fallback — the browser keeps its
+            // own keyboard focus, nothing to focus.
             let fallback = self
                 .pane_hosting_browser(browser_id)
                 .unwrap_or_else(|| "pane-main".to_string());
@@ -113,9 +120,23 @@ impl ConsoleDesktopApp {
             return false;
         };
         self.append_annotations_for_pane(&pane_id, vec![annotation]);
+        self.schedule_drafts_save(cx);
+        cx.notify();
         // Focus stays in the browser webview after Attach, so the prompt the
         // user types next would vanish into the page. Move it to the chat
-        // composer the chip was staged on.
+        // composer the chip was staged on — but only when that chat is the
+        // pane's visible tab; otherwise the composer is not on screen.
+        let chat_tab_id = format!("chat:{session_id}");
+        let chat_visible = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.id == pane_id)
+            .and_then(|leaf| leaf.active_tab_id.clone())
+            .is_some_and(|active| active == chat_tab_id);
+        if !chat_visible {
+            return false;
+        }
         let entity = cx.entity().downgrade();
         cx.defer(move |cx| {
             let Some(window) = cx.active_window() else {
@@ -134,8 +155,6 @@ impl ConsoleDesktopApp {
                 }
             });
         });
-        self.schedule_drafts_save(cx);
-        cx.notify();
         true
     }
 
