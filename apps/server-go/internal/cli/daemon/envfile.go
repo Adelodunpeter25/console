@@ -1,48 +1,34 @@
 // Per-machine secret env file (~/.console/env): KEY=VALUE lines, quotes optional,
 // comments/blank lines ignored. Managed by `console env`, mode 0600.
+//
+// The file itself lives in internal/utils, which owns the storage layout —
+// the server reads the same file at boot, so the two agree on where it is.
 package daemon
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 // ParseEnvFile parses KEY=VALUE lines (quoted values unwrapped); comments
 // (#) and blank lines are skipped.
 func ParseEnvFile(contents string) map[string]string {
-	out := make(map[string]string)
-	for _, rawLine := range strings.Split(contents, "\n") {
-		line := strings.TrimSpace(rawLine)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		eq := strings.Index(line, "=")
-		if eq <= 0 {
-			continue
-		}
-		key := strings.TrimSpace(line[:eq])
-		value := strings.TrimSpace(line[eq+1:])
-		if len(value) >= 2 {
-			if (strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`)) ||
-				(strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'")) {
-				value = value[1 : len(value)-1]
-			}
-		}
-		if key != "" {
-			out[key] = value
-		}
-	}
-	return out
+	return utils.ParseEnvFile(contents)
 }
 
 // LoadEnvFile reads and parses EnvFilePath; returns an empty map (not an
 // error) when the file doesn't exist.
 func LoadEnvFile() map[string]string {
-	data, err := os.ReadFile(EnvFilePath())
-	if err != nil {
-		return map[string]string{}
-	}
-	return ParseEnvFile(string(data))
+	return utils.LoadEnvFile()
+}
+
+// EnvFilePath is the per-machine secret env file (KEY=VALUE lines) merged
+// into the daemon environment on start.
+func EnvFilePath() string {
+	return utils.EnvFilePath()
 }
 
 // UpsertEnvValues inserts or replaces entries in the env file, leaving
@@ -50,6 +36,9 @@ func LoadEnvFile() map[string]string {
 // Creates the file at mode 0600.
 func UpsertEnvValues(values map[string]string) error {
 	if err := EnsureConsoleDir(); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(EnvFilePath()), 0o700); err != nil {
 		return err
 	}
 	raw := ""

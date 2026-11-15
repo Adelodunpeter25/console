@@ -72,12 +72,6 @@ func configFilePath(dir string) string {
 	return filepath.Join(dir, "config.json")
 }
 
-// EnvFilePath is the per-machine secret env file (KEY=VALUE lines) merged
-// into the daemon environment on start.
-func EnvFilePath() string {
-	return filepath.Join(ConsoleDir(), "env")
-}
-
 // EnsureConsoleDir creates the storage and logs directories.
 func EnsureConsoleDir() error {
 	if err := os.MkdirAll(ConsoleDir(), 0o755); err != nil {

@@ -95,6 +95,16 @@ func Run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
+	// The per-machine env file holds provider keys and harness flags.
+	// `console start` merges it into the daemon environment, but a server
+	// started any other way (go run ./cmd/server, make dev-server) would
+	// miss it. Load it here so the file means the same thing on every start
+	// path. A variable already set in the environment wins — the file fills
+	// gaps, it never overrides an explicit setting. Before the first
+	// terminal spawn, because PtyManager caches os.Environ() in a
+	// sync.Once and would miss anything set later.
+	utils.ApplyEnvFile()
+
 	// Teach git about the GitHub credential helper before anything can spawn:
 	// PtyManager caches os.Environ() in a sync.Once on first use, so a
 	// Setenv after the first terminal spawn would silently miss every shell.
