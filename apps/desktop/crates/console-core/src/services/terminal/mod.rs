@@ -99,7 +99,7 @@ impl TerminalService {
         } else if base.starts_with("http://") {
             base.replacen("http://", "ws://", 1)
         } else {
-            base.clone()
+            base
         };
         let mut url = format!(
             "{}/api/terminals?cwd={}&cols={}&rows={}",

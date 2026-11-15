@@ -86,8 +86,7 @@ pub fn error_banner(
             .children(
                 actions
                     .into_iter()
-                    .map(|action| action_button(action, theme).into_any_element())
-                    .collect::<Vec<_>>(),
+                    .map(|action| action_button(action, theme).into_any_element()),
             )
             .child(selection_input(selection)),
         6.0,

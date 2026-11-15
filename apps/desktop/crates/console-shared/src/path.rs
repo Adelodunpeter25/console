@@ -133,6 +133,7 @@ pub fn parent_dir(path: &str) -> &str {
 }
 
 /// How aggressively `short_parent_dir` shortens a parent directory.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ParentDirDisplay {
     /// Trailing segments kept when shortening (`…/a/b/c`).
     pub keep_segments: usize,
