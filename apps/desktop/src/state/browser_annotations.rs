@@ -104,7 +104,10 @@ impl ConsoleDesktopApp {
         // The chat this annotation belongs to: the selected chat, or — while a
         // browser tab is in front — the workspace's only chat, so annotation
         // chips land in that composer just like file comments do.
-        let Some((pane_id, session_id)) = self.focused_chat() else {
+        let target = self
+            .focused_chat()
+            .map(|(p, s)| (p.to_string(), s.to_string()));
+        let Some((pane_id, session_id)) = target else {
             // No chat to route to: the legacy fallback — the browser keeps its
             // own keyboard focus, nothing to focus.
             let fallback = self
@@ -125,12 +128,13 @@ impl ConsoleDesktopApp {
         let chat_tab_id = format!("chat:{session_id}");
         let chat_visible = self
             .workspace_root
-            .find_leaf(pane_id)
+            .find_leaf(&pane_id)
             .and_then(|leaf| leaf.active_tab_id.as_deref())
             .is_some_and(|active| active == chat_tab_id);
         if !chat_visible {
             return false;
         }
+        let target_pane_id = pane_id.clone();
         let entity = cx.entity().downgrade();
         cx.defer(move |cx| {
             let Some(window) = cx.active_window() else {
@@ -141,10 +145,10 @@ impl ConsoleDesktopApp {
                     app.update(cx, |this, cx| {
                         // Both the GPUI focus chain and the input's own
                         // cursor/blink state need to know.
-                        let composer = this.composer_for_pane(&pane_id);
+                        let composer = this.composer_for_pane(&target_pane_id);
                         let focus = composer.read(cx).focus();
                         window.focus(&focus, cx);
-                        composer.update(cx, |input, cx| input.focus());
+                        composer.update(cx, |input, _cx| input.focus());
                     });
                 }
             });
