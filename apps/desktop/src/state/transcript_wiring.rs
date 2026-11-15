@@ -57,10 +57,9 @@ pub(crate) fn wire_open_change_for_active_pane(
     transcript.set_on_open_change(move |path, turn_index, diff_text, _window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {
-                let pane_id = this
-                    .active_pane_id
-                    .clone()
-                    .unwrap_or_else(|| "pane-main".to_string());
+                // Route beside the pinned chat like every other open, not
+                // into whichever pane happens to be active.
+                let pane_id = this.target_subtab_pane_id();
                 this.open_diff_tab_with_text(&pane_id, path, Some(turn_index), diff_text, cx);
             });
         }
