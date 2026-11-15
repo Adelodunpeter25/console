@@ -22,12 +22,14 @@ pub async fn get_or_create_tunnel(node_id: &str) -> Result<Arc<console_iroh::Tun
         tunnel.warm_up();
         return Ok(tunnel.clone());
     }
+    let mut write_guard = registry.write().await;
+    if let Some(tunnel) = write_guard.get(node_id) {
+        tunnel.warm_up();
+        return Ok(tunnel.clone());
+    }
     let tunnel = Arc::new(console_iroh::Tunnel::new(node_id).await?);
     tunnel.warm_up();
-    registry
-        .write()
-        .await
-        .insert(node_id.to_string(), tunnel.clone());
+    write_guard.insert(node_id.to_string(), tunnel.clone());
     Ok(tunnel)
 }
 
@@ -51,7 +53,7 @@ impl HttpTransport {
         Self {
             base_url: Arc::new(RwLock::new(resolved_url)),
             auth_token: Arc::new(RwLock::new(auth_token)),
-            http: reqwest::Client::builder().build().unwrap(),
+            http: reqwest::Client::builder().build().unwrap_or_default(),
         }
     }
 
