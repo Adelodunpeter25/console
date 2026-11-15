@@ -137,9 +137,6 @@ impl ConsoleDesktopApp {
         self.preview_tab = Some((new_tab_id, created_at));
         self.active_pane_id = Some(pane_id.to_string());
         self.inspector_selected_path = Some(path.clone());
-        if let Some(sid) = self.selected_session_id.clone() {
-            self.stash_subtabs_for_session(&sid);
-        }
         self.trim_file_caches(cx);
         self.sync_workspace_webviews(cx);
         self.persist_workspaces();
@@ -447,9 +444,6 @@ impl ConsoleDesktopApp {
         self.preview_tab = Some((new_tab_id, created_at));
         self.active_pane_id = Some(pane_id.to_string());
         self.inspector_selected_path = Some(path.clone());
-        if let Some(sid) = self.selected_session_id.clone() {
-            self.stash_subtabs_for_session(&sid);
-        }
         self.trim_file_caches(cx);
         self.persist_workspaces();
 

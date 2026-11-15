@@ -77,9 +77,21 @@ impl ConsoleDesktopApp {
             // The settings took over the window; a Settings tab saved by an
             // older build must not come back as one.
             console_ui::workspace::ops::retain_non_settings_tabs(&mut root);
-            if let Some(pane_id) = ws.active_pane_id
-                && root.leaves().iter().any(|leaf| leaf.id == pane_id)
-            {
+            // Desks saved by an older build all shared one pane id, which made
+            // pane state — drafts, staged comments, the loaded branch — bleed
+            // between desks. Namespace each desk's panes under its key.
+            let renames = console_core::namespace_pane_ids(&mut root, &ws.project_id);
+            let active_pane_id = ws
+                .active_pane_id
+                .map(|pane_id| {
+                    renames
+                        .iter()
+                        .find(|(old, _)| old == &pane_id)
+                        .map(|(_, new)| new.clone())
+                        .unwrap_or(pane_id)
+                })
+                .filter(|pane_id| root.leaves().iter().any(|leaf| leaf.id == *pane_id));
+            if let Some(pane_id) = active_pane_id {
                 project_active_panes.insert(ws.project_id.clone(), pane_id);
             }
             project_workspace_roots.insert(ws.project_id, root);
@@ -721,7 +733,6 @@ impl ConsoleDesktopApp {
             persisted_bottom_terminals,
             persisted_script_tabs,
             right_sidebar_bottom_run_selected: false,
-            session_subtabs: std::collections::HashMap::new(),
             project_scripts_by_project: std::collections::HashMap::new(),
             project_script_streams: std::collections::HashMap::new(),
             project_script_stream_seq: 0,

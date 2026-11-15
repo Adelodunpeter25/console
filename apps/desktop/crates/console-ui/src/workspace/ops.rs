@@ -3,6 +3,29 @@
 //! the app state stays a plain owner; UI callbacks call these and notify.
 
 use console_core::{LeafPaneNode, SplitDirection, WorkspaceNode, WorkspaceTabConfig, split_node};
+use std::collections::HashMap;
+
+/// The desks the app knows about, keyed by workspace key.
+pub type DeskMap = HashMap<Option<String>, WorkspaceNode>;
+
+/// Move from one desk to another.
+///
+/// The desk being left is parked under its key, whole — its split, its tabs,
+/// everything — and the desk being entered comes back exactly as it was left.
+/// A desk that has never been visited starts empty, with a pane of its own so
+/// its state never shares with another desk's.
+pub fn switch_desk(
+    desks: &mut DeskMap,
+    current_tree: &WorkspaceNode,
+    current_key: &Option<String>,
+    next_key: &Option<String>,
+) -> WorkspaceNode {
+    desks.insert(current_key.clone(), current_tree.clone());
+    if let Some(saved) = desks.get(next_key) {
+        return saved.clone();
+    }
+    WorkspaceNode::leaf(console_core::desk_leaf_id(next_key))
+}
 
 /// The pane a tab lands in: the active pane, or the first leaf when there are
 /// no panes yet.

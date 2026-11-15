@@ -122,7 +122,9 @@ impl ConsoleDesktopApp {
                 .project_workspace_roots
                 .get(&new_workspace_id)
                 .cloned()
-                .unwrap_or_else(|| console_core::WorkspaceNode::leaf(pane_id.clone()));
+                .unwrap_or_else(|| {
+                    console_core::WorkspaceNode::leaf(console_core::desk_leaf_id(&new_workspace_id))
+                });
             // Drop any stale tabs from other folders (heals legacy mixed saves).
             console_ui::workspace::ops::retain_project_tabs(&mut target_root, &new_workspace_id);
             let target_pane_id = target_root
@@ -303,7 +305,9 @@ impl ConsoleDesktopApp {
                 .project_workspace_roots
                 .get(&new_workspace_id)
                 .cloned()
-                .unwrap_or_else(|| console_core::WorkspaceNode::leaf(pane_id.clone()));
+                .unwrap_or_else(|| {
+                    console_core::WorkspaceNode::leaf(console_core::desk_leaf_id(&new_workspace_id))
+                });
             console_ui::workspace::ops::retain_project_tabs(&mut target_root, &new_workspace_id);
             let target_pane_id = target_root
                 .leaves()

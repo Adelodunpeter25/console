@@ -44,9 +44,6 @@ impl ConsoleDesktopApp {
         };
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
         self.active_pane_id = Some(pane_id.to_string());
-        if let Some(sid) = self.selected_session_id.clone() {
-            self.stash_subtabs_for_session(&sid);
-        }
         self.sync_workspace_webviews(cx);
         self.persist_workspaces();
         // Focus the terminal so keyboard input works immediately

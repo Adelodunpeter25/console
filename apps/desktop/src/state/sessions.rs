@@ -1123,12 +1123,14 @@ impl ConsoleDesktopApp {
             }
             // Remember this workspace's focused pane before leaving it.
             self.remember_active_pane();
-            // Save current project's workspace tabs
-            self.project_workspace_roots.insert(
-                self.selected_project_id.clone(),
-                self.workspace_root.clone(),
+            // Park the desk whole under its key and load the target desk.
+            let outgoing_key = self.selected_project_id.clone();
+            self.workspace_root = console_ui::workspace::ops::switch_desk(
+                &mut self.project_workspace_roots,
+                &self.workspace_root,
+                &outgoing_key,
+                &target_project_id,
             );
-
             // Switch active project
             self.selected_project_id = target_project_id.clone();
             if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
@@ -1139,15 +1141,7 @@ impl ConsoleDesktopApp {
             }
 
             // Restore previously opened tabs for this project, or start a clean leaf
-            if let Some(saved_root) = self
-                .project_workspace_roots
-                .get(&target_project_id)
-                .cloned()
-            {
-                self.workspace_root = saved_root;
-            } else {
-                self.workspace_root = console_core::WorkspaceNode::leaf(active_pane_id);
-            }
+            // (a desk that has never been visited starts with a pane of its own).
             // Back on this workspace's remembered split focus before opening.
             self.restore_active_pane(&target_project_id);
             // Heal legacy mixed saves and keep any existing copy's folder in step.
@@ -1237,7 +1231,6 @@ impl ConsoleDesktopApp {
         // replaces its transcript.
         if let Some(prev_sid) = prev_sid.as_deref() {
             self.save_transcript_scroll_position_for_pane(&active_pane_id, prev_sid, cx);
-            self.stash_subtabs_for_session(prev_sid);
         }
 
         let target_session = self.sessions.iter().find(|s| s.id == id).cloned();
@@ -1249,9 +1242,7 @@ impl ConsoleDesktopApp {
             .map(|s| s.display_title().to_string())
             .unwrap_or_else(|| "Chat".to_string());
         self.open_chat_tab(id.clone(), title, cx);
-        self.restore_subtabs_for_session(&id, cx);
-        // Restoring subtabs can replace or close panes; the swapped-in tree
-        // decides which webview may stay on screen.
+        // The swapped-in tree decides which webview may stay on screen.
         self.sync_workspace_webviews(cx);
 
         if !is_different_project && prev_sid.as_deref() == Some(&id) {

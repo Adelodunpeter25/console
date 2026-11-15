@@ -186,9 +186,6 @@ impl ConsoleDesktopApp {
             workspace_ops::open_tab_in_background(&mut self.workspace_root, &pane_id, tab);
         }
         self.active_pane_id = Some(pane_id);
-        if let Some(sid) = self.selected_session_id.clone() {
-            self.stash_subtabs_for_session(&sid);
-        }
         let view = self.finish_browser_tab_open(&browser_id, url, !focus, window, cx);
         if focus {
             // Focus the browser so keyboard input works immediately (address bar via ⌘L, etc.)

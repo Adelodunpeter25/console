@@ -375,6 +375,76 @@ pub fn session_id_of_workspace_key(key: &str) -> Option<&str> {
     key.split_once(SESSION_KEY_SEP).map(|(_, id)| id)
 }
 
+/// Marks the start of a desk's namespace inside a pane id.
+const PANE_NAMESPACE_SEP: &str = "::";
+
+/// The prefix a desk's pane ids carry. Pane state — the draft being typed,
+/// the staged comments, the branch a pane loaded — is filed under the pane
+/// id, so two desks must never share one.
+///
+/// `None` (the project-less desk) has no prefix: it keeps the window's
+/// shared `pane-main`.
+pub fn desk_pane_prefix(workspace_key: &Option<String>) -> Option<String> {
+    let key = workspace_key.as_deref()?;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(key, &mut hasher);
+    let digest = format!("{:08x}", std::hash::Hasher::finish(&hasher) as u32);
+    let readable: String = project_id_of_workspace_key(key)
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    Some(format!("pane-{readable}-{digest}{PANE_NAMESPACE_SEP}"))
+}
+
+/// The pane id a fresh desk starts with.
+pub fn desk_leaf_id(workspace_key: &Option<String>) -> String {
+    match desk_pane_prefix(workspace_key) {
+        Some(prefix) => format!("{prefix}main"),
+        None => "pane-main".to_string(),
+    }
+}
+
+/// Rewrite a desk's pane ids so they carry the desk's namespace. Desks
+/// saved by an older build all shared one pane id, so their state bled into
+/// each other. Only the local part of an id is kept, so rewriting is
+/// idempotent: a desk that is saved and restored again keeps its ids.
+pub fn namespace_pane_ids(
+    root: &mut WorkspaceNode,
+    workspace_key: &Option<String>,
+) -> Vec<(String, String)> {
+    let Some(prefix) = desk_pane_prefix(workspace_key) else {
+        return Vec::new();
+    };
+    let mut renamed = Vec::new();
+    namespace_leaf_ids(root, &prefix, &mut renamed);
+    renamed
+}
+
+fn namespace_leaf_ids(
+    node: &mut WorkspaceNode,
+    prefix: &str,
+    renamed: &mut Vec<(String, String)>,
+) {
+    match node {
+        WorkspaceNode::Leaf(leaf) => {
+            let local = leaf
+                .id
+                .rsplit_once(PANE_NAMESPACE_SEP)
+                .map(|(_, local)| local)
+                .unwrap_or(leaf.id.as_str());
+            let next = format!("{prefix}{local}");
+            if next != leaf.id {
+                renamed.push((leaf.id.clone(), next.clone()));
+                leaf.id = next;
+            }
+        }
+        WorkspaceNode::Split(split) => {
+            namespace_leaf_ids(&mut split.children[0], prefix, renamed);
+            namespace_leaf_ids(&mut split.children[1], prefix, renamed);
+        }
+    }
+}
+
 /// Whether `key` belongs to one chat's own workspace rather than a project or
 /// worktree desk.
 pub fn is_session_workspace_key(key: &str) -> bool {

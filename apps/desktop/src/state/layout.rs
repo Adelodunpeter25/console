@@ -49,7 +49,18 @@ fn clean_root_for_workspace(
 ) -> console_core::WorkspaceNode {
     let mut clean = strip_diff_tabs(root);
     // A workspace must never persist tabs pointing at another folder.
+    let before = clean.leaves().iter().map(|leaf| leaf.tabs.len()).sum::<usize>();
     console_ui::workspace::ops::retain_project_tabs(&mut clean, project_id);
+    let after = clean.leaves().iter().map(|leaf| leaf.tabs.len()).sum::<usize>();
+    if after < before {
+        // A tab whose folder no longer matches its desk is dropped at write
+        // time. Silent loss here is what made an earlier tab-loss bug look
+        // like a save/restore failure.
+        log::warn!(
+            "workspace {} dropped {before} -> {after} tab(s) with a foreign folder",
+            project_id.as_deref().unwrap_or("<none>"),
+        );
+    }
     clean
 }
 
