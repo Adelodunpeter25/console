@@ -351,17 +351,43 @@ pub fn split_node(
 /// always splits the two.
 const WORKTREE_KEY_SEP: &str = "::wt::";
 
-/// The workspace key for a git worktree of `project_id`. A plain project's
-/// workspace keeps using the bare project id, so saved layouts keep working;
-/// only worktrees get this composite key, which gives each checkout its own
-/// tabs, terminals, files and diffs while the chat still belongs to the project.
+/// The workspace key for a git worktree of `project_id`. Only worktrees get
+/// this composite key, which gives each checkout its own tabs, terminals,
+/// files and diffs while the chat still belongs to the project.
 pub fn worktree_workspace_key(project_id: &str, worktree_path: &str) -> String {
     format!("{project_id}{WORKTREE_KEY_SEP}{worktree_path}")
 }
 
+/// Separator between a project id and a chat session id inside a workspace
+/// key. Session ids never contain it, so the first occurrence splits the two.
+const SESSION_KEY_SEP: &str = "::session::";
+
+/// The workspace key of a plain project chat: one chat, one desk. Every chat
+/// owns its own tabs, terminals, files and diffs — even inside the same
+/// project — while the chat still belongs to that project (the id stays the
+/// prefix, so project grouping and lookups keep working).
+pub fn session_workspace_key(project_id: &str, session_id: &str) -> String {
+    format!("{project_id}{SESSION_KEY_SEP}{session_id}")
+}
+
+/// The chat session behind a session-scoped workspace key.
+pub fn session_id_of_workspace_key(key: &str) -> Option<&str> {
+    key.split_once(SESSION_KEY_SEP).map(|(_, id)| id)
+}
+
+/// Whether `key` belongs to one chat's own workspace rather than a project or
+/// worktree desk.
+pub fn is_session_workspace_key(key: &str) -> bool {
+    key.contains(SESSION_KEY_SEP)
+}
+
 /// Split a workspace key into its real project id and, for a worktree
-/// workspace, the worktree path.
+/// workspace, the worktree path. Session-scoped keys sit in the project
+/// folder, so they split to no path.
 pub fn split_workspace_key(key: &str) -> (&str, Option<&str>) {
+    if let Some((project_id, _)) = key.split_once(SESSION_KEY_SEP) {
+        return (project_id, None);
+    }
     match key.split_once(WORKTREE_KEY_SEP) {
         Some((project_id, path)) if !path.is_empty() => (project_id, Some(path)),
         Some((project_id, _)) => (project_id, None),
@@ -416,7 +442,8 @@ pub fn workspace_key_for_session(
     let project_id = session.project_id.as_deref()?;
     match session_checkout_path(session, project_path) {
         Some(path) => Some(worktree_workspace_key(project_id, path)),
-        None => Some(project_id.to_owned()),
+        // One chat, one desk: plain chats each get their own workspace too.
+        None => Some(session_workspace_key(project_id, &session.id)),
     }
 }
 

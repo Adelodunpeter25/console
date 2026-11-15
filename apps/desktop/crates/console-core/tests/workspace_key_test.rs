@@ -1,9 +1,11 @@
-//! Workspace keys: a plain project keeps its bare id; a worktree gets its own
-//! composite key so its tabs/terminals/files are isolated from the project's.
+//! Workspace keys: every chat gets its own desk — plain chats keyed by
+//! session, worktree chats by checkout — while the project id stays the
+//! prefix so grouping and lookups keep working.
 
 use console_core::{
-    SessionHeader, SessionWorktree, is_worktree_workspace_key, project_id_of_workspace_key,
-    split_workspace_key, workspace_key_for_session, worktree_workspace_key,
+    SessionHeader, SessionWorktree, is_session_workspace_key, is_worktree_workspace_key,
+    project_id_of_workspace_key, session_workspace_key, split_workspace_key,
+    workspace_key_for_session, worktree_workspace_key,
 };
 
 fn session(project_id: Option<&str>, worktree: Option<&str>) -> SessionHeader {
@@ -63,10 +65,26 @@ fn two_worktrees_of_one_project_get_different_workspaces() {
 }
 
 #[test]
-fn session_without_a_worktree_stays_in_its_project_workspace() {
-    assert_eq!(
-        workspace_key_for_session(&session(Some("proj-1"), None), Some("/repo")),
-        Some("proj-1".to_string())
+fn session_without_a_worktree_gets_its_own_workspace() {
+    let key = workspace_key_for_session(&session(Some("proj-1"), None), Some("/repo")).unwrap();
+    assert_eq!(key, session_workspace_key("proj-1", "s1"));
+    // The chat still belongs to the project: the id stays the prefix and the
+    // desk sits in the project folder.
+    assert_eq!(project_id_of_workspace_key(&key), "proj-1");
+    assert_eq!(split_workspace_key(&key), ("proj-1", None));
+    assert!(is_session_workspace_key(&key));
+    assert!(!is_worktree_workspace_key(&key));
+}
+
+#[test]
+fn two_plain_chats_of_one_project_get_different_workspaces() {
+    let mut a = session(Some("proj-1"), None);
+    let mut b = session(Some("proj-1"), None);
+    a.id = "a".into();
+    b.id = "b".into();
+    assert_ne!(
+        workspace_key_for_session(&a, Some("/repo")),
+        workspace_key_for_session(&b, Some("/repo"))
     );
 }
 
@@ -93,22 +111,22 @@ fn chat_in_an_existing_worktree_is_keyed_by_its_cwd() {
 }
 
 #[test]
-fn trailing_slash_on_the_project_folder_does_not_make_a_new_workspace() {
+fn trailing_slash_on_the_project_folder_does_not_change_the_desk() {
     let mut s = session(Some("proj-1"), None);
     s.cwd = "/repo/".into();
     assert_eq!(
         workspace_key_for_session(&s, Some("/repo")),
-        Some("proj-1".to_string())
+        Some(session_workspace_key("proj-1", "s1"))
     );
 }
 
 #[test]
-fn unknown_project_folder_falls_back_to_the_project_workspace() {
+fn unknown_project_folder_still_gets_the_chats_own_workspace() {
     let mut s = session(Some("proj-1"), None);
     s.cwd = "/wt/a".into();
     assert_eq!(
         workspace_key_for_session(&s, None),
-        Some("proj-1".to_string())
+        Some(session_workspace_key("proj-1", "s1"))
     );
 }
 

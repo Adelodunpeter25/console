@@ -248,10 +248,34 @@ impl ConsoleDesktopApp {
             candidates.push(current);
         }
         let mut dead = console_core::dead_worktree_workspace_keys(candidates, &live);
+        // Session-scoped desks die with their chat: once no live chat maps to
+        // the key any more, the workspace (and its terminals) go too.
+        dead.extend(
+            self.project_workspace_roots
+                .keys()
+                .filter_map(|key| key.as_deref())
+                .filter(|key| console_core::is_session_workspace_key(key) && !live.contains(*key))
+                .map(str::to_owned),
+        );
         dead.sort();
         dead.dedup();
-        if dead.is_empty() {
+        let migrated = self.has_stale_project_chat_tabs();
+        if dead.is_empty() && !migrated {
             return;
+        }
+
+        // Chat tabs parked on bare project desks are leftovers from before
+        // the per-chat switch: every live session opens into its own desk,
+        // so close them here on later sweeps.
+        if migrated {
+            console_ui::workspace::ops::close_matching_tabs(&mut self.workspace_root, |t| {
+                matches!(t, WorkspaceTabConfig::Chat { .. })
+            });
+            for root in self.project_workspace_roots.values_mut() {
+                console_ui::workspace::ops::close_matching_tabs(root, |t| {
+                    matches!(t, WorkspaceTabConfig::Chat { .. })
+                });
+            }
         }
 
         let current_dead = self
@@ -342,6 +366,36 @@ impl ConsoleDesktopApp {
             self.maybe_refresh_inspector(cx);
         }
         cx.notify();
+    }
+
+    /// Whether any chat tab still sits on a bare project desk. Since the
+    /// per-chat switch, live sessions always open into their own desk, so a
+    /// chat tab on the project desk is a leftover from an older layout.
+    fn has_stale_project_chat_tabs(&self) -> bool {
+        let has_chat = |root: &console_core::WorkspaceNode| {
+            root.leaves().iter().any(|leaf| {
+                leaf.tabs
+                    .iter()
+                    .any(|t| matches!(t, WorkspaceTabConfig::Chat { .. }))
+            })
+        };
+        // The on-screen root, when the selection is a bare project desk.
+        if self.selected_project_id.as_deref().is_some_and(|key| {
+            !console_core::is_session_workspace_key(key)
+                && !console_core::is_worktree_workspace_key(key)
+        }) && has_chat(&self.workspace_root)
+        {
+            return true;
+        }
+        self.project_workspace_roots
+            .iter()
+            .filter(|(slot, _)| {
+                slot.as_deref().is_some_and(|key| {
+                    !console_core::is_session_workspace_key(key)
+                        && !console_core::is_worktree_workspace_key(key)
+                })
+            })
+            .any(|(_, root)| has_chat(root))
     }
 
     /// Release resources owned by a tab leaving the current tree: terminal

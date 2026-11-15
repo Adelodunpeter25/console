@@ -1003,19 +1003,18 @@ impl ConsoleDesktopApp {
     }
 
     /// The workspace key a session opens in: its worktree's workspace when it
-    /// runs in one, else its project's. A project the user just picked in the
-    /// footer wins (and means the project's own folder), like it does for
-    /// `target_project_for_session`.
+    /// runs in one, else its own chat workspace. A project the user just
+    /// picked in the footer wins (and means the project's own folder), like it
+    /// does for `target_project_for_session`.
     pub(crate) fn target_workspace_for_session(&self, session_id: &str) -> Option<String> {
         let project = self.target_project_for_session(session_id)?;
-        if self.pending_project_override.contains_key(session_id) {
-            return Some(project.id);
-        }
         let session = self.sessions.iter().find(|s| s.id == session_id)?;
+        // One chat, one desk: even a footer-project override opens the chat
+        // into its own workspace rooted at the picked project's folder.
         Some(
             match console_core::session_checkout_path(session, Some(&project.path)) {
                 Some(path) => console_core::worktree_workspace_key(&project.id, path),
-                None => project.id,
+                None => console_core::session_workspace_key(&project.id, session_id),
             },
         )
     }

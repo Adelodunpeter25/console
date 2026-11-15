@@ -64,7 +64,9 @@ impl ConsoleDesktopApp {
             Some(project) => Some(
                 match console_core::session_checkout_path(session, Some(&project.path)) {
                     Some(path) => console_core::worktree_workspace_key(&project.id, path),
-                    None => project.id.clone(),
+                    // One chat, one desk: plain chats each get their own
+                    // workspace too.
+                    None => console_core::session_workspace_key(&project.id, &session.id),
                 },
             ),
             None => console_core::workspace_key_for_session(session, None),
