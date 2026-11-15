@@ -503,7 +503,7 @@ impl ConsoleDesktopApp {
         console_ui::FileViewer::new(editor_view).path(self.comment_display_path(pane_id, path))
     }
 
-    /// Diff tab: full-page DiffViewer with the floating composer.
+    /// Diff tab: full-page DiffViewer.
     fn render_diff_tab(
         &mut self,
         pane_id: &str,
