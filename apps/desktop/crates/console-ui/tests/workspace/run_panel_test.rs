@@ -124,22 +124,13 @@ fn test_shortcut_display_tolerates_case_and_opt_spelling() {
 fn test_status_labels_cover_every_row_state() {
     assert_eq!(script_row_status_label(None, false), "Not run yet");
     assert_eq!(script_row_status_label(None, true), "Starting…");
+    assert_eq!(script_row_status_label(Some("running"), false), "Running…");
     assert_eq!(
-        script_row_status_label(Some("running".into()), false),
-        "Running…"
-    );
-    assert_eq!(
-        script_row_status_label(Some("succeeded".into()), false),
+        script_row_status_label(Some("succeeded"), false),
         "Succeeded"
     );
-    assert_eq!(
-        script_row_status_label(Some("failed".into()), false),
-        "Failed"
-    );
-    assert_eq!(
-        script_row_status_label(Some("stopped".into()), false),
-        "Stopped"
-    );
+    assert_eq!(script_row_status_label(Some("failed"), false), "Failed");
+    assert_eq!(script_row_status_label(Some("stopped"), false), "Stopped");
 }
 
 #[test]
