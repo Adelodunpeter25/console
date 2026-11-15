@@ -37,6 +37,17 @@ impl ConsoleDesktopApp {
         self.save_pane_scroll_position(pane_id, cx);
         self.close_workspace_tab(pane_id, tab_id, cx);
         self.active_pane_id = Some(pane_id.to_string());
+        if let Some(leaf) = self.workspace_root.leaf(pane_id) {
+            if leaf.tabs.is_empty() && self.workspace_root.leaves().len() > 1 {
+                console_ui::workspace::ops::close_pane(&mut self.workspace_root, pane_id);
+                if let Some(chat_pane) = self.active_chat_pane_id() {
+                    self.active_pane_id = Some(chat_pane);
+                }
+            }
+        }
+        if let Some(sid) = self.selected_session_id.clone() {
+            self.stash_subtabs_for_session(&sid);
+        }
         self.clear_project_if_workspace_empty();
 
         let next_session = self.active_session_for_pane(pane_id);
@@ -850,5 +861,146 @@ impl ConsoleDesktopApp {
         }
         self.persist_workspaces();
         cx.notify();
+    }
+
+    /// Locate the pane currently hosting the active chat tab, if one is open.
+    pub fn active_chat_pane_id(&self) -> Option<String> {
+        let session_id = self.selected_session_id.as_deref()?;
+        let chat_tab_id = format!("chat:{session_id}");
+        self.workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.tabs.iter().any(|t| t.id() == chat_tab_id))
+            .map(|leaf| leaf.id)
+    }
+
+    /// Target pane for secondary subtabs (Files, Diffs, Terminals, Browsers).
+    /// If a chat is open, opens or targets the right-hand split so the chat stays pinned left.
+    pub fn target_subtab_pane_id(&mut self) -> String {
+        let chat_pane_id = self.active_chat_pane_id();
+        if let Some(chat_pane_id) = chat_pane_id {
+            let other_pane = self
+                .workspace_root
+                .leaves()
+                .into_iter()
+                .find(|l| l.id != chat_pane_id)
+                .map(|l| l.id);
+
+            if let Some(other_id) = other_pane {
+                other_id
+            } else if let Some(new_id) = console_ui::workspace::ops::split_pane(
+                &mut self.workspace_root,
+                &chat_pane_id,
+                console_core::SplitDirection::Horizontal,
+            ) {
+                new_id
+            } else {
+                chat_pane_id
+            }
+        } else {
+            self.active_pane_id
+                .clone()
+                .unwrap_or_else(|| "pane-main".to_string())
+        }
+    }
+
+    /// Stash open subtabs (files, diffs, terminals, browsers) for a chat session.
+    pub fn stash_subtabs_for_session(&mut self, session_id: &str) {
+        let chat_tab_id = format!("chat:{session_id}");
+        let chat_pane_id = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|l| l.tabs.iter().any(|t| t.id() == chat_tab_id))
+            .map(|l| l.id);
+
+        let Some(chat_pane_id) = chat_pane_id else {
+            return;
+        };
+
+        let subtabs: Vec<WorkspaceTabConfig> = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .filter(|l| l.id != chat_pane_id)
+            .flat_map(|l| l.tabs.clone())
+            .filter(|t| !matches!(t, WorkspaceTabConfig::Chat { .. }))
+            .collect();
+
+        if !subtabs.is_empty() {
+            self.session_subtabs.insert(session_id.to_string(), subtabs);
+        } else {
+            self.session_subtabs.remove(session_id);
+        }
+    }
+
+    /// Restore open subtabs for a chat session.
+    pub fn restore_subtabs_for_session(&mut self, session_id: &str, cx: &mut Context<Self>) {
+        let chat_tab_id = format!("chat:{session_id}");
+        let chat_pane_id = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|l| l.tabs.iter().any(|t| t.id() == chat_tab_id))
+            .map(|l| l.id);
+
+        let Some(chat_pane_id) = chat_pane_id else {
+            return;
+        };
+
+        let saved_subtabs = self.session_subtabs.get(session_id).cloned();
+
+        let existing_subtab_pane = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|l| l.id != chat_pane_id)
+            .map(|l| l.id);
+
+        if let Some(subtabs) = saved_subtabs {
+            if !subtabs.is_empty() {
+                let target_pane = if let Some(pane_id) = existing_subtab_pane {
+                    pane_id
+                } else if let Some(new_id) = console_ui::workspace::ops::split_pane(
+                    &mut self.workspace_root,
+                    &chat_pane_id,
+                    console_core::SplitDirection::Horizontal,
+                ) {
+                    new_id
+                } else {
+                    return;
+                };
+
+                let active_tab_path = if let Some(leaf) = self.workspace_root.leaf_mut(&target_pane) {
+                    leaf.tabs = subtabs;
+                    leaf.active_tab_id = leaf.tabs.first().map(|t| t.id());
+                    leaf.tabs.first().and_then(|t| match t {
+                        WorkspaceTabConfig::File { path, .. } => Some(path.clone()),
+                        _ => None,
+                    })
+                } else {
+                    None
+                };
+
+                if let Some(path) = active_tab_path {
+                    self.fetch_file_tab_content(path, cx);
+                }
+
+                self.sync_workspace_webviews(cx);
+                self.persist_workspaces();
+                return;
+            }
+        }
+
+        if let Some(subtab_pane) = existing_subtab_pane {
+            let is_chat = self
+                .workspace_root
+                .leaf(&subtab_pane)
+                .is_some_and(|l| l.tabs.iter().any(|t| matches!(t, WorkspaceTabConfig::Chat { .. })));
+            if !is_chat {
+                console_ui::workspace::ops::close_pane(&mut self.workspace_root, &subtab_pane);
+                self.persist_workspaces();
+            }
+        }
     }
 }

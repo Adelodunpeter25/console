@@ -1229,6 +1229,7 @@ impl ConsoleDesktopApp {
         // replaces its transcript.
         if let Some(prev_sid) = prev_sid.as_deref() {
             self.save_transcript_scroll_position_for_pane(&active_pane_id, prev_sid, cx);
+            self.stash_subtabs_for_session(prev_sid);
         }
 
         let target_session = self.sessions.iter().find(|s| s.id == id).cloned();
@@ -1240,6 +1241,7 @@ impl ConsoleDesktopApp {
             .map(|s| s.display_title().to_string())
             .unwrap_or_else(|| "Chat".to_string());
         self.open_chat_tab(id.clone(), title);
+        self.restore_subtabs_for_session(&id, cx);
 
         if !is_different_project && prev_sid.as_deref() == Some(&id) {
             // Already on screen, so nothing reloads. Opening it from a banner

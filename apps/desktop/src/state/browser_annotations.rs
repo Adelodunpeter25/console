@@ -91,15 +91,17 @@ impl ConsoleDesktopApp {
     }
 
     /// Stage an annotation posted by a browser view's popover (Attach).
+    /// Routes directly to the active chat composer so the chip is immediately staged.
     pub(crate) fn stage_browser_annotation(
         &mut self,
         browser_id: &str,
         annotation: BrowserElementAnnotation,
         cx: &mut Context<Self>,
     ) {
-        let Some(pane_id) = self.pane_hosting_browser(browser_id) else {
-            return;
-        };
+        let pane_id = self
+            .active_chat_pane_id()
+            .or_else(|| self.pane_hosting_browser(browser_id))
+            .unwrap_or_else(|| "pane-main".to_string());
         self.append_annotations_for_pane(&pane_id, vec![annotation]);
         self.schedule_drafts_save(cx);
         cx.notify();

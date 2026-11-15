@@ -618,26 +618,39 @@ impl ConsoleDesktopApp {
     /// The committed comments as prompt blocks. A comment-only send is valid
     /// and carries only these blocks.
     pub(crate) fn staged_comment_prompt(&self, pane_id: &str) -> String {
-        let Some(pane) = self.workspace_pane_states.get(pane_id) else {
-            return String::new();
+        let is_chat = self.active_chat_pane_id().as_deref() == Some(pane_id);
+        let target_panes: Vec<String> = if is_chat {
+            self.workspace_root
+                .leaves()
+                .into_iter()
+                .map(|l| l.id)
+                .collect()
+        } else {
+            vec![pane_id.to_string()]
         };
+
         let mut blocks = Vec::new();
-        for comment in &pane.file_comments {
-            if !comment.staged || comment.state == FileCommentState::Draft {
+        for pid in target_panes {
+            let Some(pane) = self.workspace_pane_states.get(&pid) else {
                 continue;
+            };
+            for comment in &pane.file_comments {
+                if !comment.staged || comment.state == FileCommentState::Draft {
+                    continue;
+                }
+                let text = comment.text.trim();
+                if text.is_empty() {
+                    continue;
+                }
+                let path = self.comment_display_path(&pid, &comment.path);
+                let mut lines = Self::comment_lines(comment.start_line, comment.end_line);
+                if comment.old_side {
+                    lines.push_str(" (before the change)");
+                }
+                blocks.push(
+                    console_shared::composer::file_comments::format_file_comment(&path, &lines, text),
+                );
             }
-            let text = comment.text.trim();
-            if text.is_empty() {
-                continue;
-            }
-            let path = self.comment_display_path(pane_id, &comment.path);
-            let mut lines = Self::comment_lines(comment.start_line, comment.end_line);
-            if comment.old_side {
-                lines.push_str(" (before the change)");
-            }
-            blocks.push(
-                console_shared::composer::file_comments::format_file_comment(&path, &lines, text),
-            );
         }
         blocks.join("\n\n")
     }
@@ -666,11 +679,23 @@ impl ConsoleDesktopApp {
 
     /// Unstage every comment once it has been sent. They stay saved.
     fn clear_staged_comments(&mut self, pane_id: &str, cx: &mut Context<Self>) {
-        let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
-            return;
+        let is_chat = self.active_chat_pane_id().as_deref() == Some(pane_id);
+        let target_panes: Vec<String> = if is_chat {
+            self.workspace_root
+                .leaves()
+                .into_iter()
+                .map(|l| l.id)
+                .collect()
+        } else {
+            vec![pane_id.to_string()]
         };
-        for comment in &mut pane.file_comments {
-            comment.staged = false;
+
+        for pid in target_panes {
+            if let Some(pane) = self.workspace_pane_states.get_mut(&pid) {
+                for comment in &mut pane.file_comments {
+                    comment.staged = false;
+                }
+            }
         }
         cx.notify();
     }
@@ -703,22 +728,34 @@ impl ConsoleDesktopApp {
         pane_id: &str,
         cx: &mut Context<Self>,
     ) -> Rc<Vec<ComposerComment>> {
-        let Some(pane) = self.workspace_pane_states.get(pane_id) else {
-            return Rc::new(Vec::new());
+        let is_chat = self.active_chat_pane_id().as_deref() == Some(pane_id);
+        let target_panes: Vec<String> = if is_chat {
+            self.workspace_root
+                .leaves()
+                .into_iter()
+                .map(|l| l.id)
+                .collect()
+        } else {
+            vec![pane_id.to_string()]
         };
+
         let entity = cx.entity().downgrade();
-        let comments = pane
-            .file_comments
-            .iter()
-            .filter(|comment| comment.staged && comment.state != FileCommentState::Draft)
-            .map(|comment| {
+        let mut all_comments = Vec::new();
+        for pid in target_panes {
+            let Some(pane) = self.workspace_pane_states.get(&pid) else {
+                continue;
+            };
+            for comment in &pane.file_comments {
+                if !comment.staged || comment.state == FileCommentState::Draft {
+                    continue;
+                }
                 let edit_entity = entity.clone();
-                let edit_pane = pane_id.to_string();
+                let edit_pane = pid.clone();
                 let edit_id = comment.id;
                 let remove_entity = entity.clone();
-                let remove_pane = pane_id.to_string();
+                let remove_pane = pid.clone();
                 let remove_id = comment.id;
-                ComposerComment::new(
+                all_comments.push(ComposerComment::new(
                     comment.id,
                     comment.path.clone(),
                     comment.label(),
@@ -736,10 +773,10 @@ impl ConsoleDesktopApp {
                             });
                         }
                     },
-                )
-            })
-            .collect();
-        Rc::new(comments)
+                ));
+            }
+        }
+        Rc::new(all_comments)
     }
 
     /// Cards for the active file, anchored under their ranges by `FileViewer`.

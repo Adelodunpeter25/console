@@ -240,6 +240,8 @@ pub struct ConsoleDesktopApp {
     pub(crate) persisted_script_tabs:
         std::collections::HashMap<String, crate::persistence::PersistedScriptTabs>,
     pub right_sidebar_bottom_run_selected: bool,
+    pub session_subtabs:
+        std::collections::HashMap<String, Vec<console_core::WorkspaceTabConfig>>,
     pub project_scripts_by_project:
         std::collections::HashMap<String, super::project_scripts::ProjectScriptsPanelState>,
     pub(crate) project_script_streams:

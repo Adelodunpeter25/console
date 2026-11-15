@@ -171,10 +171,7 @@ impl ConsoleDesktopApp {
             return;
         }
 
-        let pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".into());
+        let pane_id = self.target_subtab_pane_id();
         let (browser_id, tab) = self.new_browser_tab(url.clone(), None, None, &pane_id);
         if focus {
             workspace_ops::open_tab(&mut self.workspace_root, &pane_id, tab);
@@ -184,6 +181,9 @@ impl ConsoleDesktopApp {
             workspace_ops::open_tab_in_background(&mut self.workspace_root, &pane_id, tab);
         }
         self.active_pane_id = Some(pane_id);
+        if let Some(sid) = self.selected_session_id.clone() {
+            self.stash_subtabs_for_session(&sid);
+        }
         let view = self.finish_browser_tab_open(&browser_id, url, !focus, window, cx);
         if focus {
             // Focus the browser so keyboard input works immediately (address bar via ⌘L, etc.)

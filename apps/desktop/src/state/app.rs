@@ -721,6 +721,7 @@ impl ConsoleDesktopApp {
             persisted_bottom_terminals,
             persisted_script_tabs,
             right_sidebar_bottom_run_selected: false,
+            session_subtabs: std::collections::HashMap::new(),
             project_scripts_by_project: std::collections::HashMap::new(),
             project_script_streams: std::collections::HashMap::new(),
             project_script_stream_seq: 0,

@@ -329,14 +329,14 @@ impl ConsoleDesktopApp {
                 let viewer = self
                     .file_editor_viewer(pane_id, &path, &content, &theme, cx)
                     .comments(comment_cards);
+                let has_chat_pane = self.active_chat_pane_id().is_some();
                 let composer = self.pane_composer_view(pane_id, true, true, window, cx);
                 let collapse = self.composer_collapse_on_scroll(pane_id, cx);
                 div()
                     .relative()
                     .size_full()
                     .child(viewer)
-                    .child(collapse)
-                    .child(composer)
+                    .when(!has_chat_pane, |el| el.child(collapse).child(composer))
                     .into_any_element()
             }
         }
