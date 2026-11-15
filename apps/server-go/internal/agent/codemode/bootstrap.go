@@ -121,6 +121,58 @@ const bootstrapScript = `
         return await bridge.call({ tool: "readChat", input: input });
     };
 
+    globalThis.readSkill = async function(name) {
+        const input = name ? { name: String(name) } : {};
+        return await bridge.call({ tool: "readSkill", input: input });
+    };
+
+    // Browser automation capability
+    function makeBrowserCaller() {
+        const fn = function(codeOrOpts) {
+            const code = typeof codeOrOpts === "string" ? codeOrOpts : (codeOrOpts && codeOrOpts.code ? codeOrOpts.code : String(codeOrOpts));
+            return bridge.call({ tool: "browser", input: { code: code } });
+        };
+        return new Proxy(fn, {
+            get(target, prop) {
+                if (typeof prop === "symbol" || prop === "then" || prop === "toJSON") {
+                    return undefined;
+                }
+                return async function(args) {
+                    const argStr = args ? JSON.stringify(args) : "{}";
+                    const code = "return await browser." + String(prop) + "(" + argStr + ");";
+                    return await bridge.call({ tool: "browser", input: { code: code } });
+                };
+            }
+        });
+    }
+    globalThis.browser = makeBrowserCaller();
+
+    // Attach desktop control plane methods to globalThis.console alongside console.log
+    if (globalThis.console) {
+        const namespaces = ["ports", "scripts", "sessions", "projects"];
+        for (let i = 0; i < namespaces.length; i++) {
+            const ns = namespaces[i];
+            globalThis.console[ns] = new Proxy({}, {
+                get(target, method) {
+                    if (typeof method === "symbol" || method === "then" || method === "toJSON") {
+                        return undefined;
+                    }
+                    return async function(args) {
+                        const argStr = args ? JSON.stringify(args) : "{}";
+                        const code = "return await console." + ns + "." + String(method) + "(" + argStr + ");";
+                        return await bridge.call({ tool: "console", input: { code: code } });
+                    };
+                }
+            });
+        }
+        globalThis.console.models = async function() {
+            return await bridge.call({ tool: "console", input: { code: "return await console.models();" } });
+        };
+        globalThis.console.approvalModes = async function() {
+            return await bridge.call({ tool: "console", input: { code: "return await console.approvalModes();" } });
+        };
+    }
+
     // Tool discovery
     globalThis.searchTools = async function(query) {
         return await bridge.searchTools({ query: String(query || "") });

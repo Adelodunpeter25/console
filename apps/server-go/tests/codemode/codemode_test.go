@@ -376,8 +376,14 @@ func TestCodemodeWebPrimitivesWiring(t *testing.T) {
 			typeof webSearch,
 			typeof todo,
 			typeof visualize,
-			typeof readChat
-		].every(t => t === "function");
+			typeof readChat,
+			typeof readSkill,
+			typeof browser === "function",
+			typeof browser.open === "function",
+			typeof browser.snapshot === "function",
+			typeof console.log === "function",
+			typeof console.ports === "object"
+		].every(t => t === true || t === "function");
 	`
 	res, err := rt.Eval(ctx, checkScript, 5*time.Second)
 	if err != nil {
@@ -386,6 +392,81 @@ func TestCodemodeWebPrimitivesWiring(t *testing.T) {
 	env := res.(tools.Envelope)
 	if env.IsError || !strings.Contains(env.Content.(string), "true") {
 		t.Fatalf("expected all primitives to be functions, got: %v", env.Content)
+	}
+}
+
+func TestCodemodeDescribeCapabilityTools(t *testing.T) {
+	// Add browser and console tools to registry
+	mockBrowser := tools.NewTool("browser", "Browser automation tool", tools.TierRead, func(ctx context.Context, in map[string]any) (any, error) {
+		return "ok", nil
+	})
+	mockConsole := tools.NewTool("console", "Console control tool", tools.TierRead, func(ctx context.Context, in map[string]any) (any, error) {
+		return "ok", nil
+	})
+
+	reg := tools.NewRegistry(mockBrowser, mockConsole)
+	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess))
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Check describeTool for browser
+	bScript := `
+		const d = await describeTool("browser");
+		d.name === "browser" && Array.isArray(d.methods) && d.methods.some(m => m.includes("browser.open"));
+	`
+	res1, err := rt.Eval(ctx, bScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("describe browser: %v", err)
+	}
+	env1 := res1.(tools.Envelope)
+	if env1.IsError || !strings.Contains(env1.Content.(string), "true") {
+		t.Fatalf("expected browser methods in describeTool, got: %v", env1.Content)
+	}
+
+	// Check describeTool for console
+	cScript := `
+		const d = await describeTool("console");
+		d.name === "console" && Array.isArray(d.methods) && d.methods.some(m => m.includes("console.ports.list"));
+	`
+	res2, err := rt.Eval(ctx, cScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("describe console: %v", err)
+	}
+	env2 := res2.(tools.Envelope)
+	if env2.IsError || !strings.Contains(env2.Content.(string), "true") {
+		t.Fatalf("expected console methods in describeTool, got: %v", env2.Content)
+	}
+}
+
+func TestCodemodeJSONUnwrapping(t *testing.T) {
+	// A tool returning JSON string in textResult
+	jsonTool := tools.NewTool("json_provider", "Provides JSON", tools.TierRead, func(ctx context.Context, in map[string]any) (any, error) {
+		return []map[string]any{{"type": "text", "text": `{"success": true, "items": ["a", "b", "c"], "total": 3}`}}, nil
+	})
+
+	reg := tools.NewRegistry(jsonTool)
+	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess))
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Direct property access without JSON.parse()
+	script := `
+		const res = await tools.json_provider({});
+		res.success === true && res.total === 3 && res.items.length === 3;
+	`
+	res, err := rt.Eval(ctx, script, 5*time.Second)
+	if err != nil {
+		t.Fatalf("eval json unwrapping: %v", err)
+	}
+	env := res.(tools.Envelope)
+	if env.IsError || !strings.Contains(env.Content.(string), "true") {
+		t.Fatalf("expected native object properties from json unwrapping, got: %v", env.Content)
 	}
 }
 

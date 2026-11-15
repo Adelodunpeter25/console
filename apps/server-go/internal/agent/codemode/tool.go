@@ -63,9 +63,12 @@ Direct tools are replaced by asynchronous JavaScript functions inside the script
 - fetch(url, [options]) fetches web page markdown or text.
 - webSearch(query, [options]) searches the web (DuckDuckGo/Brave).
 - todo(op, [arg]) manages the session task list (e.g. todo('view'), todo('start', 1), todo('done', 1)).
+- readSkill([name]) reads full instructions for a built-in skill (e.g. readSkill("browser-use")).
+- browser: browser.open({url}), browser.snapshot(), browser.tabs(), browser.close({tabId}), or browser(code).
+- console: console.ports.*, console.sessions.*, console.scripts.*, console.models() (while console.log remains).
 - listTools() lists all registered harness and MCP tools with summaries.
 - searchTools(query) and describeTool(name) find and inspect available tool schemas.
-- tools.<name>(input) invokes any registered tool directly.
+- tools.<name>(input) invokes any registered tool directly (results with JSON text are auto-parsed).
 - visualize(spec) renders charts/cards in chat.
 - readChat(ref, [limit]) reads previous chat transcript.
 - log(...args) outputs narration / intermediate text.
