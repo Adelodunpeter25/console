@@ -315,11 +315,11 @@ impl WorkspaceNode {
     }
 
     /// Find the leaf with the given id.
-    pub fn leaf(&self, id: &str) -> Option<&LeafPaneNode> {
+    pub fn find_leaf(&self, id: &str) -> Option<&LeafPaneNode> {
         match self {
             Self::Leaf(node) => (node.id == id).then_some(node),
             Self::Split(node) => {
-                node.children[0].leaf(id).or_else(|| node.children[1].leaf(id))
+                node.children[0].find_leaf(id).or_else(|| node.children[1].find_leaf(id))
             }
         }
     }

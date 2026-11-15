@@ -125,7 +125,7 @@ impl ConsoleDesktopApp {
         let chat_tab_id = format!("chat:{session_id}");
         let chat_visible = self
             .workspace_root
-            .leaf(pane_id)
+            .find_leaf(pane_id)
             .and_then(|leaf| leaf.active_tab_id.as_deref())
             .is_some_and(|active| active == chat_tab_id);
         if !chat_visible {
