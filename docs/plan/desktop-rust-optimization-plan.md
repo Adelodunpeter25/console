@@ -9,7 +9,7 @@ Plan for Rust best practices, clippy fixes, panic prevention, and concurrency im
 - [x] **Task 3: Fix Tunnel Cache Race Condition** (`crates/console-core/src/utils/http_transport.rs`)
 - [x] **Task 4: Eliminate Redundant Clones in Loops** (`crates/console-ui/src/common/palette.rs`, `crates/console-ui/src/inspector/file_tree.rs`)
 - [x] **Task 5: Replace `Option<String>` with `Option<&str>` in Status Lookups** (`crates/console-ui/src/run/run_panel.rs`)
-- [ ] **Task 6: Consolidate Terminal Split Locks** (`crates/console-core/src/services/terminal/mod.rs`)
+- [x] **Task 6: Consolidate Terminal Split Locks** (`crates/console-core/src/services/terminal/mod.rs`)
 - [ ] **Task 7: Add `[workspace.lints]` Configuration** (`apps/desktop/Cargo.toml`)
 - [ ] **Task 8: Consolidate Global Mutexes in Address Cache** (`crates/console-ui/src/browser/address.rs`)
 - [ ] **Task 9: Refactor Mutually Exclusive Booleans into Enums** (`crates/console-ui/src/common/floating_composer/mod.rs`)
