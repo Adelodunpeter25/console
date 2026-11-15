@@ -40,9 +40,14 @@ impl ConsoleDesktopApp {
         let app_entity = cx.entity().downgrade();
         view.update(cx, |v, _cx| {
             v.set_annotation_handler(move |annotation, cx| {
-                let _ = app_entity.update(cx, |this, cx| {
-                    this.stage_browser_annotation(&handler_bid, annotation, cx);
-                });
+                // When the chip lands on a chat composer, the handler moves
+                // keyboard focus there — the page must not take it back, so
+                // the view skips its refocus.
+                app_entity
+                    .update(cx, |this, cx| {
+                        this.stage_browser_annotation(&handler_bid, annotation, cx)
+                    })
+                    .unwrap_or(false)
             });
         });
 

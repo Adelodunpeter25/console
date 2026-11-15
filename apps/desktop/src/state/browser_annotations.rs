@@ -91,17 +91,27 @@ impl ConsoleDesktopApp {
     }
 
     /// Stage an annotation posted by a browser view's popover (Attach).
-    /// Routes directly to the active chat composer so the chip is immediately staged.
+    /// Routes directly to the active chat composer so the chip is immediately
+    /// staged. Returns true when the chip landed on a chat composer — the
+    /// browser then leaves keyboard focus to the app instead of refocusing
+    /// the page.
     pub(crate) fn stage_browser_annotation(
         &mut self,
         browser_id: &str,
         annotation: BrowserElementAnnotation,
         cx: &mut Context<Self>,
-    ) {
-        let pane_id = self
-            .active_chat_pane_id()
-            .or_else(|| self.pane_hosting_browser(browser_id))
-            .unwrap_or_else(|| "pane-main".to_string());
+    ) -> bool {
+        let Some(pane_id) = self.active_chat_pane_id() else {
+            // No chat on screen: the legacy fallback — the browser keeps its
+            // own keyboard focus, nothing to route to.
+            let fallback = self
+                .pane_hosting_browser(browser_id)
+                .unwrap_or_else(|| "pane-main".to_string());
+            self.append_annotations_for_pane(&fallback, vec![annotation]);
+            self.schedule_drafts_save(cx);
+            cx.notify();
+            return false;
+        };
         self.append_annotations_for_pane(&pane_id, vec![annotation]);
         // Focus stays in the browser webview after Attach, so the prompt the
         // user types next would vanish into the page. Move it to the chat
@@ -126,6 +136,7 @@ impl ConsoleDesktopApp {
         });
         self.schedule_drafts_save(cx);
         cx.notify();
+        true
     }
 
     pub(crate) fn restore_recalled_annotations(

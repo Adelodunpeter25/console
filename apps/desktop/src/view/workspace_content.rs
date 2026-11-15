@@ -333,15 +333,10 @@ impl ConsoleDesktopApp {
                 let viewer = self
                     .file_editor_viewer(pane_id, &path, &content, &theme, cx)
                     .comments(comment_cards);
-                let has_chat_pane = self.active_chat_pane_id().is_some();
-                let composer = self.pane_composer_view(pane_id, true, true, window, cx);
-                let collapse = self.composer_collapse_on_scroll(pane_id, cx);
-                div()
-                    .relative()
-                    .size_full()
-                    .child(viewer)
-                    .when(!has_chat_pane, |el| el.child(collapse).child(composer))
-                    .into_any_element()
+                // No composer here: with one chat per desk the chat pane is
+                // always beside the file, and that is where prompts — and the
+                // staged comments collected from every pane — are sent from.
+                div().size_full().child(viewer).into_any_element()
             }
         }
     }
@@ -528,17 +523,14 @@ impl ConsoleDesktopApp {
         let theme = Theme::current(cx);
         let diff_view = self.get_or_build_diff_view(&path, &diff_result, &raw_diff, &theme, cx);
         self.sync_diff_comments(pane_id, &path, &diff_view, window, cx);
-        let composer = self.pane_composer_view(pane_id, true, true, window, cx);
-        let collapse = self.composer_collapse_on_scroll(pane_id, cx);
+        // No composer here either — same as the file tab: the chat pane
+        // beside this split is where prompts are sent from.
         div()
-            .relative()
             .size_full()
             .child(
                 console_ui::DiffViewer::new(diff_view)
                     .path(self.comment_display_path(pane_id, &path)),
             )
-            .child(collapse)
-            .child(composer)
             .into_any_element()
     }
 
@@ -729,7 +721,7 @@ impl ConsoleDesktopApp {
 
         // Built before the composer's `.when` closure so the closure only
         // captures the finished element, not `&mut self`.
-        let pane_composer_element = self.pane_composer_view(pane_id, false, false, window, cx);
+        let pane_composer_element = self.pane_composer_view(pane_id, window, cx);
 
         div()
             .flex_1()
@@ -1103,36 +1095,9 @@ impl ConsoleDesktopApp {
         })
     }
 
-    /// The pane's chat composer, used both as the docked footer in chat tabs
-    /// and as a floating card over file/diff tabs.
-    /// Wheel scrolling over a file/diff collapses the floating composer back
-    /// to its resting bar by dropping its focus.
-    fn composer_collapse_on_scroll(
-        &self,
-        pane_id: &str,
-        cx: &mut Context<Self>,
-    ) -> gpui::AnyElement {
-        let focus = self.composer_for_pane(pane_id).read(cx).focus();
-        div()
-            .absolute()
-            .top_0()
-            .left_0()
-            .right_0()
-            .bottom(gpui::px(console_ui::FLOATING_COMPOSER_INSET))
-            .child(console_ui::scroll_watch(move |window, _cx| {
-                if focus.is_focused(window) {
-                    window.blur();
-                    window.refresh();
-                }
-            }))
-            .into_any_element()
-    }
-
     fn pane_composer_view(
         &mut self,
         pane_id: &str,
-        floating: bool,
-        reveal_chat: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
@@ -1252,9 +1217,6 @@ impl ConsoleDesktopApp {
                                 console_shared::composer::mentions::submitted_mention_paths(
                                     this.composer_for_pane(&pane_id).read(cx).mentions(),
                                 );
-                            if reveal_chat {
-                                this.reveal_chat_for_pane(&pane_id, cx);
-                            }
                             if this.is_active_session_running_for_pane(&pane_id) {
                                 this.queue_prompt_for_pane(
                                     pane_id.clone(),
@@ -1350,9 +1312,6 @@ impl ConsoleDesktopApp {
                             console_shared::composer::mentions::submitted_mention_paths(
                                 this.composer_for_pane(&pane_id).read(cx).mentions(),
                             );
-                        if reveal_chat {
-                            this.reveal_chat_for_pane(&pane_id, cx);
-                        }
                         this.queue_prompt_for_pane(
                             pane_id.clone(),
                             prompt,
@@ -1447,7 +1406,6 @@ impl ConsoleDesktopApp {
                 }
             }
         })
-        .floating(floating)
         .on_remove_attachment({
             let entity = entity.clone();
             let pane_id = pane_id.to_string();
@@ -1493,25 +1451,13 @@ impl ConsoleDesktopApp {
             }
         });
 
-        if floating {
-            div()
-                .absolute()
-                .bottom_0()
-                .left_0()
-                .right_0()
-                .flex()
-                .justify_center()
-                .child(div().w_full().max_w(px(768.0)).child(composer))
-                .into_any_element()
-        } else {
-            div()
-                .relative()
-                .w_full()
-                .max_w(px(768.0))
-                .bg(theme.chat_canvas)
-                .child(composer)
-                .into_any_element()
-        }
+        div()
+            .relative()
+            .w_full()
+            .max_w(px(768.0))
+            .bg(theme.chat_canvas)
+            .child(composer)
+            .into_any_element()
     }
 
     /// Bring the pane's active chat to the front after a file-tab send so the

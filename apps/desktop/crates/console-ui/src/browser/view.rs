@@ -116,9 +116,12 @@ pub struct BrowserView {
     /// Last synced page-area size, for clamping the popover. Updated from
     /// the canvas in `render_page_area`.
     surface_size: std::rc::Rc<std::cell::Cell<Option<(f32, f32)>>>,
-    /// Owner callback: fired with the finished annotation on Attach.
-    annotation_handler:
-        Option<Rc<dyn Fn(console_core::BrowserElementAnnotation, &mut gpui::App) + 'static>>,
+    /// Owner callback: fired with the finished annotation on Attach. Returns
+    /// whether it landed on a chat composer (whose composer took keyboard
+    /// focus) — true suppresses the page refocus on the next render.
+    annotation_handler: Option<
+        Rc<dyn Fn(console_core::BrowserElementAnnotation, &mut gpui::App) -> bool + 'static>,
+    >,
     /// Results posted back by agent-run scripts, keyed by request id.
     script_results: HashMap<String, ScriptOutcome>,
     _subscriptions: Vec<Subscription>,
@@ -510,7 +513,7 @@ impl BrowserView {
 
     pub fn set_annotation_handler(
         &mut self,
-        handler: impl Fn(console_core::BrowserElementAnnotation, &mut gpui::App) + 'static,
+        handler: impl Fn(console_core::BrowserElementAnnotation, &mut gpui::App) -> bool + 'static,
     ) {
         self.annotation_handler = Some(Rc::new(handler));
     }
@@ -553,10 +556,15 @@ impl BrowserView {
         self.annotation_input.update(cx, |input, cx| {
             input.clear(cx);
         });
-        if let Some(handler) = &self.annotation_handler {
-            (handler)(annotation, cx);
-        }
-        self.refocus_page_pending = true;
+        // The handler answers whether the annotation landed on a chat
+        // composer: true means keyboard focus moved there, so refocusing the
+        // page would steal it straight back.
+        let routed_to_chat = if let Some(handler) = &self.annotation_handler {
+            handler(annotation, cx)
+        } else {
+            false
+        };
+        self.refocus_page_pending = !routed_to_chat;
         // Resume inspect so the next pick works.
         if self.inspecting
             && let Some(host) = &self.host
