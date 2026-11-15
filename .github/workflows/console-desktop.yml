@@ -1,7 +1,7 @@
-# Packages the GPUI desktop app for Intel + Apple Silicon macOS, and the
-# Windows x64 preview build, on each push to main. macOS assets go to the
-# rolling GitHub Release tagged `console-desktop` (latest always wins),
-# mirroring console-server.yml.
+# Packages the GPUI desktop app for Intel + Apple Silicon macOS on each push
+# to main, plus the Windows x64 preview build on manual runs only
+# (workflow_dispatch). macOS assets go to the rolling GitHub Release tagged
+# `console-desktop` (latest always wins), mirroring console-server.yml.
 #
 # Assets: Console-macos-x64.zip + Console-macos-arm64.zip (ditto-packed .app
 # bundles, ad-hoc signed — see apps/desktop/scripts/build.sh), plus
@@ -80,7 +80,11 @@ jobs:
   # Windows preview. Kept separate from the macOS matrix because packaging is
   # an NSIS installer zip, not an .app bundle. It feeds `publish` alongside the
   # macOS builds, so the Windows zip lands on the same rolling release.
+  #
+  # Manual runs only: pushes build and publish the macOS builds alone. Pick
+  # "Run workflow" to include the Windows installer.
   build-windows:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -123,11 +127,20 @@ jobs:
   # rolling release in parallel, racing inside action-gh-release. Builds
   # stay parallel; only this job mutates the release.
   #
-  # It waits on `build-windows` too: download-artifact can only fetch what
-  # already exists, so publishing when only the macOS matrix is done would
-  # race the Windows upload and ship a release without it.
+  # On manual runs it waits on `build-windows` too: download-artifact can
+  # only fetch what already exists, so publishing when only the macOS matrix
+  # is done would race the Windows upload and ship a release without it. On
+  # pushes build-windows is skipped and the release ships macOS-only (the
+  # unmatched Windows file pattern is a no-op for action-gh-release).
   publish:
     needs: [build, build-windows]
+    # Run when macOS succeeded and Windows either ran or was skipped (push).
+    # A failed Windows build on a manual run blocks publishing — never ship
+    # a partial release when one was explicitly requested.
+    if: >-
+      always() &&
+      needs.build.result == 'success' &&
+      (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped')
     runs-on: ubuntu-latest
 
     # Prevent overlapping pushes from modifying the rolling release together.
