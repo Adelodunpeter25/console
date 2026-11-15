@@ -284,6 +284,82 @@ func TestCodemodeToolReplacementDefinitions(t *testing.T) {
 	}
 }
 
+func TestCodemodeTodoPrimitive(t *testing.T) {
+	tmpDir := t.TempDir()
+	exec := newTestExecutor(t, tmpDir)
+
+	rt, err := codemode.NewRuntime(exec)
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Initialize todo list
+	initScript := `await todo("init", ["first task", "second task"]);`
+	res1, err := rt.Eval(ctx, initScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("todo init eval: %v", err)
+	}
+	env1 := res1.(tools.Envelope)
+	if env1.IsError || !strings.Contains(env1.Content.(string), "first task") {
+		t.Fatalf("expected initialized tasks, got: %v", env1.Content)
+	}
+
+	// Start task 1
+	startScript := `await todo("start", 1);`
+	res2, err := rt.Eval(ctx, startScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("todo start eval: %v", err)
+	}
+	env2 := res2.(tools.Envelope)
+	if env2.IsError || !strings.Contains(env2.Content.(string), "in_progress") {
+		t.Fatalf("expected in_progress task 1, got: %v", env2.Content)
+	}
+
+	// Done task 1
+	doneScript := `await todo("done", 1);`
+	res3, err := rt.Eval(ctx, doneScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("todo done eval: %v", err)
+	}
+	env3 := res3.(tools.Envelope)
+	if env3.IsError || !strings.Contains(env3.Content.(string), "completed") {
+		t.Fatalf("expected completed task 1, got: %v", env3.Content)
+	}
+}
+
+func TestCodemodeWebPrimitivesWiring(t *testing.T) {
+	tmpDir := t.TempDir()
+	exec := newTestExecutor(t, tmpDir)
+
+	rt, err := codemode.NewRuntime(exec)
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	ctx := context.Background()
+
+	checkScript := `
+		[
+			typeof fetch,
+			typeof webFetch,
+			typeof webSearch,
+			typeof todo,
+			typeof visualize,
+			typeof readChat
+		].every(t => t === "function");
+	`
+	res, err := rt.Eval(ctx, checkScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("web primitives check eval: %v", err)
+	}
+	env := res.(tools.Envelope)
+	if env.IsError || !strings.Contains(env.Content.(string), "true") {
+		t.Fatalf("expected all primitives to be functions, got: %v", env.Content)
+	}
+}
+
 func jsonString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)

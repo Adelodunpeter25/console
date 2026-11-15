@@ -437,10 +437,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	}
 	// Lazy built-in tools (CONSOLE_HARNESS_LAZY_TOOLS): the deferred six are
 	// held back; the loadTools loader itself is added once the registry
-	// exists (it needs to know whether MCP groups are in play). The ensure
-	// closure resolves lazyLoaderInst at call time.
-	lazy := agentflags.FromEnv(os.Getenv).LazyTools
+	// exists (it needs to know whether MCP groups are in play). Under Code Mode,
+	// all tools remain directly registered because model-facing declarations
+	// are already collapsed to REPL tools without per-turn schema bloat.
 	codeMode := agentflags.FromEnv(os.Getenv).CodeMode
+	lazy := agentflags.FromEnv(os.Getenv).LazyTools && !codeMode
 	var lazyLoaderInst *lazyLoader
 	var held []tools.Tool
 	if lazy {

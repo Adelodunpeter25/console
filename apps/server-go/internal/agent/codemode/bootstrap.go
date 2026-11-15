@@ -72,6 +72,55 @@ const bootstrapScript = `
         return await bridge.call({ tool: "list_dir", input: { path: String(path || ".") } });
     };
 
+    // Web primitives
+    globalThis.fetch = async function(url, options) {
+        const input = typeof url === "object" ? url : Object.assign({ url: String(url) }, options || {});
+        const res = await bridge.call({ tool: "webFetch", input: input });
+        if (typeof res === "string") return res;
+        if (Array.isArray(res) && res.length > 0 && res[0].text !== undefined) {
+            return res[0].text;
+        }
+        if (res && typeof res.text === "string") return res.text;
+        return typeof res === "object" ? JSON.stringify(res) : String(res);
+    };
+    globalThis.webFetch = globalThis.fetch;
+
+    globalThis.webSearch = async function(query, options) {
+        const input = typeof query === "object" ? query : Object.assign({ query: String(query) }, options || {});
+        const res = await bridge.call({ tool: "webSearch", input: input });
+        if (typeof res === "string") return res;
+        if (Array.isArray(res) && res.length > 0 && res[0].text !== undefined) {
+            return res[0].text;
+        }
+        return typeof res === "object" ? JSON.stringify(res) : String(res);
+    };
+
+    // Todo list helper
+    globalThis.todo = async function(op, arg) {
+        const input = { op: String(op) };
+        if (typeof arg === "number") {
+            input.index = arg;
+        } else if (Array.isArray(arg)) {
+            input.tasks = arg;
+        } else if (typeof arg === "string") {
+            input.tasks = [arg];
+        } else if (typeof arg === "object" && arg !== null) {
+            Object.assign(input, arg);
+        }
+        return await bridge.call({ tool: "todo", input: input });
+    };
+
+    // Artifacts & chat reference
+    globalThis.visualize = async function(spec) {
+        return await bridge.call({ tool: "visualize", input: { spec: spec } });
+    };
+
+    globalThis.readChat = async function(ref, limit) {
+        const input = { ref: String(ref) };
+        if (limit) input.limit = limit;
+        return await bridge.call({ tool: "readChat", input: input });
+    };
+
     // Tool discovery
     globalThis.searchTools = async function(query) {
         return await bridge.searchTools({ query: String(query || "") });

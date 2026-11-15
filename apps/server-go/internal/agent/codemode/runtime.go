@@ -177,8 +177,19 @@ func (r *Runtime) dispatchCall(ctx context.Context, args map[string]any) (*jsker
 	}
 
 	// Normalize aliases
-	if toolName == "edit_file" {
+	switch toolName {
+	case "edit_file":
 		toolName = "editFile"
+	case "read_chat":
+		toolName = "readChat"
+	case "web_fetch", "fetch":
+		toolName = "webFetch"
+	case "web_search":
+		toolName = "webSearch"
+	case "bash_job":
+		toolName = "bashJob"
+	case "batch_write":
+		toolName = "batchWrite"
 	}
 
 	input, _ := args["input"].(map[string]any)
@@ -378,6 +389,16 @@ func formatSummary(tool string, input map[string]any) string {
 		return fmt.Sprintf("grep(%v)", input["pattern"])
 	case "list_dir":
 		return fmt.Sprintf("list(%v)", input["path"])
+	case "webFetch":
+		return fmt.Sprintf("fetch(%v)", input["url"])
+	case "webSearch":
+		return fmt.Sprintf("webSearch(%v)", input["query"])
+	case "todo":
+		return fmt.Sprintf("todo(%v)", input["op"])
+	case "visualize":
+		return "visualize(...)"
+	case "readChat":
+		return fmt.Sprintf("readChat(%v)", input["ref"])
 	default:
 		return tool
 	}

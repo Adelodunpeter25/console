@@ -18,7 +18,7 @@ type codeResetInput struct{}
 func NewCodeTool(rt *Runtime) tools.Tool {
 	return tools.NewTool(
 		"code",
-		"Execute JavaScript in the session REPL to orchestrate file operations, shell commands, searches, and tools. Built-ins: $`cmd`, file(path), write(path, content), edit(path, old, new), glob(pat), grep(pat, opts), list(path), tools.X(args), searchTools(query), describeTool(name), log(...args), spawnContext(args).",
+		"Execute JavaScript in the session REPL to orchestrate file operations, shell commands, searches, and tools. Built-ins: $`cmd`, file(path), write(path, content), edit(path, old, new), glob(pat), grep(pat, opts), list(path), fetch(url), webSearch(query), todo(op, arg), visualize(spec), tools.X(args), searchTools(query), describeTool(name), log(...args), spawnContext(args).",
 		tools.TierExec,
 		func(ctx context.Context, in codeInput) (any, error) {
 			timeout := time.Duration(in.TimeoutMs) * time.Millisecond
@@ -58,6 +58,11 @@ Direct tools are replaced by asynchronous JavaScript functions inside the script
 - glob(pattern, [root]) finds matching file paths
 - grep(pattern, [options]) searches file contents
 - list(path) lists directory entries
+- fetch(url, [options]) fetches web page markdown or text
+- webSearch(query, [options]) searches the web (DuckDuckGo/Brave)
+- todo(op, [arg]) manages the session task list (e.g. todo('view'), todo('start', 1), todo('done', 1))
+- visualize(spec) renders charts/cards in chat
+- readChat(ref, [limit]) reads previous chat transcript
 - tools.<name>(input) invokes any registered tool (built-in or MCP)
 - searchTools(query) and describeTool(name) find and inspect available tool schemas
 - log(...args) outputs narration / intermediate text
