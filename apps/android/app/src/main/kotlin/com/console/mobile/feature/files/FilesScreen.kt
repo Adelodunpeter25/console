@@ -381,7 +381,7 @@ fun FilesScreen(onBack: () -> Unit) {
                     }
                 }
                 else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(flattenTree(entries, expanded, childrenByPath), key = { it.key }) { row ->
+                    items(flattenTree(entries, expanded, childrenByPath, loadingDirs), key = { it.key }) { row ->
                         when (row.kind) {
                             TreeKind.Loading -> Row(modifier = Modifier.fillMaxWidth().padding(start = (16 + row.depth * 18).dp).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
@@ -390,15 +390,7 @@ fun FilesScreen(onBack: () -> Unit) {
                             TreeKind.Empty -> Text("(empty)", color = NewTheme.TextMuted, fontSize = 13.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, modifier = Modifier.padding(start = (16 + row.depth * 18).dp, top = 2.dp, bottom = 8.dp))
                             TreeKind.Entry -> {
                                 val e = row.entry!!
-                                val isLoadingDir = e.is_dir && loadingDirs.contains(e.path)
-                                if (isLoadingDir && !childrenByPath.containsKey(e.path)) {
-                                    Row(modifier = Modifier.fillMaxWidth().padding(start = (16 + row.depth * 18).dp).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                                        Text(e.name, color = NewTheme.TextSecondary, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
-                                    }
-                                } else {
-                                    TreeRowEntry(entry = e, depth = row.depth, selected = selectedPath == e.path, expanded = expanded.contains(e.path), badge = gitBadges[e.path], onPressDir = { toggleDir(e.path) }, onPressFile = { selectFile(e.path, e.size) })
-                                }
+                                TreeRowEntry(entry = e, depth = row.depth, selected = selectedPath == e.path, expanded = expanded.contains(e.path), badge = gitBadges[e.path], onPressDir = { toggleDir(e.path) }, onPressFile = { selectFile(e.path, e.size) })
                             }
                         }
                     }
@@ -432,7 +424,7 @@ private suspend fun loadGitBadges(root: String?): Map<String, GitBadgeInfo> = wi
 private enum class TreeKind { Entry, Loading, Empty }
 private data class FlatRow(val key: String, val kind: TreeKind, val entry: FsTreeEntry? = null, val depth: Int)
 
-private fun flattenTree(roots: List<FsTreeEntry>, expanded: Set<String>, children: Map<String, List<FsTreeEntry>>): List<FlatRow> {
+private fun flattenTree(roots: List<FsTreeEntry>, expanded: Set<String>, children: Map<String, List<FsTreeEntry>>, loading: Set<String>): List<FlatRow> {
     val out = mutableListOf<FlatRow>()
     fun visit(list: List<FsTreeEntry>, depth: Int) {
         val sorted = list.sortedWith(compareBy({ !it.is_dir }, { it.name.lowercase() }))
@@ -440,12 +432,16 @@ private fun flattenTree(roots: List<FsTreeEntry>, expanded: Set<String>, childre
             out.add(FlatRow("row:${e.path}", TreeKind.Entry, e, depth))
             if (e.is_dir && expanded.contains(e.path)) {
                 val kids = children[e.path]
-                if (kids == null) {
-                    out.add(FlatRow("loading:${e.path}", TreeKind.Loading, null, depth + 1))
-                } else if (kids.isEmpty()) {
-                    out.add(FlatRow("empty:${e.path}", TreeKind.Empty, null, depth + 1))
-                } else {
-                    visit(kids, depth + 1)
+                when {
+                    // Only a fetch that is still running shows a spinner. An
+                    // expanded folder with no children and no fetch in flight
+                    // is one whose load failed, and a spinner there would spin
+                    // forever.
+                    kids == null -> if (loading.contains(e.path)) {
+                        out.add(FlatRow("loading:${e.path}", TreeKind.Loading, null, depth + 1))
+                    }
+                    kids.isEmpty() -> out.add(FlatRow("empty:${e.path}", TreeKind.Empty, null, depth + 1))
+                    else -> visit(kids, depth + 1)
                 }
             }
         }
