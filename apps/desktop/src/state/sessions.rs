@@ -1173,6 +1173,10 @@ impl ConsoleDesktopApp {
             }
             self.persist_layout();
             self.persist_workspaces();
+            // The swapped-out tree may have had the visible browser tab; the
+            // new tree's webview set is entirely different, so re-sync
+            // visibility or the old browser keeps painting above everything.
+            self.sync_workspace_webviews(cx);
         } else if self.selected_project_id.is_none() && target_project_id.is_some() {
             self.selected_project_id = target_project_id.clone();
             if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {

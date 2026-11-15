@@ -156,6 +156,10 @@ impl ConsoleDesktopApp {
                 state.branch_is_git_repository = false;
             }
             self.selected_project_id = new_workspace_id.clone();
+            // The old tree (with its browser tabs) just went into the stash,
+            // so its webviews must be hidden now: the native view paints
+            // above everything until a sync marks it inactive.
+            self.sync_workspace_webviews(cx);
             self.persist_layout();
             self.persist_workspaces();
         } else {
