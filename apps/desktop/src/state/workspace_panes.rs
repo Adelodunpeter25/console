@@ -952,6 +952,15 @@ impl ConsoleDesktopApp {
         chats.next().is_none().then_some(only)
     }
 
+    /// The pane whose chat owns the workspace-wide subtab state — staged file
+    /// comments and browser annotations. That is the selected chat's pane, or
+    /// the workspace's only chat while a terminal, file, or browser tab is in
+    /// front.
+    pub(crate) fn focused_chat_pane_id(&self) -> Option<String> {
+        self.active_chat_pane_id()
+            .or_else(|| self.sole_workspace_chat().map(|(pane_id, _)| pane_id))
+    }
+
     /// Target pane for secondary subtabs (Files, Diffs, Terminals, Browsers).
     /// If a chat is open, opens or targets the right-hand split so the chat stays pinned left.
     pub fn target_subtab_pane_id(&mut self) -> String {
