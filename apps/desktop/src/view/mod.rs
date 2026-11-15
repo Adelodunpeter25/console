@@ -712,7 +712,7 @@ impl Render for ConsoleDesktopApp {
                                 // A workspace with just one chat keeps it
                                 // highlighted while a terminal, file, or
                                 // browser tab is in front.
-                                .or_else(|| self.sole_workspace_chat().map(|(_, sid)| sid)),
+                                .or_else(|| self.focused_chat().map(|(_, sid)| sid)),
                             self.collapsed_groups.clone(),
                             self.sidebar_sort_mode,
                             self.collapsed_projects.clone(),

@@ -104,11 +104,7 @@ impl ConsoleDesktopApp {
         // The chat this annotation belongs to: the selected chat, or — while a
         // browser tab is in front — the workspace's only chat, so annotation
         // chips land in that composer just like file comments do.
-        let chat = self
-            .active_chat_pane_id()
-            .zip(self.selected_session_id.clone())
-            .or_else(|| self.sole_workspace_chat());
-        let Some((pane_id, session_id)) = chat else {
+        let Some((pane_id, session_id)) = self.focused_chat() else {
             // No chat to route to: the legacy fallback — the browser keeps its
             // own keyboard focus, nothing to focus.
             let fallback = self

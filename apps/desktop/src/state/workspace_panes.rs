@@ -934,12 +934,19 @@ impl ConsoleDesktopApp {
             .map(|leaf| leaf.id.clone())
     }
 
-    /// The active workspace's chat when it is the only one open, as
-    /// `(pane_id, session_id)`. With a terminal, file, or browser tab in
-    /// front no chat is selected, but a single-chat workspace still has an
-    /// unambiguous chat: the sidebar keeps it highlighted and browser
-    /// annotations land on its composer, the way file comments do.
-    pub fn sole_workspace_chat(&self) -> Option<(String, String)> {
+    /// The chat this workspace's composer state belongs to, as
+    /// `(pane_id, session_id)`: the selected chat, or — while a terminal,
+    /// file, or browser tab is in front — the workspace's only chat. Staged
+    /// file comments, browser annotations, and the sidebar highlight all
+    /// follow it.
+    ///
+    /// Distinct from [`Self::active_chat_pane_id`], which answers "is a chat
+    /// actually selected". Opening a subtab or falling back after a pane
+    /// close must not be redirected to a chat that is not in front.
+    pub(crate) fn focused_chat(&self) -> Option<(String, String)> {
+        if let Some(pane_id) = self.active_chat_pane_id() {
+            return self.selected_session_id.clone().map(|sid| (pane_id, sid));
+        }
         let mut chats = self.workspace_root.leaves().into_iter().flat_map(|leaf| {
             leaf.tabs.iter().filter_map(move |tab| match tab {
                 WorkspaceTabConfig::Chat { session_id, .. } => {
@@ -950,15 +957,6 @@ impl ConsoleDesktopApp {
         });
         let only = chats.next()?;
         chats.next().is_none().then_some(only)
-    }
-
-    /// The pane whose chat owns the workspace-wide subtab state — staged file
-    /// comments and browser annotations. That is the selected chat's pane, or
-    /// the workspace's only chat while a terminal, file, or browser tab is in
-    /// front.
-    pub(crate) fn focused_chat_pane_id(&self) -> Option<String> {
-        self.active_chat_pane_id()
-            .or_else(|| self.sole_workspace_chat().map(|(pane_id, _)| pane_id))
     }
 
     /// Target pane for secondary subtabs (Files, Diffs, Terminals, Browsers).

@@ -618,7 +618,7 @@ impl ConsoleDesktopApp {
     /// The committed comments as prompt blocks. A comment-only send is valid
     /// and carries only these blocks.
     pub(crate) fn staged_comment_prompt(&self, pane_id: &str) -> String {
-        let is_chat = self.focused_chat_pane_id().as_deref() == Some(pane_id);
+        let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
         let target_panes: Vec<String> = if is_chat {
             self.workspace_root
                 .leaves()
@@ -681,7 +681,7 @@ impl ConsoleDesktopApp {
 
     /// Unstage every comment once it has been sent. They stay saved.
     fn clear_staged_comments(&mut self, pane_id: &str, cx: &mut Context<Self>) {
-        let is_chat = self.focused_chat_pane_id().as_deref() == Some(pane_id);
+        let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
         let target_panes: Vec<String> = if is_chat {
             self.workspace_root
                 .leaves()
@@ -730,7 +730,7 @@ impl ConsoleDesktopApp {
         pane_id: &str,
         cx: &mut Context<Self>,
     ) -> Rc<Vec<ComposerComment>> {
-        let is_chat = self.focused_chat_pane_id().as_deref() == Some(pane_id);
+        let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
         let target_panes: Vec<String> = if is_chat {
             self.workspace_root
                 .leaves()
