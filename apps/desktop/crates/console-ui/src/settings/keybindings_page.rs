@@ -773,7 +773,9 @@ pub fn keybinding_categories(shortcuts: &[ShortcutInfo]) -> Vec<KeybindingCatego
             Some((category, description)) => (category.to_string(), description.to_string()),
             None => ("Other".to_string(), shortcut.action_name.clone()),
         };
-        let index = category_index(&category).unwrap_or_else(|| category_index("Other").unwrap());
+        let index = category_index(&category)
+            .or_else(|| category_index("Other"))
+            .unwrap_or(0);
         categories[index].entries.push(KeybindingEntry {
             action_name: shortcut.action_name.clone(),
             description,

@@ -1442,16 +1442,17 @@ pub fn install_selection_input(
                             .unwrap_or(false),
                         _ => text.is_some(),
                     };
-                if inside && cite_ready {
+                if inside && cite_ready && let Some(text) = text {
                     state.selection.borrow_mut().clear();
                     window.refresh();
                     match action {
                         PressAction::Copy => {
-                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text.unwrap()));
+                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
                         }
                         PressAction::Cite => {
-                            let quote = format_cite_quote(&text.unwrap()).unwrap();
-                            if let Some(handler) = state.cite_handler() {
+                            if let Some(quote) = format_cite_quote(&text)
+                                && let Some(handler) = state.cite_handler()
+                            {
                                 (handler)(quote, window, cx);
                             }
                         }

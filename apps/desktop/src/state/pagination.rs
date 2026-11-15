@@ -74,10 +74,12 @@ impl ConsoleDesktopApp {
         let Some(pagination) = self.pagination_for_session(&session_id) else {
             return;
         };
-        if !pagination.has_more || pagination.next_cursor.is_none() {
+        if !pagination.has_more {
             return;
         }
-        let before = pagination.next_cursor.unwrap();
+        let Some(before) = pagination.next_cursor else {
+            return;
+        };
         self.pagination_in_flight.insert(session_id.clone());
         // Mark loading
         self.transcript_for_pane(&pane_id)
