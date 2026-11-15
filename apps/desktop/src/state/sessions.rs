@@ -1248,8 +1248,11 @@ impl ConsoleDesktopApp {
             .as_ref()
             .map(|s| s.display_title().to_string())
             .unwrap_or_else(|| "Chat".to_string());
-        self.open_chat_tab(id.clone(), title);
+        self.open_chat_tab(id.clone(), title, cx);
         self.restore_subtabs_for_session(&id, cx);
+        // Restoring subtabs can replace or close panes; the swapped-in tree
+        // decides which webview may stay on screen.
+        self.sync_workspace_webviews(cx);
 
         if !is_different_project && prev_sid.as_deref() == Some(&id) {
             // Already on screen, so nothing reloads. Opening it from a banner

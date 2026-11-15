@@ -967,9 +967,16 @@ impl BrowserView {
     }
 
     /// Push the current show/hide decision to the native view, if it exists.
+    ///
+    /// Only hiding happens here: showing is owned by the page-area canvas,
+    /// which syncs this frame's bounds first. Showing from an event would put
+    /// a stale frame on screen — the host is created 800x600 at the window
+    /// origin, so a tab re-shown before its first paint flashes there.
     fn apply_native_visibility(&self) {
-        if let Some(host) = &self.host {
-            host.set_visible(self.should_show());
+        if let Some(host) = &self.host
+            && !self.should_show()
+        {
+            host.set_visible(false);
         }
     }
 
@@ -983,7 +990,9 @@ impl BrowserView {
         occluded: bool,
         cx: &mut Context<Self>,
     ) {
+        let was_visible = self.surface_visible;
         let occlusion_started = occluded && !self.occluded;
+        let occlusion_ended = !occluded && self.occluded;
         self.occluded = occluded;
         self.surface_visible = surface_visible;
 
@@ -1048,10 +1057,17 @@ impl BrowserView {
         }
 
         let show = self.should_show();
-        if !show && host.native_focus_within() {
-            self.reclaim_native_keyboard(cx);
+        if !show {
+            if host.native_focus_within() {
+                self.reclaim_native_keyboard(cx);
+            }
+            host.set_visible(false);
+        } else if !was_visible || occlusion_ended {
+            // The canvas shows the native view after syncing bounds, so a tab
+            // returning from another workspace or from under an overlay never
+            // flashes at its previous frame. Request the frame that paints it.
+            cx.notify();
         }
-        host.set_visible(show);
     }
 
     pub fn reclaim_native_keyboard(&mut self, cx: &mut Context<Self>) {

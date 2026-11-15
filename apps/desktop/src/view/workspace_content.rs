@@ -1473,7 +1473,7 @@ impl ConsoleDesktopApp {
             .find(|session| session.id == session_id)
             .map(|session| session.display_title().to_string())
             .unwrap_or_else(|| "Chat".to_string());
-        self.open_chat_tab_in_pane(pane_id, session_id, title);
+        self.open_chat_tab_in_pane(pane_id, session_id, title, cx);
         cx.notify();
     }
 }

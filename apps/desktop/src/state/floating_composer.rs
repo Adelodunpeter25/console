@@ -950,7 +950,12 @@ impl ConsoleDesktopApp {
         // The new chat replaces this pane's transcript, so the
         // chat it was showing keeps its position.
         self.save_pane_scroll_position(&target_pane, cx);
-        self.open_chat_tab_in_pane(&target_pane, new_session.id.clone(), "Generating title…");
+        self.open_chat_tab_in_pane(
+            &target_pane,
+            new_session.id.clone(),
+            "Generating title…",
+            cx,
+        );
         // The project folder's branch just changed, so the
         // footer's branch list is stale until it reloads.
         if let Some((_, cwd)) = checkout {

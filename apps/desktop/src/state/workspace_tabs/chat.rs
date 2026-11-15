@@ -839,6 +839,7 @@ impl ConsoleDesktopApp {
         &mut self,
         session_id: impl Into<String>,
         title: impl Into<String>,
+        cx: &mut Context<Self>,
     ) -> String {
         let session_id = session_id.into();
         let tab_id = format!("chat:{session_id}");
@@ -854,6 +855,7 @@ impl ConsoleDesktopApp {
         }) {
             workspace_ops::select_tab(&mut self.workspace_root, &existing_pane_id, &tab_id);
             self.active_pane_id = Some(existing_pane_id);
+            self.sync_workspace_webviews(cx);
             self.persist_workspaces();
             return tab_id;
         }
@@ -862,7 +864,7 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".into());
-        self.open_chat_tab_in_pane(&pane_id, session_id, title)
+        self.open_chat_tab_in_pane(&pane_id, session_id, title, cx)
     }
 
     pub fn open_chat_tab_in_pane(
@@ -870,6 +872,7 @@ impl ConsoleDesktopApp {
         pane_id: &str,
         session_id: impl Into<String>,
         title: impl Into<String>,
+        cx: &mut Context<Self>,
     ) -> String {
         let session_id = session_id.into();
         let tab_id = format!("chat:{session_id}");
@@ -883,6 +886,7 @@ impl ConsoleDesktopApp {
         {
             workspace_ops::select_tab(&mut self.workspace_root, pane_id, &tab_id);
             self.active_pane_id = Some(pane_id.to_string());
+            self.sync_workspace_webviews(cx);
             self.persist_workspaces();
             return tab_id;
         }
@@ -911,6 +915,7 @@ impl ConsoleDesktopApp {
         };
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
         self.active_pane_id = Some(pane_id.to_string());
+        self.sync_workspace_webviews(cx);
         self.persist_workspaces();
         format!("chat:{session_id}")
     }

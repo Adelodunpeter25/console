@@ -707,7 +707,7 @@ impl ConsoleDesktopApp {
                                             this.selected_session_id = Some(sid.clone());
                                         }
                                         Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
-                                        this.open_chat_tab_in_pane(&run_pane_id, sid.clone(), new_session.title.clone());
+                                        this.open_chat_tab_in_pane(&run_pane_id, sid.clone(), new_session.title.clone(), cx);
                                         this.set_session_running(&sid, Some(run_started_at));
                                         assigned_token = this.next_run_token_for_session(&sid);
                                         cx.notify();

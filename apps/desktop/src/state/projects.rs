@@ -615,6 +615,7 @@ impl ConsoleDesktopApp {
                                     &pane_id,
                                     new_session.id.clone(),
                                     "New Chat",
+                                    cx,
                                 );
                                 this.sync_workspace_webviews(cx);
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
