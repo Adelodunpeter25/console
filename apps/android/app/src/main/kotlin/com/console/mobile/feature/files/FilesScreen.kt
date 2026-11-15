@@ -49,6 +49,9 @@ import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
 import console.v1.FsTreeEntry
+import com.console.mobile.SharedNative.GitBadgeInfo
+import com.console.mobile.core.util.gitBadges
+import com.console.mobile.core.util.gitRoleColor
 import com.console.mobile.data.model.getFilePreviewBlock
 import com.console.mobile.core.util.resolveFilePath
 import com.console.mobile.data.model.isMarkdownPath
@@ -105,6 +108,8 @@ fun FilesScreen(onBack: () -> Unit) {
     var expanded by remember { mutableStateOf(setOf<String>()) }
     var childrenByPath by remember { mutableStateOf<Map<String, List<FsTreeEntry>>>(emptyMap()) }
     var loadingDirs by remember { mutableStateOf(setOf<String>()) }
+    // The git badge of every changed path, and of every folder above one.
+    var gitBadges by remember { mutableStateOf<Map<String, GitBadgeInfo>>(emptyMap()) }
     var selectedPath by remember { mutableStateOf<String?>(null) }
     // True while the open file came from a chat link rather than the tree.
     var openedFromLink by remember { mutableStateOf(false) }
@@ -136,6 +141,7 @@ fun FilesScreen(onBack: () -> Unit) {
         } finally {
             entriesLoading = false
         }
+        gitBadges = loadGitBadges(projectRoot)
     }
 
     LaunchedEffect(searchQuery, projectRoot) {
@@ -336,6 +342,7 @@ fun FilesScreen(onBack: () -> Unit) {
                         } finally {
                             entriesLoading = false
                         }
+                        gitBadges = loadGitBadges(projectRoot)
                     }
                 })
             },
@@ -368,7 +375,7 @@ fun FilesScreen(onBack: () -> Unit) {
                     } else {
                         LazyColumn(state = resultsListState, modifier = Modifier.fillMaxSize()) {
                             items(results, key = { it.path }) { r ->
-                                TreeRowEntry(entry = r, depth = 0, selected = false, expanded = false, onPressDir = { toggleDir(r.path) }, onPressFile = { selectFile(r.path, null) })
+                                TreeRowEntry(entry = r, depth = 0, selected = false, expanded = false, badge = gitBadges[r.path], onPressDir = { toggleDir(r.path) }, onPressFile = { selectFile(r.path, null) })
                             }
                         }
                     }
@@ -390,7 +397,7 @@ fun FilesScreen(onBack: () -> Unit) {
                                         Text(e.name, color = NewTheme.TextSecondary, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
                                     }
                                 } else {
-                                    TreeRowEntry(entry = e, depth = row.depth, selected = selectedPath == e.path, expanded = expanded.contains(e.path), onPressDir = { toggleDir(e.path) }, onPressFile = { selectFile(e.path, e.size) })
+                                    TreeRowEntry(entry = e, depth = row.depth, selected = selectedPath == e.path, expanded = expanded.contains(e.path), badge = gitBadges[e.path], onPressDir = { toggleDir(e.path) }, onPressFile = { selectFile(e.path, e.size) })
                                 }
                             }
                         }
@@ -400,6 +407,25 @@ fun FilesScreen(onBack: () -> Unit) {
         }
         @Suppress("UNUSED_EXPRESSION")
         fsState
+    }
+}
+
+/**
+ * The git badge of every changed path under [root], and of every folder above
+ * one — the rules come from the shared crate, so the phone and the desktop
+ * badge the same file the same way.
+ *
+ * Empty when the folder is not a repository or the server cannot be reached:
+ * the tree then shows no badges rather than wrong ones.
+ */
+private suspend fun loadGitBadges(root: String?): Map<String, GitBadgeInfo> = withContext(Dispatchers.IO) {
+    val repo = root ?: return@withContext emptyMap()
+    try {
+        val status = AppContainer.consoleApi.getGitStatus(repo) ?: return@withContext emptyMap()
+        val files = status.files
+        gitBadges(files.map { it.path }, files.map { it.status })
+    } catch (_: Exception) {
+        emptyMap()
     }
 }
 
@@ -429,7 +455,7 @@ private fun flattenTree(roots: List<FsTreeEntry>, expanded: Set<String>, childre
 }
 
 @Composable
-private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expanded: Boolean, onPressDir: () -> Unit, onPressFile: () -> Unit) {
+private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expanded: Boolean, badge: GitBadgeInfo?, onPressDir: () -> Unit, onPressFile: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth()
             .background(if (selected) Color.White.copy(alpha = 0.06f) else Color.Transparent)
@@ -447,14 +473,21 @@ private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expa
                 Icon(
                     if (expanded) TablerIcons.Outline.FolderOpen else TablerIcons.Outline.Folder,
                     contentDescription = null,
-                    tint = NewTheme.TextPrimary,
+                    // A folder carries the strongest badge beneath it, so the
+                    // tint says what changed inside it.
+                    tint = badge?.let { gitRoleColor(it.role) } ?: NewTheme.TextPrimary,
                     modifier = Modifier.size(20.dp),
                 )
             } else {
                 FileIcon(filename = entry.name, sizeDp = 20)
             }
         }
-        Text(entry.name, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 12.dp))
+        Box(modifier = Modifier.width(14.dp).padding(start = 6.dp)) {
+            badge?.takeIf { !entry.is_dir }?.let {
+                Text(it.label, color = gitRoleColor(it.role), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Text(entry.name, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 6.dp))
     }
 }
 

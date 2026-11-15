@@ -7,27 +7,6 @@ sealed interface ChangesRow {
     data class File(val key: String, val path: String, val name: String, val rel: String, val status: String, val additions: Int, val deletions: Int, val reviewed: Boolean = false, val turnIndex: Int = 0) : ChangesRow
 }
 
-fun statusLetter(s: String?): String {
-    val u = (s ?: "").uppercase()
-    return when (u) {
-        "A", "ADDED" -> "A"
-        "D", "DELETED" -> "D"
-        "R", "C", "RENAMED" -> "R"
-        "U" -> "U"
-        "?" -> "?"
-        else -> "M"
-    }
-}
-
-fun statusColorHex(s: String?): String = when (statusLetter(s)) {
-    "A" -> "#34d399"
-    "D" -> "#f87171"
-    "R" -> "#38bdf8"
-    "U" -> "#fb7185"
-    "?" -> "#a1a1aa"
-    else -> "#facc15"
-}
-
 fun dirOf(path: String): String {
     val i = path.lastIndexOf('/')
     return if (i > 0) path.substring(0, i) else ""

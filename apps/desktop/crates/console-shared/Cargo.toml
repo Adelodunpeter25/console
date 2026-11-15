@@ -31,6 +31,10 @@ name = "format_test"
 path = "tests/format_test.rs"
 
 [[test]]
+name = "git_badges_test"
+path = "tests/git_badges_test.rs"
+
+[[test]]
 name = "icons_test"
 path = "tests/icons_test.rs"
 

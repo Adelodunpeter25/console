@@ -30,7 +30,7 @@ import java.nio.ByteOrder
  */
 object SharedNative {
     /** Must match `ABI_VERSION` in `shared-native/src/shared.rs`. */
-    const val EXPECTED_ABI = 3
+    const val EXPECTED_ABI = 4
 
     /** Framed payloads start with `"CSHR"` and this version. */
     private const val MAGIC = 0x4353_4852
@@ -61,6 +61,8 @@ object SharedNative {
     private external fun fileCallDiffs(name: String, argumentsJson: String): ByteArray?
     private external fun nativeToolSummary(name: String, argumentsJson: String, cwd: String): String?
     private external fun nativeParseReadFileOutput(raw: String): ByteArray?
+    private external fun nativeGitBadgeTable(): ByteArray?
+    private external fun nativeGitBadges(paths: Array<String>, statuses: Array<String>): ByteArray?
 
     // ── iroh ──────────────────────────────────────────────────────────────
 
@@ -96,6 +98,63 @@ object SharedNative {
         val reader = (if (available) nativeParseReadFileOutput(raw) else null)?.let(::Reader)?.takeIf { it.valid }
             ?: return null
         return reader.str() to reader.str()
+    }
+
+    // ── Git badges ───────────────────────────────────────────────────────
+
+    /**
+     * How loudly a git badge reports itself. The rules live in
+     * `console-shared`; each client maps a role to its own palette, so the
+     * two cannot disagree about what a badge *means*.
+     */
+    enum class GitRole { SUCCESS, WARNING, DANGER, MUTED }
+
+    /** A git badge as the shared rules describe it: the letter, and the role. */
+    data class GitBadgeInfo(val label: String, val role: GitRole)
+
+    /** Every status code the shared rules know, by code. */
+    private val gitBadgeTable: Map<String, GitBadgeInfo> by lazy {
+        if (!available) emptyMap() else decodeGitBadgeTable(nativeGitBadgeTable())
+    }
+
+    /**
+     * The badge for a git status code (`M`, `A`, `D`, `R`, `?`), or null when
+     * the code has no badge — or when the shared library is missing, since the
+     * rules live there.
+     */
+    fun gitBadge(code: String): GitBadgeInfo? = gitBadgeTable[code]
+
+    /**
+     * The badge for every path a changed file sits under: the file itself and
+     * each folder above it, a folder carrying the strongest badge beneath it.
+     *
+     * [paths] and [statuses] are parallel arrays, one entry per changed file.
+     */
+    fun gitBadges(paths: List<String>, statuses: List<String>): Map<String, GitBadgeInfo> {
+        if (!available || paths.size != statuses.size) return emptyMap()
+        return decodeGitBadges(nativeGitBadges(paths.toTypedArray(), statuses.toTypedArray()))
+    }
+
+    private fun decodeGitBadgeTable(bytes: ByteArray?): Map<String, GitBadgeInfo> {
+        val reader = bytes?.let(::Reader)?.takeIf { it.valid } ?: return emptyMap()
+        val count = reader.u32()
+        val table = HashMap<String, GitBadgeInfo>(count)
+        repeat(count) {
+            val code = reader.str()
+            table[code] = reader.badge()
+        }
+        return table
+    }
+
+    private fun decodeGitBadges(bytes: ByteArray?): Map<String, GitBadgeInfo> {
+        val reader = bytes?.let(::Reader)?.takeIf { it.valid } ?: return emptyMap()
+        val count = reader.u32()
+        val badges = HashMap<String, GitBadgeInfo>(count)
+        repeat(count) {
+            val path = reader.str()
+            badges[path] = reader.badge()
+        }
+        return badges
     }
 
     // ── Icons ─────────────────────────────────────────────────────────────
@@ -213,6 +272,17 @@ object SharedNative {
                 DiffLine(kind, str(), old.takeIf { it >= 0 }, new.takeIf { it >= 0 })
             }
             return Diff(lines, added, removed)
+        }
+
+        fun badge(): GitBadgeInfo {
+            val label = str()
+            val role = when (u8()) {
+                0 -> GitRole.SUCCESS
+                1 -> GitRole.WARNING
+                2 -> GitRole.DANGER
+                else -> GitRole.MUTED
+            }
+            return GitBadgeInfo(label, role)
         }
     }
 }

@@ -24,7 +24,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,7 +39,8 @@ import com.console.mobile.core.util.ChangesRow
 import com.console.mobile.core.util.baseOf
 import com.console.mobile.core.util.buildRows
 import com.console.mobile.SharedNative
-import com.console.mobile.core.util.statusColorHex
+import com.console.mobile.core.util.changeSummary
+import com.console.mobile.core.util.gitBadgeColor
 import com.console.mobile.core.util.statusLetter
 import com.console.mobile.core.util.stripRepoPrefix
 import com.console.mobile.core.util.changeSummary
@@ -173,7 +173,7 @@ fun ChangesScreen(onBack: () -> Unit) {
                 if (change != null) {
                     SectionCard(modifier = Modifier.padding(bottom = 16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
-                            Text(statusLetter(change.status), color = parseChangeColor(statusColorHex(change.status)), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text(statusLetter(change.status), color = gitBadgeColor(change.status), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                             Text("+${change.additions}", color = NewTheme.Success, fontSize = 14.sp, fontFamily = ConsoleMonoFamily, modifier = Modifier.padding(start = 12.dp))
                             Text("-${change.deletions}", color = NewTheme.Danger, fontSize = 14.sp, fontFamily = ConsoleMonoFamily, modifier = Modifier.padding(start = 10.dp))
                             Box(modifier = Modifier.weight(1f))
@@ -285,7 +285,7 @@ private fun FileChangeRow(row: ChangesRow.File, onOpen: () -> Unit, onToggleRevi
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(statusLetter(row.status), color = parseChangeColor(statusColorHex(row.status)), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(14.dp))
+        Text(statusLetter(row.status), color = gitBadgeColor(row.status), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(14.dp))
         Box(modifier = Modifier.padding(start = 6.dp)) { FileIcon(filename = row.name, sizeDp = 20) }
         Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
             Text(row.name, color = NewTheme.TextPrimary, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -313,12 +313,4 @@ private fun ReviewCheckbox(checked: Boolean, onCheckedChange: () -> Unit) {
 private fun ChangesRow.keyOf(): String = when (this) {
     is ChangesRow.Folder -> key
     is ChangesRow.File -> key
-}
-
-private fun parseChangeColor(hex: String): Color {
-    return try {
-        Color(android.graphics.Color.parseColor(hex))
-    } catch (_: Exception) {
-        NewTheme.TextMuted
-    }
 }

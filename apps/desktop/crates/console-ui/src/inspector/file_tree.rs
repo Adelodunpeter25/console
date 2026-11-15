@@ -16,93 +16,36 @@ use crate::primitives::file_icons::file_icon_for_name;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 
-/// A file's Git state, reduced to what the tree paints. Variants are ordered
-/// by how loudly a folder should report them: a folder holding a deleted file
-/// and a new one shows the deletion.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum GitBadge {
-    Untracked,
-    Added,
-    Renamed,
-    Modified,
-    Deleted,
-    Conflict,
-}
+// The badge rules live in console-shared, which the Android client reaches
+// over JNI, so a file cannot be green on one client and grey on the other.
+// Only the palette is the desktop's own.
+pub use console_shared::git_badges::{GitBadge, GitBadgeRole};
 
-impl GitBadge {
-    /// Maps the server's status code (`M`/`A`/`D`/`R`/`U`/`?`); anything else
-    /// gets no badge rather than a guess.
-    pub fn from_code(code: &str) -> Option<Self> {
-        Some(match code {
-            "?" => Self::Untracked,
-            "A" => Self::Added,
-            "R" | "C" => Self::Renamed,
-            "M" => Self::Modified,
-            "D" => Self::Deleted,
-            "U" => Self::Conflict,
-            _ => return None,
-        })
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Untracked => "U",
-            Self::Added => "A",
-            Self::Renamed => "R",
-            Self::Modified => "M",
-            Self::Deleted => "D",
-            Self::Conflict => "!",
-        }
-    }
-
-    pub fn color(self, theme: &Theme) -> Hsla {
-        match self {
-            Self::Untracked | Self::Added => theme.success,
-            Self::Renamed => theme.text_tertiary,
-            Self::Modified => theme.warning,
-            Self::Deleted | Self::Conflict => theme.danger,
-        }
+/// The color a badge is drawn in: the desktop's theme, by the role the shared
+/// rules give it.
+pub fn git_badge_color(badge: GitBadge, theme: &Theme) -> Hsla {
+    match badge.role() {
+        GitBadgeRole::Success => theme.success,
+        GitBadgeRole::Warning => theme.warning,
+        GitBadgeRole::Danger => theme.danger,
+        GitBadgeRole::Muted => theme.text_tertiary,
     }
 }
 
 /// Git badge per absolute path, with every changed file's ancestors carrying
 /// the strongest badge beneath them (VS Code's folder tinting).
 ///
-/// Built once per status update, not per frame. The walk up from a file stops
-/// at the first ancestor already showing an equal or stronger badge: that
-/// ancestor's own ancestors were raised to at least that level when it was
-/// set, so the rest of the chain cannot change. A thousand files in one
-/// folder therefore cost one walk, not a thousand.
+/// A thin adapter over the shared rules: the desktop's own type becomes the
+/// shared one, and the rules run unchanged.
 pub fn aggregate_git_badges(changes: &[GitFileEntry]) -> HashMap<String, GitBadge> {
-    let mut badges: HashMap<String, GitBadge> = HashMap::with_capacity(changes.len() * 2);
-    for change in changes {
-        let Some(badge) = GitBadge::from_code(&change.status) else {
-            continue;
-        };
-        raise(&mut badges, &change.path, badge);
-        for ancestor in Path::new(&change.path).ancestors().skip(1) {
-            if ancestor.file_name().is_none() {
-                break;
-            }
-            let Some(path) = ancestor.to_str() else {
-                break;
-            };
-            if badges.get(path).is_some_and(|existing| *existing >= badge) {
-                break;
-            }
-            raise(&mut badges, path, badge);
-        }
-    }
-    badges
-}
-
-fn raise(badges: &mut HashMap<String, GitBadge>, path: &str, badge: GitBadge) {
-    match badges.get_mut(path) {
-        Some(existing) => *existing = (*existing).max(badge),
-        None => {
-            badges.insert(path.to_owned(), badge);
-        }
-    }
+    let files: Vec<console_shared::git_badges::ChangedFile<'_>> = changes
+        .iter()
+        .map(|change| console_shared::git_badges::ChangedFile {
+            path: &change.path,
+            status: &change.status,
+        })
+        .collect();
+    console_shared::git_badges::aggregate_git_badges(&files)
 }
 
 #[derive(Clone, Debug)]
@@ -167,7 +110,7 @@ impl FileTreeView {
 
         if matches_filter || node.is_dir {
             let badge = git_badges.get(&node.path).copied();
-            let status_color = badge.map(|badge| badge.color(theme));
+            let status_color = badge.map(|badge| git_badge_color(badge, theme));
             let on_toggle = on_toggle_folder.clone();
             let on_select = on_select_file.clone();
             let node_path = path.clone();
@@ -248,7 +191,7 @@ impl FileTreeView {
                                 .flex_none()
                                 .text_size(px(11.0))
                                 .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(badge.color(theme))
+                                .text_color(git_badge_color(badge, theme))
                                 .child(badge.label()),
                         )
                     });
