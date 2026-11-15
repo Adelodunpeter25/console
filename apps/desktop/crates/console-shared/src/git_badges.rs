@@ -113,10 +113,14 @@ pub fn aggregate_git_badges(files: &[ChangedFile<'_>]) -> HashMap<String, GitBad
             let Some(path) = ancestor.to_str() else {
                 break;
             };
-            if badges.get(path).is_some_and(|existing| *existing >= badge) {
-                break;
+            if let Some(existing) = badges.get_mut(path) {
+                if *existing >= badge {
+                    break;
+                }
+                *existing = badge;
+            } else {
+                badges.insert(path.to_owned(), badge);
             }
-            raise(&mut badges, path, badge);
         }
     }
     badges

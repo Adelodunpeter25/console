@@ -619,19 +619,20 @@ impl ConsoleDesktopApp {
     /// and carries only these blocks.
     pub(crate) fn staged_comment_prompt(&self, pane_id: &str) -> String {
         let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
-        let target_panes: Vec<String> = if is_chat {
-            self.workspace_root
-                .leaves()
-                .into_iter()
-                .map(|l| l.id.clone())
-                .collect()
+        let leaves = if is_chat {
+            self.workspace_root.leaves()
         } else {
-            vec![pane_id.to_string()]
+            Vec::new()
+        };
+        let pids: Vec<&str> = if is_chat {
+            leaves.iter().map(|l| l.id.as_str()).collect()
+        } else {
+            vec![pane_id]
         };
 
         let mut blocks = Vec::new();
-        for pid in target_panes {
-            let Some(pane) = self.workspace_pane_states.get(&pid) else {
+        for pid in pids {
+            let Some(pane) = self.workspace_pane_states.get(pid) else {
                 continue;
             };
             for comment in &pane.file_comments {
@@ -642,7 +643,7 @@ impl ConsoleDesktopApp {
                 if text.is_empty() {
                     continue;
                 }
-                let path = self.comment_display_path(&pid, &comment.path);
+                let path = self.comment_display_path(pid, &comment.path);
                 let mut lines = Self::comment_lines(comment.start_line, comment.end_line);
                 if comment.old_side {
                     lines.push_str(" (before the change)");
@@ -682,18 +683,19 @@ impl ConsoleDesktopApp {
     /// Unstage every comment once it has been sent. They stay saved.
     fn clear_staged_comments(&mut self, pane_id: &str, cx: &mut Context<Self>) {
         let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
-        let target_panes: Vec<String> = if is_chat {
-            self.workspace_root
-                .leaves()
-                .into_iter()
-                .map(|l| l.id.clone())
-                .collect()
+        let leaves = if is_chat {
+            self.workspace_root.leaves()
         } else {
-            vec![pane_id.to_string()]
+            Vec::new()
+        };
+        let pids: Vec<&str> = if is_chat {
+            leaves.iter().map(|l| l.id.as_str()).collect()
+        } else {
+            vec![pane_id]
         };
 
-        for pid in target_panes {
-            if let Some(pane) = self.workspace_pane_states.get_mut(&pid) {
+        for pid in pids {
+            if let Some(pane) = self.workspace_pane_states.get_mut(pid) {
                 for comment in &mut pane.file_comments {
                     comment.staged = false;
                 }
@@ -731,20 +733,30 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) -> Rc<Vec<ComposerComment>> {
         let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
-        let target_panes: Vec<String> = if is_chat {
-            self.workspace_root
-                .leaves()
-                .into_iter()
-                .map(|l| l.id.clone())
-                .collect()
+        let leaves = if is_chat {
+            self.workspace_root.leaves()
         } else {
-            vec![pane_id.to_string()]
+            Vec::new()
         };
+        let pids: Vec<&str> = if is_chat {
+            leaves.iter().map(|l| l.id.as_str()).collect()
+        } else {
+            vec![pane_id]
+        };
+
+        let has_any_staged = pids.iter().any(|pid| {
+            self.workspace_pane_states
+                .get(*pid)
+                .is_some_and(|pane| pane.file_comments.iter().any(|c| c.staged && c.state != FileCommentState::Draft))
+        });
+        if !has_any_staged {
+            return Rc::new(Vec::new());
+        }
 
         let entity = cx.entity().downgrade();
         let mut all_comments = Vec::new();
-        for pid in target_panes {
-            let Some(pane) = self.workspace_pane_states.get(&pid) else {
+        for pid in pids {
+            let Some(pane) = self.workspace_pane_states.get(pid) else {
                 continue;
             };
             for comment in &pane.file_comments {
@@ -752,10 +764,10 @@ impl ConsoleDesktopApp {
                     continue;
                 }
                 let edit_entity = entity.clone();
-                let edit_pane = pid.clone();
+                let edit_pane = pid.to_string();
                 let edit_id = comment.id;
                 let remove_entity = entity.clone();
-                let remove_pane = pid.clone();
+                let remove_pane = pid.to_string();
                 let remove_id = comment.id;
                 all_comments.push(ComposerComment::new(
                     comment.id,

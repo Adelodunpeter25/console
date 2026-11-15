@@ -712,7 +712,7 @@ impl Render for ConsoleDesktopApp {
                                 // A workspace with just one chat keeps it
                                 // highlighted while a terminal, file, or
                                 // browser tab is in front.
-                                .or_else(|| self.focused_chat().map(|(_, sid)| sid)),
+                                .or_else(|| self.focused_chat().map(|(_, sid)| sid.to_string())),
                             self.collapsed_groups.clone(),
                             self.sidebar_sort_mode,
                             self.collapsed_projects.clone(),
@@ -1045,10 +1045,14 @@ impl Render for ConsoleDesktopApp {
                                 let tab_follows: std::collections::HashMap<
                                     String,
                                     console_ui::workspace::TabStripFollow,
-                                > = self
-                                    .workspace_pane_states
-                                    .iter()
-                                    .map(|(k, v)| (k.clone(), v.tab_strip_follow.clone()))
+                                > = workspace_root
+                                    .leaves()
+                                    .into_iter()
+                                    .filter_map(|leaf| {
+                                        self.workspace_pane_states
+                                            .get(&leaf.id)
+                                            .map(|state| (leaf.id.clone(), state.tab_strip_follow.clone()))
+                                    })
                                     .collect();
                                 WorkspacePane::new(
                                     workspace_root,

@@ -352,6 +352,11 @@ impl ConsoleDesktopApp {
                     view.update(cx, |terminal, _| terminal.kill());
                 }
             }
+            for leaf in root.leaves() {
+                self.workspace_pane_states.remove(&leaf.id);
+                self.todo_items.remove(&leaf.id);
+                self.browser_annotations.remove(&leaf.id);
+            }
         }
         self.sweep_unreferenced_browser_views(cx);
         self.trim_file_caches(cx);
@@ -919,14 +924,22 @@ impl ConsoleDesktopApp {
     }
 
     /// Locate the pane currently hosting the active chat tab, if one is open.
-    pub fn active_chat_pane_id(&self) -> Option<String> {
+    pub fn active_chat_pane_ref(&self) -> Option<&str> {
         let session_id = self.selected_session_id.as_deref()?;
-        let chat_tab_id = format!("chat:{session_id}");
-        self.workspace_root
-            .leaves()
-            .into_iter()
-            .find(|leaf| leaf.tabs.iter().any(|t| t.id() == chat_tab_id))
-            .map(|leaf| leaf.id.clone())
+        for leaf in self.workspace_root.leaves() {
+            if leaf.tabs.iter().any(|t| match t {
+                WorkspaceTabConfig::Chat { session_id: s, .. } => s == session_id,
+                _ => false,
+            }) {
+                return Some(&leaf.id);
+            }
+        }
+        None
+    }
+
+    /// Locate the pane currently hosting the active chat tab, if one is open.
+    pub fn active_chat_pane_id(&self) -> Option<String> {
+        self.active_chat_pane_ref().map(str::to_owned)
     }
 
     /// The chat this workspace's composer state belongs to, as
@@ -938,20 +951,22 @@ impl ConsoleDesktopApp {
     /// Distinct from [`Self::active_chat_pane_id`], which answers "is a chat
     /// actually selected". Opening a subtab or falling back after a pane
     /// close must not be redirected to a chat that is not in front.
-    pub(crate) fn focused_chat(&self) -> Option<(String, String)> {
-        if let Some(pane_id) = self.active_chat_pane_id() {
-            return self.selected_session_id.clone().map(|sid| (pane_id, sid));
+    pub(crate) fn focused_chat(&self) -> Option<(&str, &str)> {
+        if let Some(pane_id) = self.active_chat_pane_ref() {
+            return self.selected_session_id.as_deref().map(|sid| (pane_id, sid));
         }
-        let mut chats = self.workspace_root.leaves().into_iter().flat_map(|leaf| {
-            leaf.tabs.iter().filter_map(move |tab| match tab {
-                WorkspaceTabConfig::Chat { session_id, .. } => {
-                    Some((leaf.id.clone(), session_id.clone()))
+        let mut sole = None;
+        for leaf in self.workspace_root.leaves() {
+            for tab in &leaf.tabs {
+                if let WorkspaceTabConfig::Chat { session_id, .. } = tab {
+                    if sole.is_some() {
+                        return None;
+                    }
+                    sole = Some((leaf.id.as_str(), session_id.as_str()));
                 }
-                _ => None,
-            })
-        });
-        let only = chats.next()?;
-        chats.next().is_none().then_some(only)
+            }
+        }
+        sole
     }
 
     /// Target pane for secondary subtabs (Files, Diffs, Terminals, Browsers).
