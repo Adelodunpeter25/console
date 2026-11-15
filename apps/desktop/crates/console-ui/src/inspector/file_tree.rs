@@ -282,11 +282,11 @@ pub fn build_tree_from_entries(entries: &[FsTreeEntry]) -> Vec<FileTreeNode> {
         return Vec::new();
     }
 
-    let mut all_paths = HashSet::new();
+    let mut all_paths: HashSet<&str> = HashSet::new();
     let mut children_by_parent: HashMap<String, Vec<FsTreeEntry>> = HashMap::new();
 
     for entry in entries {
-        all_paths.insert(entry.path.clone());
+        all_paths.insert(&entry.path);
         if let Some(parent) = Path::new(&entry.path).parent() {
             children_by_parent
                 .entry(parent.to_string_lossy().to_string())
@@ -310,7 +310,8 @@ pub fn build_tree_from_entries(entries: &[FsTreeEntry]) -> Vec<FileTreeNode> {
         .filter(|e| {
             Path::new(&e.path)
                 .parent()
-                .map(|p| !all_paths.contains(&p.to_string_lossy().to_string()))
+                .and_then(|p| p.to_str())
+                .map(|p| !all_paths.contains(p))
                 .unwrap_or(true)
         })
         .cloned()
