@@ -223,14 +223,15 @@ impl ConsoleDesktopApp {
         }
     }
 
-    /// Drop every worktree workspace that no live chat maps to — its worktree
-    /// (or all its chats) was deleted — and with it that workspace's tabs,
-    /// terminals, split layout and remembered state. If the workspace on
-    /// screen is one of them, fall back to the project's own workspace.
+    /// Drop every workspace that no live chat maps to — a worktree whose
+    /// checkout (or all its chats) was deleted, or a chat desk whose chat is
+    /// gone — and with it that workspace's tabs, terminals, split layout and
+    /// remembered state. If the workspace on screen is one of them, fall back
+    /// to the project's own desk.
     /// Skipped until projects have loaded: a chat started inside an existing
     /// worktree is only recognised as a worktree chat once its project's
     /// folder is known, and sweeping earlier would discard live workspaces.
-    pub(crate) fn sweep_dead_worktree_workspaces(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn sweep_dead_workspaces(&mut self, cx: &mut Context<Self>) {
         if self.projects.is_empty() {
             return;
         }

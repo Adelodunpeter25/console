@@ -464,7 +464,7 @@ impl ConsoleDesktopApp {
             .unwrap_or(self.approval_mode)
     }
 
-    pub(crate) fn pane_project_id(&self, pane_id: &str) -> Option<String> {
+    pub(crate) fn pane_workspace_key(&self, pane_id: &str) -> Option<String> {
         self.workspace_pane_states
             .get(pane_id)
             .and_then(|state| state.selected_project_id.clone())
@@ -894,7 +894,7 @@ impl ConsoleDesktopApp {
         let known_project_id = known_session.map(|s| self.workspace_key_for_header(s));
         let project_id = known_project_id
             .clone()
-            .unwrap_or_else(|| self.pane_project_id(pane_id));
+            .unwrap_or_else(|| self.pane_workspace_key(pane_id));
         let provider = known_session.map(|s| s.provider.clone());
         if known_project_id.is_some()
             && let Some(state) = self.workspace_pane_states.get_mut(pane_id)

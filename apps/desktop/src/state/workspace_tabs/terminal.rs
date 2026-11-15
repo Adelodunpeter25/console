@@ -39,7 +39,7 @@ impl ConsoleDesktopApp {
         let tab = WorkspaceTabConfig::Terminal {
             terminal_id: terminal_id.clone(),
             title: "Terminal".into(),
-            project_id: self.pane_project_id(pane_id),
+            project_id: self.pane_workspace_key(pane_id),
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);

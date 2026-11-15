@@ -864,7 +864,7 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) -> WorkspaceFooter {
         let entity = cx.entity().downgrade();
-        let pane_project_id = self.pane_real_project_id(pane_id);
+        let pane_workspace_key = self.pane_real_project_id(pane_id);
         let pane_branches = self.pane_branches(pane_id);
         let pane_branch_loaded = self.pane_branch_loaded(pane_id);
         let pane_is_git_repository = self.pane_is_git_repository(pane_id);
@@ -879,7 +879,7 @@ impl ConsoleDesktopApp {
 
         WorkspaceFooter::new(
             self.projects.clone(),
-            pane_project_id,
+            pane_workspace_key,
             pane_branches,
             pane_branch_loaded,
             pane_is_git_repository,

@@ -116,7 +116,7 @@ impl ConsoleDesktopApp {
         let tab = WorkspaceTabConfig::File {
             path: path.clone(),
             title,
-            project_id: self.pane_project_id(pane_id),
+            project_id: self.pane_workspace_key(pane_id),
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
 
@@ -426,7 +426,7 @@ impl ConsoleDesktopApp {
         let tab = WorkspaceTabConfig::Diff {
             path: path.clone(),
             title,
-            project_id: self.pane_project_id(pane_id),
+            project_id: self.pane_workspace_key(pane_id),
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
 

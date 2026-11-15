@@ -152,7 +152,7 @@ impl ConsoleDesktopApp {
             .and_then(|session_id| self.session_errors.get(&session_id))
             .or_else(|| {
                 self.error_message.as_ref().filter(|error| {
-                    !(error.needs_project && self.pane_project_id(pane_id).is_some())
+                    !(error.needs_project && self.pane_workspace_key(pane_id).is_some())
                 })
             })
     }

@@ -400,7 +400,7 @@ impl ConsoleDesktopApp {
             url: url.unwrap_or_default(),
             title,
             session_id: owner_session,
-            project_id: project_key.or_else(|| self.pane_project_id(pane_id)),
+            project_id: project_key.or_else(|| self.pane_workspace_key(pane_id)),
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
         (browser_id, tab)

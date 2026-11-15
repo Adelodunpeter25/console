@@ -78,7 +78,7 @@ impl ConsoleDesktopApp {
                                 // workspace too — unless the response may predate
                                 // a chat just created (it would look dead).
                                 if !created_meanwhile {
-                                    this.sweep_dead_worktree_workspaces(cx);
+                                    this.sweep_dead_workspaces(cx);
                                 }
                                 cx.notify();
                             });
@@ -452,8 +452,9 @@ impl ConsoleDesktopApp {
                 t.id() == format!("chat:{}", id)
             });
         }
-        // Deleting a worktree's last chat removes the worktree's workspace with it.
-        self.sweep_dead_worktree_workspaces(cx);
+        // Deleting a chat removes its own desk with it (worktree desks too,
+        // once their last chat goes).
+        self.sweep_dead_workspaces(cx);
         // The chat's agent browser tabs go with it.
         self.close_session_browser_tabs(&id, cx);
         // Drop all run-derived state for the deleted session, now keyed by session id.
@@ -883,7 +884,7 @@ impl ConsoleDesktopApp {
         // against that — skipped when already loaded for this folder.
         if !header.cwd.is_empty()
             && !self.pending_project_override.contains_key(&header.id)
-            && self.pane_project_id(pane_id).is_some()
+            && self.pane_workspace_key(pane_id).is_some()
             && self
                 .workspace_pane_states
                 .get(pane_id)
@@ -919,7 +920,7 @@ impl ConsoleDesktopApp {
         // just-cleared No project whose update hasn't landed): apply it and
         // skip header resolution plus the branch fetch.
         if let Some(override_project) = self.pending_project_override.get(&header.id).cloned() {
-            if override_project != self.pane_project_id(pane_id) {
+            if override_project != self.pane_workspace_key(pane_id) {
                 if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
                     state.selected_project_id = override_project.clone();
                     Rc::make_mut(&mut state.branches).clear();
@@ -958,7 +959,7 @@ impl ConsoleDesktopApp {
             (None, None) => true,
             _ => false,
         };
-        if same_project(&target_id, &self.pane_project_id(pane_id)) {
+        if same_project(&target_id, &self.pane_workspace_key(pane_id)) {
             return;
         }
         if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
@@ -1191,7 +1192,7 @@ impl ConsoleDesktopApp {
             // project: pin pane + global to explicit None and persist.
             if target_project_id.is_none() {
                 let mut changed = false;
-                if self.pane_project_id(active_pane_id).is_some() {
+                if self.pane_workspace_key(active_pane_id).is_some() {
                     if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
                         state.selected_project_id = None;
                         std::rc::Rc::make_mut(&mut state.branches).clear();

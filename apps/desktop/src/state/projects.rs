@@ -14,7 +14,7 @@ impl ConsoleDesktopApp {
     /// checkout, so everything that reads it — terminals, file tree, search,
     /// quick open, new chats — follows the checkout the workspace is for.
     pub(crate) fn selected_project_for_pane(&self, pane_id: &str) -> Option<ProjectInfo> {
-        let key = self.pane_project_id(pane_id)?;
+        let key = self.pane_workspace_key(pane_id)?;
         let (project_id, worktree) = console_core::split_workspace_key(&key);
         let mut project = self.projects.iter().find(|p| p.id == project_id)?.clone();
         if let Some(path) = worktree {
@@ -27,7 +27,7 @@ impl ConsoleDesktopApp {
     /// project lookups need this; the workspace key itself also encodes which
     /// worktree the pane is in.
     pub(crate) fn pane_real_project_id(&self, pane_id: &str) -> Option<String> {
-        self.pane_project_id(pane_id)
+        self.pane_workspace_key(pane_id)
             .map(|key| console_core::project_id_of_workspace_key(&key).to_owned())
     }
 
@@ -45,8 +45,8 @@ impl ConsoleDesktopApp {
     }
 
     /// The workspace a session's tabs live in: its worktree's workspace when
-    /// it runs outside the project folder, else the project's. Falls back to
-    /// what the header alone says while projects are still loading.
+    /// it runs outside the project folder, else the chat's own desk. Falls
+    /// back to what the header alone says while projects are still loading.
     pub(crate) fn workspace_key_for_header(
         &self,
         session: &console_core::SessionHeader,
