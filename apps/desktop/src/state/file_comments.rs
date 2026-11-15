@@ -623,7 +623,7 @@ impl ConsoleDesktopApp {
             self.workspace_root
                 .leaves()
                 .into_iter()
-                .map(|l| l.id)
+                .map(|l| l.id.clone())
                 .collect()
         } else {
             vec![pane_id.to_string()]
@@ -648,7 +648,9 @@ impl ConsoleDesktopApp {
                     lines.push_str(" (before the change)");
                 }
                 blocks.push(
-                    console_shared::composer::file_comments::format_file_comment(&path, &lines, text),
+                    console_shared::composer::file_comments::format_file_comment(
+                        &path, &lines, text,
+                    ),
                 );
             }
         }
@@ -684,7 +686,7 @@ impl ConsoleDesktopApp {
             self.workspace_root
                 .leaves()
                 .into_iter()
-                .map(|l| l.id)
+                .map(|l| l.id.clone())
                 .collect()
         } else {
             vec![pane_id.to_string()]
@@ -733,7 +735,7 @@ impl ConsoleDesktopApp {
             self.workspace_root
                 .leaves()
                 .into_iter()
-                .map(|l| l.id)
+                .map(|l| l.id.clone())
                 .collect()
         } else {
             vec![pane_id.to_string()]

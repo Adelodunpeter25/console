@@ -37,7 +37,12 @@ impl ConsoleDesktopApp {
         self.save_pane_scroll_position(pane_id, cx);
         self.close_workspace_tab(pane_id, tab_id, cx);
         self.active_pane_id = Some(pane_id.to_string());
-        if let Some(leaf) = self.workspace_root.leaf(pane_id) {
+        if let Some(leaf) = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|l| l.id == pane_id)
+        {
             if leaf.tabs.is_empty() && self.workspace_root.leaves().len() > 1 {
                 console_ui::workspace::ops::close_pane(&mut self.workspace_root, pane_id);
                 if let Some(chat_pane) = self.active_chat_pane_id() {
@@ -871,7 +876,7 @@ impl ConsoleDesktopApp {
             .leaves()
             .into_iter()
             .find(|leaf| leaf.tabs.iter().any(|t| t.id() == chat_tab_id))
-            .map(|leaf| leaf.id)
+            .map(|leaf| leaf.id.clone())
     }
 
     /// Target pane for secondary subtabs (Files, Diffs, Terminals, Browsers).
@@ -884,7 +889,7 @@ impl ConsoleDesktopApp {
                 .leaves()
                 .into_iter()
                 .find(|l| l.id != chat_pane_id)
-                .map(|l| l.id);
+                .map(|l| l.id.clone());
 
             if let Some(other_id) = other_pane {
                 other_id
@@ -912,7 +917,7 @@ impl ConsoleDesktopApp {
             .leaves()
             .into_iter()
             .find(|l| l.tabs.iter().any(|t| t.id() == chat_tab_id))
-            .map(|l| l.id);
+            .map(|l| l.id.clone());
 
         let Some(chat_pane_id) = chat_pane_id else {
             return;
@@ -942,7 +947,7 @@ impl ConsoleDesktopApp {
             .leaves()
             .into_iter()
             .find(|l| l.tabs.iter().any(|t| t.id() == chat_tab_id))
-            .map(|l| l.id);
+            .map(|l| l.id.clone());
 
         let Some(chat_pane_id) = chat_pane_id else {
             return;
@@ -955,7 +960,7 @@ impl ConsoleDesktopApp {
             .leaves()
             .into_iter()
             .find(|l| l.id != chat_pane_id)
-            .map(|l| l.id);
+            .map(|l| l.id.clone());
 
         if let Some(subtabs) = saved_subtabs {
             if !subtabs.is_empty() {
@@ -971,7 +976,8 @@ impl ConsoleDesktopApp {
                     return;
                 };
 
-                let active_tab_path = if let Some(leaf) = self.workspace_root.leaf_mut(&target_pane) {
+                let active_tab_path = if let Some(leaf) = self.workspace_root.leaf_mut(&target_pane)
+                {
                     leaf.tabs = subtabs;
                     leaf.active_tab_id = leaf.tabs.first().map(|t| t.id());
                     leaf.tabs.first().and_then(|t| match t {
@@ -995,8 +1001,14 @@ impl ConsoleDesktopApp {
         if let Some(subtab_pane) = existing_subtab_pane {
             let is_chat = self
                 .workspace_root
-                .leaf(&subtab_pane)
-                .is_some_and(|l| l.tabs.iter().any(|t| matches!(t, WorkspaceTabConfig::Chat { .. })));
+                .leaves()
+                .into_iter()
+                .find(|l| l.id == subtab_pane)
+                .is_some_and(|l| {
+                    l.tabs
+                        .iter()
+                        .any(|t| matches!(t, WorkspaceTabConfig::Chat { .. }))
+                });
             if !is_chat {
                 console_ui::workspace::ops::close_pane(&mut self.workspace_root, &subtab_pane);
                 self.persist_workspaces();
