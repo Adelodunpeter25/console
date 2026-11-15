@@ -312,36 +312,8 @@ func (r *Runtime) describeTool(ctx context.Context, args map[string]any) (*jsker
 		"parameters":  schema,
 	}
 
-	switch name {
-	case "browser":
-		payload["methods"] = []string{
-			"browser.open({url}) -> {tabId, url, title}",
-			"browser.goto({url, tabId?}) -> {tabId, url, title}",
-			"browser.snapshot({tabId?}) -> {text, elements: [{ref, role, name, value?}]}",
-			"browser.query({selector, tabId?}) -> {matches, text}",
-			"browser.click({selector? | text? | ref?})",
-			"browser.type({text, selector? | ref?})",
-			"browser.waitFor({selector? | text? | url?})",
-			"browser.extract({fields}) -> structured object",
-			"browser.tabs() -> [{id, url, title, active}]",
-			"browser.close({tabId}) -> {success: true}",
-		}
-		payload["codeExample"] = "const tab = await browser.open({ url: 'https://example.com' });\nconst snap = await browser.snapshot();\nawait browser.close({ tabId: tab.tabId });"
-	case "console":
-		payload["methods"] = []string{
-			"console.ports.list() -> [{port, target}]",
-			"console.ports.forward({port}) -> {port, target}",
-			"console.ports.unforward({port}) -> {success: true}",
-			"console.scripts.list() -> [{id, label, command}]",
-			"console.scripts.run({id}) -> {jobId}",
-			"console.scripts.status({id}) -> {running, pid?}",
-			"console.models() -> [{id, provider, thinkingLevels}]",
-			"console.sessions.list() -> [{id, title, status}]",
-			"console.sessions.create({prompt, model?, provider?}) -> {sessionId, started}",
-			"console.sessions.prompt({session_id, prompt}) -> {queued: true|false}",
-			"console.sessions.wait({session_ids, timeout_ms?}) -> {done, last_reply}",
-		}
-		payload["codeExample"] = "const ports = await console.ports.list();\nconst sessions = await console.sessions.list();"
+	if md, ok := t.(tools.MethodDescriptor); ok {
+		payload["methods"] = md.Methods()
 	}
 
 	raw, _ := json.Marshal(payload)

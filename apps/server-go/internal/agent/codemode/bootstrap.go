@@ -126,51 +126,51 @@ const bootstrapScript = `
         return await bridge.call({ tool: "readSkill", input: input });
     };
 
-    // Browser automation capability
-    function makeBrowserCaller() {
-        const fn = function(codeOrOpts) {
-            const code = typeof codeOrOpts === "string" ? codeOrOpts : (codeOrOpts && codeOrOpts.code ? codeOrOpts.code : String(codeOrOpts));
-            return bridge.call({ tool: "browser", input: { code: code } });
-        };
-        return new Proxy(fn, {
-            get(target, prop) {
-                if (typeof prop === "symbol" || prop === "then" || prop === "toJSON") {
-                    return undefined;
+    // Generic subkernel proxy factory for kernel-backed capabilities (browser, console, cua)
+    function makeSubkernelProxy(rootName, directCaller) {
+        function createTarget(path) {
+            const callable = function(...args) {
+                if (path.length === 0 && directCaller) {
+                    return directCaller(...args);
                 }
-                return async function(args) {
-                    const argStr = args ? JSON.stringify(args) : "{}";
-                    const code = "return await browser." + String(prop) + "(" + argStr + ");";
-                    return await bridge.call({ tool: "browser", input: { code: code } });
-                };
-            }
-        });
-    }
-    globalThis.browser = makeBrowserCaller();
-
-    // Attach desktop control plane methods to globalThis.console alongside console.log
-    if (globalThis.console) {
-        const namespaces = ["ports", "scripts", "sessions", "projects"];
-        for (let i = 0; i < namespaces.length; i++) {
-            const ns = namespaces[i];
-            globalThis.console[ns] = new Proxy({}, {
-                get(target, method) {
-                    if (typeof method === "symbol" || method === "then" || method === "toJSON") {
+                const argStr = args.length > 0 ? JSON.stringify(args[0]) : "{}";
+                const expr = "return await " + rootName + (path.length > 0 ? "." + path.join(".") : "") + "(" + argStr + ");";
+                return bridge.call({ tool: rootName, input: { code: expr } });
+            };
+            return new Proxy(callable, {
+                get(target, prop) {
+                    if (typeof prop === "symbol" || prop === "then" || prop === "toJSON" || prop === "constructor") {
                         return undefined;
                     }
-                    return async function(args) {
-                        const argStr = args ? JSON.stringify(args) : "{}";
-                        const code = "return await console." + ns + "." + String(method) + "(" + argStr + ");";
-                        return await bridge.call({ tool: "console", input: { code: code } });
-                    };
+                    return createTarget(path.concat(String(prop)));
                 }
             });
         }
-        globalThis.console.models = async function() {
-            return await bridge.call({ tool: "console", input: { code: "return await console.models();" } });
-        };
-        globalThis.console.approvalModes = async function() {
-            return await bridge.call({ tool: "console", input: { code: "return await console.approvalModes();" } });
-        };
+        return createTarget([]);
+    }
+
+    // browser capability
+    globalThis.browser = makeSubkernelProxy("browser", function(codeOrOpts) {
+        const code = typeof codeOrOpts === "string" ? codeOrOpts : (codeOrOpts && codeOrOpts.code ? codeOrOpts.code : String(codeOrOpts));
+        return bridge.call({ tool: "browser", input: { code: code } });
+    });
+
+    // console desktop control plane: dynamically proxies any console.<path>() method
+    // while preserving standard console.log and console.print intact.
+    if (globalThis.console) {
+        const originalLog = globalThis.console.log || globalThis.print;
+        const consoleSubkernel = makeSubkernelProxy("console", function(codeOrOpts) {
+            const code = typeof codeOrOpts === "string" ? codeOrOpts : (codeOrOpts && codeOrOpts.code ? codeOrOpts.code : String(codeOrOpts));
+            return bridge.call({ tool: "console", input: { code: code } });
+        });
+        globalThis.console = new Proxy(consoleSubkernel, {
+            get(target, prop) {
+                if (prop === "log" || prop === "print") {
+                    return originalLog;
+                }
+                return target[prop];
+            }
+        });
     }
 
     // Tool discovery

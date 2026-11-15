@@ -41,6 +41,8 @@ type Capability struct {
 	// GatedTools are its always-present tools. Until the reference is on, a
 	// call to one is refused and answered with the reference instead.
 	GatedTools []string
+	// Methods optionally describes the sub-methods exposed by the capability's tools.
+	Methods func() []string
 }
 
 // loadContext is what a Load needs to know about the run.
@@ -74,6 +76,7 @@ var Capabilities = []Capability{
 		AlwaysLoaded:   true,
 		Tier:           tools.TierRead,
 		GatedTools:     []string{"browser"},
+		Methods:        browseruse.MethodSignatures,
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := browseruse.NewLoader(s.browseruseManager, c.sessionID, c.browserHandler).Load(registry)
 			return err
@@ -102,6 +105,7 @@ var Capabilities = []Capability{
 		AlwaysLoaded:   true,
 		Tier:           tools.TierExec,
 		GatedTools:     []string{"console"},
+		Methods:        console.MethodSignatures,
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := console.NewLoader(s.consoleManager, c.sessionID, c.projectID, c.cwd, c.mode).Load(registry)
 			return err
@@ -197,6 +201,16 @@ func (g *referenceGate) Execute(ctx context.Context, arguments json.RawMessage) 
 	}
 	return nil, tools.NewToolError("Not run: you called %s before reading the %s skill. It is loaded now; read it and call %s again.\n\n%s",
 		g.Name(), g.capability.Name, g.Name(), g.capability.Text())
+}
+
+func (g *referenceGate) Methods() []string {
+	if g.capability.Methods != nil {
+		return g.capability.Methods()
+	}
+	if md, ok := g.Tool.(tools.MethodDescriptor); ok {
+		return md.Methods()
+	}
+	return nil
 }
 
 // allowedIn reports whether the mode permits the capability's tools.

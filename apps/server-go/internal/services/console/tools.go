@@ -44,6 +44,39 @@ func NewConsoleTool(manager *Manager, sessionID, projectID, cwd, mode string) to
 	return &consoleTool{Tool: inner, manager: manager, sessionID: sessionID, projectID: projectID, cwd: cwd, mode: mode}
 }
 
+// MethodSignatures lists the methods available on the console object.
+func MethodSignatures() []string {
+	return []string{
+		"console.ports.list()",
+		"console.ports.forward({port})",
+		"console.ports.unforward({port})",
+		"console.scripts.list()",
+		"console.scripts.run({id})",
+		"console.scripts.status({id})",
+		"console.scripts.output({id})",
+		"console.scripts.stop({id})",
+		"console.models()",
+		"console.approvalModes()",
+		"console.projects.list()",
+		"console.projects.add({directory, name?})",
+		"console.sessions.list({project_id?})",
+		"console.sessions.read({session_id, limit?})",
+		"console.sessions.create({prompt?, model?, provider?})",
+		"console.sessions.delete({session_id})",
+		"console.sessions.abort({session_id})",
+		"console.sessions.set_model({session_id, model})",
+		"console.sessions.set_approval({session_id, mode})",
+		"console.sessions.prompt({session_id, prompt})",
+		"console.sessions.wait({session_ids, timeout_ms?})",
+		"console.sessions.search({query})",
+		"console.sessions.fork({session_id, message_id})",
+	}
+}
+
+func (t *consoleTool) Methods() []string {
+	return MethodSignatures()
+}
+
 func (t *consoleTool) Execute(ctx context.Context, arguments json.RawMessage) (any, error) {
 	var in consoleInput
 	if err := json.Unmarshal(arguments, &in); err != nil {

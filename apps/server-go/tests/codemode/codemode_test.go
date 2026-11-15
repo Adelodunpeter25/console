@@ -382,7 +382,8 @@ func TestCodemodeWebPrimitivesWiring(t *testing.T) {
 			typeof browser.open === "function",
 			typeof browser.snapshot === "function",
 			typeof console.log === "function",
-			typeof console.ports === "object"
+			typeof console.ports === "function",
+			typeof console.ports.list === "function"
 		].every(t => t === true || t === "function");
 	`
 	res, err := rt.Eval(ctx, checkScript, 5*time.Second)
@@ -395,14 +396,29 @@ func TestCodemodeWebPrimitivesWiring(t *testing.T) {
 	}
 }
 
+type mockMethodTool struct {
+	tools.Tool
+	methods []string
+}
+
+func (m *mockMethodTool) Methods() []string {
+	return m.methods
+}
+
 func TestCodemodeDescribeCapabilityTools(t *testing.T) {
-	// Add browser and console tools to registry
-	mockBrowser := tools.NewTool("browser", "Browser automation tool", tools.TierRead, func(ctx context.Context, in map[string]any) (any, error) {
-		return "ok", nil
-	})
-	mockConsole := tools.NewTool("console", "Console control tool", tools.TierRead, func(ctx context.Context, in map[string]any) (any, error) {
-		return "ok", nil
-	})
+	// Add browser and console tools implementing MethodDescriptor to registry
+	mockBrowser := &mockMethodTool{
+		Tool: tools.NewTool("browser", "Browser automation tool", tools.TierRead, func(ctx context.Context, in map[string]any) (any, error) {
+			return "ok", nil
+		}),
+		methods: []string{"browser.open({url})", "browser.snapshot()"},
+	}
+	mockConsole := &mockMethodTool{
+		Tool: tools.NewTool("console", "Console control tool", tools.TierRead, func(ctx context.Context, in map[string]any) (any, error) {
+			return "ok", nil
+		}),
+		methods: []string{"console.ports.list()", "console.sessions.list()"},
+	}
 
 	reg := tools.NewRegistry(mockBrowser, mockConsole)
 	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess))
