@@ -1451,13 +1451,7 @@ impl ConsoleDesktopApp {
             }
         });
 
-        div()
-            .relative()
-            .w_full()
-            .max_w(px(768.0))
-            .bg(theme.chat_canvas)
-            .child(composer)
-            .into_any_element()
+        composer.into_any_element()
     }
 
     /// Bring the pane's active chat to the front after a file-tab send so the
