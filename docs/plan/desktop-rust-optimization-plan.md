@@ -12,4 +12,4 @@ Plan for Rust best practices, clippy fixes, panic prevention, and concurrency im
 - [x] **Task 6: Consolidate Terminal Split Locks** (`crates/console-core/src/services/terminal/mod.rs`)
 - [x] **Task 7: Add `[workspace.lints]` Configuration** (`apps/desktop/Cargo.toml`)
 - [x] **Task 8: Consolidate Global Mutexes in Address Cache** (`crates/console-ui/src/browser/address.rs`)
-- [ ] **Task 9: Refactor Mutually Exclusive Booleans into Enums** (`crates/console-ui/src/common/floating_composer/mod.rs`)
+- [x] **Task 9: Refactor Mutually Exclusive Booleans into Enums** (`crates/console-ui/src/common/floating_composer/mod.rs`)
