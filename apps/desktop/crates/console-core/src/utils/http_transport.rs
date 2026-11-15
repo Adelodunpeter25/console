@@ -157,15 +157,28 @@ impl HttpTransport {
     }
 }
 
-/// Decode already-buffered JSON on Tokio's blocking pool.
+/// Decode already-buffered JSON off the polling thread.
+///
+/// Prefers Tokio's blocking pool, but gpui executors poll service futures
+/// outside any runtime context where `spawn_blocking` panics — fall back to
+/// a plain thread there instead.
 pub async fn decode_json_bytes<T>(bytes: Vec<u8>) -> Result<T>
 where
     T: DeserializeOwned + Send + 'static,
 {
-    tokio::task::spawn_blocking(move || serde_json::from_slice::<T>(&bytes))
-        .await
-        .context("JSON decode worker failed")?
-        .context("Failed to decode JSON response")
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => handle
+            .spawn_blocking(move || serde_json::from_slice::<T>(&bytes))
+            .await
+            .context("JSON decode worker failed")?
+            .context("Failed to decode JSON response"),
+        Err(_) => {
+            let joined = std::thread::spawn(move || serde_json::from_slice::<T>(&bytes))
+                .join()
+                .map_err(|_| anyhow::anyhow!("JSON decode worker panicked"))?;
+            joined.context("Failed to decode JSON response")
+        }
+    }
 }
 
 /// Probe an arbitrary backend URL for reachability — used by the settings
