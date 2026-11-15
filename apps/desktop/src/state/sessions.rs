@@ -1090,6 +1090,10 @@ impl ConsoleDesktopApp {
         let target_project = self.target_project_for_session(id);
         // The workspace key: the project id, or project + worktree path.
         let target_project_id = self.target_workspace_for_session(id);
+        // The desk we're leaving goes cached with its live transcript entity,
+        // but the persisted scroll map is only as fresh as the last snapshot —
+        // record the outgoing chat's position before the tree swap.
+        self.save_pane_scroll_position(active_pane_id, cx);
 
         // A workspace switch occurs if target_project_id differs from current project,
         // or if switching from an unassociated workspace into a project when tabs are already open.
