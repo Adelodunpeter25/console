@@ -85,6 +85,10 @@ func builtinLabel(name string) string {
 		return "Reset Computer"
 	case "writePlan":
 		return "Write Plan"
+	case "code":
+		return "Code"
+	case "code_reset":
+		return "Reset Code"
 	default:
 		return ""
 	}
@@ -189,6 +193,8 @@ func ToolIconKey(name string) string {
 		return "terminal"
 	case "computer", "computer_reset":
 		return "globe"
+	case "code", "code_reset":
+		return "code"
 	case "writePlan":
 		return "file"
 	default:

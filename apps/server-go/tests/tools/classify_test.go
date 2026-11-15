@@ -21,6 +21,7 @@ func TestToolLabels(t *testing.T) {
 		"browser": "Browser", "visualize": "Visualize", "subagent": "Subagent",
 		"ask": "Ask Question", "askMany": "Ask Questions", "todo": "Todo",
 		"memory": "Memory", "read_chat": "Read Chat", "readSkill": "Read Skill", "loadTools": "Load Tools",
+		"code": "Code", "code_reset": "Reset Code",
 	}
 	for name, want := range cases {
 		if got := tools.ToolLabel(name); got != want {
@@ -72,6 +73,7 @@ func TestToolIconKey(t *testing.T) {
 		"read_file": "file", "list_dir": "folder", "grep": "search", "glob": "search",
 		"webSearch": "globe", "webFetch": "globe", "browser": "globe",
 		"visualize": "chart", "memory": "memory", "read_chat": "memory", "todo": "list",
+		"code": "code", "code_reset": "code",
 		"loadTools": "package", "mcp__gh__x": "package",
 		"unknown_thing": "wrench",
 	}

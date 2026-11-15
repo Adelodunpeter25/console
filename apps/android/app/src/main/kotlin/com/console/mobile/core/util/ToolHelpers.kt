@@ -29,6 +29,7 @@ import kotlinx.serialization.json.jsonPrimitive
 private val SERVER_KEY_ICONS: Map<String, ImageVector> = mapOf(
     "sparkle" to TablerIcons.Outline.Sparkles,
     "terminal" to TablerIcons.Outline.Terminal,
+    "code" to TablerIcons.Outline.Terminal2,
     "pencil" to TablerIcons.Outline.FilePencil,
     "file" to TablerIcons.Outline.FileText,
     "folder" to TablerIcons.Outline.FolderOpen,
