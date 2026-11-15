@@ -1442,7 +1442,10 @@ pub fn install_selection_input(
                             .unwrap_or(false),
                         _ => text.is_some(),
                     };
-                if inside && cite_ready && let Some(text) = text {
+                if inside
+                    && cite_ready
+                    && let Some(text) = text
+                {
                     state.selection.borrow_mut().clear();
                     window.refresh();
                     match action {

@@ -170,7 +170,9 @@ pub fn with_diff_popover(
         return chip;
     };
 
-    if open && matches!(body, Body::Loading) && !fetching
+    if open
+        && matches!(body, Body::Loading)
+        && !fetching
         && let Some(load_diff) = load_diff
     {
         state.update(cx, |s, _| s.fetching = true);

@@ -20,7 +20,10 @@ fn previous_turn_skips_turns_without_changes() {
     let changes = vec![change("d.rs", 4), change("b.rs", 2), change("a.rs", 0)];
     let previous = filter_changes_for_scope(&changes, ChangesScope::PreviousTurn);
     assert_eq!(paths(&previous), vec!["b.rs"]);
-    assert_eq!(count_changes_for_scope(&changes, ChangesScope::PreviousTurn), 1);
+    assert_eq!(
+        count_changes_for_scope(&changes, ChangesScope::PreviousTurn),
+        1
+    );
 }
 
 #[test]
@@ -35,7 +38,10 @@ fn this_turn_is_latest_turn() {
 fn previous_turn_empty_with_single_turn() {
     let changes = vec![change("a.rs", 0), change("b.rs", 0)];
     assert!(filter_changes_for_scope(&changes, ChangesScope::PreviousTurn).is_empty());
-    assert_eq!(count_changes_for_scope(&changes, ChangesScope::PreviousTurn), 0);
+    assert_eq!(
+        count_changes_for_scope(&changes, ChangesScope::PreviousTurn),
+        0
+    );
 }
 
 #[test]

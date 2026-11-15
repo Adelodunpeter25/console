@@ -168,22 +168,17 @@ impl RenderOnce for ReviewTab {
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .children(scoped.iter().map(|entry| {
-                                let is_collapsed = self.collapsed.contains(&entry.path);
-                                render_review_entry(
-                                    entry,
-                                    is_collapsed,
-                                    &on_toggle_collapsed,
-                                    &on_toggle_reviewed,
-                                    window,
-                                    cx,
-                                )
-                            })),
-                    )
+                    .child(div().flex().flex_col().children(scoped.iter().map(|entry| {
+                        let is_collapsed = self.collapsed.contains(&entry.path);
+                        render_review_entry(
+                            entry,
+                            is_collapsed,
+                            &on_toggle_collapsed,
+                            &on_toggle_reviewed,
+                            window,
+                            cx,
+                        )
+                    })))
                     .into_any_element()
             })
     }
@@ -225,10 +220,8 @@ fn render_review_entry(
                     entry.updated_at,
                     text.len()
                 );
-                let state = window.use_keyed_state(
-                    gpui::ElementId::Name(key.into()),
-                    cx,
-                    |_, cx| {
+                let state =
+                    window.use_keyed_state(gpui::ElementId::Name(key.into()), cx, |_, cx| {
                         build_editor_diff_capped(
                             text,
                             &entry.path,
@@ -237,8 +230,7 @@ fn render_review_entry(
                             cx,
                         )
                         .0
-                    },
-                );
+                    });
                 state.read(cx).clone()
             })
     };
@@ -253,11 +245,7 @@ fn render_review_entry(
         .child(
             div()
                 .id(gpui::ElementId::Name(
-                    format!(
-                        "review-header-{}-{}",
-                        entry.path, entry.turn_index
-                    )
-                    .into(),
+                    format!("review-header-{}-{}", entry.path, entry.turn_index).into(),
                 ))
                 .flex()
                 .items_center()
@@ -268,11 +256,7 @@ fn render_review_entry(
                 .cursor_pointer()
                 .hover(|s| s.bg(theme.overlay))
                 .on_click(move |_, window, cx| {
-                    (on_toggle_collapsed)(
-                        path_for_toggle.clone(),
-                        window,
-                        cx,
-                    );
+                    (on_toggle_collapsed)(path_for_toggle.clone(), window, cx);
                 })
                 .child(
                     div()
@@ -314,9 +298,7 @@ fn render_review_entry(
                                             .flex_1()
                                             .text_size(px(10.5))
                                             .font_family(MONO_FAMILY)
-                                            .text_color(
-                                                theme.text_ghost,
-                                            )
+                                            .text_color(theme.text_ghost)
                                             .child(short_dir),
                                     )
                                 }),
@@ -325,11 +307,7 @@ fn render_review_entry(
                 .child(
                     div()
                         .id(gpui::ElementId::Name(
-                            format!(
-                                "review-mark-{}-{}",
-                                entry.path, entry.turn_index
-                            )
-                            .into(),
+                            format!("review-mark-{}-{}", entry.path, entry.turn_index).into(),
                         ))
                         .flex()
                         .items_center()
@@ -338,23 +316,15 @@ fn render_review_entry(
                         .h(px(24.0))
                         .rounded(px(6.0))
                         .cursor_pointer()
-                        .when(reviewed, |el| {
-                            el.bg(theme.overlay_strong)
-                        })
+                        .when(reviewed, |el| el.bg(theme.overlay_strong))
                         .when(!reviewed, |el| {
-                            el.border_1()
-                                .border_color(theme.border_strong)
+                            el.border_1().border_color(theme.border_strong)
                         })
                         .hover(|s| s.bg(theme.overlay))
                         .on_click(move |event, window, cx| {
                             cx.stop_propagation();
                             let _ = event;
-                            (on_toggle_reviewed)(
-                                path_for_reviewed.clone(),
-                                turn_index,
-                                window,
-                                cx,
-                            );
+                            (on_toggle_reviewed)(path_for_reviewed.clone(), turn_index, window, cx);
                         })
                         .child(app_icon(
                             IconName::Check,
@@ -383,8 +353,7 @@ fn render_review_entry(
                 ),
         )
         .when_some(editor_diff, |el, diff| {
-            let height = (diff.line_count as f32 * DIFF_LINE_HEIGHT)
-                .min(REVIEW_DIFF_MAX_HEIGHT);
+            let height = (diff.line_count as f32 * DIFF_LINE_HEIGHT).min(REVIEW_DIFF_MAX_HEIGHT);
             el.child(
                 div().px(px(16.0)).pb(px(12.0)).child(
                     div()

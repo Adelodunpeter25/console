@@ -1,8 +1,8 @@
 //! "View all" session changes review tab: opening, fetching, and toggling
 //! per-file reviewed state.
 
-use console_core::types::ChangesScope;
 use console_core::WorkspaceTabConfig;
+use console_core::types::ChangesScope;
 use console_ui::workspace::ops as workspace_ops;
 use gpui::Context;
 

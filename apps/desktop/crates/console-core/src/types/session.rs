@@ -239,10 +239,7 @@ impl ChangesScope {
 
 /// Count items in a change list for the given scope without cloning or
 /// allocating `Vec<SessionFileChange>` or diff text.
-pub fn count_changes_for_scope(
-    changes: &[SessionFileChange],
-    scope: ChangesScope,
-) -> usize {
+pub fn count_changes_for_scope(changes: &[SessionFileChange], scope: ChangesScope) -> usize {
     if changes.is_empty() {
         return 0;
     }
@@ -266,10 +263,7 @@ pub fn count_changes_for_scope(
                 .filter(|&t| t < latest_turn)
                 .max();
             match previous_turn {
-                Some(previous) => changes
-                    .iter()
-                    .filter(|c| c.turn_index == previous)
-                    .count(),
+                Some(previous) => changes.iter().filter(|c| c.turn_index == previous).count(),
                 None => 0,
             }
         }

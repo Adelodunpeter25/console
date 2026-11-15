@@ -250,8 +250,7 @@ impl TerminalView {
                         cx.background_executor()
                             .spawn(async move {
                                 let full = handle_for_snapshot.snapshot_full().await;
-                                let (status, error) =
-                                    handle_for_snapshot.status_and_error().await;
+                                let (status, error) = handle_for_snapshot.status_and_error().await;
                                 (
                                     full.snapshot,
                                     full.mouse_mode,
