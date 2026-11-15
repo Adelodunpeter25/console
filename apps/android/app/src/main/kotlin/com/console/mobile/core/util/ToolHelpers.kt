@@ -13,6 +13,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ListCheck
 import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Search
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal
+import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import io.github.lyxnx.compose.ui.tablericons.outline.Tool
 import com.console.mobile.SharedNative
 import com.console.mobile.data.model.ToolCall
