@@ -141,6 +141,10 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        // A file tab in the chat's subtab split renders in a pane that never
+        // hosted a chat: give it its own composer and comment storage, or it
+        // would silently borrow the main pane's.
+        self.ensure_workspace_pane_state(pane_id, window, cx);
         let path = path.to_owned();
 
         let theme = Theme::current(cx);
@@ -512,6 +516,8 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        // Same as the file tab: the subtab split needs its own pane state.
+        self.ensure_workspace_pane_state(pane_id, window, cx);
         let path = path.to_owned();
 
         let (diff_result, raw_diff) = self
