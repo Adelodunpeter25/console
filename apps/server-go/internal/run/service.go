@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/codemode"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/memory"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
@@ -87,6 +88,8 @@ type Service struct {
 	consoleManager *console.Manager
 	// browseruseManager owns the /browser-use kernels and their owned tabs.
 	browseruseManager *browseruse.Manager
+	// codemodeManager owns the codemode REPL runtimes.
+	codemodeManager *codemode.Manager
 	// ctxCache holds the last context-window snapshot per session, keyed
 	// by message count so the footer ring never recomputes a walk it
 	// already did. Has its own mutex: read on the request path while a
@@ -108,7 +111,7 @@ type Service struct {
 }
 
 func NewService(sessions *services.SessionService) *Service {
-	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager(), consoleManager: console.NewManager(), browseruseManager: browseruse.NewManager(), background: background.NewManager()}
+	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager(), consoleManager: console.NewManager(), browseruseManager: browseruse.NewManager(), codemodeManager: codemode.NewManager(), background: background.NewManager()}
 	s.background.SetListener(s.backgroundWorkListener)
 	s.decisions.Notify = func(ctx context.Context, sessionID string, event loop.Event) {
 		s.notifyEvent(ctx, sessionID, event)
@@ -277,6 +280,13 @@ func (s *Service) notifier() *services.NotificationService {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.notify
+}
+
+// CodemodeManager returns the codemode session runtime manager.
+func (s *Service) CodemodeManager() *codemode.Manager {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.codemodeManager
 }
 
 // IsActive reports whether the session has an in-flight run.

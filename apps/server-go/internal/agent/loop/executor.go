@@ -31,6 +31,11 @@ func NewExecutor(registry *tools.Registry, mode permissions.Mode) *Executor {
 	return &Executor{registry: registry, mode: mode}
 }
 
+// Registry exposes the executor's tool registry.
+func (e *Executor) Registry() *tools.Registry {
+	return e.registry
+}
+
 // Execute resolves permissions, runs the tool, and always returns a
 // ToolResult (tool failures become isError results; only abort failures
 // surface as errors).

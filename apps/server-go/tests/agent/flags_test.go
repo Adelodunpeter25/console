@@ -10,6 +10,7 @@ import (
 func TestFlagsFromEnv(t *testing.T) {
 	env := map[string]string{
 		"CONSOLE_HARNESS_SPARSE_LINE_NUMBERS": "1",
+		"CONSOLE_HARNESS_CODEMODE":            "1",
 		"CONSOLE_HARNESS_UNKNOWN":             "1",
 	}
 	get := func(key string) string { return env[key] }
@@ -17,6 +18,9 @@ func TestFlagsFromEnv(t *testing.T) {
 	f := flags.FromEnv(get)
 	if !f.SparseLineNumbers {
 		t.Fatal("SparseLineNumbers should be on")
+	}
+	if !f.CodeMode {
+		t.Fatal("CodeMode should be on")
 	}
 	// Unknown CONSOLE_HARNESS_ vars are simply not fields yet; FromEnv must
 	// not fail on them.
@@ -27,5 +31,8 @@ func TestFlagsFromEnv(t *testing.T) {
 	off := flags.FromEnv(func(string) string { return "" })
 	if off.SparseLineNumbers {
 		t.Fatal("SparseLineNumbers defaults to off")
+	}
+	if off.CodeMode {
+		t.Fatal("CodeMode defaults to off")
 	}
 }

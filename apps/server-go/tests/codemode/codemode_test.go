@@ -1,0 +1,290 @@
+package tests
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/codemode"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+)
+
+func newTestExecutor(t *testing.T, tmpDir string) *loop.Executor {
+	t.Helper()
+	reg := tools.NewRegistry(tools.DefaultTools()...)
+	exec := loop.NewExecutor(reg, permissions.FullAccess)
+	exec.Guard = permissions.NewGuard(tmpDir)
+	return exec
+}
+
+func TestCodemodeBasicEvalAndPersistence(t *testing.T) {
+	tmpDir := t.TempDir()
+	exec := newTestExecutor(t, tmpDir)
+
+	rt, err := codemode.NewRuntime(exec)
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Variable assignment
+	res, err := rt.Eval(ctx, "var counter = 40;", 5*time.Second)
+	if err != nil {
+		t.Fatalf("eval 1: %v", err)
+	}
+	env, ok := res.(tools.Envelope)
+	if !ok || env.IsError {
+		t.Fatalf("unexpected result: %#v", res)
+	}
+
+	// Read and increment across turns
+	res2, err := rt.Eval(ctx, "counter += 2; counter;", 5*time.Second)
+	if err != nil {
+		t.Fatalf("eval 2: %v", err)
+	}
+	env2 := res2.(tools.Envelope)
+	if env2.IsError || !strings.Contains(env2.Content.(string), "42") {
+		t.Fatalf("expected 42 in output, got: %v", env2.Content)
+	}
+}
+
+func TestCodemodeFilePrimitives(t *testing.T) {
+	tmpDir := t.TempDir()
+	exec := newTestExecutor(t, tmpDir)
+
+	rt, err := codemode.NewRuntime(exec)
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	ctx := context.Background()
+	testFile := filepath.Join(tmpDir, "sample.txt")
+
+	// write() primitive
+	writeScript := `await write(` + jsonString(testFile) + `, "hello world\nline 2");`
+	res, err := rt.Eval(ctx, writeScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("write eval: %v", err)
+	}
+	if env := res.(tools.Envelope); env.IsError {
+		t.Fatalf("write failed: %v", env.Content)
+	}
+
+	// Verify on disk
+	data, err := os.ReadFile(testFile)
+	if err != nil || string(data) != "hello world\nline 2" {
+		t.Fatalf("expected file content on disk, got: %q, err: %v", string(data), err)
+	}
+
+	// file() primitive
+	readScript := `await file(` + jsonString(testFile) + `);`
+	res2, err := rt.Eval(ctx, readScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("file eval: %v", err)
+	}
+	if env := res2.(tools.Envelope); env.IsError || !strings.Contains(env.Content.(string), "hello world") {
+		t.Fatalf("expected content in read output, got: %v", env.Content)
+	}
+
+	// edit() primitive
+	editScript := `await edit(` + jsonString(testFile) + `, "hello world", "goodbye world");`
+	res3, err := rt.Eval(ctx, editScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("edit eval: %v", err)
+	}
+	if env := res3.(tools.Envelope); env.IsError {
+		t.Fatalf("edit failed: %v", env.Content)
+	}
+
+	// Verify updated on disk
+	updated, err := os.ReadFile(testFile)
+	if err != nil || !strings.HasPrefix(string(updated), "goodbye world") {
+		t.Fatalf("expected edited file on disk, got: %q", string(updated))
+	}
+}
+
+func TestCodemodeShellCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	exec := newTestExecutor(t, tmpDir)
+
+	rt, err := codemode.NewRuntime(exec)
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Tagged template execution with .text()
+	script1 := "(await $`echo \"code mode shell\"`).text();"
+	res1, err := rt.Eval(ctx, script1, 10*time.Second)
+	if err != nil {
+		t.Fatalf("shell text eval: %v", err)
+	}
+	env1 := res1.(tools.Envelope)
+	if env1.IsError || !strings.Contains(env1.Content.(string), "code mode shell") {
+		t.Fatalf("expected command output, got: %v", env1.Content)
+	}
+
+	// Function call $("cmd") with .text()
+	scriptFunc := `(await $("echo 'function syntax'")).text();`
+	resFunc, err := rt.Eval(ctx, scriptFunc, 10*time.Second)
+	if err != nil {
+		t.Fatalf("shell func eval: %v", err)
+	}
+	envFunc := resFunc.(tools.Envelope)
+	if envFunc.IsError || !strings.Contains(envFunc.Content.(string), "function syntax") {
+		t.Fatalf("expected function syntax command output, got: %v", envFunc.Content)
+	}
+
+	// JSON parsing with .json()
+	script2 := "(await $`echo '{\"score\": 99}'`).json().score;"
+	res2, err := rt.Eval(ctx, script2, 10*time.Second)
+	if err != nil {
+		t.Fatalf("shell json eval: %v", err)
+	}
+	env2 := res2.(tools.Envelope)
+	if env2.IsError || !strings.Contains(env2.Content.(string), "99") {
+		t.Fatalf("expected json value 99, got: %v", env2.Content)
+	}
+
+	// nothrow() suppression
+	script3 := `
+		const res = await $("false").nothrow();
+		({ code: res.code, ok: res.ok });
+	`
+	res3, err := rt.Eval(ctx, script3, 10*time.Second)
+	if err != nil {
+		t.Fatalf("shell nothrow eval: %v", err)
+	}
+	env3 := res3.(tools.Envelope)
+	if env3.IsError || !strings.Contains(env3.Content.(string), `"ok":false`) {
+		t.Fatalf("expected ok: false without throw, got: %v", env3.Content)
+	}
+}
+
+func TestCodemodeToolDiscoveryAndGenericCall(t *testing.T) {
+	tmpDir := t.TempDir()
+	exec := newTestExecutor(t, tmpDir)
+
+	rt, err := codemode.NewRuntime(exec)
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// searchTools
+	searchScript := `
+		const matches = await searchTools("grep");
+		matches.some(m => m.name === "grep");
+	`
+	res1, err := rt.Eval(ctx, searchScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("searchTools eval: %v", err)
+	}
+	env1 := res1.(tools.Envelope)
+	if env1.IsError || !strings.Contains(env1.Content.(string), "true") {
+		t.Fatalf("expected searchTools to find grep, got: %v", env1.Content)
+	}
+
+	// describeTool
+	descScript := `
+		const desc = await describeTool("grep");
+		desc.name === "grep" && !!desc.parameters;
+	`
+	res2, err := rt.Eval(ctx, descScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("describeTool eval: %v", err)
+	}
+	env2 := res2.(tools.Envelope)
+	if env2.IsError || !strings.Contains(env2.Content.(string), "true") {
+		t.Fatalf("expected describeTool for grep, got: %v", env2.Content)
+	}
+}
+
+func TestCodemodeReset(t *testing.T) {
+	tmpDir := t.TempDir()
+	exec := newTestExecutor(t, tmpDir)
+
+	rt, err := codemode.NewRuntime(exec)
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	ctx := context.Background()
+
+	_, _ = rt.Eval(ctx, "var secretValue = 12345;", 5*time.Second)
+
+	// Call code_reset tool
+	resetTool := codemode.NewCodeResetTool(rt)
+	raw, _ := json.Marshal(map[string]any{})
+	out, err := resetTool.Execute(ctx, raw)
+	if err != nil {
+		t.Fatalf("code_reset failed: %v", err)
+	}
+	if !strings.Contains(fmt.Sprint(out), "reset") {
+		t.Fatalf("unexpected reset output: %v", out)
+	}
+
+	// Verify variable is gone
+	res, _ := rt.Eval(ctx, "typeof secretValue;", 5*time.Second)
+	env := res.(tools.Envelope)
+	if !strings.Contains(env.Content.(string), "undefined") {
+		t.Fatalf("expected secretValue to be undefined after reset, got: %v", env.Content)
+	}
+}
+
+func TestCodemodeToolReplacementDefinitions(t *testing.T) {
+	// Build registry with standard tools plus codemode tools
+	reg := tools.NewRegistry(tools.DefaultTools()...)
+	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess))
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	reg.Add(codemode.NewCodeTool(rt), codemode.NewCodeResetTool(rt))
+
+	// Simulate the tool replacement filter used in turns.go
+	filterDefs := func() []tools.Definition {
+		var defs []tools.Definition
+		for _, def := range reg.Definitions() {
+			switch def.Name {
+			case "code", "code_reset", "ask", "askMany":
+				defs = append(defs, def)
+			}
+		}
+		return defs
+	}
+
+	filtered := filterDefs()
+	if len(filtered) == 0 {
+		t.Fatal("expected at least code and code_reset tools")
+	}
+
+	for _, d := range filtered {
+		if d.Name != "code" && d.Name != "code_reset" && d.Name != "ask" && d.Name != "askMany" {
+			t.Fatalf("unexpected tool in filtered definitions: %s", d.Name)
+		}
+	}
+
+	// Verify standard tools (e.g. read_file, bash) are still in the underlying registry
+	if _, err := reg.Get("read_file"); err != nil {
+		t.Fatalf("read_file should still be registered: %v", err)
+	}
+	if _, err := reg.Get("bash"); err != nil {
+		t.Fatalf("bash should still be registered: %v", err)
+	}
+}
+
+func jsonString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
