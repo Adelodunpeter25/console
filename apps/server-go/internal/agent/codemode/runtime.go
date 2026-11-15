@@ -382,6 +382,9 @@ func formatSummary(tool string, input map[string]any) string {
 		if len(cmd) > 50 {
 			cmd = cmd[:47] + "..."
 		}
+		if cwd, ok := input["cwd"].(string); ok && cwd != "" {
+			return fmt.Sprintf("$ [%s] %s", cwd, cmd)
+		}
 		return fmt.Sprintf("$ %s", cmd)
 	case "glob":
 		return fmt.Sprintf("glob(%v)", input["pattern"])

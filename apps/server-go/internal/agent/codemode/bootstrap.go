@@ -126,6 +126,10 @@ const bootstrapScript = `
         return await bridge.searchTools({ query: String(query || "") });
     };
 
+    globalThis.listTools = async function() {
+        return await bridge.searchTools({ query: "" });
+    };
+
     globalThis.describeTool = async function(name) {
         return await bridge.describeTool({ name: String(name) });
     };
@@ -205,8 +209,9 @@ const bootstrapScript = `
     }
 
     class CommandPromise {
-        constructor(cmd) {
+        constructor(cmd, opts) {
             this.cmd = cmd;
+            this.opts = opts || {};
             this._noThrow = false;
             this._promise = null;
         }
@@ -219,14 +224,22 @@ const bootstrapScript = `
         async _exec() {
             if (!this._promise) {
                 this._promise = (async () => {
+                    const input = { command: this.cmd };
+                    if (this.opts.cwd) input.cwd = String(this.opts.cwd);
+                    if (this.opts.env) input.env = this.opts.env;
+                    if (this.opts.timeoutMs) input.timeoutMs = this.opts.timeoutMs;
+
+                    const startTime = Date.now();
                     let res;
                     let threw = false;
                     try {
-                        res = await bridge.call({ tool: "bash", input: { command: this.cmd } });
+                        res = await bridge.call({ tool: "bash", input: input });
                     } catch (err) {
                         threw = true;
                         res = err.message || String(err);
                     }
+                    const durationMs = Date.now() - startTime;
+
                     let rawOutput = "";
                     let isError = threw;
                     if (typeof res === "string") {
@@ -261,9 +274,11 @@ const bootstrapScript = `
 
                     return {
                         code: exitCode,
+                        exitCode: exitCode,
                         stdout: stdout,
                         stderr: stderr,
                         ok: exitCode === 0,
+                        durationMs: durationMs,
                         text() { return stdout; },
                         json() { return JSON.parse(stdout); }
                     };
@@ -295,9 +310,16 @@ const bootstrapScript = `
         }
     }
 
-    globalThis.$ = function(strings, ...values) {
-        const cmd = buildCmd(strings, values);
-        return new CommandPromise(cmd);
+    globalThis.$ = function(first, ...rest) {
+        if (typeof first === "object" && !Array.isArray(first) && first !== null) {
+            const opts = first;
+            return function(strings, ...values) {
+                const cmd = buildCmd(strings, values);
+                return new CommandPromise(cmd, opts);
+            };
+        }
+        const cmd = buildCmd(first, rest);
+        return new CommandPromise(cmd, {});
     };
 })();
 `

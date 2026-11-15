@@ -51,20 +51,32 @@ func NewCodeResetTool(rt *Runtime) tools.Tool {
 const SetupHint = `# Code Mode Active
 You interact with the workspace and tools through the ` + "`code`" + ` tool (JavaScript REPL).
 Direct tools are replaced by asynchronous JavaScript functions inside the script:
-- $` + "`cmd`" + ` runs shell commands (e.g. ` + "`await $'git status'`" + `). Returns object with .text(), .json(), and .nothrow()
-- file(path) reads file text contents
-- write(path, content) writes/overwrites file
-- edit(path, oldStr, newStr) performs exact replacement
-- glob(pattern, [root]) finds matching file paths
-- grep(pattern, [options]) searches file contents
-- list(path) lists directory entries
-- fetch(url, [options]) fetches web page markdown or text
-- webSearch(query, [options]) searches the web (DuckDuckGo/Brave)
-- todo(op, [arg]) manages the session task list (e.g. todo('view'), todo('start', 1), todo('done', 1))
-- visualize(spec) renders charts/cards in chat
-- readChat(ref, [limit]) reads previous chat transcript
-- tools.<name>(input) invokes any registered tool (built-in or MCP)
-- searchTools(query) and describeTool(name) find and inspect available tool schemas
-- log(...args) outputs narration / intermediate text
-- spawnContext({ prompt, role }) runs a subagent
+- $` + "`cmd`" + ` or $("cmd") runs shell commands. Custom options: $({ cwd: "dir" })` + "`cmd`" + `.
+  Returns { code, exitCode, stdout, stderr, ok, durationMs, text(), json() }.
+  Throws on non-zero exit code unless .nothrow() is called: (await $` + "`git status`" + `).nothrow()
+- file(path) reads file text contents. Relative to process CWD or absolute.
+- write(path, content) writes/overwrites file (creates parent directories automatically).
+- edit(path, oldStr, newStr) performs exact replacement (throws if oldStr is missing or not unique).
+- glob(pattern, [root]) finds matching file paths.
+- grep(pattern, [options]) searches file contents.
+- list(path) lists directory entries.
+- fetch(url, [options]) fetches web page markdown or text.
+- webSearch(query, [options]) searches the web (DuckDuckGo/Brave).
+- todo(op, [arg]) manages the session task list (e.g. todo('view'), todo('start', 1), todo('done', 1)).
+- listTools() lists all registered harness and MCP tools with summaries.
+- searchTools(query) and describeTool(name) find and inspect available tool schemas.
+- tools.<name>(input) invokes any registered tool directly.
+- visualize(spec) renders charts/cards in chat.
+- readChat(ref, [limit]) reads previous chat transcript.
+- log(...args) outputs narration / intermediate text.
+- spawnContext({ prompt, role }) runs a subagent.
+
+Pattern example:
+` + "```js" + `
+const status = (await $` + "`git status --porcelain`" + `).text();
+if (status) log("Working tree dirty:", status);
+await edit("config.json", '"debug": false', '"debug": true');
+const test = await $` + "`npm test`" + `.nothrow();
+if (!test.ok) throw new Error("Tests failed: " + test.stderr);
+` + "```" + `
 `

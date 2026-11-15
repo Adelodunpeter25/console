@@ -155,18 +155,33 @@ func TestCodemodeShellCommand(t *testing.T) {
 		t.Fatalf("expected json value 99, got: %v", env2.Content)
 	}
 
-	// nothrow() suppression
+	// nothrow() suppression with structured metadata
 	script3 := `
 		const res = await $("false").nothrow();
-		({ code: res.code, ok: res.ok });
+		({ code: res.code, exitCode: res.exitCode, ok: res.ok, hasDuration: typeof res.durationMs === "number" });
 	`
 	res3, err := rt.Eval(ctx, script3, 10*time.Second)
 	if err != nil {
 		t.Fatalf("shell nothrow eval: %v", err)
 	}
 	env3 := res3.(tools.Envelope)
-	if env3.IsError || !strings.Contains(env3.Content.(string), `"ok":false`) {
-		t.Fatalf("expected ok: false without throw, got: %v", env3.Content)
+	if env3.IsError || !strings.Contains(env3.Content.(string), `"ok":false`) || !strings.Contains(env3.Content.(string), `"hasDuration":true`) {
+		t.Fatalf("expected ok: false and durationMs without throw, got: %v", env3.Content)
+	}
+
+	// Custom options $({ cwd: ... })
+	subDir := filepath.Join(tmpDir, "sub")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatalf("mkdir sub: %v", err)
+	}
+	scriptCwd := `(await $({ cwd: ` + jsonString(subDir) + ` })("pwd")).text();`
+	resCwd, err := rt.Eval(ctx, scriptCwd, 10*time.Second)
+	if err != nil {
+		t.Fatalf("shell cwd eval: %v", err)
+	}
+	envCwd := resCwd.(tools.Envelope)
+	if envCwd.IsError || !strings.Contains(envCwd.Content.(string), "sub") {
+		t.Fatalf("expected output with sub directory, got: %v", envCwd.Content)
 	}
 }
 
@@ -207,6 +222,20 @@ func TestCodemodeToolDiscoveryAndGenericCall(t *testing.T) {
 	env2 := res2.(tools.Envelope)
 	if env2.IsError || !strings.Contains(env2.Content.(string), "true") {
 		t.Fatalf("expected describeTool for grep, got: %v", env2.Content)
+	}
+
+	// listTools
+	listToolsScript := `
+		const all = await listTools();
+		Array.isArray(all) && all.length > 5 && all.some(t => t.name === "bash");
+	`
+	res3, err := rt.Eval(ctx, listToolsScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("listTools eval: %v", err)
+	}
+	env3 := res3.(tools.Envelope)
+	if env3.IsError || !strings.Contains(env3.Content.(string), "true") {
+		t.Fatalf("expected listTools to return tool list, got: %v", env3.Content)
 	}
 }
 
