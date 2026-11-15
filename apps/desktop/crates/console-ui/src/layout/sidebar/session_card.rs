@@ -35,6 +35,12 @@ pub struct SidebarHoverManager {
     pub generation: u64,
 }
 
+impl Default for SidebarHoverManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SidebarHoverManager {
     pub fn new() -> Self {
         Self {

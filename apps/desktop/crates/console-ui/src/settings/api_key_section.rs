@@ -223,9 +223,10 @@ impl RenderOnce for ApiKeyProviderSection {
             );
         }
 
-        if self.form_open {
-            if let Some(input) = self.key_input.clone() {
-                // Clone for the widget, keep the original for the click
+        if self.form_open
+            && let Some(input) = self.key_input.clone()
+        {
+            // Clone for the widget, keep the original for the click
                 // handler that reads the typed value.
                 let submit_input = input.clone();
                 row = row.child(
@@ -270,7 +271,6 @@ impl RenderOnce for ApiKeyProviderSection {
                         }),
                 );
             }
-        }
 
         row.into_any_element()
     }

@@ -1932,7 +1932,7 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
             !view.streaming.get() && !view.source_code_blocks.borrow().contains(&key.index)
         });
     let mode_toggle = is_markdown_fence(language)
-        .then(|| ctx.cache)
+        .then_some(ctx.cache)
         .flatten()
         .filter(|view| !view.streaming.get())
         .map(|view| (view.source_code_blocks.clone(), rendered_markdown));

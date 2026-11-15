@@ -303,9 +303,10 @@ impl RenderOnce for SidebarSessionItem {
                     .when(self.has_draft, |el| el.child(draft_badge(theme))),
             );
 
-        if is_card_active && !is_renaming {
-            if let Some(bounds) = probe_bounds.get() {
-                let hover_mgr_card = hover_mgr.clone();
+        if is_card_active && !is_renaming
+            && let Some(bounds) = probe_bounds.get()
+        {
+            let hover_mgr_card = hover_mgr.clone();
                 let model_name = if !session.model_id.is_empty() {
                     let base = console_shared::format::format_model_name(&session.model_id);
                     let thinking = session
@@ -389,7 +390,6 @@ impl RenderOnce for SidebarSessionItem {
                     .with_priority(100),
                 );
             }
-        }
 
         if is_renaming {
             let on_commit = on_commit_rename;
