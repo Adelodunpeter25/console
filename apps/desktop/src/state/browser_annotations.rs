@@ -103,6 +103,27 @@ impl ConsoleDesktopApp {
             .or_else(|| self.pane_hosting_browser(browser_id))
             .unwrap_or_else(|| "pane-main".to_string());
         self.append_annotations_for_pane(&pane_id, vec![annotation]);
+        // Focus stays in the browser webview after Attach, so the prompt the
+        // user types next would vanish into the page. Move it to the chat
+        // composer the chip was staged on.
+        let entity = cx.entity().downgrade();
+        cx.defer(move |cx| {
+            let Some(window) = cx.active_window() else {
+                return;
+            };
+            let _ = window.update(cx, |_, window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        // Both the GPUI focus chain and the input's own
+                        // cursor/blink state need to know.
+                        let composer = this.composer_for_pane(&pane_id);
+                        let focus = composer.read(cx).focus();
+                        window.focus(&focus, cx);
+                        composer.update(cx, |input, cx| input.focus());
+                    });
+                }
+            });
+        });
         self.schedule_drafts_save(cx);
         cx.notify();
     }
