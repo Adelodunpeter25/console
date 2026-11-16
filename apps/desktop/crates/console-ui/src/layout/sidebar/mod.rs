@@ -1212,7 +1212,7 @@ impl RenderOnce for SidebarView {
             .flex_none()
             .with_spring(
                 "sidebar-spring-width",
-                SpringAnimation::new(SpringConfig::new(700.0, 52.0, 1.0))
+                SpringAnimation::new(SpringConfig::new(1800.0, 85.0, 1.0))
                     .to(target_width)
                     .with_epsilon(0.5),
                 move |container, current_width| {
