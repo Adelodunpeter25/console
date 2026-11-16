@@ -91,22 +91,22 @@ impl TranscriptView {
         let button = |id: &'static str, icon: IconName, is_left: bool| {
             let mut el = div()
                 .id(id)
-                .w(px(32.0))
-                .h(px(32.0))
+                .w(px(29.0))
+                .h(px(29.0))
                 .flex()
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
                 .hover(|element| element.bg(theme.overlay_strong))
-                .child(app_icon(icon, 15.0, theme.text_secondary));
+                .child(app_icon(icon, 14.0, theme.text_secondary));
             if both {
                 if is_left {
-                    el = el.rounded_tl(px(16.0)).rounded_bl(px(16.0));
+                    el = el.rounded_tl(px(14.5)).rounded_bl(px(14.5));
                 } else {
-                    el = el.rounded_tr(px(16.0)).rounded_br(px(16.0));
+                    el = el.rounded_tr(px(14.5)).rounded_br(px(14.5));
                 }
             } else {
-                el = el.rounded(px(16.0));
+                el = el.rounded(px(14.5));
             }
             el
         };
@@ -115,7 +115,7 @@ impl TranscriptView {
             .flex()
             .items_center()
             .overflow_hidden()
-            .rounded(px(17.0))
+            .rounded(px(15.5))
             .border_1()
             .border_color(theme.border)
             .bg(theme.raised);
@@ -197,7 +197,7 @@ impl TranscriptView {
                     }))
                     .absolute()
                     .right_0()
-                    .bottom(px(44.0))
+                    .bottom(px(41.0))
                     .w(px(340.0))
                     .max_w_full()
                     .h(px(visible_rows.max(1) as f32 * PROMPT_ROW_HEIGHT + 8.0))
@@ -232,7 +232,7 @@ impl TranscriptView {
                     .left_0()
                     .right_0()
                     .bottom(px(10.0))
-                    .h(px(34.0))
+                    .h(px(31.0))
                     .w_full()
                     .px(px(20.0))
                     .flex()
@@ -243,7 +243,7 @@ impl TranscriptView {
                             .relative()
                             .w_full()
                             .max_w(px(768.0))
-                            .h(px(34.0))
+                            .h(px(31.0))
                             .flex()
                             .items_center()
                             .when_some(popup_element, |el, popup| el.child(popup))
