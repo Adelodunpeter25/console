@@ -414,11 +414,11 @@ impl ConsoleDesktopApp {
                         this.open_diff_contents.clear();
                         this.changes_review_data.clear();
                         this.changes_review_collapsed.clear();
-                        this.inspector_tree = std::rc::Rc::new(Vec::new());
-                        this.inspector_working_changes = std::rc::Rc::new(Vec::new());
-                        this.inspector_git_badges =
+                        this.file_tree_nodes = std::rc::Rc::new(Vec::new());
+                        this.working_changes = std::rc::Rc::new(Vec::new());
+                        this.git_badges =
                             std::rc::Rc::new(std::collections::HashMap::new());
-                        this.inspector_selected_path = None;
+                        this.file_tree_selected_path = None;
                         this.inspector_session_changes = std::rc::Rc::new(Vec::new());
 
                         // Reload data from new server

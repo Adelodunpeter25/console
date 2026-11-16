@@ -80,16 +80,26 @@ fn command_palette_entries(
         })
         .icon(IconName::SidebarMinimalistic)
         .shortcut(kbd("⌘B", "Ctrl+B")),
-        PaletteEntry::new("toggle-right-sidebar", "Toggle Inspector", {
+        PaletteEntry::new("open-files", "Open Files", {
             let entity = entity.clone();
             move |_window, cx| {
                 if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| this.toggle_right_sidebar(cx));
+                    app.update(cx, |this, cx| this.open_file_tree_tab(cx));
                 }
             }
         })
-        .icon(IconName::PanelRightOpen)
-        .shortcut(kbd("⌥B", "Alt+B")),
+        .icon(IconName::FolderOpen)
+        .shortcut_if(cfg!(target_os = "macos"), "⌃F"),
+        PaletteEntry::new("open-changes", "Open Changes", {
+            let entity = entity.clone();
+            move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.open_changes_for_active_pane(cx));
+                }
+            }
+        })
+        .icon(IconName::FileDiff)
+        .shortcut_if(cfg!(target_os = "macos"), "⌃G"),
         PaletteEntry::new("open-settings", "Open Settings", {
             let entity = entity.clone();
             move |window, cx| {
@@ -101,6 +111,19 @@ fn command_palette_entries(
         .icon(IconName::Settings)
         .shortcut(kbd("⌘,", "Ctrl+,")),
     ];
+    #[cfg(target_os = "macos")]
+    entries.push(
+        PaletteEntry::new("open-devices", "Open Devices", {
+            let entity = entity.clone();
+            move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.open_device_tab(cx));
+                }
+            }
+        })
+        .icon(IconName::Smartphone)
+        .shortcut("⌃D"),
+    );
     // Browser tabs are deferred on Windows.
     #[cfg(not(target_os = "windows"))]
     entries.push(

@@ -128,7 +128,7 @@ impl ConsoleDesktopApp {
         }
 
         if let Some(console_core::WorkspaceTabConfig::Device { .. }) = active_tab {
-            let device = self.device_view_for_inspector(window, cx);
+            let device = self.device_view(window, cx);
             let occluded = self.any_palette_open(cx);
             device.update(cx, |view, cx| view.sync_native_state(true, occluded, cx));
             return div().size_full().child(device).into_any_element();
@@ -552,7 +552,7 @@ impl ConsoleDesktopApp {
             .file_tree_data
             .get(&tab_id)
             .cloned()
-            .unwrap_or_else(|| self.inspector_tree.clone());
+            .unwrap_or_else(|| self.file_tree_nodes.clone());
         let expanded = self
             .file_tree_expanded
             .get(&tab_id)
@@ -580,10 +580,10 @@ impl ConsoleDesktopApp {
             .child(console_ui::FileTreeView::new(
                 tree,
                 expanded,
-                self.inspector_selected_path.clone(),
+                self.file_tree_selected_path.clone(),
                 String::new(),
                 on_toggle_folder,
-                self.inspector_git_badges.clone(),
+                self.git_badges.clone(),
                 on_select_file,
             ))
             .into_any_element()

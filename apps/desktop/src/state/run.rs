@@ -1051,7 +1051,7 @@ impl ConsoleDesktopApp {
                         );
                     });
                 }
-                self.maybe_refresh_inspector(cx);
+                self.refresh_file_tree(cx);
             }
             AgentSessionEvent::TodoUpdate { items, .. } => {
                 self.set_todo_items_for_session(run_session_id, items);
@@ -1198,7 +1198,7 @@ impl ConsoleDesktopApp {
             AgentSessionEvent::TurnEnd { .. } => {
                 self.set_pending_question_for_session(run_session_id, None);
                 self.clear_question_selected_for_session(run_session_id);
-                self.maybe_refresh_inspector(cx);
+                self.refresh_file_tree(cx);
             }
             AgentSessionEvent::SessionEnd => {
                 // A mid-chain sessionEnd (server auto-popped a queued prompt
@@ -1225,7 +1225,7 @@ impl ConsoleDesktopApp {
                         self.schedule_read_after_finish(run_session_id, cx);
                     }
                 }
-                self.maybe_refresh_inspector(cx);
+                self.refresh_file_tree(cx);
             }
             AgentSessionEvent::SessionStart => {
                 self.set_agent_notice_for_session(run_session_id, None);

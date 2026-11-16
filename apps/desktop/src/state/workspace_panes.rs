@@ -56,7 +56,7 @@ impl ConsoleDesktopApp {
         let transcript = self.transcript_for_pane(pane_id);
 
         if next_session == previous_session {
-            self.maybe_refresh_inspector(cx);
+            self.refresh_file_tree(cx);
             cx.notify();
             return;
         }
@@ -80,7 +80,7 @@ impl ConsoleDesktopApp {
             }
         }
 
-        self.maybe_refresh_inspector(cx);
+        self.refresh_file_tree(cx);
         self.sync_workspace_webviews(cx);
         cx.notify();
     }
@@ -367,7 +367,7 @@ impl ConsoleDesktopApp {
         self.persist_layout();
         self.persist_workspaces();
         if current_dead {
-            self.maybe_refresh_inspector(cx);
+            self.refresh_file_tree(cx);
         }
         cx.notify();
     }
@@ -550,7 +550,7 @@ impl ConsoleDesktopApp {
                 .and_then(|state| state.loaded_session_id.as_deref())
                 == Some(sid);
             if transcript_has_messages && (already_loaded || prev_sid.as_deref() == Some(sid)) {
-                self.maybe_refresh_inspector(cx);
+                self.refresh_file_tree(cx);
                 cx.notify();
                 return;
             }
@@ -613,7 +613,7 @@ impl ConsoleDesktopApp {
         } else {
             self.selected_session_id = None;
         }
-        self.maybe_refresh_inspector(cx);
+        self.refresh_file_tree(cx);
         cx.notify();
     }
 
@@ -660,7 +660,7 @@ impl ConsoleDesktopApp {
         {
             state.selected_project_id = Some(key);
         }
-        self.maybe_refresh_inspector(cx);
+        self.refresh_file_tree(cx);
         cx.notify();
     }
 

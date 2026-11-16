@@ -210,7 +210,7 @@ impl ConsoleDesktopApp {
             .update(cx, |transcript, _| {
                 transcript.set_session_cwd(Some(path.clone()));
             });
-        self.maybe_refresh_inspector(cx);
+        self.refresh_file_tree(cx);
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
@@ -372,7 +372,7 @@ impl ConsoleDesktopApp {
         {
             session.project_id = None;
         }
-        self.maybe_refresh_inspector(cx);
+        self.refresh_file_tree(cx);
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
@@ -536,7 +536,7 @@ impl ConsoleDesktopApp {
                                     state.branch_loaded = true;
                                     state.branch_is_git_repository = branches.is_git_repository;
                                 }
-                                this.maybe_refresh_inspector(cx);
+                                this.refresh_file_tree(cx);
                             }
                             Err(error) => {
                                 this.set_error(format!("Unable to switch branch: {error}"), cx)

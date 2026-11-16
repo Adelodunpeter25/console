@@ -34,15 +34,13 @@ enum LeadingAction {
 
 /// Full-width window title bar. Shows `title` centered (e.g.
 /// "can you see this image — Gpui-ui") plus a sidebar toggle on the left
-/// and an inspector toggle on the right.
+/// and the ports popover on the right.
 #[derive(IntoElement)]
 pub struct TitleBar {
     title: Option<String>,
     sidebar_width: f32,
     on_toggle_sidebar: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     leading: LeadingAction,
-    on_toggle_right_sidebar: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
-    right_sidebar_open: bool,
     ports_element: Option<gpui::AnyElement>,
 }
 
@@ -57,8 +55,6 @@ impl TitleBar {
             sidebar_width,
             on_toggle_sidebar,
             leading: LeadingAction::SidebarToggle,
-            on_toggle_right_sidebar: None,
-            right_sidebar_open: false,
             ports_element: None,
         }
     }
@@ -72,16 +68,6 @@ impl TitleBar {
         self
     }
 
-    pub fn with_right_sidebar_toggle(
-        mut self,
-        open: bool,
-        on_toggle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    ) -> Self {
-        self.right_sidebar_open = open;
-        self.on_toggle_right_sidebar = Some(on_toggle);
-        self
-    }
-
     pub fn with_ports(mut self, ports: Option<gpui::AnyElement>) -> Self {
         self.ports_element = ports;
         self
@@ -92,7 +78,6 @@ impl RenderOnce for TitleBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let on_toggle = self.on_toggle_sidebar;
-        let on_toggle_right = self.on_toggle_right_sidebar;
         let title = self.title;
         let sidebar_width = self.sidebar_width;
         let leading_inset = if window.is_fullscreen() {
@@ -176,7 +161,7 @@ impl RenderOnce for TitleBar {
                     )
                 },
             ))
-            // Right: spacer + ports popover + right inspector toggle button
+            // Right: ports popover
             .child(
                 div()
                     .w(px(sidebar_width))
@@ -186,25 +171,7 @@ impl RenderOnce for TitleBar {
                     .justify_end()
                     .gap(px(4.0))
                     .pr(px(12.0))
-                    .when_some(self.ports_element, |el, ports| el.child(ports))
-                    .when_some(on_toggle_right, |el, on_toggle_right| {
-                        el.child(
-                            div()
-                                .id("titlebar-right-sidebar-toggle")
-                                .mt(px(4.0))
-                                .size(px(26.0))
-                                .rounded(px(6.0))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_default()
-                                .hover(|s| s.bg(theme.overlay))
-                                .active(|s| s.bg(theme.overlay_strong))
-                                .on_click(move |_, window, cx| (on_toggle_right)(window, cx))
-                                .tooltip(Tooltip::text("Toggle inspector"))
-                                .child(app_icon(IconName::PanelRight, 14.0, theme.text_tertiary)),
-                        )
-                    }),
+                    .when_some(self.ports_element, |el, ports| el.child(ports)),
             )
     }
 }

@@ -263,17 +263,17 @@ pub struct ConsoleDesktopApp {
     pub(crate) new_tab_menus: std::collections::HashMap<String, console_ui::ContextMenuHandle>,
     pub inspector_add_tab_menu: console_ui::ContextMenuHandle,
     pub inspector_search_query: String,
-    pub inspector_tree: Rc<Vec<console_ui::FileTreeNode>>,
-    pub inspector_working_changes: Rc<Vec<console_core::types::GitFileEntry>>,
-    /// Derived from `inspector_working_changes`; only set through
-    /// `set_inspector_working_changes` so the two cannot disagree.
-    pub inspector_git_badges: Rc<std::collections::HashMap<String, console_ui::GitBadge>>,
+    pub file_tree_nodes: Rc<Vec<console_ui::FileTreeNode>>,
+    pub working_changes: Rc<Vec<console_core::types::GitFileEntry>>,
+    /// Derived from `working_changes`; only set through
+    /// `set_working_changes` so the two cannot disagree.
+    pub git_badges: Rc<std::collections::HashMap<String, console_ui::GitBadge>>,
     /// One live fs-watch SSE stream per inspector target: the cwd it watches
     /// plus its task. Dropping the task cancels the stream, so replacing this
     /// on target change is what prevents duplicate stream accumulation.
-    pub(crate) inspector_fs_watch: Option<(String, gpui::Task<()>)>,
-    /// Same as `inspector_fs_watch` for the git-status watch stream.
-    pub(crate) inspector_git_watch: Option<(String, gpui::Task<()>)>,
+    pub(crate) file_tree_fs_watch: Option<(String, gpui::Task<()>)>,
+    /// Same as `file_tree_fs_watch` for the git-status watch stream.
+    pub(crate) file_tree_git_watch: Option<(String, gpui::Task<()>)>,
     /// One live forwarded-port SSE stream for the active backend environment.
     pub(crate) port_stream: Option<gpui::Task<()>>,
     /// Trailing-debounce latch so bursts of fs events fetch the tree once.
@@ -298,7 +298,7 @@ pub struct ConsoleDesktopApp {
     pub(crate) file_tree_expanded:
         std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub inspector_expanded_folders: Rc<std::collections::HashSet<String>>,
-    pub inspector_selected_path: Option<String>,
+    pub file_tree_selected_path: Option<String>,
     pub session_subagents:
         std::collections::HashMap<String, Rc<Vec<console_core::types::SubagentInfo>>>,
     /// Background work per session id (detached shells, subagents), fed by the

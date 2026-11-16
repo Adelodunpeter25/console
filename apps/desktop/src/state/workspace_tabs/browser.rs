@@ -155,7 +155,7 @@ impl ConsoleDesktopApp {
                 v.sync_native_state(is_active, occluded, cx);
             });
         }
-        self.sync_inspector_webviews(cx);
+        self.sync_device_webview(cx);
     }
 
     /// Open a Browser tab in the active pane, optionally seeded with a URL.

@@ -6,7 +6,7 @@
 
 use crate::keybindings::{
     AddProject, CheckForUpdates, NewBrowser, NewChat, NewProject, NewTerminal, NewWindow,
-    OpenSettings, QuickOpenFile, ToggleLeftSidebar, ToggleRightSidebar,
+    OpenSettings, QuickOpenFile, ToggleLeftSidebar,
 };
 use gpui::{App, KeyBinding, Menu, MenuItem, OsAction, SystemMenuType, actions};
 
@@ -261,7 +261,6 @@ pub fn init(cx: &mut App) {
         // to our actions (same pattern as File for ⌘O / ⌘P).
         Menu::new("View").items([
             MenuItem::action("Toggle Left Sidebar", ToggleLeftSidebar),
-            MenuItem::action("Toggle Right Sidebar", ToggleRightSidebar),
         ]),
         // GPUI's mac backend makes any menu named "Window" the app's windows
         // menu, so open windows (and tab items) list under ours.

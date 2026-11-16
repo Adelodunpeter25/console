@@ -68,8 +68,6 @@ actions!(
         CheckForUpdates,
         /// Toggle the left sidebar.
         ToggleLeftSidebar,
-        /// Toggle the right workspace inspector panel.
-        ToggleRightSidebar,
         /// Jump to the nth visible sidebar session (browser-tab style).
         SwitchSession1,
         SwitchSession2,
@@ -173,8 +171,6 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("shift-tab", CycleApprovalMode, Some("ComposerInput")),
         KeyBinding::new("secondary-,", OpenSettings, None),
         KeyBinding::new("secondary-b", ToggleLeftSidebar, None),
-        KeyBinding::new("alt-b", ToggleRightSidebar, None),
-        KeyBinding::new("alt-B", ToggleRightSidebar, None),
         KeyBinding::new("secondary-1", SwitchSession1, None),
         KeyBinding::new("secondary-2", SwitchSession2, None),
         KeyBinding::new("secondary-3", SwitchSession3, None),
@@ -463,12 +459,6 @@ pub fn init_handlers(cx: &mut App) {
     cx.on_action(|_: &ToggleLeftSidebar, cx| {
         if let Some((_, app)) = crate::window::get_active_window(cx) {
             app.update(cx, |this, cx| this.toggle_left_sidebar(cx));
-        }
-    });
-
-    cx.on_action(|_: &ToggleRightSidebar, cx| {
-        if let Some((_, app)) = crate::window::get_active_window(cx) {
-            app.update(cx, |this, cx| this.toggle_right_sidebar(cx));
         }
     });
 

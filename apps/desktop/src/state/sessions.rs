@@ -484,7 +484,7 @@ impl ConsoleDesktopApp {
                 self.load_session_messages_for_pane(pane_id, next_id, cx);
             }
         }
-        self.maybe_refresh_inspector(cx);
+        self.refresh_file_tree(cx);
         cx.notify();
 
         let client = self.client.clone();
@@ -915,7 +915,7 @@ impl ConsoleDesktopApp {
                 transcript.set_session_cwd(cwd);
             });
 
-        self.maybe_refresh_inspector(cx);
+        self.refresh_file_tree(cx);
     }
 
     /// Point a pane's project picker at the project a loaded session belongs
@@ -1718,11 +1718,6 @@ impl ConsoleDesktopApp {
                                     );
                                 });
                                 let app_entity_for_older = entity.clone();
-                                if this.active_inspector_target().0.as_deref()
-                                    == Some(session_id.as_str())
-                                {
-                                    this.fetch_inspector_session_changes(cx);
-                                }
                                 transcript.update(cx, |t, cx| {
                                     if let Some(changes) = changes {
                                         t.set_session_changes(Rc::new(changes), cx);

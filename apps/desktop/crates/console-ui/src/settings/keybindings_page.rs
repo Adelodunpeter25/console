@@ -118,11 +118,6 @@ const ACTION_META: &[ActionMeta] = &[
         description: "Toggle left sidebar",
     },
     ActionMeta {
-        action: "ToggleRightSidebar",
-        category: "Global & Window",
-        description: "Toggle right sidebar",
-    },
-    ActionMeta {
         action: "OpenSettings",
         category: "Global & Window",
         description: "Open settings window",

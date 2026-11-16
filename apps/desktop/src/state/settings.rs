@@ -145,7 +145,6 @@ impl ConsoleDesktopApp {
         });
 
         self.settings_open = true;
-        self.sync_inspector_webviews(cx);
         self.sync_workspace_webviews(cx);
         // The workspace is unmounted while the settings are open, so the
         // composer that had the focus goes with it. The settings take the
@@ -173,7 +172,6 @@ impl ConsoleDesktopApp {
             return;
         }
         self.settings_open = false;
-        self.sync_inspector_webviews(cx);
         self.sync_workspace_webviews(cx);
         // A modal that was open on top of the settings goes with them: it
         // belongs to a view that is no longer on screen. Deferred: GPUI holds
