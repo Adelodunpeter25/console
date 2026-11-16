@@ -46,8 +46,8 @@ impl ConsoleDesktopApp {
             if leaf.tabs.is_empty() && self.workspace_root.leaves().len() > 1 {
                 console_ui::workspace::ops::close_pane(&mut self.workspace_root, pane_id);
                 self.carry_staged_comments(pane_id, cx);
-                if let Some(chat_pane) = self.active_chat_pane_id() {
-                    self.active_pane_id = Some(chat_pane);
+                if let Some((chat_pane, _)) = self.workspace_chat() {
+                    self.active_pane_id = Some(chat_pane.to_owned());
                 }
             }
         }
@@ -966,11 +966,6 @@ impl ConsoleDesktopApp {
         None
     }
 
-    /// Locate the pane currently hosting the active chat tab, if one is open.
-    pub fn active_chat_pane_id(&self) -> Option<String> {
-        self.active_chat_pane_ref().map(str::to_owned)
-    }
-
     /// The chat this workspace's composer state belongs to, as
     /// `(pane_id, session_id)`: the selected chat, or — while a terminal,
     /// file, or browser tab is in front — the workspace's only chat. Staged
@@ -984,24 +979,37 @@ impl ConsoleDesktopApp {
         if let Some(pane_id) = self.active_chat_pane_ref() {
             return self.selected_session_id.as_deref().map(|sid| (pane_id, sid));
         }
-        let mut sole = None;
+        self.workspace_chat()
+    }
+
+    /// The chat that owns the current workspace, as `(pane_id, session_id)`,
+    /// whichever pane has focus. A workspace is created for one chat, so this
+    /// is that chat's tab; if a desk ever holds several (worktree desks can),
+    /// the most recently used wins. `None` when no pane holds a chat tab.
+    pub(crate) fn workspace_chat(&self) -> Option<(&str, &str)> {
+        let mut best: Option<(i64, &str, &str)> = None;
         for leaf in self.workspace_root.leaves() {
             for tab in &leaf.tabs {
-                if let WorkspaceTabConfig::Chat { session_id, .. } = tab {
-                    if sole.is_some() {
-                        return None;
+                if let WorkspaceTabConfig::Chat {
+                    session_id,
+                    last_active_at_ms,
+                    ..
+                } = tab
+                {
+                    let ts = last_active_at_ms.unwrap_or(0);
+                    if best.is_none_or(|(b, _, _)| ts > b) {
+                        best = Some((ts, leaf.id.as_str(), session_id.as_str()));
                     }
-                    sole = Some((leaf.id.as_str(), session_id.as_str()));
                 }
             }
         }
-        sole
+        best.map(|(_, pane, session)| (pane, session))
     }
 
     /// Target pane for secondary subtabs (Files, Diffs, Terminals, Browsers).
     /// If a chat is open, opens or targets the right-hand split so the chat stays pinned left.
     pub fn target_subtab_pane_id(&mut self) -> String {
-        let chat_pane_id = self.active_chat_pane_id();
+        let chat_pane_id = self.workspace_chat().map(|(pane, _)| pane.to_owned());
         if let Some(chat_pane_id) = chat_pane_id {
             let other_pane = self
                 .workspace_root

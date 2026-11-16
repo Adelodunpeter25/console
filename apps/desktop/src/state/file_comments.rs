@@ -758,7 +758,8 @@ impl ConsoleDesktopApp {
             return;
         }
         let Some(target) = self
-            .active_chat_pane_id()
+            .workspace_chat()
+            .map(|(pane, _)| pane.to_owned())
             .filter(|pane| pane != closing_pane)
             .or_else(|| {
                 self.workspace_root

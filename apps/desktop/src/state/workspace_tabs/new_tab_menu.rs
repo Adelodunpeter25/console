@@ -105,20 +105,13 @@ pub(crate) fn new_tab_menu_items(
 }
 
 impl ConsoleDesktopApp {
-    /// Open the changes review for the focused chat, if any, in the
-    /// right-hand split. The chat is resolved before the split is chosen.
+    /// Open the changes review for this workspace's chat in the right-hand
+    /// split, whichever pane has focus.
     pub fn open_changes_for_active_pane(&mut self, cx: &mut Context<Self>) {
-        let chat_pane = self.active_chat_pane_id().unwrap_or_else(|| {
-            self.active_pane_id
-                .clone()
-                .unwrap_or_else(|| "pane-main".into())
-        });
-        if let Some(session_id) = self.active_session_for_pane(&chat_pane) {
-            self.open_changes_review_tab(
-                session_id,
-                console_core::types::ChangesScope::AllTurns,
-                cx,
-            );
-        }
+        let Some(session_id) = self.workspace_chat().map(|(_, session)| session.to_owned())
+        else {
+            return;
+        };
+        self.open_changes_review_tab(session_id, console_core::types::ChangesScope::AllTurns, cx);
     }
 }
