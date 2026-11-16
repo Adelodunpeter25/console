@@ -24,6 +24,8 @@ pub struct ProjectScriptRunView {
 }
 
 /// Everything the Run tab needs for one project.
+// Kept without a UI while the Run panel has no new home; see the inspector removal.
+#[allow(dead_code)]
 #[derive(Clone, Default)]
 pub struct ProjectScriptsPanelState {
     pub scripts: Vec<ProjectScript>,
@@ -111,6 +113,7 @@ impl ConsoleDesktopApp {
     /// Fetch script definitions (once per project) and reconnect to any runs
     /// the server still holds. Cheap guards make this safe to call on every
     /// render while the bottom panel is visible.
+    #[allow(dead_code)]
     pub fn ensure_project_scripts(&mut self, cx: &mut Context<Self>) {
         let Some(project_id) = self.active_scripts_project_id() else {
             return;
@@ -128,6 +131,7 @@ impl ConsoleDesktopApp {
     /// Re-read `console.toml` even when already loaded, so edits never need
     /// an app restart. Runs and expanded rows merge by script id, so a
     /// refresh never collapses open output or drops a live tail.
+    #[allow(dead_code)]
     pub fn refresh_project_scripts(&mut self, cx: &mut Context<Self>) {
         let Some(project_id) = self.active_scripts_project_id() else {
             return;
@@ -142,6 +146,7 @@ impl ConsoleDesktopApp {
         self.fetch_project_scripts(project_id, cx);
     }
 
+    #[allow(dead_code)]
     fn fetch_project_scripts(&mut self, project_id: String, cx: &mut Context<Self>) {
         let state = self
             .project_scripts_by_project
@@ -266,6 +271,7 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    #[allow(dead_code)]
     pub(crate) fn prune_project_script_tabs(&mut self, project_id: &str) {
         let Some(state) = self.project_scripts_by_project.get(project_id) else {
             return;
