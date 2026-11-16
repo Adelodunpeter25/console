@@ -13,4 +13,4 @@ Plan for Kotlin coroutines, state management, Compose performance, and memory op
 - [x] **Task 7: Prevent Coroutine Cancellation Swallowing** (`core/forward/LocalForwardManager.kt`, `core/notification/NotificationCoordinator.kt`)
 - [x] **Task 8: Optimize Keystroke Trigger & Duration Formatting** (`core/util/ComposerAutocomplete.kt`, `core/util/Format.kt`)
 - [x] **Task 9: Eliminate $O(N^2)$ List Growth in `reconstructRuns`** (`core/chat/ReconstructRuns.kt`)
-- [ ] **Task 10: Memoize Markdown Block Parsing** (`feature/chat/markdown/CustomMarkdown.kt`)
+- [x] **Task 10: Memoize Markdown Block Parsing** (`feature/chat/markdown/CustomMarkdown.kt`)
