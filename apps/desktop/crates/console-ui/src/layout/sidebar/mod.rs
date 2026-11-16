@@ -33,9 +33,9 @@ pub fn init_sidebar_search_keybindings(cx: &mut App) {
 
 use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
 use gpui::{
-    App, Entity, FontWeight, InteractiveElement, IntoElement, ListState, MouseButton,
-    ParentElement, RenderOnce, StatefulInteractiveElement, Styled, Window, div, list,
-    prelude::FluentBuilder, px,
+    AnimationExt, App, Entity, FontWeight, InteractiveElement, IntoElement, ListState, MouseButton,
+    ParentElement, RenderOnce, SpringAnimation, SpringConfig, StatefulInteractiveElement, Styled,
+    Window, div, list, prelude::FluentBuilder, px,
 };
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -282,10 +282,6 @@ impl SidebarView {
 
 impl RenderOnce for SidebarView {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        if !self.visible {
-            return div().id("console-sidebar-hidden").w(px(0.0)).h_full();
-        }
-
         let theme = Theme::current(cx);
         let projects = self.projects;
         let selected_id = self.selected_session_id;
@@ -898,7 +894,10 @@ impl RenderOnce for SidebarView {
             .clone()
             .or_else(|| self.on_clear_search.clone());
 
-        div()
+        let target_width = if self.visible { px(width) } else { px(0.0) };
+        let full_width = width.max(1.0);
+
+        let content = div()
             .id("console-sidebar")
             .w(px(width))
             .h_full()
@@ -1204,6 +1203,23 @@ impl RenderOnce for SidebarView {
                         cx.stop_propagation();
                         (on_resize_start)(f32::from(event.position.x), window, cx);
                     }),
+            );
+
+        div()
+            .id("console-sidebar-wrapper")
+            .h_full()
+            .overflow_hidden()
+            .flex_none()
+            .with_spring(
+                "sidebar-spring-width",
+                SpringAnimation::new(SpringConfig::new(480.0, 42.0, 1.0))
+                    .to(target_width)
+                    .with_epsilon(0.5),
+                move |container, current_width| {
+                    let progress = (f32::from(current_width) / full_width).clamp(0.0, 1.0);
+                    container.w(current_width).opacity(progress)
+                },
             )
+            .child(content)
     }
 }

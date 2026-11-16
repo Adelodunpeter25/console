@@ -6,8 +6,8 @@ use std::rc::Rc;
 
 use console_core::{LeafPaneNode, WorkspaceNode};
 use gpui::{
-    App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
-    Styled, Window, div, prelude::FluentBuilder, px,
+    AnimationExt, App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    RenderOnce, SpringAnimation, SpringConfig, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
 use crate::theme::Theme;
@@ -383,11 +383,20 @@ fn render_node(
                     div()
                         .min_w_0()
                         .min_h_0()
-                        .flex_grow(size_0)
-                        .flex_shrink(1.0)
-                        .flex_basis(gpui::relative(size_0 / 100.0))
+                        .overflow_hidden()
                         .flex()
                         .flex_col()
+                        .with_spring(
+                            ElementId::Name(format!("workspace-split-size0-{}", split.id).into()),
+                            SpringAnimation::new(SpringConfig::new(480.0, 42.0, 1.0))
+                                .to(size_0)
+                                .with_epsilon(0.5),
+                            move |el, s| {
+                                el.flex_grow(s)
+                                    .flex_shrink(1.0)
+                                    .flex_basis(gpui::relative(s / 100.0))
+                            },
+                        )
                         .child(render_node(
                             &split.children[0],
                             active_pane_id,
@@ -449,11 +458,20 @@ fn render_node(
                     div()
                         .min_w_0()
                         .min_h_0()
-                        .flex_grow(size_1)
-                        .flex_shrink(1.0)
-                        .flex_basis(gpui::relative(size_1 / 100.0))
+                        .overflow_hidden()
                         .flex()
                         .flex_col()
+                        .with_spring(
+                            ElementId::Name(format!("workspace-split-size1-{}", split.id).into()),
+                            SpringAnimation::new(SpringConfig::new(480.0, 42.0, 1.0))
+                                .to(size_1)
+                                .with_epsilon(0.5),
+                            move |el, s| {
+                                el.flex_grow(s)
+                                    .flex_shrink(1.0)
+                                    .flex_basis(gpui::relative(s / 100.0))
+                            },
+                        )
                         .child(render_node(
                             &split.children[1],
                             active_pane_id,
