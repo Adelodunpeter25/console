@@ -751,6 +751,12 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
+        // A launch can switch the chat into a brand-new desk whose pane has no
+        // `WorkspacePaneState` yet. Capturing the window lets the result create
+        // that state before writing to the transcript — otherwise the optimistic
+        // prompt lands in the fallback (main) transcript, which that pane never
+        // renders.
+        let window_handle = cx.active_window();
         let client = self.client.clone();
         // The card's choice, not the pane's: the mode is picked in the card
         // precisely so a launch doesn't inherit whatever the focused pane
@@ -794,6 +800,7 @@ impl ConsoleDesktopApp {
                 card_model,
                 card_thinking,
                 approval_mode,
+                window_handle,
                 cx,
             );
             return;
@@ -874,49 +881,61 @@ impl ConsoleDesktopApp {
                     console_ui::common::resolve_pending_pastes(&prompt, &context_files, &resolved);
             }
 
+            let finish =
+                move |this: &mut Self, window: Option<&mut Window>, cx: &mut Context<Self>| {
+                    match result {
+                        Ok(new_session) => {
+                            this.floating_composer.hide();
+                            if this.drafts.remove(FLOATING_KEY).is_some() {
+                                this.schedule_drafts_save(cx);
+                            }
+                            this.open_floating_session(
+                                &pane_id,
+                                &new_session,
+                                card_model.clone(),
+                                card_thinking,
+                                approval_mode,
+                                checkout.clone(),
+                                window,
+                                cx,
+                            );
+                            // Auto-send: the prompt that described the task *is*
+                            // the task, so it goes straight to the agent instead of
+                            // waiting for a second Enter. This also clears the
+                            // composer, stages the attachments, and pushes the
+                            // optimistic user message into the transcript.
+                            this.submit_prompt_with_context(
+                                prompt.clone(),
+                                staged_attachments.clone(),
+                                Vec::new(),
+                                context_files.clone(),
+                                cx,
+                            );
+                            if let Some(error) = paste_error.as_ref() {
+                                this.set_error(format!("Paste upload failed: {error}"), cx);
+                            }
+                            cx.notify();
+                        }
+                        Err(error) => {
+                            // Keep the card open with the prompt intact so a failed
+                            // launch costs one retry, not a retype.
+                            this.floating_composer
+                                .set_error(Some(format!("Unable to create a session: {error}")));
+                            cx.notify();
+                        }
+                    }
+                    let _ = mentions;
+                };
             cx.update(|cx| {
-                let Some(app) = entity.upgrade() else { return };
-                app.update(cx, |this, cx| match result {
-                    Ok(new_session) => {
-                        this.floating_composer.hide();
-                        if this.drafts.remove(FLOATING_KEY).is_some() {
-                            this.schedule_drafts_save(cx);
+                if let Some(handle) = window_handle {
+                    let _ = handle.update(cx, move |_, window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, move |this, cx| finish(this, Some(window), cx));
                         }
-                        this.open_floating_session(
-                            &pane_id,
-                            &new_session,
-                            card_model.clone(),
-                            card_thinking,
-                            approval_mode,
-                            checkout.clone(),
-                            cx,
-                        );
-                        // Auto-send: the prompt that described the task *is*
-                        // the task, so it goes straight to the agent instead of
-                        // waiting for a second Enter. This also clears the
-                        // composer, stages the attachments, and pushes the
-                        // optimistic user message into the transcript.
-                        this.submit_prompt_with_context(
-                            prompt.clone(),
-                            staged_attachments.clone(),
-                            Vec::new(),
-                            context_files.clone(),
-                            cx,
-                        );
-                        if let Some(error) = paste_error.as_ref() {
-                            this.set_error(format!("Paste upload failed: {error}"), cx);
-                        }
-                        cx.notify();
-                    }
-                    Err(error) => {
-                        // Keep the card open with the prompt intact so a failed
-                        // launch costs one retry, not a retype.
-                        this.floating_composer
-                            .set_error(Some(format!("Unable to create a session: {error}")));
-                        cx.notify();
-                    }
-                });
-                let _ = mentions;
+                    });
+                } else if let Some(app) = entity.upgrade() {
+                    app.update(cx, move |this, cx| finish(this, None, cx));
+                }
             });
         })
         .detach();
@@ -934,6 +953,7 @@ impl ConsoleDesktopApp {
         card_thinking: Option<ThinkingLevel>,
         approval_mode: ApprovalMode,
         checkout: Option<(String, String)>,
+        window: Option<&mut Window>,
         cx: &mut Context<Self>,
     ) {
         self.apply_session_header_for_pane(pane_id, new_session, cx);
@@ -947,6 +967,12 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .unwrap_or_else(|| pane_id.to_string());
+        // A fresh desk's pane has no state until the first render creates it.
+        // Without this, transcript writes below fall back to the main
+        // transcript that this pane never renders.
+        if let Some(window) = window {
+            self.ensure_workspace_pane_state(&target_pane, window, cx);
+        }
         // The new chat replaces this pane's transcript, so the
         // chat it was showing keeps its position.
         self.save_pane_scroll_position(&target_pane, cx);
@@ -997,6 +1023,7 @@ impl ConsoleDesktopApp {
         card_model: Option<SelectedModel>,
         card_thinking: Option<ThinkingLevel>,
         approval_mode: ApprovalMode,
+        window_handle: Option<gpui::AnyWindowHandle>,
         cx: &mut Context<Self>,
     ) {
         let client = self.client.clone();
@@ -1024,36 +1051,48 @@ impl ConsoleDesktopApp {
         };
         cx.spawn(async move |entity, cx| {
             let result = client.sessions.launch_with_worktree(launch).await;
-            cx.update(|cx| {
-                let Some(app) = entity.upgrade() else { return };
-                app.update(cx, |this, cx| match result {
-                    Ok(new_session) => {
-                        this.floating_composer.hide();
-                        if this.drafts.remove(FLOATING_KEY).is_some() {
-                            this.schedule_drafts_save(cx);
+            let finish =
+                move |this: &mut Self, window: Option<&mut Window>, cx: &mut Context<Self>| {
+                    match result {
+                        Ok(new_session) => {
+                            this.floating_composer.hide();
+                            if this.drafts.remove(FLOATING_KEY).is_some() {
+                                this.schedule_drafts_save(cx);
+                            }
+                            this.open_floating_session(
+                                &pane_id,
+                                &new_session,
+                                card_model,
+                                card_thinking,
+                                approval_mode,
+                                None,
+                                window,
+                                cx,
+                            );
+                            // The server starts the run once the worktree exists;
+                            // watch the launch state and attach when it lands.
+                            this.watch_worktree_launch(&pane_id, new_session.id.clone(), cx);
+                            cx.notify();
                         }
-                        this.open_floating_session(
-                            &pane_id,
-                            &new_session,
-                            card_model,
-                            card_thinking,
-                            approval_mode,
-                            None,
-                            cx,
-                        );
-                        // The server starts the run once the worktree exists;
-                        // watch the launch state and attach when it lands.
-                        this.watch_worktree_launch(&pane_id, new_session.id.clone(), cx);
-                        cx.notify();
+                        Err(error) => {
+                            // Nothing was created; the card stays open with the
+                            // prompt intact so a failed launch costs one retry.
+                            this.floating_composer
+                                .set_error(Some(format!("Unable to create a session: {error}")));
+                            cx.notify();
+                        }
                     }
-                    Err(error) => {
-                        // Nothing was created; the card stays open with the
-                        // prompt intact so a failed launch costs one retry.
-                        this.floating_composer
-                            .set_error(Some(format!("Unable to create a session: {error}")));
-                        cx.notify();
-                    }
-                });
+                };
+            cx.update(|cx| {
+                if let Some(handle) = window_handle {
+                    let _ = handle.update(cx, move |_, window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, move |this, cx| finish(this, Some(window), cx));
+                        }
+                    });
+                } else if let Some(app) = entity.upgrade() {
+                    app.update(cx, move |this, cx| finish(this, None, cx));
+                }
             });
         })
         .detach();
