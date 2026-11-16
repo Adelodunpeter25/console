@@ -286,7 +286,7 @@ func TestCodemodeToolReplacementDefinitions(t *testing.T) {
 		var defs []tools.Definition
 		for _, def := range reg.Definitions() {
 			switch def.Name {
-			case "code", "code_reset":
+			case "code", "codeReset", "code_reset":
 				defs = append(defs, def)
 			}
 		}
@@ -295,11 +295,11 @@ func TestCodemodeToolReplacementDefinitions(t *testing.T) {
 
 	filtered := filterDefs()
 	if len(filtered) != 2 {
-		t.Fatalf("expected exactly code and code_reset tools, got %d", len(filtered))
+		t.Fatalf("expected exactly code and codeReset tools, got %d", len(filtered))
 	}
 
 	for _, d := range filtered {
-		if d.Name != "code" && d.Name != "code_reset" {
+		if d.Name != "code" && d.Name != "codeReset" && d.Name != "code_reset" {
 			t.Fatalf("unexpected tool in filtered definitions: %s", d.Name)
 		}
 	}
@@ -588,6 +588,27 @@ func TestCodemodeAskAndChatRead(t *testing.T) {
 	envAsk := resAsk.(tools.Envelope)
 	if envAsk.IsError || !strings.Contains(envAsk.Content.(string), "Option A") {
 		t.Fatalf("expected ask response, got: %v", envAsk.Content)
+	}
+}
+
+func TestCodemodeRequestFullAccess(t *testing.T) {
+	mockReq := tools.NewTool("requestFullAccess", "Request full access", tools.TierRead, func(ctx context.Context, in map[string]any) (any, error) {
+		return "Approved: Full Access granted", nil
+	})
+	reg := tools.NewRegistry(mockReq)
+	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.PlanMode))
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+	ctx := context.Background()
+	script := `await requestFullAccess("implement user features");`
+	res, err := rt.Eval(ctx, script, 5*time.Second)
+	if err != nil {
+		t.Fatalf("requestFullAccess eval: %v", err)
+	}
+	env := res.(tools.Envelope)
+	if env.IsError || !strings.Contains(env.Content.(string), "Approved") {
+		t.Fatalf("expected approved result, got: %v", env.Content)
 	}
 }
 

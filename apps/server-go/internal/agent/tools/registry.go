@@ -55,11 +55,20 @@ func (r *Registry) Replace(t Tool) {
 func (r *Registry) Get(name string) (Tool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	t, ok := r.tools[name]
-	if !ok {
-		return nil, NewToolError("Unknown tool: %s", name)
+	if t, ok := r.tools[name]; ok {
+		return t, nil
 	}
-	return t, nil
+	if canon := CanonicalName(name); canon != name {
+		if t, ok := r.tools[canon]; ok {
+			return t, nil
+		}
+	}
+	for _, alias := range AliasesFor(name) {
+		if t, ok := r.tools[alias]; ok {
+			return t, nil
+		}
+	}
+	return nil, NewToolError("Unknown tool: %s", name)
 }
 
 func (r *Registry) Names() []string {

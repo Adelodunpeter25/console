@@ -69,7 +69,7 @@ type computerResetTool struct {
 // changes nothing on the machine, so it is a read-tier lifecycle operation
 // like loadTools.
 func NewComputerResetTool(manager *Manager, sessionID string) tools.Tool {
-	inner := tools.NewTool("computer_reset",
+	inner := tools.NewTool("computerReset",
 		"Forget the computer-use session: clear every variable and binding created by prior computer calls. The cua object itself is reinstalled fresh.",
 		tools.TierRead,
 		func(ctx context.Context, in struct{}) (any, error) {

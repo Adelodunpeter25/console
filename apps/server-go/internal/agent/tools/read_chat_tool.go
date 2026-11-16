@@ -27,7 +27,7 @@ type ChatReader interface {
 // chat can never reference itself and can only reach its own project.
 // A nil reader reports unavailable (the run service always wires one).
 func NewReadChatTool(currentSessionID string, reader ChatReader) Tool {
-	return NewTool("read_chat",
+	return NewTool("readChat",
 		"Read the transcript of another chat in this project, named by a $reference ($title-slug or $<session-id>) the user wrote. Returns the most recent user/assistant messages; thinking and tool output are excluded. Only chats from the same project as this one can be read, and never this chat itself. When more messages exist before this page, the result ends with a before cursor: pass it back as `before` to read the next older page.",
 		TierRead,
 		func(ctx context.Context, in readChatInput) (any, error) {

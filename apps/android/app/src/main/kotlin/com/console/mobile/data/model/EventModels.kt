@@ -117,6 +117,7 @@ data class AgentSessionEvent(
     val tokensAfter: Int? = null,
     val compactedMessages: List<AgentMessage>? = null,
     val title: String? = null,
+    val approvalMode: String? = null,
     val error: EventError? = null,
     // Staged next-turn prompt: raw until the event stream migrates (Phase 4
     // schemas the frames); the payload is console.v1.QueuedPrompt, decoded

@@ -60,8 +60,8 @@ func (g *Guard) Check(call tools.ToolCall) (json.RawMessage, error) {
 	if g == nil || g.root == "" || len(call.Arguments) == 0 {
 		return call.Arguments, nil
 	}
-	switch call.Name {
-	case "write_file", "editFile":
+	switch tools.CanonicalName(call.Name) {
+	case "writeFile", "editFile":
 		return g.checkSingleWrite(call)
 	case "batchWrite":
 		return g.checkBatchWrite(call)

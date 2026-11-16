@@ -59,6 +59,34 @@ func TestWireFrameBackgroundWorkUsesWorkRecord(t *testing.T) {
 	}
 }
 
+func TestWireFrameSessionApprovalModeUpdated(t *testing.T) {
+	name, body, drop := run.WireFrame(loop.Event{
+		Kind:         loop.EventSessionApprovalModeUpdated,
+		ApprovalMode: "full-access",
+	})
+	if drop {
+		t.Fatal("sessionApprovalModeUpdated frame was dropped")
+	}
+	if name != "sessionApprovalModeUpdated" {
+		t.Fatalf("event name = %q", name)
+	}
+
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope["type"] != "sessionApprovalModeUpdated" {
+		t.Fatalf("envelope type = %v", envelope["type"])
+	}
+	if envelope["approvalMode"] != "full-access" || envelope["approval_mode"] != "full-access" {
+		t.Fatalf("approvalMode payload = %#v", envelope)
+	}
+}
+
 func TestBackgroundWorkOutputRouteReadsDetachedShell(t *testing.T) {
 	app := fiber.New()
 	runs := run.NewService(nil)

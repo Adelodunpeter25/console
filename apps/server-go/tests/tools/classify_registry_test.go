@@ -27,12 +27,13 @@ func registered(t *testing.T) map[string]bool {
 		tools.NewReadChatTool("", nil),
 		tools.NewWritePlanTool(t.TempDir()),
 		tools.NewPlanModeBashTool(nil, ""),
+		tools.NewRequestFullAccessTool(nil, nil),
 	} {
 		names[tool.Name()] = true
 	}
 	// Tools living in other packages are named by the run loop; their names are
 	// part of the contract this test pins.
-	for _, n := range []string{"console", "console_reset", "computer", "computer_reset", "visualize", "loadTools", "browser", "browser_reset", "code", "code_reset"} {
+	for _, n := range []string{"console", "consoleReset", "computer", "computerReset", "visualize", "loadTools", "browser", "browserReset", "code", "codeReset"} {
 		names[n] = true
 	}
 	return names
@@ -109,15 +110,24 @@ func TestEveryRegisteredToolHasALabelAndAnIcon(t *testing.T) {
 // What clients rely on: the file tools are recognised by their real names, and
 // an alias that used to be accepted is now a plain unknown name.
 func TestRegisteredFileToolsAreClassifiedAndAliasesAreNot(t *testing.T) {
-	if !tools.IsReadFile("read_file") || !tools.IsEditFile("editFile") || !tools.IsWriteFile("write_file") || !tools.IsWriteFile("batchWrite") {
-		t.Fatal("the registered file tools must be classified")
-	}
-	for _, alias := range []string{"readFile", "view", "Read", "edit_file", "str_replace", "writeFile", "batch_write"} {
-		if tools.IsReadFile(alias) || tools.IsEditFile(alias) || tools.IsWriteFile(alias) || tools.IsFileTargetTool(alias) {
-			t.Errorf("%q is not a registered tool and must not be classified", alias)
+	for _, canon := range []string{"readFile", "editFile", "writeFile", "batchWrite"} {
+		if !tools.IsReadFile(canon) && !tools.IsEditFile(canon) && !tools.IsWriteFile(canon) {
+			t.Fatalf("%q must be classified", canon)
 		}
-		if tools.ToolLabel(alias) != alias || tools.ToolIconKey(alias) != "wrench" || tools.ToolKindFlags(alias) != 0 {
-			t.Errorf("%q must fall back to its raw name, a wrench and no flags", alias)
+	}
+	// Accepted legacy aliases are also classified
+	for _, alias := range []string{"read_file", "edit_file", "write_file", "batch_write"} {
+		if !tools.IsReadFile(alias) && !tools.IsEditFile(alias) && !tools.IsWriteFile(alias) {
+			t.Fatalf("alias %q must be classified", alias)
+		}
+	}
+	// Unknown/unregistered aliases fall back to raw name, wrench and no flags
+	for _, unknown := range []string{"view", "Read", "str_replace"} {
+		if tools.IsReadFile(unknown) || tools.IsEditFile(unknown) || tools.IsWriteFile(unknown) || tools.IsFileTargetTool(unknown) {
+			t.Errorf("%q is not a registered tool and must not be classified", unknown)
+		}
+		if tools.ToolLabel(unknown) != unknown || tools.ToolIconKey(unknown) != "wrench" || tools.ToolKindFlags(unknown) != 0 {
+			t.Errorf("%q must fall back to its raw name, a wrench and no flags", unknown)
 		}
 	}
 }

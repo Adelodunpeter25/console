@@ -178,22 +178,18 @@ func (r *Runtime) dispatchCall(ctx context.Context, args map[string]any) (*jsker
 
 	// Normalize aliases
 	switch toolName {
-	case "edit_file":
-		toolName = "editFile"
-	case "readChat":
-		toolName = "read_chat"
-	case "ask_many":
-		toolName = "askMany"
-	case "web_fetch", "fetch":
+	case "fetch":
 		toolName = "webFetch"
-	case "web_search":
-		toolName = "webSearch"
-	case "bash_job":
-		toolName = "bashJob"
-	case "batch_write":
-		toolName = "batchWrite"
-	case "write_plan":
-		toolName = "writePlan"
+	case "file":
+		toolName = "readFile"
+	case "write":
+		toolName = "writeFile"
+	case "edit":
+		toolName = "editFile"
+	case "list":
+		toolName = "listDir"
+	default:
+		toolName = tools.CanonicalName(toolName)
 	}
 
 	input, _ := args["input"].(map[string]any)
@@ -399,10 +395,10 @@ func formatContentString(content any) string {
 }
 
 func formatSummary(tool string, input map[string]any) string {
-	switch tool {
-	case "read_file":
+	switch tools.CanonicalName(tool) {
+	case "readFile":
 		return fmt.Sprintf("file(%v)", input["path"])
-	case "write_file":
+	case "writeFile":
 		return fmt.Sprintf("write(%v)", input["path"])
 	case "editFile":
 		return fmt.Sprintf("edit(%v)", input["path"])
@@ -419,7 +415,7 @@ func formatSummary(tool string, input map[string]any) string {
 		return fmt.Sprintf("glob(%v)", input["pattern"])
 	case "grep":
 		return fmt.Sprintf("grep(%v)", input["pattern"])
-	case "list_dir":
+	case "listDir":
 		return fmt.Sprintf("list(%v)", input["path"])
 	case "webFetch":
 		return fmt.Sprintf("fetch(%v)", input["url"])
@@ -431,7 +427,9 @@ func formatSummary(tool string, input map[string]any) string {
 		return "visualize(...)"
 	case "writePlan":
 		return fmt.Sprintf("writePlan(%v)", input["name"])
-	case "read_chat", "readChat":
+	case "requestFullAccess":
+		return fmt.Sprintf("requestFullAccess(%v)", input["reason"])
+	case "readChat":
 		return fmt.Sprintf("readChat(%v)", input["ref"])
 	case "ask":
 		return fmt.Sprintf("ask(%v)", input["question"])

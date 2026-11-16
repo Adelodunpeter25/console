@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/pmezard/go-difflib/difflib"
 )
@@ -119,8 +120,8 @@ func (s *Service) generateAndRecordFileChange(
 	}
 
 	var paths []string
-	switch toolName {
-	case "write_file", "editFile":
+	switch tools.CanonicalName(toolName) {
+	case "writeFile", "editFile":
 		if p, ok := args["path"].(string); ok && p != "" {
 			paths = append(paths, p)
 		} else if p, ok := args["targetFile"].(string); ok && p != "" {
