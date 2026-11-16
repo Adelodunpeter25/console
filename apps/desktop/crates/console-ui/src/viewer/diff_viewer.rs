@@ -117,11 +117,32 @@ pub fn build_editor_diff_capped(
     max_lines: usize,
     cx: &mut App,
 ) -> (EditorDiff, usize) {
+    build_editor_diff_capped_sized(raw, path, theme, max_lines, 12.0, DIFF_LINE_HEIGHT, cx)
+}
+
+/// [`build_editor_diff_capped`] with its own text size and row height, for
+/// views that are not laid out at the default 12px / 20px.
+pub fn build_editor_diff_capped_sized(
+    raw: &str,
+    path: &str,
+    theme: &Theme,
+    max_lines: usize,
+    font_size: f32,
+    line_height: f32,
+    cx: &mut App,
+) -> (EditorDiff, usize) {
     let mut parsed = parse_unified_diff(raw);
     let total = parsed.lines.len();
     parsed.lines.truncate(max_lines);
     (
-        build_from_result(editor_diff_from_parsed(&parsed), path, theme, cx),
+        build_from_result_sized(
+            editor_diff_from_parsed(&parsed),
+            path,
+            theme,
+            font_size,
+            line_height,
+            cx,
+        ),
         total,
     )
 }
@@ -137,6 +158,17 @@ pub fn build_editor_diff_from_parsed(
 }
 
 fn build_from_result(result: DiffResult, path: &str, theme: &Theme, cx: &mut App) -> EditorDiff {
+    build_from_result_sized(result, path, theme, 12.0, DIFF_LINE_HEIGHT, cx)
+}
+
+fn build_from_result_sized(
+    result: DiffResult,
+    path: &str,
+    theme: &Theme,
+    font_size: f32,
+    line_height: f32,
+    cx: &mut App,
+) -> EditorDiff {
     let language = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
     let preset = if theme.is_dark {
         syntax::ThemePreset::GitHubDark
@@ -145,8 +177,8 @@ fn build_from_result(result: DiffResult, path: &str, theme: &Theme, cx: &mut App
     };
     let font = FontConfig {
         family: "JetBrains Mono".into(),
-        size: px(12.0),
-        line_height: px(DIFF_LINE_HEIGHT),
+        size: px(font_size),
+        line_height: px(line_height),
     };
     let line_count = result.lines.len();
     let state = cx.new(|_| {

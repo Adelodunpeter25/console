@@ -15,9 +15,13 @@ use crate::primitives::icons::{IconName, app_icon};
 use crate::primitives::{base_name, file_type_icon};
 use crate::theme::Theme;
 use crate::utils::short_parent_dir;
-use crate::viewer::diff_viewer::{
-    DIFF_LINE_HEIGHT, DiffViewer, EditorDiff, build_editor_diff_capped,
-};
+use crate::viewer::diff_viewer::{DiffViewer, EditorDiff, build_editor_diff_capped_sized};
+
+/// Code size and row height of a file's diff in this view.
+const REVIEW_FONT_SIZE: f32 = 11.0;
+const REVIEW_LINE_HEIGHT: f32 = 18.0;
+/// Height of a collapsed file row.
+const REVIEW_ROW_HEIGHT: f32 = 34.0;
 
 /// Longest a file's diff grows inside the review tab before it scrolls
 /// internally. The editor diff view lays out every row it is given room for,
@@ -230,11 +234,13 @@ fn render_review_entry(
                 );
                 let state =
                     window.use_keyed_state(gpui::ElementId::Name(key.into()), cx, |_, cx| {
-                        build_editor_diff_capped(
+                        build_editor_diff_capped_sized(
                             text,
                             &entry.path,
                             &theme,
                             REVIEW_DIFF_MAX_LINES,
+                            REVIEW_FONT_SIZE,
+                            REVIEW_LINE_HEIGHT,
                             cx,
                         )
                         .0
@@ -247,8 +253,6 @@ fn render_review_entry(
         .w_full()
         .flex()
         .flex_col()
-        .border_b_1()
-        .border_color(theme.sidebar_border)
         .when(reviewed, |el| el.opacity(0.6))
         .child(
             div()
@@ -259,8 +263,9 @@ fn render_review_entry(
                 .items_center()
                 .justify_between()
                 .gap(px(8.0))
-                .px(px(16.0))
-                .py(px(14.0))
+                .px(px(14.0))
+                .h(px(REVIEW_ROW_HEIGHT))
+                .flex_none()
                 .cursor_pointer()
                 .hover(|s| s.bg(theme.overlay))
                 .on_click(move |_, window, cx| {
@@ -293,8 +298,8 @@ fn render_review_entry(
                                 .child(
                                     div()
                                         .flex_none()
-                                        .text_size(px(13.0))
-                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_size(px(12.0))
+                                        .font_weight(FontWeight::MEDIUM)
                                         .text_color(theme.text)
                                         .child(file_name.to_string()),
                                 )
@@ -304,9 +309,9 @@ fn render_review_entry(
                                             .truncate()
                                             .min_w_0()
                                             .flex_1()
-                                            .text_size(px(10.5))
+                                            .text_size(px(10.0))
                                             .font_family(MONO_FAMILY)
-                                            .text_color(theme.text_ghost)
+                                            .text_color(theme.text_tertiary)
                                             .child(short_dir),
                                     )
                                 }),
@@ -321,7 +326,7 @@ fn render_review_entry(
                         .when(additions > 0, |el| {
                             el.child(
                                 div()
-                                    .text_size(px(12.0))
+                                    .text_size(px(11.0))
                                     .font_family(MONO_FAMILY)
                                     .text_color(theme.success)
                                     .child(format!("+{additions}")),
@@ -330,7 +335,7 @@ fn render_review_entry(
                         .when(deletions > 0, |el| {
                             el.child(
                                 div()
-                                    .text_size(px(12.0))
+                                    .text_size(px(11.0))
                                     .font_family(MONO_FAMILY)
                                     .text_color(theme.danger)
                                     .child(format!("-{deletions}")),
@@ -341,12 +346,12 @@ fn render_review_entry(
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .w(px(22.0))
-                                .h(px(22.0))
-                                .rounded(px(5.0))
+                                .w(px(18.0))
+                                .h(px(18.0))
+                                .rounded(px(4.0))
                                 .border_1()
                                 .border_color(status_color)
-                                .text_size(px(11.0))
+                                .text_size(px(10.0))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(status_color)
                                 .child(status_label),
@@ -401,7 +406,7 @@ fn render_review_entry(
                 ),
         )
         .when_some(editor_diff, |el, diff| {
-            let height = (diff.line_count as f32 * DIFF_LINE_HEIGHT).min(REVIEW_DIFF_MAX_HEIGHT);
+            let height = (diff.line_count as f32 * REVIEW_LINE_HEIGHT).min(REVIEW_DIFF_MAX_HEIGHT);
             el.child(
                 div().w_full().h(px(height)).overflow_hidden().child(DiffViewer::new(diff.view)),
             )
