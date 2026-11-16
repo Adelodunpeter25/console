@@ -6,8 +6,10 @@ import com.console.mobile.data.model.BackgroundWorkOutputFrame
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -135,7 +137,7 @@ class ChatStreamClient(
             job.cancel()
             call.cancel()
         }
-    }
+    }.buffer(Channel.UNLIMITED)
 
     private sealed interface Method {
         data class Post(val bodyJson: String) : Method
@@ -231,7 +233,7 @@ class ChatStreamClient(
             job.cancel()
             call.cancel()
         }
-    }
+    }.buffer(Channel.UNLIMITED)
 }
 
 sealed interface StreamOutcome {
