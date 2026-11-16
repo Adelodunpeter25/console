@@ -143,9 +143,21 @@ class TerminalStateHolder {
             m + (id to fn(cur).copy(revision = cur.revision + 1))
         }
     }
+    companion object {
+        const val MAX_TERMINAL_BUFFER_CHARS = 100_000
+    }
+
     fun remove(id: String) { _terminals.update { it - id }; _buffers.update { it - id } }
     fun appendOutput(id: String, data: String) {
-        _buffers.update { it + (id to ((it[id] ?: "") + data)) }
+        _buffers.update { map ->
+            val current = map[id].orEmpty() + data
+            val capped = if (current.length > MAX_TERMINAL_BUFFER_CHARS) {
+                current.takeLast(MAX_TERMINAL_BUFFER_CHARS)
+            } else {
+                current
+            }
+            map + (id to capped)
+        }
     }
     fun findLive(projectId: String, cwd: String?): String? {
         val cands = _terminals.value.values.filter { it.projectId == projectId && (it.status == TerminalStatus.Spawning || it.status == TerminalStatus.Running) }
