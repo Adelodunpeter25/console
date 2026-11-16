@@ -135,7 +135,7 @@ fn icon_from_key(key: &str) -> &'static str {
     let icon = match key {
         "sparkle" => IconName::Sparkle,
         "terminal" => IconName::Terminal,
-        "code" => IconName::SquareTerminal,
+        "code" => IconName::FileType(FileTypeIcon::Javascript),
         "pencil" => IconName::Pencil,
         "file" => IconName::File,
         "folder" => IconName::Folder,

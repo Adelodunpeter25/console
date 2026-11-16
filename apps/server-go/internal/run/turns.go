@@ -765,7 +765,7 @@ func (t *turnTranslator) translate(event loop.Event) {
 		if event.Call == nil {
 			return
 		}
-		label := tools.ToolLabel(event.Call.Name)
+		label := tools.ToolCallLabel(event.Call.Name, event.Call.Arguments)
 		flags := tools.ToolKindFlags(event.Call.Name)
 		icon := tools.ToolIconKey(event.Call.Name)
 		t.hub.Broadcast(loop.Event{

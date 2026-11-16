@@ -44,6 +44,27 @@ func TestToolLabelMCPServer(t *testing.T) {
 	}
 }
 
+func TestToolCallLabel(t *testing.T) {
+	cases := []struct {
+		name string
+		args string
+		want string
+	}{
+		{"code", `{"code":"await $'git status --porcelain'"}`, "$ git status --porcelain"},
+		{"code", `{"code":"const f = await file(\"src/main.go\")"}`, "file(src/main.go)"},
+		{"code", `{"code":"await edit(\"config.json\", \"old\", \"new\")"}`, "edit(config.json)"},
+		{"code", `{"code":"const page = await browser.open({url: \"https://example.com\"})"}`, "browser.open"},
+		{"code", `{"code":"let sum = 0;\nfor (let i = 0; i < 10; i++) sum += i;"}`, "sum = 0;"},
+		{"code", `{}`, "Code"},
+		{"read_file", `{"path":"a.txt"}`, "Read File"},
+	}
+	for _, c := range cases {
+		if got := tools.ToolCallLabel(c.name, []byte(c.args)); got != c.want {
+			t.Errorf("ToolCallLabel(%q, %q) = %q, want %q", c.name, c.args, got, c.want)
+		}
+	}
+}
+
 func TestToolKindFlags(t *testing.T) {
 	cases := []struct {
 		name  string
