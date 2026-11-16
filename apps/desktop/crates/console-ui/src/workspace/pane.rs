@@ -454,7 +454,7 @@ fn render_node(
                         .flex_col()
                         .with_spring(
                             ElementId::Name(format!("workspace-split-size1-{}", split.id).into()),
-                            SpringAnimation::new(SpringConfig::new(700.0, 52.0, 1.0))
+                            SpringAnimation::new(SpringConfig::new(1800.0, 85.0, 1.0))
                                 .to(size_1)
                                 .from(0.0)
                                 .with_epsilon(0.5),
