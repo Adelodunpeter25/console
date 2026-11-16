@@ -383,20 +383,11 @@ fn render_node(
                     div()
                         .min_w_0()
                         .min_h_0()
-                        .overflow_hidden()
+                        .flex_grow(size_0)
+                        .flex_shrink(1.0)
+                        .flex_basis(gpui::relative(size_0 / 100.0))
                         .flex()
                         .flex_col()
-                        .with_spring(
-                            ElementId::Name(format!("workspace-split-size0-{}", split.id).into()),
-                            SpringAnimation::new(SpringConfig::new(480.0, 42.0, 1.0))
-                                .to(size_0)
-                                .with_epsilon(0.5),
-                            move |el, s| {
-                                el.flex_grow(s)
-                                    .flex_shrink(1.0)
-                                    .flex_basis(gpui::relative(s / 100.0))
-                            },
-                        )
                         .child(render_node(
                             &split.children[0],
                             active_pane_id,
@@ -465,11 +456,14 @@ fn render_node(
                             ElementId::Name(format!("workspace-split-size1-{}", split.id).into()),
                             SpringAnimation::new(SpringConfig::new(480.0, 42.0, 1.0))
                                 .to(size_1)
+                                .from(0.0)
                                 .with_epsilon(0.5),
                             move |el, s| {
+                                let progress = (s / size_1.max(1.0)).clamp(0.0, 1.0);
                                 el.flex_grow(s)
                                     .flex_shrink(1.0)
                                     .flex_basis(gpui::relative(s / 100.0))
+                                    .opacity(progress)
                             },
                         )
                         .child(render_node(
