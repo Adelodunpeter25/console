@@ -101,25 +101,15 @@ impl ConsoleDesktopApp {
         })
     }
 
-    /// Fetch the chat's synced draft as it opens and adopt it when newer.
-    pub(crate) fn pull_draft(&mut self, session_id: String, cx: &mut Context<Self>) {
-        let client = self.client.clone();
-        cx.spawn(async move |entity, cx| {
-            let Ok(Some(remote)) = client.drafts.get(&session_id).await else {
-                return;
-            };
-            cx.update(|cx| {
-                let Some(handle) = cx.active_window() else {
-                    return;
-                };
-                let _ = handle.update(cx, |_, _window, cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.adopt_remote_draft(remote, cx));
-                    }
-                });
-            });
-        })
-        .detach();
+    /// Adopt the draft bundled in a session bootstrap response, if any.
+    pub(crate) fn adopt_bootstrap_draft(
+        &mut self,
+        remote: Option<ChatDraft>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(remote) = remote {
+            self.adopt_remote_draft(remote, cx);
+        }
     }
 
     /// Apply a server draft if it is newer than what this device holds.

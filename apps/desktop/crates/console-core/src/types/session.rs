@@ -9,7 +9,8 @@ pub struct SessionPageOptions {
     pub before: Option<i64>,
 }
 
-use super::agent::{AgentMessage, ImageAttachment};
+use super::agent::{AgentMessage, ImageAttachment, QueuedPrompt, TodoItem};
+use super::events::BackgroundWork;
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
 
@@ -93,6 +94,20 @@ where
                 .and_then(AgentMessage::from_proto)
         })
         .collect())
+}
+
+/// Everything a pane needs to paint a freshly opened chat in one round-trip.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionBootstrapResponse {
+    #[serde(flatten)]
+    pub detail: SessionDetailResponse,
+    pub changes: Vec<SessionFileChange>,
+    pub todos: Vec<TodoItem>,
+    pub suggestions: Vec<String>,
+    pub queued_prompts: Vec<QueuedPrompt>,
+    pub background_work: Vec<BackgroundWork>,
+    pub draft: Option<console_proto::ChatDraft>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

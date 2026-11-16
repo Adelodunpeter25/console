@@ -1684,29 +1684,16 @@ impl ConsoleDesktopApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.pull_draft(session_id.clone(), cx);
         self.report_session_read(&session_id, cx);
         let client = self.client.clone();
         let saved_position = self.transcript_scroll_positions.get(&session_id).cloned();
         cx.spawn(async move |entity, cx| {
-            // Fetched together and applied in one update, so the transcript
-            // is measured once with its change chips instead of re-measuring
-            // the last row when the changes land later.
-            let (detail, changes) = futures::join!(
-                client.sessions.get(
-                    &session_id,
-                    Some(console_core::SessionPageOptions {
-                        limit: Some(50),
-                        before: None,
-                    }),
-                ),
-                client.sessions.get_changes_without_diff(&session_id),
-            );
-            let changes = changes
-                .map_err(|err| log::warn!("Failed to fetch turn changes: {}", err))
-                .ok();
-            match detail {
-                Ok(detail) => {
+            // One round-trip carries the header, first message page and the
+            // rest of the chat's state, so the transcript is measured once.
+            let bootstrap = client.sessions.get_bootstrap(&session_id).await;
+            match bootstrap {
+                Ok(bootstrap) => {
+                    let detail = bootstrap.detail;
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
@@ -1735,9 +1722,7 @@ impl ConsoleDesktopApp {
                                 });
                                 let app_entity_for_older = entity.clone();
                                 transcript.update(cx, |t, cx| {
-                                    if let Some(changes) = changes {
-                                        t.set_session_changes(Rc::new(changes), cx);
-                                    }
+                                    t.set_session_changes(Rc::new(bootstrap.changes), cx);
                                     t.set_messages(detail.messages, cx);
                                     t.set_pagination(detail.has_more, detail.next_cursor);
                                     // Wire Load older handler for this pane/session
@@ -1811,80 +1796,18 @@ impl ConsoleDesktopApp {
                                     );
                                 }
 
-                                // Hydrate the persisted todo checklist so a
-                                // reopened session shows its outstanding tasks
-                                // right away instead of waiting for the next
-                                // run's todoUpdate (docs/todo-integration.md).
-                                let todo_client = client.clone();
-                                let todo_pane_id = pane_id.clone();
-                                let todo_session_id = session_id.clone();
-                                cx.spawn(async move |entity, cx| {
-                                    if let Ok(items) =
-                                        todo_client.sessions.get_todos(&todo_session_id).await
-                                    {
-                                        let _ = cx.update(|cx| {
-                                            if let Some(app) = entity.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    // Ignore a slower response after
-                                                    // this pane has switched to
-                                                    // another active tab.
-                                                    if this
-                                                        .active_session_for_pane(&todo_pane_id)
-                                                        .as_deref()
-                                                        != Some(todo_session_id.as_str())
-                                                    {
-                                                        return;
-                                                    }
-                                                    this.set_todo_items_for_session(
-                                                        &todo_session_id,
-                                                        items,
-                                                    );
-                                                    cx.notify();
-                                                });
-                                            }
-                                        });
-                                    }
-                                })
-                                .detach();
-
-                                // Shells started before this window attached.
-                                this.load_background_work(session_id.clone(), cx);
-
-                                this.load_suggestions(session_id.clone(), cx);
-
-                                // Hydrate any staged next-turn prompt so a queue
-                                // set before restart or on another device shows
-                                // immediately without waiting for queueUpdated SSE.
-                                let queue_client = client.clone();
-                                let queue_pane_id = pane_id.clone();
-                                let queue_session_id = session_id.clone();
-                                cx.spawn(async move |entity, cx| {
-                                    if let Ok(q) = queue_client
-                                        .runs
-                                        .get_queued_prompts(&queue_session_id)
-                                        .await
-                                    {
-                                        let _ = cx.update(|cx| {
-                                            if let Some(app) = entity.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    if this
-                                                        .active_session_for_pane(&queue_pane_id)
-                                                        .as_deref()
-                                                        != Some(queue_session_id.as_str())
-                                                    {
-                                                        return;
-                                                    }
-                                                    this.set_queue_from_server(
-                                                        &queue_session_id,
-                                                        q,
-                                                    );
-                                                    cx.notify();
-                                                });
-                                            }
-                                        });
-                                    }
-                                })
-                                .detach();
+                                // The bootstrap carries the persisted checklist,
+                                // suggestions, queue, shells and draft alongside
+                                // the transcript, all under the stale guard above.
+                                this.set_todo_items_for_session(&session_id, bootstrap.todos);
+                                this.set_suggestions(&session_id, bootstrap.suggestions, cx);
+                                this.apply_background_work(
+                                    session_id.clone(),
+                                    bootstrap.background_work,
+                                    cx,
+                                );
+                                this.set_queue_from_server(&session_id, bootstrap.queued_prompts);
+                                this.adopt_bootstrap_draft(bootstrap.draft, cx);
 
                                 cx.notify();
                             });

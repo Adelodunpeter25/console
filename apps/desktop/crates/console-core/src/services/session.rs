@@ -112,6 +112,38 @@ impl SessionService {
         }
     }
 
+    /// `GET /api/sessions/:id/bootstrap` — header, first page of messages and
+    /// the rest of a freshly opened chat's state in a single round-trip.
+    pub async fn get_bootstrap(&self, id: &str) -> Result<SessionBootstrapResponse> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{id}/bootstrap"))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get session bootstrap")?;
+
+        let body: ApiResponse<SessionBootstrapResponse> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse session bootstrap response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Session bootstrap data is missing"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to get session bootstrap".into())
+            ))
+        }
+    }
+
     pub async fn get_paginated(
         &self,
         id: &str,

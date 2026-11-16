@@ -48,6 +48,23 @@ impl ConsoleDesktopApp {
             .unwrap_or_default()
     }
 
+    /// Replace the session's work list with `list`, resuming shell polling
+    /// when a detached shell is still running.
+    pub(crate) fn apply_background_work(
+        &mut self,
+        session_id: String,
+        list: Vec<BackgroundWork>,
+        cx: &mut Context<Self>,
+    ) {
+        let has_running = list.iter().any(|w| w.is_running_shell());
+        self.session_background_work
+            .insert(session_id.clone(), Rc::new(list));
+        if has_running {
+            self.poll_background_shells(session_id, cx);
+        }
+        cx.notify();
+    }
+
     /// Load the session's work list so a reopened chat shows shells that were
     /// started before this window attached.
     pub(crate) fn load_background_work(&mut self, session_id: String, cx: &mut Context<Self>) {
@@ -56,16 +73,10 @@ impl ConsoleDesktopApp {
             let Ok(list) = client.runs.list_background_work(&session_id).await else {
                 return;
             };
-            let has_running = list.iter().any(|w| w.is_running_shell());
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.session_background_work
-                            .insert(session_id.clone(), Rc::new(list));
-                        if has_running {
-                            this.poll_background_shells(session_id, cx);
-                        }
-                        cx.notify();
+                        this.apply_background_work(session_id, list, cx);
                     });
                 }
             });

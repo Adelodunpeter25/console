@@ -82,6 +82,10 @@ name = "patch_body_test"
 path = "tests/settings/patch_body_test.rs"
 
 [[test]]
+name = "bootstrap_dto_test"
+path = "tests/session/bootstrap_dto_test.rs"
+
+[[test]]
 name = "changes_scope_test"
 path = "tests/session/changes_scope_test.rs"
 
