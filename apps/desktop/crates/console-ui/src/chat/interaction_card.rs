@@ -179,7 +179,10 @@ impl RenderOnce for QuestionInteractionCard {
             .when_some(custom_input, |el, input| {
                 el.child(
                     div()
-                        .pl(px(24.0))
+                        // Margin, not padding: a following `px(8.0)` would
+                        // otherwise reset the indent and left this field
+                        // wider and further left than the options above it.
+                        .ml(px(24.0))
                         .h(px(32.0))
                         .rounded(px(7.0))
                         .border_1()
