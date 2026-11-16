@@ -180,8 +180,10 @@ func (r *Runtime) dispatchCall(ctx context.Context, args map[string]any) (*jsker
 	switch toolName {
 	case "edit_file":
 		toolName = "editFile"
-	case "read_chat":
-		toolName = "readChat"
+	case "readChat":
+		toolName = "read_chat"
+	case "ask_many":
+		toolName = "askMany"
 	case "web_fetch", "fetch":
 		toolName = "webFetch"
 	case "web_search":
@@ -429,8 +431,12 @@ func formatSummary(tool string, input map[string]any) string {
 		return "visualize(...)"
 	case "writePlan":
 		return fmt.Sprintf("writePlan(%v)", input["name"])
-	case "readChat":
+	case "read_chat", "readChat":
 		return fmt.Sprintf("readChat(%v)", input["ref"])
+	case "ask":
+		return fmt.Sprintf("ask(%v)", input["question"])
+	case "askMany":
+		return "askMany(...)"
 	default:
 		return tool
 	}

@@ -286,7 +286,7 @@ func TestCodemodeToolReplacementDefinitions(t *testing.T) {
 		var defs []tools.Definition
 		for _, def := range reg.Definitions() {
 			switch def.Name {
-			case "code", "code_reset", "ask", "askMany":
+			case "code", "code_reset":
 				defs = append(defs, def)
 			}
 		}
@@ -294,12 +294,12 @@ func TestCodemodeToolReplacementDefinitions(t *testing.T) {
 	}
 
 	filtered := filterDefs()
-	if len(filtered) == 0 {
-		t.Fatal("expected at least code and code_reset tools")
+	if len(filtered) != 2 {
+		t.Fatalf("expected exactly code and code_reset tools, got %d", len(filtered))
 	}
 
 	for _, d := range filtered {
-		if d.Name != "code" && d.Name != "code_reset" && d.Name != "ask" && d.Name != "askMany" {
+		if d.Name != "code" && d.Name != "code_reset" {
 			t.Fatalf("unexpected tool in filtered definitions: %s", d.Name)
 		}
 	}
@@ -378,6 +378,9 @@ func TestCodemodeWebPrimitivesWiring(t *testing.T) {
 			typeof visualize,
 			typeof readChat,
 			typeof readSkill,
+			typeof writePlan,
+			typeof ask,
+			typeof askMany,
 			typeof browser === "function",
 			typeof browser.open === "function",
 			typeof browser.snapshot === "function",
@@ -544,6 +547,47 @@ func TestCodemodePlanMode(t *testing.T) {
 	envWrite := resWrite.(tools.Envelope)
 	if !envWrite.IsError || !strings.Contains(envWrite.Content.(string), "denied") {
 		t.Fatalf("expected write to be denied in plan mode, got: %v", envWrite.Content)
+	}
+}
+
+func TestCodemodeAskAndChatRead(t *testing.T) {
+	// Mock read_chat tool
+	mockReadChat := tools.NewTool("read_chat", "Read chat transcript", tools.TierRead, func(ctx context.Context, in map[string]any) (any, error) {
+		return "Chat transcript for " + fmt.Sprint(in["ref"]), nil
+	})
+	// Mock ask tool
+	mockAsk := tools.NewTool("ask", "Ask question", tools.TierRead, func(ctx context.Context, in map[string]any) (any, error) {
+		return "[User Answer]: Selected Option A", nil
+	})
+
+	reg := tools.NewRegistry(mockReadChat, mockAsk)
+	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess))
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// 1. readChat in code
+	chatScript := `await readChat("session-123");`
+	resChat, err := rt.Eval(ctx, chatScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("readChat eval: %v", err)
+	}
+	envChat := resChat.(tools.Envelope)
+	if envChat.IsError || !strings.Contains(envChat.Content.(string), "session-123") {
+		t.Fatalf("expected chat transcript, got: %v", envChat.Content)
+	}
+
+	// 2. ask in code
+	askScript := `await ask("Which framework?", ["A", "B"]);`
+	resAsk, err := rt.Eval(ctx, askScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("ask eval: %v", err)
+	}
+	envAsk := resAsk.(tools.Envelope)
+	if envAsk.IsError || !strings.Contains(envAsk.Content.(string), "Option A") {
+		t.Fatalf("expected ask response, got: %v", envAsk.Content)
 	}
 }
 

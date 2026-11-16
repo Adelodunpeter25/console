@@ -18,7 +18,7 @@ type codeResetInput struct{}
 func NewCodeTool(rt *Runtime) tools.Tool {
 	return tools.NewTool(
 		"code",
-		"Execute JavaScript in the session REPL to orchestrate file operations, shell commands, searches, and tools. Built-ins: $`cmd`, file(path), write(path, content), edit(path, old, new), glob(pat), grep(pat, opts), list(path), fetch(url), webSearch(query), todo(op, arg), writePlan(name, content), visualize(spec), tools.X(args), searchTools(query), describeTool(name), log(...args), spawnContext(args).",
+		"Execute JavaScript in the session REPL to orchestrate file operations, shell commands, searches, and tools. Built-ins: $`cmd`, file(path), write(path, content), edit(path, old, new), glob(pat), grep(pat, opts), list(path), fetch(url), webSearch(query), todo(op, arg), ask(q, opts), writePlan(name, content), visualize(spec), tools.X(args), searchTools(query), describeTool(name), log(...args), spawnContext(args).",
 		tools.TierRead,
 		func(ctx context.Context, in codeInput) (any, error) {
 			timeout := time.Duration(in.TimeoutMs) * time.Millisecond
@@ -64,6 +64,8 @@ Direct tools are replaced by asynchronous JavaScript functions inside the script
 - fetch(url, [options]) fetches web page markdown or text.
 - webSearch(query, [options]) searches the web (DuckDuckGo/Brave).
 - todo(op, [arg]) manages the session task list (e.g. todo('view'), todo('start', 1), todo('done', 1)).
+- ask(question, [options], [isMultiSelect]) asks the user a clarifying question (returns user answer).
+- askMany(questions) asks the user multiple questions in sequence.
 - readSkill([name]) reads full instructions for a built-in skill (e.g. readSkill("browser-use")).
 - browser: browser.open({url}), browser.snapshot(), browser.tabs(), browser.close({tabId}), or browser(code).
 - console: console.ports.*, console.sessions.*, console.scripts.*, console.models() (while console.log remains).

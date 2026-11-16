@@ -604,7 +604,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			var defs []tools.Definition
 			for _, def := range registry.Definitions() {
 				switch def.Name {
-				case "code", "code_reset", "ask", "askMany", "writePlan":
+				case "code", "code_reset":
 					defs = append(defs, def)
 				}
 			}

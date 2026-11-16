@@ -118,7 +118,7 @@ const bootstrapScript = `
     globalThis.readChat = async function(ref, limit) {
         const input = { ref: String(ref) };
         if (limit) input.limit = limit;
-        return await bridge.call({ tool: "readChat", input: input });
+        return await bridge.call({ tool: "read_chat", input: input });
     };
 
     globalThis.readSkill = async function(name) {
@@ -135,6 +135,28 @@ const bootstrapScript = `
             input = { name: String(arg1 || ""), content: String(arg2 || "") };
         }
         return await bridge.call({ tool: "writePlan", input: input });
+    };
+
+    // User interaction: ask clarifying questions
+    globalThis.ask = async function(question, options, isMultiSelect) {
+        let input = {};
+        if (typeof question === "object" && question !== null) {
+            input = question;
+        } else {
+            input = { question: String(question || "") };
+            if (Array.isArray(options)) {
+                input.options = options.map(String);
+            }
+            if (isMultiSelect) {
+                input.isMultiSelect = true;
+            }
+        }
+        return await bridge.call({ tool: "ask", input: input });
+    };
+
+    globalThis.askMany = async function(questions) {
+        const input = Array.isArray(questions) ? { questions: questions } : (questions || {});
+        return await bridge.call({ tool: "askMany", input: input });
     };
 
     // Generic subkernel proxy factory for kernel-backed capabilities (browser, console, cua)
