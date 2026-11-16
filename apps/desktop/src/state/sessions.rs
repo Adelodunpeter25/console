@@ -1113,11 +1113,17 @@ impl ConsoleDesktopApp {
         let is_different_project = match (&self.selected_project_id, &target_project_id) {
             (Some(current), Some(target)) => current != target,
             (Some(_), None) => true,
-            (None, Some(_)) => self
-                .workspace_root
-                .leaves()
-                .iter()
-                .any(|l| !l.tabs.is_empty()),
+            (None, Some(target)) => {
+                self.workspace_root
+                    .leaves()
+                    .iter()
+                    .any(|l| !l.tabs.is_empty())
+                    // A parked workspace comes back whole, even from an empty desk.
+                    || self
+                        .project_workspace_roots
+                        .get(&Some(target.clone()))
+                        .is_some_and(|root| !console_ui::workspace::ops::is_workspace_empty(root))
+            }
             (None, None) => false,
         };
 
@@ -1250,6 +1256,13 @@ impl ConsoleDesktopApp {
         let is_different_project = self.switch_workspace_for_session(&id, &active_pane_id, cx);
 
         self.selected_session_id = Some(id.clone());
+        // A parked workspace has no chat tab left; the chat belongs in its first
+        // pane, not in whichever split was focused when it was parked.
+        if self.workspace_chat().is_none()
+            && let Some(first) = self.workspace_root.first_leaf().map(|leaf| leaf.id.clone())
+        {
+            self.active_pane_id = Some(first);
+        }
         let title = target_session
             .as_ref()
             .map(|s| s.display_title().to_string())

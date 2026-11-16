@@ -52,6 +52,9 @@ impl ConsoleDesktopApp {
             }
         }
         self.clear_project_if_workspace_empty();
+        if tab_id.starts_with("chat:") {
+            self.park_workspace_if_chatless(cx);
+        }
 
         let next_session = self.active_session_for_pane(pane_id);
         let transcript = self.transcript_for_pane(pane_id);
@@ -84,6 +87,43 @@ impl ConsoleDesktopApp {
         self.refresh_file_tree(cx);
         self.sync_workspace_webviews(cx);
         cx.notify();
+    }
+
+    /// Closing a chat tab by hand must not leave its file, terminal and browser
+    /// splits on screen. When the workspace still has other tabs but no chat,
+    /// park it whole under its key — terminals keep running, nothing is closed
+    /// — and show a clean desk. Opening the chat again brings it back. Settling
+    /// or deleting the chat is what actually ends the workspace.
+    fn park_workspace_if_chatless(&mut self, cx: &mut Context<Self>) {
+        if self.workspace_chat().is_some()
+            || workspace_ops::is_workspace_empty(&self.workspace_root)
+        {
+            return;
+        }
+        let Some(key) = self.selected_project_id.clone() else {
+            return;
+        };
+        self.remember_active_pane();
+        self.workspace_root = workspace_ops::switch_desk(
+            &mut self.project_workspace_roots,
+            &self.workspace_root,
+            &Some(key.clone()),
+            &None,
+        );
+        self.selected_project_id = None;
+        for state in self.workspace_pane_states.values_mut() {
+            if state.selected_project_id.as_deref() == Some(key.as_str()) {
+                state.selected_project_id = None;
+                Rc::make_mut(&mut state.branches).clear();
+                state.branch_loaded = true;
+                state.branch_is_git_repository = false;
+                state.branch_cwd = None;
+            }
+        }
+        self.restore_active_pane(&None);
+        self.persist_layout();
+        self.persist_workspaces();
+        self.sync_workspace_webviews(cx);
     }
 
     /// Once the last tab in every pane is closed the workspace is back to its
