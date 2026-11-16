@@ -67,7 +67,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.console.mobile.core.util.FILE_LINK_PREFIX
+import com.console.mobile.core.util.BARE_FILE_PATH_REGEX
+import com.console.mobile.core.util.BARE_FILE_URL_REGEX
 import com.console.mobile.core.util.PageTitles
+import com.console.mobile.core.util.isBareFilePathMatch
 import com.console.mobile.core.util.bareWebUrls
 import com.console.mobile.core.util.faviconHostOrNull
 import com.console.mobile.core.util.fileLinkTarget
@@ -672,7 +675,7 @@ private fun AnnotatedString.Builder.appendLinkifiedText(src: String, start: Int,
         val rawEnd = start + match.range.last + 1
 
         if (matchStart > cursor) {
-            appendUnescaped(src, cursor, matchStart)
+            appendFileLinkified(src, cursor, matchStart)
         }
         link(trimmed) {
             append(PageTitles.get(trimmed) ?: trimmed)
@@ -683,8 +686,42 @@ private fun AnnotatedString.Builder.appendLinkifiedText(src: String, start: Int,
         cursor = rawEnd
     }
     if (cursor < end) {
-        appendUnescaped(src, cursor, end)
+        appendFileLinkified(src, cursor, end)
     }
+}
+
+/** Plain text between web URLs: `file://` URLs and bare paths become file links, as on desktop. */
+private fun AnnotatedString.Builder.appendFileLinkified(src: String, start: Int, end: Int) {
+    val text = src.substring(start, end)
+    var cursor = 0
+    fun filePath(target: String, shown: String) {
+        appendIcon("file", target)
+        pushLink(LinkAnnotation.Url(FILE_LINK_PREFIX + target, LINK_STYLES))
+        styled(CODE_SPAN) { append(shown) }
+        pop()
+    }
+    for (m in BARE_FILE_URL_REGEX.findAll(text)) {
+        val shown = trimmedBareUrl(m.value)
+        val target = fileLinkTarget(shown)
+        if (shown.isEmpty() || target == null || m.range.first < cursor) continue
+        appendFilePaths(text, cursor, m.range.first, ::filePath)
+        filePath(target, shown)
+        cursor = m.range.first + shown.length
+    }
+    appendFilePaths(text, cursor, text.length, ::filePath)
+}
+
+private fun AnnotatedString.Builder.appendFilePaths(text: String, from: Int, to: Int, filePath: (String, String) -> Unit) {
+    if (from >= to) return
+    val seg = text.substring(from, to)
+    var cursor = 0
+    for (m in BARE_FILE_PATH_REGEX.findAll(seg)) {
+        if (!isBareFilePathMatch(seg, m.range.first, m.value)) continue
+        if (m.range.first > cursor) appendUnescaped(seg, cursor, m.range.first)
+        filePath(m.value, m.value)
+        cursor = m.range.last + 1
+    }
+    if (cursor < seg.length) appendUnescaped(seg, cursor, seg.length)
 }
 
 private fun AnnotatedString.Builder.appendUnescaped(src: String, start: Int, end: Int) {

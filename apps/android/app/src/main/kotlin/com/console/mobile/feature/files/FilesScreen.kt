@@ -53,7 +53,10 @@ import com.console.mobile.SharedNative.GitBadgeInfo
 import com.console.mobile.core.util.gitBadges
 import com.console.mobile.core.util.gitRoleColor
 import com.console.mobile.data.model.getFilePreviewBlock
+import com.console.mobile.core.util.closestMatch
+import com.console.mobile.core.util.isBareFileName
 import com.console.mobile.core.util.resolveFilePath
+import com.console.mobile.core.util.stripLineSuffix
 import com.console.mobile.data.model.isMarkdownPath
 import com.console.mobile.data.model.filePreviewKind
 import com.console.mobile.data.model.FilePreviewKind
@@ -221,7 +224,16 @@ fun FilesScreen(onBack: () -> Unit) {
     LaunchedEffect(pendingFile, projectRoot) {
         if (pendingFile == null || projectRoot == null) return@LaunchedEffect
         AppContainer.appStateHolder.consumePendingFile()
-        selectFile(resolveFilePath(pendingFile, projectRoot), null, fromLink = true)
+        var target = resolveFilePath(pendingFile, projectRoot)
+        // A bare name only resolves when the file sits in the project root, so look it up.
+        if (isBareFileName(pendingFile) && !pendingFile.startsWith("~")) {
+            val name = stripLineSuffix(pendingFile.trim())
+            val found = runCatching { AppContainer.fsRepository.searchFiles(projectRoot, name, 20, false) }.getOrDefault(emptyList())
+                .filter { !it.is_dir && it.absolute_path.substringAfterLast('/').equals(name, ignoreCase = true) }
+                .map { it.absolute_path }
+            if (target !in found) closestMatch(projectRoot, found)?.let { target = it }
+        }
+        selectFile(target, null, fromLink = true)
     }
 
     // File preview view.

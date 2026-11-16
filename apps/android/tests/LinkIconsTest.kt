@@ -1,7 +1,11 @@
 package com.console.mobile
 
 import com.console.mobile.SharedNative
+import com.console.mobile.core.util.BARE_FILE_PATH_REGEX
 import com.console.mobile.core.util.FILE_LINK_PREFIX
+import com.console.mobile.core.util.closestMatch
+import com.console.mobile.core.util.isBareFileName
+import com.console.mobile.core.util.isBareFilePathMatch
 import com.console.mobile.core.util.faviconHostOrNull
 import com.console.mobile.core.util.fileLinkTarget
 import com.console.mobile.core.util.filePathFromLink
@@ -102,5 +106,33 @@ class LinkIconsTest {
         assertEquals("> hello\n\n", com.console.mobile.feature.chat.markdown.formatCiteQuote("hello"))
         assertEquals("> first\n> second\n\n", com.console.mobile.feature.chat.markdown.formatCiteQuote("first\nsecond"))
         assertEquals("", com.console.mobile.feature.chat.markdown.formatCiteQuote("   "))
+    }
+
+    @Test
+    fun barePathsInProseMatchDesktop() {
+        fun found(text: String) = BARE_FILE_PATH_REGEX.findAll(text)
+            .filter { isBareFilePathMatch(text, it.range.first, it.value) }.map { it.value }.toList()
+        assertEquals(listOf("apps/server/index.ts"), found("see apps/server/index.ts now"))
+        assertEquals(listOf("./src/foo.rs:12:3"), found("at ./src/foo.rs:12:3."))
+        assertEquals(listOf("/abs/path/file.md"), found("(/abs/path/file.md)"))
+        assertEquals(listOf("~/proj/file.png"), found("open ~/proj/file.png"))
+        assertEquals(emptyList<String>(), found("costs \$0.0005/audio-minute"))
+        assertEquals(emptyList<String>(), found("version 1.2.3 and e.g. foo()"))
+    }
+
+    @Test
+    fun fileUrlsAreDecoded() {
+        assertEquals("/tmp/example file.txt", fileLinkTarget("file:///tmp/example%20file.txt"))
+        assertEquals("/tmp/a.rs", fileLinkTarget("file://localhost/tmp/a.rs:4:2"))
+        assertEquals("/tmp/a b.rs", resolveFilePath("file:///tmp/a%20b.rs", "/root"))
+    }
+
+    @Test
+    fun closestMatchPrefersNearestToCwd() {
+        val c = listOf("/p/a/x/main.rs", "/p/b/main.rs", "/p/b/deep/main.rs")
+        assertEquals("/p/b/main.rs", closestMatch("/p/b", c))
+        assertEquals("/p/a/x/main.rs", closestMatch("/p/a/x", c))
+        assertEquals(true, isBareFileName("main.rs:3"))
+        assertEquals(false, isBareFileName("src/main.rs"))
     }
 }
