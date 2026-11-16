@@ -1,5 +1,6 @@
-//! The workspace tab bar's `+` dropdown: one handle per pane, and the rows
-//! that open each kind of tab in the pane whose button was clicked.
+//! The workspace tab bar's `+` dropdown: one handle per pane. Every row
+//! except New Chat opens in the right-hand split beside the chat, the same
+//! place new browser tabs go.
 
 use std::rc::Rc;
 
@@ -76,22 +77,19 @@ pub(crate) fn new_tab_menu_items(
                 kbd("⌃G"),
                 Rc::new(|this, _, cx| this.open_changes_for_active_pane(cx)),
             ),
-            row("Terminal", IconName::Terminal, kbd("⌃T"), {
-                let pane_id = pane_id.clone();
-                Rc::new(move |this, window, cx| {
-                    this.open_terminal_tab_for_pane_project(&pane_id, window, cx)
-                })
-            }),
+            row(
+                "Terminal",
+                IconName::Terminal,
+                kbd("⌃T"),
+                Rc::new(|this, window, cx| this.open_terminal_tab(window, cx)),
+            ),
         ];
         if !cfg!(target_os = "windows") {
-            let pane_id = pane_id.clone();
             items.push(row(
                 "Browser",
                 IconName::Global,
                 kbd("⌃B"),
-                Rc::new(move |this, window, cx| {
-                    this.open_browser_tab_in_pane(&pane_id, None, true, window, cx)
-                }),
+                Rc::new(|this, window, cx| this.open_browser_tab(window, cx)),
             ));
         }
         if cfg!(target_os = "macos") {
@@ -107,13 +105,15 @@ pub(crate) fn new_tab_menu_items(
 }
 
 impl ConsoleDesktopApp {
-    /// Open the changes review for the chat in the active pane, if any.
+    /// Open the changes review for the focused chat, if any, in the
+    /// right-hand split. The chat is resolved before the split is chosen.
     pub fn open_changes_for_active_pane(&mut self, cx: &mut Context<Self>) {
-        let pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".into());
-        if let Some(session_id) = self.active_session_for_pane(&pane_id) {
+        let chat_pane = self.active_chat_pane_id().unwrap_or_else(|| {
+            self.active_pane_id
+                .clone()
+                .unwrap_or_else(|| "pane-main".into())
+        });
+        if let Some(session_id) = self.active_session_for_pane(&chat_pane) {
             self.open_changes_review_tab(
                 session_id,
                 console_core::types::ChangesScope::AllTurns,

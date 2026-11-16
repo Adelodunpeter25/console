@@ -9,12 +9,9 @@ use gpui::Context;
 use crate::state::app::ConsoleDesktopApp;
 
 impl ConsoleDesktopApp {
-    /// Open (or focus, if already open) the Files tab in the active pane.
+    /// Open (or focus, if already open) the Files tab in the right-hand split.
     pub fn open_file_tree_tab(&mut self, cx: &mut Context<Self>) {
-        let pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".into());
+        let pane_id = self.target_subtab_pane_id();
 
         let tab = WorkspaceTabConfig::FileTree {
             title: "Files".to_string(),

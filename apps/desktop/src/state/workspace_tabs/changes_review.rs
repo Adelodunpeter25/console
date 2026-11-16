@@ -10,17 +10,14 @@ use crate::state::app::ConsoleDesktopApp;
 
 impl ConsoleDesktopApp {
     /// Open (or focus, if already open) the review tab for the given session
-    /// and scope in the active pane.
+    /// and scope in the right-hand split beside the chat.
     pub fn open_changes_review_tab(
         &mut self,
         session_id: String,
         scope: ChangesScope,
         cx: &mut Context<Self>,
     ) {
-        let pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".into());
+        let pane_id = self.target_subtab_pane_id();
 
         let title = format!("Changes: {}", scope.label());
         let tab = WorkspaceTabConfig::ChangesReview {
