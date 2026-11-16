@@ -33,12 +33,13 @@ pub fn init_sidebar_search_keybindings(cx: &mut App) {
 
 use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
 use gpui::{
-    AnimationExt, App, Entity, FontWeight, InteractiveElement, IntoElement, ListState, MouseButton,
+    Animation, AnimationExt, App, Entity, FontWeight, InteractiveElement, IntoElement, ListState, MouseButton,
     ParentElement, RenderOnce, SpringAnimation, SpringConfig, StatefulInteractiveElement, Styled,
     Window, div, list, prelude::FluentBuilder, px,
 };
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use crate::input::ComposerInput;
 use crate::primitives::menu::{ContextMenuHandle, MenuAlign, MenuItem, dropdown_menu};
@@ -50,6 +51,48 @@ use crate::utils::{
     ProjectSectionKey, SessionDateGroup, SidebarSortMode, group_indices_by_date,
     group_indices_by_project, partition_settled,
 };
+
+const ROW_FADE: Duration = Duration::from_millis(140);
+
+/// Session ids the list showed last render, plus the rows that appeared
+/// recently (expanded section, new chat) and are still fading in. Collapsed
+/// rows are dropped from the list before rendering, so only appearance can be
+/// animated.
+#[derive(Default)]
+struct RowFades {
+    seen: HashSet<String>,
+    fresh: HashMap<String, (Instant, u64)>,
+    generation: u64,
+}
+
+impl gpui::Global for RowFades {}
+
+/// Record this render's session ids and return the rows still fading in,
+/// keyed by id with a per-appearance generation (animation state is keyed by
+/// element id, so a replay needs a new one).
+fn fading_rows(current: HashSet<String>, cx: &mut App) -> Rc<HashMap<String, u64>> {
+    let fades = cx.default_global::<RowFades>();
+    let now = Instant::now();
+    fades
+        .fresh
+        .retain(|_, (since, _)| now.duration_since(*since) < ROW_FADE * 2);
+    // First paint and workspace-wide reloads have nothing to compare against.
+    if !fades.seen.is_empty() {
+        for id in current.difference(&fades.seen) {
+            fades.generation += 1;
+            let generation = fades.generation;
+            fades.fresh.insert(id.clone(), (now, generation));
+        }
+    }
+    fades.seen = current;
+    Rc::new(
+        fades
+            .fresh
+            .iter()
+            .map(|(id, (_, generation))| (id.clone(), *generation))
+            .collect(),
+    )
+}
 
 /// Collapsed-project key for sessions without a known project.
 pub const NO_PROJECT_KEY: &str = "none";
@@ -759,6 +802,16 @@ impl RenderOnce for SidebarView {
             sidebar_list_state.reset_with_uniform_height(list_rows.len(), px(55.0));
         }
 
+        let list_fresh = fading_rows(
+            list_rows
+                .iter()
+                .filter_map(|row| match row {
+                    SidebarRow::Session(index) => Some(sessions[*index].id.clone()),
+                    _ => None,
+                })
+                .collect(),
+            cx,
+        );
         let list_sessions = sessions;
         let list_projects = projects;
         let list_selected_id = selected_id;
@@ -790,6 +843,12 @@ impl RenderOnce for SidebarView {
         let grouped_rows = list(sidebar_list_state, move |index, window, cx| {
             let Some(row) = list_rows.get(index).cloned() else {
                 return div().into_any_element();
+            };
+            let fade_generation = match &row {
+                SidebarRow::Session(index) => list_sessions
+                    .get(*index)
+                    .and_then(|session| list_fresh.get(&session.id).copied()),
+                _ => None,
             };
             let row = match row {
                 SidebarRow::Draft(draft_index) => {
@@ -885,7 +944,22 @@ impl RenderOnce for SidebarView {
                     .child("No matching sessions")
                     .into_any_element(),
             };
-            div().w_full().pb(px(2.0)).child(row).into_any_element()
+            let row = div().w_full().pb(px(2.0)).child(row);
+            match fade_generation {
+                Some(generation) => row
+                    .id(gpui::ElementId::Name(
+                        format!("sidebar-row-fade-{index}-{generation}").into(),
+                    ))
+                    .with_animation(
+                        gpui::ElementId::Name(
+                            format!("sidebar-row-fade-anim-{index}-{generation}").into(),
+                        ),
+                        Animation::new(ROW_FADE),
+                        |element, delta| element.opacity(delta),
+                    )
+                    .into_any_element(),
+                None => row.into_any_element(),
+            }
         })
         .size_full();
 
