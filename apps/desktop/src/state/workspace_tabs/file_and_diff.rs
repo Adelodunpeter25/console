@@ -19,9 +19,12 @@ impl ConsoleDesktopApp {
         // A bare name (`file_tree.rs`) only resolves when the file sits in the
         // cwd itself. Open the direct guess when it exists; otherwise search
         // the project for the name instead of opening a path that is not there.
-        let target_pane = self.target_subtab_pane_id();
+        // The split is created only when a tab is about to open in it: a bare
+        // name still needs a server-side search first, and an early split
+        // would sit on the chat empty state for that whole round trip.
         let direct_exists = std::path::Path::new(&resolved).is_file();
         if !links::is_bare_file_name(&link) || direct_exists {
+            let target_pane = self.target_subtab_pane_id();
             if let Some(line) = line {
                 self.open_file_tab_at_line(&target_pane, resolved, line, None, cx);
             } else {

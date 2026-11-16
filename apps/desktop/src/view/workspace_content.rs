@@ -232,7 +232,7 @@ impl ConsoleDesktopApp {
                     }
                     console_ui::SvgViewMode::Source => {
                         let Some(content) = self.ensure_text_file_state(&path, cx) else {
-                            return Self::file_loading_content_panel();
+                            return Self::file_loading_content_panel(&theme);
                         };
                         let file_viewer =
                             self.file_editor_viewer(pane_id, &path, &content, &theme, cx);
@@ -265,7 +265,7 @@ impl ConsoleDesktopApp {
 
                 if mode == console_ui::SvgViewMode::Source {
                     let Some(content) = self.ensure_text_file_state(&path, cx) else {
-                        return Self::file_loading_content_panel();
+                        return Self::file_loading_content_panel(&theme);
                     };
                     let file_viewer = self.file_editor_viewer(pane_id, &path, &content, &theme, cx);
                     return div()
@@ -326,7 +326,7 @@ impl ConsoleDesktopApp {
             }
             console_core::FileKind::Text => {
                 let Some(content) = self.ensure_text_file_state(&path, cx) else {
-                    return Self::file_loading_content_panel();
+                    return Self::file_loading_content_panel(&theme);
                 };
 
                 let comment_cards = self.file_comment_cards(pane_id, &path, window, cx);
@@ -434,21 +434,21 @@ impl ConsoleDesktopApp {
             .gap(px(8.0))
             .text_color(theme.text_tertiary)
             .text_size(px(13.0))
-            .child(console_ui::app_icon(
-                console_ui::IconName::LoaderCircle,
-                16.0,
-                theme.text_tertiary,
+            .child(console_ui::primitives::motion::spin_slow(
+                console_ui::app_icon(
+                    console_ui::IconName::LoaderCircle,
+                    16.0,
+                    theme.text_tertiary,
+                ),
             ))
             .child(label.to_owned())
             .into_any_element()
     }
 
-    /// The "still decoding" panel shown while a text/markdown fetch is in
-    /// flight (no spinner — identical to the original placeholder).
-    fn file_loading_content_panel() -> gpui::AnyElement {
-        console_ui::BlockedFilePanel::new("Loading file…", "The file content is still loading.")
-            .icon(console_ui::IconName::File)
-            .into_any_element()
+    /// The "still fetching" panel shown while a text/markdown fetch is in
+    /// flight: the same centered spinner row as the image states.
+    fn file_loading_content_panel(theme: &Theme) -> gpui::AnyElement {
+        Self::file_loading_panel("Loading file…", theme)
     }
 
     /// The "failed" panel whose retry refetches the tab content.
