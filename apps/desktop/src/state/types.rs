@@ -290,6 +290,11 @@ pub struct ConsoleDesktopApp {
     /// data was fetched; toggling reviewed flips membership here too.
     pub(crate) changes_review_collapsed:
         std::collections::HashMap<String, std::collections::HashSet<String>>,
+    /// Tree contents and expanded folders for each open Files tab, keyed by tab id.
+    pub(crate) file_tree_data:
+        std::collections::HashMap<String, Rc<Vec<console_ui::FileTreeNode>>>,
+    pub(crate) file_tree_expanded:
+        std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub inspector_expanded_folders: Rc<std::collections::HashSet<String>>,
     pub inspector_selected_path: Option<String>,
     pub session_subagents:

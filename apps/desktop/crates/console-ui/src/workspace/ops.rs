@@ -334,6 +334,7 @@ pub fn open_file_paths(root: &WorkspaceNode) -> Vec<String> {
                 | WorkspaceTabConfig::Terminal { .. }
                 | WorkspaceTabConfig::Browser { .. }
                 | WorkspaceTabConfig::ChangesReview { .. }
+                | WorkspaceTabConfig::FileTree { .. }
                 | WorkspaceTabConfig::Settings { .. } => {}
             }
         }

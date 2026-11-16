@@ -127,6 +127,11 @@ impl ConsoleDesktopApp {
             );
         }
 
+        if let Some(console_core::WorkspaceTabConfig::FileTree { .. }) = active_tab {
+            let tab_id = active_tab.map(|tab| tab.id()).unwrap_or_default();
+            return self.render_file_tree_tab(tab_id, cx);
+        }
+
         // Chat tab: transcript, pills, banners, composer and footer.
         self.render_chat_tab(pane_id, window, cx)
     }
@@ -531,6 +536,49 @@ impl ConsoleDesktopApp {
                 console_ui::DiffViewer::new(diff_view)
                     .path(self.comment_display_path(pane_id, &path)),
             )
+            .into_any_element()
+    }
+
+    /// Files tab: the project's file tree; selecting a file opens it as a tab.
+    fn render_file_tree_tab(&mut self, tab_id: String, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let tree = self
+            .file_tree_data
+            .get(&tab_id)
+            .cloned()
+            .unwrap_or_else(|| self.inspector_tree.clone());
+        let expanded = self
+            .file_tree_expanded
+            .get(&tab_id)
+            .cloned()
+            .unwrap_or_default();
+        let entity = cx.entity().downgrade();
+        let on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App)> = {
+            let entity = entity.clone();
+            Rc::new(move |path, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.toggle_file_tree_folder(&tab_id, path, cx);
+                    });
+                }
+            })
+        };
+        let on_select_file: Rc<dyn Fn(String, &mut Window, &mut App)> = Rc::new(move |path, _w, cx| {
+            if let Some(app) = entity.upgrade() {
+                app.update(cx, |this, cx| this.open_file_tab(path, cx));
+            }
+        });
+        div()
+            .size_full()
+            .min_h_0()
+            .child(console_ui::FileTreeView::new(
+                tree,
+                expanded,
+                self.inspector_selected_path.clone(),
+                String::new(),
+                on_toggle_folder,
+                self.inspector_git_badges.clone(),
+                on_select_file,
+            ))
             .into_any_element()
     }
 

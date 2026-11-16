@@ -347,7 +347,8 @@ impl ConsoleDesktopApp {
             Some(console_core::WorkspaceTabConfig::File { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Diff { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Terminal { project_id, .. })
-            | Some(console_core::WorkspaceTabConfig::Browser { project_id, .. }) => {
+            | Some(console_core::WorkspaceTabConfig::Browser { project_id, .. })
+            | Some(console_core::WorkspaceTabConfig::FileTree { project_id, .. }) => {
                 // When focused on a tab in the workspace (Diff, Terminal, File), retain the pane's
                 // active session and its cwd so the changes inspector doesn't clear out.
                 let session_id = self.active_session_for_pane(pane_id);
@@ -539,7 +540,7 @@ impl ConsoleDesktopApp {
     /// the `right_sidebar_visible` guard that was previously copy-pasted
     /// across every tab-select/close path in `view/mod.rs`.
     pub fn maybe_refresh_inspector(&mut self, cx: &mut Context<Self>) {
-        if self.right_sidebar_visible {
+        if self.right_sidebar_visible || self.file_tree_tab_active() {
             self.refresh_inspector(cx);
         }
     }
@@ -612,7 +613,7 @@ impl ConsoleDesktopApp {
     /// each kind. Reopening restarts them because dropping clears the stored
     /// target that `ensure_*` compares against.
     pub fn sync_inspector_watchers(&mut self, cx: &mut Context<Self>) {
-        let watches = if self.right_sidebar_visible {
+        let mut watches = if self.right_sidebar_visible {
             self.inspector_active_tab.watches()
         } else {
             InspectorWatches {
@@ -620,6 +621,10 @@ impl ConsoleDesktopApp {
                 git: false,
             }
         };
+        if self.file_tree_tab_active() {
+            watches.fs = true;
+            watches.git = true;
+        }
         if watches.fs {
             self.ensure_inspector_fs_watcher(cx);
         } else {
@@ -635,7 +640,18 @@ impl ConsoleDesktopApp {
     /// True while the Files tree is on screen (sidebar visible and the Files
     /// tab active) — the only time an fs-driven refetch is worth issuing.
     fn inspector_tree_visible(&self) -> bool {
-        self.right_sidebar_visible && self.inspector_active_tab.watches().fs
+        (self.right_sidebar_visible && self.inspector_active_tab.watches().fs)
+            || self.file_tree_tab_active()
+    }
+
+    /// True while a Files tab is the active tab of any pane.
+    pub(crate) fn file_tree_tab_active(&self) -> bool {
+        self.workspace_root.leaves().iter().any(|leaf| {
+            matches!(
+                leaf.active_tab_id.as_deref().and_then(|id| leaf.tabs.iter().find(|t| t.id() == id)),
+                Some(console_core::WorkspaceTabConfig::FileTree { .. })
+            )
+        })
     }
 
     pub fn ensure_inspector_fs_watcher(&mut self, cx: &mut Context<Self>) {
@@ -714,7 +730,7 @@ impl ConsoleDesktopApp {
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            if this.right_sidebar_visible {
+                            if this.right_sidebar_visible || this.file_tree_tab_active() {
                                 this.set_inspector_working_changes(status.files);
                             }
                             // Keep branches in sync across all panes whose cwd matches this repository.
@@ -799,7 +815,11 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.inspector_tree = Rc::new(tree);
+                                let tree = Rc::new(tree);
+                                for data in this.file_tree_data.values_mut() {
+                                    *data = tree.clone();
+                                }
+                                this.inspector_tree = tree;
                                 cx.notify();
                             });
                         }

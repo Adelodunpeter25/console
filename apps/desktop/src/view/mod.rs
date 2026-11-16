@@ -222,6 +222,9 @@ impl Render for ConsoleDesktopApp {
                 })
                 | Some(console_core::WorkspaceTabConfig::ChangesReview {
                     title, project_id, ..
+                })
+                | Some(console_core::WorkspaceTabConfig::FileTree {
+                    title, project_id, ..
                 }) => {
                     let folder = project_id
                         .as_deref()

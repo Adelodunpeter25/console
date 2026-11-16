@@ -325,6 +325,16 @@ impl RenderOnce for WorkspaceTabBar {
                                         .into_any_element()
                                     }
                                 }
+                                console_core::WorkspaceTabConfig::FileTree { .. } => app_icon(
+                                    IconName::Folder,
+                                    11.0,
+                                    if is_active {
+                                        theme.text
+                                    } else {
+                                        theme.text_tertiary
+                                    },
+                                )
+                                .into_any_element(),
                                 console_core::WorkspaceTabConfig::ChangesReview { .. } => app_icon(
                                     IconName::FileDiff,
                                     11.0,

@@ -452,6 +452,19 @@ impl ConsoleDesktopApp {
             }
             WorkspaceTabConfig::Chat { .. } => {}
             WorkspaceTabConfig::Settings { .. } => {}
+            WorkspaceTabConfig::FileTree { .. } => {
+                let tab_id = tab.id();
+                let still_referenced = self
+                    .workspace_root
+                    .leaves()
+                    .iter()
+                    .flat_map(|leaf| leaf.tabs.iter())
+                    .any(|open_tab| open_tab.id() == tab_id);
+                if !still_referenced {
+                    self.file_tree_data.remove(&tab_id);
+                    self.file_tree_expanded.remove(&tab_id);
+                }
+            }
             WorkspaceTabConfig::ChangesReview { .. } => {
                 let tab_id = tab.id();
                 let still_referenced = self
