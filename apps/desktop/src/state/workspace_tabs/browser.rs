@@ -51,6 +51,14 @@ impl ConsoleDesktopApp {
             });
         });
 
+        let focus_bid = browser_id.to_string();
+        let focus_app = cx.entity().downgrade();
+        view.update(cx, |v, _cx| {
+            v.set_user_focus_handler(move |cx| {
+                let _ = focus_app.update(cx, |this, cx| this.focus_pane_of_browser(&focus_bid, cx));
+            });
+        });
+
         let bid = browser_id.to_string();
         let sub = cx.observe(&view, move |this, view, cx| {
             // The annotation popover floats above the native webview in GPUI,
@@ -146,6 +154,22 @@ impl ConsoleDesktopApp {
             });
         }
         self.sync_device_webview(cx);
+    }
+
+    /// A click into a page focuses the pane that holds its tab.
+    fn focus_pane_of_browser(&mut self, browser_id: &str, cx: &mut Context<Self>) {
+        let tab_id = format!("browser:{browser_id}");
+        let pane_id = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.active_tab_id.as_deref() == Some(tab_id.as_str()))
+            .map(|leaf| leaf.id.clone());
+        if let Some(pane_id) = pane_id
+            && self.active_pane_id.as_deref() != Some(pane_id.as_str())
+        {
+            self.focus_workspace_pane(&pane_id, cx);
+        }
     }
 
     /// Open a Browser tab in the active pane, optionally seeded with a URL.

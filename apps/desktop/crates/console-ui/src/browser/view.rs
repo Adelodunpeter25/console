@@ -122,6 +122,9 @@ pub struct BrowserView {
     annotation_handler: Option<
         Rc<dyn Fn(console_core::BrowserElementAnnotation, &mut gpui::App) -> bool + 'static>,
     >,
+    /// Owner callback: the user clicked into the page. The native view paints
+    /// above the app, so the click never reaches the pane that hosts it.
+    on_user_focus: Option<Rc<dyn Fn(&mut gpui::App) + 'static>>,
     /// Results posted back by agent-run scripts, keyed by request id.
     script_results: HashMap<String, ScriptOutcome>,
     _subscriptions: Vec<Subscription>,
@@ -268,6 +271,7 @@ impl BrowserView {
             annotation_capture_failed: false,
             surface_size: std::rc::Rc::new(std::cell::Cell::new(None)),
             annotation_handler: None,
+            on_user_focus: None,
             script_results: HashMap::new(),
             _subscriptions: vec![
                 submit_subscription,
@@ -404,6 +408,13 @@ impl BrowserView {
     }
 
     #[cfg(target_os = "macos")]
+    fn notify_user_focus(&self, cx: &mut Context<Self>) {
+        if let Some(handler) = self.on_user_focus.clone() {
+            handler(cx);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
     fn native_responder_changed(
         &mut self,
         user_gesture: bool,
@@ -415,6 +426,9 @@ impl BrowserView {
             .as_ref()
             .is_some_and(|host| host.native_focus_within());
         if natively_focused {
+            if user_gesture && !self.was_natively_focused {
+                self.notify_user_focus(cx);
+            }
             let address_focused = self.address.read(cx).focus().is_focused(window);
             if address_focused && !user_gesture {
                 self.reclaim_native_keyboard(cx);
@@ -509,6 +523,12 @@ impl BrowserView {
             host.evaluate_script(&script);
         }
         cx.notify();
+    }
+
+    /// Called when the user clicks into the page, so the owner can focus the
+    /// pane that holds this view.
+    pub fn set_user_focus_handler(&mut self, handler: impl Fn(&mut gpui::App) + 'static) {
+        self.on_user_focus = Some(Rc::new(handler));
     }
 
     pub fn set_annotation_handler(
