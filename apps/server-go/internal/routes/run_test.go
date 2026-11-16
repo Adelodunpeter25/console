@@ -82,7 +82,7 @@ func TestWireFrameSessionApprovalModeUpdated(t *testing.T) {
 	if envelope["type"] != "sessionApprovalModeUpdated" {
 		t.Fatalf("envelope type = %v", envelope["type"])
 	}
-	if envelope["approvalMode"] != "full-access" || envelope["approval_mode"] != "full-access" {
+	if envelope["approvalMode"] != "full-access" {
 		t.Fatalf("approvalMode payload = %#v", envelope)
 	}
 }
