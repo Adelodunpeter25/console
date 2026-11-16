@@ -92,7 +92,8 @@ impl ConsoleDesktopApp {
             | console_core::WorkspaceTabConfig::Terminal { project_id, .. }
             | console_core::WorkspaceTabConfig::Browser { project_id, .. }
             | console_core::WorkspaceTabConfig::ChangesReview { project_id, .. }
-            | console_core::WorkspaceTabConfig::FileTree { project_id, .. } => {
+            | console_core::WorkspaceTabConfig::FileTree { project_id, .. }
+            | console_core::WorkspaceTabConfig::Device { project_id, .. } => {
                 project_id.clone()
             }
         };

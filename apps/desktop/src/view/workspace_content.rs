@@ -127,6 +127,13 @@ impl ConsoleDesktopApp {
             );
         }
 
+        if let Some(console_core::WorkspaceTabConfig::Device { .. }) = active_tab {
+            let device = self.device_view_for_inspector(window, cx);
+            let occluded = self.any_palette_open(cx);
+            device.update(cx, |view, cx| view.sync_native_state(true, occluded, cx));
+            return div().size_full().child(device).into_any_element();
+        }
+
         if let Some(console_core::WorkspaceTabConfig::FileTree { .. }) = active_tab {
             let tab_id = active_tab.map(|tab| tab.id()).unwrap_or_default();
             return self.render_file_tree_tab(tab_id, cx);

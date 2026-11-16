@@ -293,6 +293,7 @@ fn tab_palette_entries(
                 | WorkspaceTabConfig::Diff { .. }
                 | WorkspaceTabConfig::ChangesReview { .. }
                 | WorkspaceTabConfig::FileTree { .. }
+                | WorkspaceTabConfig::Device { .. }
                 | WorkspaceTabConfig::Settings { .. } => continue,
             };
             let entry = tab_palette_entry(

@@ -452,6 +452,18 @@ impl ConsoleDesktopApp {
             }
             WorkspaceTabConfig::Chat { .. } => {}
             WorkspaceTabConfig::Settings { .. } => {}
+            WorkspaceTabConfig::Device { .. } => {
+                let still_open = self
+                    .workspace_root
+                    .leaves()
+                    .iter()
+                    .flat_map(|leaf| leaf.tabs.iter())
+                    .any(|open_tab| matches!(open_tab, WorkspaceTabConfig::Device { .. }));
+                let sidebar_uses = self.inspector_open_auxiliary_tabs.contains(&console_ui::AuxiliaryTab::Devices);
+                if !still_open && !sidebar_uses && let Some(device) = self.device_view.take() {
+                    device.update(cx, |view, cx| view.close(cx));
+                }
+            }
             WorkspaceTabConfig::FileTree { .. } => {
                 let tab_id = tab.id();
                 let still_referenced = self

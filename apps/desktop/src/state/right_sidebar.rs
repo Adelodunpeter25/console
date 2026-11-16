@@ -11,9 +11,12 @@ use super::{
 
 impl ConsoleDesktopApp {
     pub(super) fn sync_inspector_webviews(&self, cx: &mut Context<Self>) {
-        let is_device = !self.settings_open
-            && self.right_sidebar_visible
+        let sidebar_device = self.right_sidebar_visible
             && self.inspector_active_tab == InspectorTab::Auxiliary(AuxiliaryTab::Devices);
+        let tab_device = self.workspace_root.leaves().iter().any(|leaf| {
+            leaf.active_tab_id.as_deref() == Some("device")
+        });
+        let is_device = !self.settings_open && (sidebar_device || tab_device);
         if let Some(ref device) = self.device_view {
             let overlay_open = device.read(cx).overlay_open();
             device.update(cx, |view, cx| {
@@ -348,7 +351,8 @@ impl ConsoleDesktopApp {
             | Some(console_core::WorkspaceTabConfig::Diff { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Terminal { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Browser { project_id, .. })
-            | Some(console_core::WorkspaceTabConfig::FileTree { project_id, .. }) => {
+            | Some(console_core::WorkspaceTabConfig::FileTree { project_id, .. })
+            | Some(console_core::WorkspaceTabConfig::Device { project_id, .. }) => {
                 // When focused on a tab in the workspace (Diff, Terminal, File), retain the pane's
                 // active session and its cwd so the changes inspector doesn't clear out.
                 let session_id = self.active_session_for_pane(pane_id);

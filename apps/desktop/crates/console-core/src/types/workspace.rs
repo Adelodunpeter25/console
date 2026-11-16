@@ -99,6 +99,15 @@ pub enum WorkspaceTabConfig {
         #[serde(rename = "lastActiveAtMs")]
         last_active_at_ms: Option<i64>,
     },
+    #[serde(rename = "device")]
+    Device {
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        project_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "lastActiveAtMs")]
+        last_active_at_ms: Option<i64>,
+    },
     #[serde(rename = "settings")]
     Settings {
         #[serde(default = "default_settings_title")]
@@ -128,6 +137,7 @@ impl WorkspaceTabConfig {
                 session_id, scope, ..
             } => format!("changesReview:{session_id}:{scope:?}"),
             Self::FileTree { .. } => "files".to_string(),
+            Self::Device { .. } => "device".to_string(),
             Self::Settings { .. } => "settings".to_string(),
         }
     }
@@ -141,6 +151,7 @@ impl WorkspaceTabConfig {
             | Self::Browser { title, .. }
             | Self::ChangesReview { title, .. }
             | Self::FileTree { title, .. }
+            | Self::Device { title, .. }
             | Self::Settings { title, .. } => title,
         }
     }
@@ -155,6 +166,7 @@ impl WorkspaceTabConfig {
             | Self::Browser { title: t, .. }
             | Self::ChangesReview { title: t, .. }
             | Self::FileTree { title: t, .. }
+            | Self::Device { title: t, .. }
             | Self::Settings { title: t, .. } => *t = title,
         }
     }
@@ -167,7 +179,8 @@ impl WorkspaceTabConfig {
             | Self::Diff { project_id, .. }
             | Self::Browser { project_id, .. }
             | Self::ChangesReview { project_id, .. }
-            | Self::FileTree { project_id, .. } => project_id.as_deref(),
+            | Self::FileTree { project_id, .. }
+            | Self::Device { project_id, .. } => project_id.as_deref(),
             Self::Settings { .. } => None,
         }
     }
@@ -180,7 +193,8 @@ impl WorkspaceTabConfig {
             | Self::Diff { project_id: p, .. }
             | Self::Browser { project_id: p, .. }
             | Self::ChangesReview { project_id: p, .. }
-            | Self::FileTree { project_id: p, .. } => *p = project_id,
+            | Self::FileTree { project_id: p, .. }
+            | Self::Device { project_id: p, .. } => *p = project_id,
             Self::Settings { .. } => {}
         }
     }
@@ -206,6 +220,9 @@ impl WorkspaceTabConfig {
                 last_active_at_ms, ..
             }
             | Self::FileTree {
+                last_active_at_ms, ..
+            }
+            | Self::Device {
                 last_active_at_ms, ..
             }
             | Self::Settings {
@@ -235,6 +252,9 @@ impl WorkspaceTabConfig {
                 last_active_at_ms, ..
             }
             | Self::FileTree {
+                last_active_at_ms, ..
+            }
+            | Self::Device {
                 last_active_at_ms, ..
             }
             | Self::Settings {
