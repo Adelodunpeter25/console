@@ -122,7 +122,10 @@ fun CustomMarkdown(
             // the unstable tail when possible; completed blocks retain their model.
             val parser = remember { StreamingMarkdownParser() }
             // A title arriving later must rebuild blocks that were parsed without it.
-            val blocks = parser.update(content, streaming, PageTitles.version)
+            val pageTitlesVersion = PageTitles.version
+            val blocks = remember(content, streaming, pageTitlesVersion) {
+                parser.update(content, streaming, pageTitlesVersion)
+            }
             // Only settled text is looked up, so a URL still streaming in is never fetched.
             LaunchedEffect(content, streaming) {
                 if (!streaming) bareWebUrls(content).forEach(PageTitles::request)

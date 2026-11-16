@@ -274,9 +274,7 @@ fun Composer(
     }
 
     fun applySkillSuggestion(command: SlashCommandInfo, replaceFrom: Int) {
-        if (!command.builtin) {
-            confirmedSkills = confirmedSkills + command.name
-        }
+        confirmedSkills = confirmedSkills + command.name
         applySuggestion("/${command.name} ", replaceFrom)
     }
 

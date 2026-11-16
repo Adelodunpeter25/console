@@ -130,9 +130,66 @@ class SessionRepository(
         sessions.removeView(id)
     }
 
-    /** Create the real session from a new chat's picks, move its composer over, and return the new id. */
-    suspend fun commitNewChat(draftId: String): String {
+    /** The result of committing a new chat to the server. */
+    data class CommitResult(val sessionId: String, val worktreeLaunched: Boolean)
+
+    /**
+     * Create the real session from a new chat's picks, move its composer over,
+     * and return the new id.
+     *
+     * A pending worktree takes the instant-launch endpoint: the session header
+     * returns immediately and the server provisions the worktree and runs the
+     * draft's prompt in the background, so nothing is sent client-side
+     * afterwards — [watchWorktreeLaunch] attaches to the run when it starts.
+     */
+    suspend fun commitNewChat(draftId: String): CommitResult {
         val view = sessions.getView(draftId)
+        val draft = chats.get(draftId)
+        val prompt = draft.input.trim()
+        if (view.worktreePending && prompt.isNotEmpty()) {
+            val created = withContext(Dispatchers.IO) {
+                api.launchWorktreeSession(
+                    com.console.mobile.data.model.LaunchWorktreeDto(
+                        cwd = view.sessionCwd,
+                        projectId = view.projectId,
+                        title = "New Chat",
+                        modelId = view.sessionModelId,
+                        provider = view.sessionProvider,
+                        approvalMode = view.approvalMode,
+                        thinkingLevel = view.thinkingLevel,
+                        worktree = com.console.mobile.data.model.CreateWorktreeDto(baseBranch = view.worktreeBase),
+                        prompt = com.console.mobile.data.model.RunPromptDto(
+                            prompt = prompt,
+                            modelId = view.sessionModelId,
+                            provider = view.sessionProvider,
+                            approvalMode = view.approvalMode,
+                            thinkingLevel = view.thinkingLevel,
+                            // The serializer base64-encodes raw bytes at the
+                            // request boundary.
+                            attachments = draft.attachments,
+                            contextFiles = com.console.mobile.core.util.mentionPaths(prompt),
+                        ),
+                    ),
+                )
+            }
+            withContext(Dispatchers.Main.immediate) {
+                projectState.prependSession(created.copy(message_count = 1))
+                applyHeader(created.id, created)
+                if (created.thinking_level.isNullOrBlank() && view.thinkingLevel != null) {
+                    sessions.setView(created.id, sessions.getView(created.id).copy(thinkingLevel = view.thinkingLevel))
+                }
+                // The prompt lives on the server now; the new chat's composer
+                // starts clean.
+                chats.update(created.id) { state ->
+                    state.copy(input = "", attachments = emptyList(), draftUpdatedAt = null)
+                }
+                discardNewChat(draftId)
+                chats.remove(draftId)
+                persistence?.saveNewChatOptions(null)
+            }
+            watchWorktreeLaunch(created.id)
+            return CommitResult(created.id, worktreeLaunched = true)
+        }
         val created = withContext(Dispatchers.IO) {
             api.createSession(
                 CreateSessionDto(
@@ -162,7 +219,52 @@ class SessionRepository(
             chats.remove(draftId)
             persistence?.saveNewChatOptions(null)
         }
-        return created.id
+        return CommitResult(created.id, worktreeLaunched = false)
+    }
+
+    /**
+     * Poll a pending worktree launch until it leaves provisioning. Ready →
+     * [loadDetail] refreshes the header (the worktree re-pointed the cwd) and
+     * the chat screen attaches to the auto-started run through its existing
+     * working-status watcher. Failed → the error lands on the header
+     * (`launch_state`/`launch_error`) and the chat's banner offers Retry and
+     * Discard.
+     */
+    fun watchWorktreeLaunch(sessionId: String) {
+        scope.launch {
+            // One `git worktree add` is seconds; five minutes is a generous ceiling.
+            repeat(300) {
+                delay(1000)
+                val detail = try {
+                    withContext(Dispatchers.IO) { api.getSession(sessionId, 1, null) }
+                } catch (_: Exception) {
+                    return@repeat
+                }
+                when (detail.header.launch_state) {
+                    null -> {
+                        loadDetail(sessionId)
+                        return@launch
+                    }
+                    "failed" -> {
+                        applyHeader(sessionId, detail.header)
+                        return@launch
+                    }
+                }
+            }
+        }
+    }
+
+    /** Retry a failed worktree launch from the server's stored payload; re-arms the watcher. */
+    fun retryWorktreeLaunch(sessionId: String) {
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { api.retryWorktreeLaunch(sessionId) }
+                watchWorktreeLaunch(sessionId)
+            } catch (e: Exception) {
+                // Keep the failed header; the banner stays and can retry again.
+                android.util.Log.w("SessionRepository", "retryWorktreeLaunch($sessionId) failed", e)
+            }
+        }
     }
 
     private fun updateNewChat(id: String, dto: UpdateSessionDto): SessionHeader {

@@ -1,4 +1,6 @@
-use console_core::types::{ChangesScope, SessionFileChange, filter_changes_for_scope};
+use console_core::types::{
+    ChangesScope, SessionFileChange, count_changes_for_scope, filter_changes_for_scope,
+};
 
 fn change(path: &str, turn_index: u32) -> SessionFileChange {
     SessionFileChange {
@@ -18,6 +20,10 @@ fn previous_turn_skips_turns_without_changes() {
     let changes = vec![change("d.rs", 4), change("b.rs", 2), change("a.rs", 0)];
     let previous = filter_changes_for_scope(&changes, ChangesScope::PreviousTurn);
     assert_eq!(paths(&previous), vec!["b.rs"]);
+    assert_eq!(
+        count_changes_for_scope(&changes, ChangesScope::PreviousTurn),
+        1
+    );
 }
 
 #[test]
@@ -25,12 +31,17 @@ fn this_turn_is_latest_turn() {
     let changes = vec![change("d.rs", 4), change("e.rs", 4), change("b.rs", 2)];
     let this_turn = filter_changes_for_scope(&changes, ChangesScope::ThisTurn);
     assert_eq!(paths(&this_turn), vec!["d.rs", "e.rs"]);
+    assert_eq!(count_changes_for_scope(&changes, ChangesScope::ThisTurn), 2);
 }
 
 #[test]
 fn previous_turn_empty_with_single_turn() {
     let changes = vec![change("a.rs", 0), change("b.rs", 0)];
     assert!(filter_changes_for_scope(&changes, ChangesScope::PreviousTurn).is_empty());
+    assert_eq!(
+        count_changes_for_scope(&changes, ChangesScope::PreviousTurn),
+        0
+    );
 }
 
 #[test]
@@ -64,6 +75,7 @@ fn all_turns_aggregates_additions_and_deletions_across_turns() {
 
     let all = filter_changes_for_scope(&changes, ChangesScope::AllTurns);
     assert_eq!(paths(&all), vec!["runtime.go", "args.go"]);
+    assert_eq!(count_changes_for_scope(&changes, ChangesScope::AllTurns), 2);
 
     let runtime = &all[0];
     assert_eq!(runtime.path, "runtime.go");

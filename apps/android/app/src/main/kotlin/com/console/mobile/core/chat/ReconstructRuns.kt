@@ -25,19 +25,19 @@ fun reconstructRuns(messages: List<AgentMessage>): List<RunActivityState> {
             }
             current = RunActivityState(runId = "reconstructed-${runIndex++}", startedAt = msg.createdAt, status = RunStatus.Completed)
         } else if (current != null) {
-            var cur: RunActivityState = current
             when (msg) {
                 is AssistantMessage -> {
                     if (msg.content.any { it is ToolCallPart }) {
+                        val events = current.events.toMutableList()
                         for (part in msg.content) {
                             when (part) {
-                                is ThinkingPart -> if (part.text.isNotBlank()) cur = cur.copy(events = cur.events + ActivityEvent.Thinking("reconstructed-thinking-$runIndex-${cur.events.size}", part.text))
-                                is TextPart -> if (part.text.isNotBlank()) cur = cur.copy(events = cur.events + ActivityEvent.Text("reconstructed-text-$runIndex-${cur.events.size}", part.text))
-                                is ToolCallPart -> cur = cur.copy(events = cur.events + ActivityEvent.ToolCallEvent(part.call.id, part.call))
+                                is ThinkingPart -> if (part.text.isNotBlank()) events.add(ActivityEvent.Thinking("reconstructed-thinking-$runIndex-${events.size}", part.text))
+                                is TextPart -> if (part.text.isNotBlank()) events.add(ActivityEvent.Text("reconstructed-text-$runIndex-${events.size}", part.text))
+                                is ToolCallPart -> events.add(ActivityEvent.ToolCallEvent(part.call.id, part.call))
                                 else -> {}
                             }
                         }
-                        current = cur
+                        current = current.copy(events = events)
                     }
                 }
                 is ToolResultMessage -> for (r in msg.results) pending[r.toolCallId] = r

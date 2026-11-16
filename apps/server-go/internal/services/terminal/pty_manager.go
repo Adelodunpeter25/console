@@ -287,9 +287,8 @@ func (s *PtySession) enqueueOutput(chunk []byte) {
 		s.pending = append(s.pending, cp)
 		s.pendingCount++
 		if len(s.pending) > 100 {
-			dropped := s.pending[0]
+			s.pending[0] = nil
 			s.pending = s.pending[1:]
-			_ = dropped
 			s.pendingCount--
 		}
 		s.outputMu.Unlock()
@@ -301,9 +300,10 @@ func (s *PtySession) enqueueOutput(chunk []byte) {
 		s.pausedBuffer = append(s.pausedBuffer, cp)
 		s.pausedBytes += len(cp)
 		for s.pausedBytes > pausedBufferLimitBytes && len(s.pausedBuffer) > 0 {
-			dropped := s.pausedBuffer[0]
+			dropped := len(s.pausedBuffer[0])
+			s.pausedBuffer[0] = nil
 			s.pausedBuffer = s.pausedBuffer[1:]
-			s.pausedBytes -= len(dropped)
+			s.pausedBytes -= dropped
 		}
 		s.outputMu.Unlock()
 		return
@@ -313,9 +313,10 @@ func (s *PtySession) enqueueOutput(chunk []byte) {
 	s.outputQueue = append(s.outputQueue, cp)
 	s.outputBytes += len(cp)
 	for s.outputBytes > pausedBufferLimitBytes && len(s.outputQueue) > 0 {
-		dropped := s.outputQueue[0]
+		dropped := len(s.outputQueue[0])
+		s.outputQueue[0] = nil
 		s.outputQueue = s.outputQueue[1:]
-		s.outputBytes -= len(dropped)
+		s.outputBytes -= dropped
 	}
 	shouldFlush := s.outputBytes >= outputFlushBytes
 	if shouldFlush {
@@ -351,9 +352,10 @@ func (s *PtySession) flushOutput() {
 			s.pausedBytes += len(chunk)
 		}
 		for s.pausedBytes > pausedBufferLimitBytes && len(s.pausedBuffer) > 0 {
-			dropped := s.pausedBuffer[0]
+			dropped := len(s.pausedBuffer[0])
+			s.pausedBuffer[0] = nil
 			s.pausedBuffer = s.pausedBuffer[1:]
-			s.pausedBytes -= len(dropped)
+			s.pausedBytes -= dropped
 		}
 		s.outputQueue = nil
 		s.outputBytes = 0

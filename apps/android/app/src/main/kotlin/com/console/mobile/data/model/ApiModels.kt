@@ -28,6 +28,25 @@ data class CreateWorktreeDto(
     val baseBranch: String? = null,
 )
 
+/**
+ * POST /api/sessions/with-worktree — the instant launch: the server creates
+ * the session immediately, then provisions the worktree and runs [prompt] in
+ * the background. The response header carries `launchState`
+ * ("provisioning"/"failed") until the prompt is running.
+ */
+@Serializable
+data class LaunchWorktreeDto(
+    val cwd: String? = null,
+    val projectId: String? = null,
+    val title: String? = null,
+    val modelId: String? = null,
+    val provider: String? = null,
+    val approvalMode: String? = null,
+    val thinkingLevel: String? = null,
+    val worktree: CreateWorktreeDto,
+    val prompt: RunPromptDto,
+)
+
 @Serializable
 data class UpdateSessionDto(
     /** Send an explicit `projectId: null` — the server moves the chat to "No project". */

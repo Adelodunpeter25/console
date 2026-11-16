@@ -13,6 +13,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ListCheck
 import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Search
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal
+import io.github.lyxnx.compose.ui.tablericons.outline.Code
 import io.github.lyxnx.compose.ui.tablericons.outline.Tool
 import com.console.mobile.SharedNative
 import com.console.mobile.data.model.ToolCall
@@ -29,6 +30,7 @@ import kotlinx.serialization.json.jsonPrimitive
 private val SERVER_KEY_ICONS: Map<String, ImageVector> = mapOf(
     "sparkle" to TablerIcons.Outline.Sparkles,
     "terminal" to TablerIcons.Outline.Terminal,
+    "code" to TablerIcons.Outline.Code,
     "pencil" to TablerIcons.Outline.FilePencil,
     "file" to TablerIcons.Outline.FileText,
     "folder" to TablerIcons.Outline.FolderOpen,
@@ -103,6 +105,9 @@ fun toolCallSummary(call: ToolCall, cwd: String? = null): String? {
     if (call.name == "loadTools") {
         return s("group")?.let { truncate(it, 72) }
     }
+    if (call.name == "code") {
+        s("code")?.let { codeArgumentSummary(it)?.let { return it } }
+    }
     // Multi-line values (heredoc scripts, multi-line queries) must collapse to
     // one line: a literal newline renders as a hard line break that no
     // truncation can suppress. `directory` renders relative to the cwd.
@@ -160,6 +165,51 @@ fun argumentPath(call: ToolCall): String? {
     val obj = call.arguments as? JsonObject ?: return null
     for (key in listOf("path", "filePath", "targetFile", "absolutePath")) {
         (obj[key] as? JsonPrimitive)?.takeIf { it.isString }?.let { return it.content }
+    }
+    return null
+}
+
+/** Extracts a concise one-line action summary from a Code Mode script. */
+fun codeArgumentSummary(code: String): String? {
+    val trimmed = code.trim()
+    if (trimmed.isEmpty()) return null
+
+    // 1. Shell commands: $`cmd` or $'cmd' or $("cmd")
+    val shellMatch = Regex("""\$\s*(?:`([^`]+)`|['"]([^'"]+)['"]|\(\s*["'`]?([^"'`]+)["'`]?\s*\))""").find(trimmed)
+    if (shellMatch != null) {
+        val cmd = shellMatch.groupValues.drop(1).firstOrNull { it.isNotBlank() }?.trim()
+        if (!cmd.isNullOrEmpty()) {
+            return truncate("$ $cmd", 72)
+        }
+    }
+
+    // 2. Common tool helper functions: file("..."), edit("..."), etc.
+    val helperMatch = Regex("""\b(file|write|edit|glob|grep|fetch|webSearch|webFetch|todo|readChat|readSkill)\s*\(\s*["']([^"']+)["']""").find(trimmed)
+    if (helperMatch != null) {
+        val fnName = helperMatch.groupValues[1]
+        val arg = helperMatch.groupValues[2].trim()
+        return truncate("$fnName($arg)", 72)
+    }
+
+    // 3. Subkernel calls: browser.open, console.ports.list, etc.
+    val subkernelMatch = Regex("""\b(browser\.[a-zA-Z0-9_]+|console\.[a-zA-Z0-9_.]+)""").find(trimmed)
+    if (subkernelMatch != null) {
+        return truncate(subkernelMatch.groupValues[1], 72)
+    }
+
+    // 4. First non-empty non-comment line
+    for (rawLine in trimmed.lineSequence()) {
+        val line = rawLine.trim()
+        if (line.isEmpty() || line.startsWith("//") || line.startsWith("/*") || line.startsWith("*")) continue
+        val cleaned = line.removePrefix("const ")
+            .removePrefix("let ")
+            .removePrefix("var ")
+            .removePrefix("return ")
+            .removePrefix("await ")
+            .trim()
+        if (cleaned.isNotEmpty()) {
+            return truncate(singleLine(cleaned), 72)
+        }
     }
     return null
 }

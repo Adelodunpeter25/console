@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/accounts"
@@ -191,19 +190,6 @@ func CredentialExists() bool {
 	return shared.CredentialFileExists(CredentialPath())
 }
 
-var (
-	inflightMu  sync.Mutex
-	inflight    map[string]chan struct{}
-	inflightOut map[string]ParsedCredential
-	inflightErr map[string]error
-)
-
-func init() {
-	inflight = map[string]chan struct{}{}
-	inflightOut = map[string]ParsedCredential{}
-	inflightErr = map[string]error{}
-}
-
 type tokenResponse struct {
 	AccessToken string `json:"access_token"`
 	ExpiresIn   int64  `json:"expires_in"`
@@ -252,37 +238,22 @@ func doRefresh(client *http.Client, cred ParsedCredential) (OAuthCredential, err
 // refreshCredential dedupes a refresh (keyed by refresh token) and writes
 // the result through save.
 func refreshCredential(key string, client *http.Client, cred ParsedCredential, save func(OAuthCredential) error) (ParsedCredential, error) {
-	inflightMu.Lock()
-	if ch, ok := inflight[key]; ok {
-		inflightMu.Unlock()
-		<-ch
-		inflightMu.Lock()
-		out, outErr := inflightOut[key], inflightErr[key]
-		inflightMu.Unlock()
-		return out, outErr
-	}
-	ch := make(chan struct{})
-	inflight[key] = ch
-	inflightMu.Unlock()
-
-	updated, err := doRefresh(client, cred)
-	var out ParsedCredential
-	if err == nil {
-		if err = save(updated); err == nil {
-			out = ParsedCredential{
-				AccessToken: updated.Token, ProjectID: updated.ProjectID,
-				RefreshToken: updated.RefreshToken, ExpiresAtMs: updated.ExpiresAt,
-				Email: updated.Email,
-			}
+	return shared.SingleFlight(key, func() (ParsedCredential, error) {
+		updated, err := doRefresh(client, cred)
+		if err != nil {
+			return ParsedCredential{}, err
 		}
-	}
-
-	inflightMu.Lock()
-	inflightOut[key], inflightErr[key] = out, err
-	delete(inflight, key)
-	inflightMu.Unlock()
-	close(ch)
-	return out, err
+		if err := save(updated); err != nil {
+			return ParsedCredential{}, err
+		}
+		return ParsedCredential{
+			AccessToken:  updated.Token,
+			ProjectID:    updated.ProjectID,
+			RefreshToken: updated.RefreshToken,
+			ExpiresAtMs:  updated.ExpiresAt,
+			Email:        updated.Email,
+		}, nil
+	})
 }
 
 // RefreshIfNeeded refreshes an expiring credential (60s skew), deduping

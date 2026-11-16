@@ -91,18 +91,69 @@ impl ConsoleDesktopApp {
     }
 
     /// Stage an annotation posted by a browser view's popover (Attach).
+    /// Routes directly to the active chat composer so the chip is immediately
+    /// staged. Returns true when the chip landed on a chat composer — the
+    /// browser then leaves keyboard focus to the app instead of refocusing
+    /// the page.
     pub(crate) fn stage_browser_annotation(
         &mut self,
         browser_id: &str,
         annotation: BrowserElementAnnotation,
         cx: &mut Context<Self>,
-    ) {
-        let Some(pane_id) = self.pane_hosting_browser(browser_id) else {
-            return;
+    ) -> bool {
+        // The chat this annotation belongs to: the selected chat, or — while a
+        // browser tab is in front — the workspace's only chat, so annotation
+        // chips land in that composer just like file comments do.
+        let target = self
+            .focused_chat()
+            .map(|(p, s)| (p.to_string(), s.to_string()));
+        let Some((pane_id, session_id)) = target else {
+            // No chat to route to: the legacy fallback — the browser keeps its
+            // own keyboard focus, nothing to focus.
+            let fallback = self
+                .pane_hosting_browser(browser_id)
+                .unwrap_or_else(|| "pane-main".to_string());
+            self.append_annotations_for_pane(&fallback, vec![annotation]);
+            self.schedule_drafts_save(cx);
+            cx.notify();
+            return false;
         };
         self.append_annotations_for_pane(&pane_id, vec![annotation]);
         self.schedule_drafts_save(cx);
         cx.notify();
+        // Focus stays in the browser webview after Attach, so the prompt the
+        // user types next would vanish into the page. Move it to the chat
+        // composer the chip was staged on — but only when that chat is the
+        // pane's visible tab; otherwise the composer is not on screen.
+        let chat_tab_id = format!("chat:{session_id}");
+        let chat_visible = self
+            .workspace_root
+            .find_leaf(&pane_id)
+            .and_then(|leaf| leaf.active_tab_id.as_deref())
+            .is_some_and(|active| active == chat_tab_id);
+        if !chat_visible {
+            return false;
+        }
+        let target_pane_id = pane_id.clone();
+        let entity = cx.entity().downgrade();
+        cx.defer(move |cx| {
+            let Some(window) = cx.active_window() else {
+                return;
+            };
+            let _ = window.update(cx, |_, window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        // Both the GPUI focus chain and the input's own
+                        // cursor/blink state need to know.
+                        let composer = this.composer_for_pane(&target_pane_id);
+                        let focus = composer.read(cx).focus();
+                        window.focus(&focus, cx);
+                        composer.update(cx, |input, _cx| input.focus());
+                    });
+                }
+            });
+        });
+        true
     }
 
     pub(crate) fn restore_recalled_annotations(

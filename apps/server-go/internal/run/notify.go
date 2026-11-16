@@ -102,6 +102,13 @@ func ReadStateNotification(sessionID string) *consolev1.NotificationEvent {
 	}
 }
 
+// BackgroundWorkNotification tells clients a background shell status changed.
+func BackgroundWorkNotification(sessionID string) *consolev1.NotificationEvent {
+	return &consolev1.NotificationEvent{
+		Type: "notification", Kind: "background_work", SessionId: sessionID,
+	}
+}
+
 // NotifyReadState pushes the read-state signal.
 func (s *Service) NotifyReadState(sessionID string) {
 	if bus := s.notifier(); bus != nil {

@@ -33,10 +33,25 @@ type FsService struct{}
 
 func NewFsService() *FsService { return &FsService{} }
 
+// ResolvePath expands ~ or ~/ prefix to the user's home directory.
+func ResolvePath(p string) string {
+	if p == "~" {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home
+		}
+	}
+	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, p[2:])
+		}
+	}
+	return p
+}
+
 // BrowseDirectory lists one directory for the file picker UI.
 func (s *FsService) BrowseDirectory(targetPath string, showHidden bool) (types.FsBrowseResult, error) {
 	home, _ := os.UserHomeDir()
-	resolved := targetPath
+	resolved := ResolvePath(targetPath)
 	if resolved == "" {
 		resolved = home
 	}
@@ -99,7 +114,7 @@ type EntriesOptions struct {
 // ListAllEntries walks a tree DFS-style: directories first, each directory
 // immediately followed by its subtree, capped at maxEntries.
 func (s *FsService) ListAllEntries(targetPath string, maxDepth int, showHidden bool, opts EntriesOptions) ([]types.FsTreeEntry, error) {
-	resolved, err := filepath.Abs(targetPath)
+	resolved, err := filepath.Abs(ResolvePath(targetPath))
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +239,7 @@ type FileContentMeta struct {
 
 // ReadFileContentWithMeta reads text content with preview gating.
 func (s *FsService) ReadFileContentWithMeta(path string, startLine, endLine int) (FileContentMeta, error) {
+	path = ResolvePath(path)
 	info, err := os.Stat(path)
 	if err != nil {
 		return FileContentMeta{}, err
@@ -272,6 +288,7 @@ type ImageMeta struct {
 
 // GetImageMeta validates and describes an image file for raw preview.
 func (s *FsService) GetImageMeta(path string) (ImageMeta, error) {
+	path = ResolvePath(path)
 	ext := strings.ToLower(filepath.Ext(path))
 	if !imageExtensions[ext] {
 		return ImageMeta{}, &PreviewBlocked{Code: "BINARY_FILE", Status: 403,
@@ -294,21 +311,21 @@ func (s *FsService) GetImageMeta(path string) (ImageMeta, error) {
 }
 
 func (s *FsService) DeleteFile(path string) (bool, error) {
-	if err := os.Remove(path); err != nil {
+	if err := os.Remove(ResolvePath(path)); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
 func (s *FsService) CreateDirectory(path string) (bool, error) {
-	if err := os.MkdirAll(path, 0o755); err != nil {
+	if err := os.MkdirAll(ResolvePath(path), 0o755); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
 func (s *FsService) DeleteDirectory(path string) (bool, error) {
-	if err := os.RemoveAll(path); err != nil {
+	if err := os.RemoveAll(ResolvePath(path)); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -367,7 +384,7 @@ func (s *FsService) searchDirs(resolved, query string, maxDirs int) []types.File
 // the index is warm — and always when fff is absent — it falls back to a
 // substring walk. Items carry relative/absolute paths plus a score.
 func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool) ([]types.FileSearchResult, error) {
-	resolved, err := filepath.Abs(root)
+	resolved, err := filepath.Abs(ResolvePath(root))
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +504,7 @@ func (s *FsService) Grep(root, query string, opts GrepOptions) (types.GrepResult
 	if manager == nil || !manager.Enabled() {
 		return types.GrepResult{}, ErrFffUnavailable
 	}
-	resolvedRoot, err := filepath.Abs(root)
+	resolvedRoot, err := filepath.Abs(ResolvePath(root))
 	if err != nil {
 		return types.GrepResult{}, err
 	}

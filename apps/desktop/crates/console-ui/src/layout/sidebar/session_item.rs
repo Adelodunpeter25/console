@@ -303,92 +303,91 @@ impl RenderOnce for SidebarSessionItem {
                     .when(self.has_draft, |el| el.child(draft_badge(theme))),
             );
 
-        if is_card_active && !is_renaming {
-            if let Some(bounds) = probe_bounds.get() {
-                let hover_mgr_card = hover_mgr.clone();
-                let model_name = if !session.model_id.is_empty() {
-                    let base = console_shared::format::format_model_name(&session.model_id);
-                    let thinking = session
-                        .thinking_level
-                        .as_deref()
-                        .filter(|t| !t.is_empty())
-                        .or_else(|| match session.provider.to_ascii_lowercase().as_str() {
-                            "claude" => Some("low"),
-                            "antigravity" | "google" => Some("low"),
-                            _ => None,
-                        });
-                    if let Some(thinking) = thinking {
-                        Some(format!("{base} ({thinking})"))
-                    } else {
-                        Some(base)
-                    }
+        if is_card_active
+            && !is_renaming
+            && let Some(bounds) = probe_bounds.get()
+        {
+            let hover_mgr_card = hover_mgr.clone();
+            let model_name = if !session.model_id.is_empty() {
+                let base = console_shared::format::format_model_name(&session.model_id);
+                let thinking = session
+                    .thinking_level
+                    .as_deref()
+                    .filter(|t| !t.is_empty())
+                    .or_else(|| match session.provider.to_ascii_lowercase().as_str() {
+                        "claude" => Some("low"),
+                        "antigravity" | "google" => Some("low"),
+                        _ => None,
+                    });
+                if let Some(thinking) = thinking {
+                    Some(format!("{base} ({thinking})"))
                 } else {
-                    None
-                };
+                    Some(base)
+                }
+            } else {
+                None
+            };
 
-                let (branch, is_worktree) = if let Some(ref wt) = session.worktree
-                    && !wt.branch.is_empty()
-                {
-                    (Some(wt.branch.as_str()), true)
-                } else {
-                    (None, false)
-                };
+            let (branch, is_worktree) = if let Some(ref wt) = session.worktree
+                && !wt.branch.is_empty()
+            {
+                (Some(wt.branch.as_str()), true)
+            } else {
+                (None, false)
+            };
 
-                let (status_label, status_color, status_mark) = match row_status {
-                    sidebar::RowStatus::Running => {
-                        ("Running", theme.accent, CardStatusMark::Spinner)
-                    }
-                    sidebar::RowStatus::NeedsAttention => (
-                        "Needs attention",
-                        theme.badge,
-                        CardStatusMark::Icon(IconName::Alert),
-                    ),
-                    sidebar::RowStatus::Unread => (
-                        "Unread",
-                        theme.badge,
-                        CardStatusMark::Icon(IconName::Unread),
-                    ),
-                    sidebar::RowStatus::Done => {
-                        ("Done", theme.success, CardStatusMark::Icon(IconName::Done))
-                    }
-                    sidebar::RowStatus::Quiet if settled => {
-                        ("Settled", theme.text_tertiary, CardStatusMark::Dot)
-                    }
-                    sidebar::RowStatus::Quiet => ("Idle", theme.text_ghost, CardStatusMark::Dot),
-                };
+            let (status_label, status_color, status_mark) = match row_status {
+                sidebar::RowStatus::Running => ("Running", theme.accent, CardStatusMark::Spinner),
+                sidebar::RowStatus::NeedsAttention => (
+                    "Needs attention",
+                    theme.badge,
+                    CardStatusMark::Icon(IconName::Alert),
+                ),
+                sidebar::RowStatus::Unread => (
+                    "Unread",
+                    theme.badge,
+                    CardStatusMark::Icon(IconName::Unread),
+                ),
+                sidebar::RowStatus::Done => {
+                    ("Done", theme.success, CardStatusMark::Icon(IconName::Done))
+                }
+                sidebar::RowStatus::Quiet if settled => {
+                    ("Settled", theme.text_tertiary, CardStatusMark::Dot)
+                }
+                sidebar::RowStatus::Quiet => ("Idle", theme.text_ghost, CardStatusMark::Dot),
+            };
 
-                let card = div()
-                    .id(ElementId::Name(
-                        format!("session-card-{}", session.id).into(),
-                    ))
-                    .occlude()
-                    .on_hover(move |hovered, _, cx| {
-                        on_card_hover(&hover_mgr_card, *hovered, cx);
-                    })
-                    .child(render_session_card_content(
-                        &display_title,
-                        session.created_at,
-                        session.updated_at,
-                        model_name.as_deref(),
-                        &self.project_name,
-                        branch,
-                        is_worktree,
-                        status_label,
-                        status_color,
-                        status_mark,
-                        &theme,
-                    ));
+            let card = div()
+                .id(ElementId::Name(
+                    format!("session-card-{}", session.id).into(),
+                ))
+                .occlude()
+                .on_hover(move |hovered, _, cx| {
+                    on_card_hover(&hover_mgr_card, *hovered, cx);
+                })
+                .child(render_session_card_content(
+                    &display_title,
+                    session.created_at,
+                    session.updated_at,
+                    model_name.as_deref(),
+                    &self.project_name,
+                    branch,
+                    is_worktree,
+                    status_label,
+                    status_color,
+                    status_mark,
+                    &theme,
+                ));
 
-                row = row.child(
-                    deferred(
-                        anchored()
-                            .position(Point::new(bounds.right() + px(6.0), bounds.top()))
-                            .snap_to_window_with_margin(px(8.0))
-                            .child(card),
-                    )
-                    .with_priority(100),
-                );
-            }
+            row = row.child(
+                deferred(
+                    anchored()
+                        .position(Point::new(bounds.right() + px(6.0), bounds.top()))
+                        .snap_to_window_with_margin(px(8.0))
+                        .child(card),
+                )
+                .with_priority(100),
+            );
         }
 
         if is_renaming {

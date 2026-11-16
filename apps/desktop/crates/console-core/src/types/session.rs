@@ -9,7 +9,7 @@ pub struct SessionPageOptions {
     pub before: Option<i64>,
 }
 
-use super::agent::AgentMessage;
+use super::agent::{AgentMessage, ImageAttachment};
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
 
@@ -131,6 +131,50 @@ pub struct CreateWorktreeSpec {
     pub base_branch: Option<String>,
 }
 
+/// Request body for `POST /api/sessions/with-worktree` — the instant launch:
+/// the server creates the session immediately and provisions the worktree +
+/// runs `prompt` in the background. The response header carries
+/// launchState ("provisioning" / "failed") until the prompt is running.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchWorktreeDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    pub project_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub approval_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_level: Option<ThinkingLevel>,
+    pub worktree: CreateWorktreeSpec,
+    pub prompt: LaunchPromptDto,
+}
+
+/// The stored first prompt of a worktree launch; the server runs it once the
+/// worktree exists.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchPromptDto {
+    pub prompt: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<ImageAttachment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub approval_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_level: Option<ThinkingLevel>,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSessionDto {
@@ -189,6 +233,39 @@ impl ChangesScope {
             Self::ThisTurn => "This Turn",
             Self::AllTurns => "All Turns",
             Self::PreviousTurn => "Previous Turn",
+        }
+    }
+}
+
+/// Count items in a change list for the given scope without cloning or
+/// allocating `Vec<SessionFileChange>` or diff text.
+pub fn count_changes_for_scope(changes: &[SessionFileChange], scope: ChangesScope) -> usize {
+    if changes.is_empty() {
+        return 0;
+    }
+    let latest_turn = changes.iter().map(|c| c.turn_index).max().unwrap_or(0);
+    match scope {
+        ChangesScope::AllTurns => {
+            let mut paths = std::collections::HashSet::new();
+            for change in changes {
+                paths.insert(change.path.as_str());
+            }
+            paths.len()
+        }
+        ChangesScope::ThisTurn => changes
+            .iter()
+            .filter(|c| c.turn_index == latest_turn)
+            .count(),
+        ChangesScope::PreviousTurn => {
+            let previous_turn = changes
+                .iter()
+                .map(|c| c.turn_index)
+                .filter(|&t| t < latest_turn)
+                .max();
+            match previous_turn {
+                Some(previous) => changes.iter().filter(|c| c.turn_index == previous).count(),
+                None => 0,
+            }
         }
     }
 }

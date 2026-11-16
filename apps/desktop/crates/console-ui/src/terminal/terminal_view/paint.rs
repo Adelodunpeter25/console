@@ -203,18 +203,13 @@ pub(super) fn render_canvas_grid(
 
             let cell_underline = cell.flags.underline || is_link;
 
-            let can_merge = if let Some(last) = runs.last() {
-                last.fg == fg
-                    && last.bg == bg
-                    && last.bold == cell.flags.bold
-                    && last.italic == cell.flags.italic
-                    && last.underline == cell_underline
-            } else {
-                false
-            };
-
-            if can_merge {
-                let last = runs.last_mut().unwrap();
+            if let Some(last) = runs.last_mut()
+                && last.fg == fg
+                && last.bg == bg
+                && last.bold == cell.flags.bold
+                && last.italic == cell.flags.italic
+                && last.underline == cell_underline
+            {
                 last.count += 1;
                 last.text.push(c);
             } else {

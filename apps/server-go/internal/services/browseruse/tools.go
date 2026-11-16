@@ -43,6 +43,29 @@ func NewBrowserTool(manager *Manager, sessionID string, handler tools.BrowserHan
 	return &browserTool{Tool: inner, manager: manager, sessionID: sessionID, handler: handler}
 }
 
+// MethodSignatures lists the methods available on the browser object.
+func MethodSignatures() []string {
+	return []string{
+		"browser.open({url})",
+		"browser.goto({url, tabId?})",
+		"browser.snapshot({tabId?})",
+		"browser.content({tabId?})",
+		"browser.query({selector, tabId?})",
+		"browser.click({selector? | text? | ref?})",
+		"browser.type({text, selector? | ref?})",
+		"browser.waitFor({selector? | text? | url?})",
+		"browser.extract({fields})",
+		"browser.scroll({direction})",
+		"browser.tabs()",
+		"browser.close({tabId})",
+		"browser.paginate({nextSelector})",
+	}
+}
+
+func (t *browserTool) Methods() []string {
+	return MethodSignatures()
+}
+
 // Execute dispatches to the session's runtime. The handler arrives per run,
 // so a restored kernel binds to the live desktop connection of the run that
 // uses it.

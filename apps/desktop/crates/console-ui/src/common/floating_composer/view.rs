@@ -62,6 +62,12 @@ pub struct Data {
     pub supported_thinking_levels: Vec<ThinkingLevel>,
     pub approval_mode: ApprovalMode,
     pub attachments: Rc<Vec<ImageAttachment>>,
+    /// Dictation state mirrored from the app (see FloatingComposerState).
+    pub mic_enabled: bool,
+    pub mic_recording: bool,
+    pub mic_elapsed_secs: u32,
+    pub mic_transcribing: bool,
+    pub mic_error: Option<String>,
     pub autocomplete: Option<AutocompleteView>,
     pub submitting: bool,
     pub error: Option<String>,
@@ -88,6 +94,7 @@ pub struct FloatingComposerView {
     on_choose_model: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     on_choose_thinking: Rc<dyn Fn(ThinkingLevel, &mut Window, &mut App) + 'static>,
     on_submit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_toggle_mic: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_pick_image: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_drop_files: Rc<dyn Fn(&ExternalPaths, &mut Window, &mut App) + 'static>,
     on_remove_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
@@ -137,6 +144,11 @@ impl FloatingComposerView {
                 supported_thinking_levels: Vec::new(),
                 approval_mode: ApprovalMode::default(),
                 attachments: Rc::new(Vec::new()),
+                mic_enabled: false,
+                mic_recording: false,
+                mic_elapsed_secs: 0,
+                mic_transcribing: false,
+                mic_error: None,
                 autocomplete: None,
                 submitting: false,
                 error: None,
@@ -153,6 +165,7 @@ impl FloatingComposerView {
             on_choose_model: Rc::new(|_, _, _, _| {}),
             on_choose_thinking: Rc::new(|_, _, _| {}),
             on_submit: Rc::new(|_, _, _| {}),
+            on_toggle_mic: Rc::new(|_, _| {}),
             on_pick_image: Rc::new(|_, _| {}),
             on_drop_files: Rc::new(|_, _, _| {}),
             on_remove_attachment: Rc::new(|_, _, _| {}),
@@ -250,6 +263,13 @@ impl FloatingComposerView {
 
     pub fn on_submit(mut self, f: impl Fn(String, &mut Window, &mut App) + 'static) -> Self {
         self.on_submit = Rc::new(f);
+        self
+    }
+
+    /// Mic click: start a take when idle, stop + transcribe when recording.
+    /// Inert while transcribing — the callback checks that on the app side.
+    pub fn on_toggle_mic(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_toggle_mic = Rc::new(f);
         self
     }
 
@@ -649,6 +669,21 @@ impl FloatingComposerView {
             })
             .child(app_icon(IconName::Plus, 13.0, theme.text_tertiary));
 
+        // ---- dictation mic ----
+        // The shared three-state control; the card passes its callback and
+        // the mirrored STT state (see FloatingComposerState).
+        let mic_control = super::super::mic_button::mic_button(
+            "floating",
+            super::super::mic_button::MicState {
+                enabled: data.mic_enabled,
+                recording: data.mic_recording,
+                elapsed_secs: data.mic_elapsed_secs,
+                transcribing: data.mic_transcribing,
+            },
+            Some(self.on_toggle_mic.clone()),
+            &theme,
+        );
+
         // ---- assemble ----
         let on_dismiss = self.on_dismiss.clone();
         let on_drop_files = self.on_drop_files.clone();
@@ -803,6 +838,15 @@ impl FloatingComposerView {
                             .child(model_control)
                             .child(thinking_control)
                             .child(div().flex_1())
+                            .when_some(data.mic_error, |el, message| {
+                                el.child(
+                                    div()
+                                        .text_size(px(11.5))
+                                        .text_color(theme.danger)
+                                        .child(message),
+                                )
+                            })
+                            .child(mic_control)
                             // Spinner replaces nothing — it sits just before
                             // Create, which reads as the in-flight action.
                             .when(submitting, |el| {

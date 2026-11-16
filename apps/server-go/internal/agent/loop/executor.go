@@ -47,6 +47,11 @@ func (e *Executor) SetMode(mode permissions.Mode) {
 	e.mode = mode
 }
 
+// Registry exposes the executor's tool registry.
+func (e *Executor) Registry() *tools.Registry {
+	return e.registry
+}
+
 // Execute resolves permissions, runs the tool, and always returns a
 // ToolResult (tool failures become isError results; only abort failures
 // surface as errors).

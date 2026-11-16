@@ -31,9 +31,11 @@ func registerMiscRoutes(app *fiber.App, notifications *services.NotificationServ
 					if event == nil {
 						continue
 					}
-					// Encode straight into the stream buffer: protojson, no
-					// intermediate []byte->string copy.
-					if err := sse.SendJSON("notification", event); err != nil {
+					raw, err := protoMarshal.Marshal(event)
+					if err != nil {
+						return
+					}
+					if err := sse.Send("notification", string(raw)); err != nil {
 						return
 					}
 				case <-ticker.C:

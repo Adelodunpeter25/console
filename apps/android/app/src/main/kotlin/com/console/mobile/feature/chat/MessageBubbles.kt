@@ -24,6 +24,7 @@ fun MessageBubbleItem(
             content = item.content,
             createdAt = item.createdAt,
             attachments = item.attachments,
+            contextFiles = item.contextFiles,
             planMode = item.approvalMode == com.console.mobile.data.model.ApprovalMode.PlanMode.value,
         )
         is ToolResultMessage -> {}

@@ -116,9 +116,12 @@ pub struct BrowserView {
     /// Last synced page-area size, for clamping the popover. Updated from
     /// the canvas in `render_page_area`.
     surface_size: std::rc::Rc<std::cell::Cell<Option<(f32, f32)>>>,
-    /// Owner callback: fired with the finished annotation on Attach.
-    annotation_handler:
-        Option<Rc<dyn Fn(console_core::BrowserElementAnnotation, &mut gpui::App) + 'static>>,
+    /// Owner callback: fired with the finished annotation on Attach. Returns
+    /// whether it landed on a chat composer (whose composer took keyboard
+    /// focus) — true suppresses the page refocus on the next render.
+    annotation_handler: Option<
+        Rc<dyn Fn(console_core::BrowserElementAnnotation, &mut gpui::App) -> bool + 'static>,
+    >,
     /// Results posted back by agent-run scripts, keyed by request id.
     script_results: HashMap<String, ScriptOutcome>,
     _subscriptions: Vec<Subscription>,
@@ -510,7 +513,7 @@ impl BrowserView {
 
     pub fn set_annotation_handler(
         &mut self,
-        handler: impl Fn(console_core::BrowserElementAnnotation, &mut gpui::App) + 'static,
+        handler: impl Fn(console_core::BrowserElementAnnotation, &mut gpui::App) -> bool + 'static,
     ) {
         self.annotation_handler = Some(Rc::new(handler));
     }
@@ -553,10 +556,15 @@ impl BrowserView {
         self.annotation_input.update(cx, |input, cx| {
             input.clear(cx);
         });
-        if let Some(handler) = &self.annotation_handler {
-            (handler)(annotation, cx);
-        }
-        self.refocus_page_pending = true;
+        // The handler answers whether the annotation landed on a chat
+        // composer: true means keyboard focus moved there, so refocusing the
+        // page would steal it straight back.
+        let routed_to_chat = if let Some(handler) = &self.annotation_handler {
+            handler(annotation, cx)
+        } else {
+            false
+        };
+        self.refocus_page_pending = !routed_to_chat;
         // Resume inspect so the next pick works.
         if self.inspecting
             && let Some(host) = &self.host
@@ -959,9 +967,16 @@ impl BrowserView {
     }
 
     /// Push the current show/hide decision to the native view, if it exists.
+    ///
+    /// Only hiding happens here: showing is owned by the page-area canvas,
+    /// which syncs this frame's bounds first. Showing from an event would put
+    /// a stale frame on screen — the host is created 800x600 at the window
+    /// origin, so a tab re-shown before its first paint flashes there.
     fn apply_native_visibility(&self) {
-        if let Some(host) = &self.host {
-            host.set_visible(self.should_show());
+        if let Some(host) = &self.host
+            && !self.should_show()
+        {
+            host.set_visible(false);
         }
     }
 
@@ -975,7 +990,9 @@ impl BrowserView {
         occluded: bool,
         cx: &mut Context<Self>,
     ) {
+        let was_visible = self.surface_visible;
         let occlusion_started = occluded && !self.occluded;
+        let occlusion_ended = !occluded && self.occluded;
         self.occluded = occluded;
         self.surface_visible = surface_visible;
 
@@ -1040,10 +1057,17 @@ impl BrowserView {
         }
 
         let show = self.should_show();
-        if !show && host.native_focus_within() {
-            self.reclaim_native_keyboard(cx);
+        if !show {
+            if host.native_focus_within() {
+                self.reclaim_native_keyboard(cx);
+            }
+            host.set_visible(false);
+        } else if !was_visible || occlusion_ended {
+            // The canvas shows the native view after syncing bounds, so a tab
+            // returning from another workspace or from under an overlay never
+            // flashes at its previous frame. Request the frame that paints it.
+            cx.notify();
         }
-        host.set_visible(show);
     }
 
     pub fn reclaim_native_keyboard(&mut self, cx: &mut Context<Self>) {

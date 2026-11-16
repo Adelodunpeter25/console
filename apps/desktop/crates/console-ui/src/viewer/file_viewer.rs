@@ -13,10 +13,6 @@ use gpui::{
 };
 use std::rc::Rc;
 
-/// Room kept free under a file/diff viewer so its last lines can scroll up
-/// above the floating composer's resting bar (bar height + its padding).
-pub const FLOATING_COMPOSER_INSET: f32 = 78.0;
-
 /// Render a path header row (file icon + directory + filename).
 pub fn file_path_header(path: &str, theme: &Theme) -> impl IntoElement + use<> {
     let (dir, name) = match path.rfind('/') {
@@ -192,15 +188,7 @@ impl RenderOnce for FileViewer {
             .w_full()
             .overflow_hidden()
             .bg(gpui::rgb(0x000000))
-            .child(
-                div()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .right_0()
-                    .bottom(px(FLOATING_COMPOSER_INSET))
-                    .child(view),
-            )
+            .child(div().absolute().inset_0().child(view))
             .children(overlays);
 
         let header = path.map(|p| {

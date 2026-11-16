@@ -1442,16 +1442,20 @@ pub fn install_selection_input(
                             .unwrap_or(false),
                         _ => text.is_some(),
                     };
-                if inside && cite_ready {
+                if inside
+                    && cite_ready
+                    && let Some(text) = text
+                {
                     state.selection.borrow_mut().clear();
                     window.refresh();
                     match action {
                         PressAction::Copy => {
-                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text.unwrap()));
+                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
                         }
                         PressAction::Cite => {
-                            let quote = format_cite_quote(&text.unwrap()).unwrap();
-                            if let Some(handler) = state.cite_handler() {
+                            if let Some(quote) = format_cite_quote(&text)
+                                && let Some(handler) = state.cite_handler()
+                            {
                                 (handler)(quote, window, cx);
                             }
                         }
@@ -1932,7 +1936,7 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
             !view.streaming.get() && !view.source_code_blocks.borrow().contains(&key.index)
         });
     let mode_toggle = is_markdown_fence(language)
-        .then(|| ctx.cache)
+        .then_some(ctx.cache)
         .flatten()
         .filter(|view| !view.streaming.get())
         .map(|view| (view.source_code_blocks.clone(), rendered_markdown));

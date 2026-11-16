@@ -147,4 +147,21 @@ fn argument_summary_uses_the_calls_for_console_and_computer() {
         argument_summary("console", &json!({"code": "1+1"}), None),
         None
     );
+
+    // Code tool shows shell command or helper summary.
+    let code_args = json!({"code": "const res = await $'git status --porcelain'"});
+    assert_eq!(
+        argument_summary("code", &code_args, None).as_deref(),
+        Some("$ git status --porcelain")
+    );
+    let code_file = json!({"code": "const data = await file(\"src/main.rs\");"});
+    assert_eq!(
+        argument_summary("code", &code_file, None).as_deref(),
+        Some("file(src/main.rs)")
+    );
+    let code_fallback = json!({"code": "const count = 42;"});
+    assert_eq!(
+        argument_summary("code", &code_fallback, None).as_deref(),
+        Some("count = 42;")
+    );
 }

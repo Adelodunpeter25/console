@@ -58,11 +58,10 @@ impl ConsoleDesktopApp {
                 move |path, _window, cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            let pane_id = this
-                                .active_pane_id
-                                .clone()
-                                .unwrap_or_else(|| "pane-main".to_string());
-                            this.open_file_tab_in_pane(&pane_id, path, cx);
+                            // One routing rule for every open: beside the
+                            // chat when one is pinned, the active pane
+                            // otherwise.
+                            this.open_file_tab(path, cx);
                         });
                     }
                 },

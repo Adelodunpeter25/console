@@ -36,6 +36,7 @@ func (s *FsService) SaveFileContent(path, content, baseEtag string) (SaveFileRes
 	if path == "" {
 		return SaveFileResult{}, fmt.Errorf("Path is required.")
 	}
+	path = ResolvePath(path)
 	target := path
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		target = resolved

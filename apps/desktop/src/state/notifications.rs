@@ -122,6 +122,23 @@ impl ConsoleDesktopApp {
                                     }
                                     continue;
                                 }
+                                if event.kind == "background_work" {
+                                    // Silent signal: background shell status changed. Refresh
+                                    // the session's work list so the shell pill updates immediately.
+                                    if !session_id.is_empty() {
+                                        let _ = cx.update(|cx| {
+                                            if let Some(app) = entity.upgrade() {
+                                                app.update(cx, |this, cx| {
+                                                    this.load_background_work(
+                                                        session_id.clone(),
+                                                        cx,
+                                                    );
+                                                });
+                                            }
+                                        });
+                                    }
+                                    continue;
+                                }
                                 let title = normalize_notification_title(&event.title);
                                 let subtitle = event.subtitle.clone();
                                 let body = event.body.clone();

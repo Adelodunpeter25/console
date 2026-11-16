@@ -95,7 +95,7 @@ impl ConsoleDesktopApp {
                 project_id.clone()
             }
         };
-        from_tab.or_else(|| self.pane_project_id(pane_id))
+        from_tab.or_else(|| self.pane_workspace_key(pane_id))
     }
 
     /// The server-side project id and checkout folder behind a scripts key

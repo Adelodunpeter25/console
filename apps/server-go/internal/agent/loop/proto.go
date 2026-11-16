@@ -188,7 +188,7 @@ func AssistantToProto(m AssistantMessage) *consolev1.AgentAssistantMessage {
 			if p.Call.ThoughtSignature != "" {
 				call.ThoughtSignature = &p.Call.ThoughtSignature
 			}
-			label := tools.ToolLabel(p.Call.Name)
+			label := tools.ToolCallLabel(p.Call.Name, p.Call.Arguments)
 			flags := tools.ToolKindFlags(p.Call.Name)
 			icon := tools.ToolIconKey(p.Call.Name)
 			call.Label, call.KindFlags, call.Icon = &label, &flags, &icon

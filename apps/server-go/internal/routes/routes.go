@@ -123,6 +123,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	go mcpManager.AutoConnect()
 	registerMCPRoutes(app, mcpManager)
 	RegisterSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
+	RegisterWorktreeLaunchRoutes(app, services.NewSessionService(cfg.DB), runSvc)
 	registerWorktreeRoutes(app, services.NewSessionService(cfg.DB), git.NewWorktreeService())
 	// The provider account store backs multi-account support. Configure
 	// also migrates the legacy single-credential files; a failure here must

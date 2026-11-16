@@ -22,6 +22,10 @@ actions!(
         /// Toggle the settled mark on the chat the user is looking at: file
         /// it away, or bring a settled chat back to active (cmd-shift-s).
         SettleSession,
+        /// Toggle the pinned mark on the chat the user is looking at (cmd-shift-p).
+        PinSession,
+        /// Delete the chat the user is looking at (cmd-shift-d).
+        DeleteSession,
         /// Open a new terminal tab in the active pane (cmd-shift-t).
         NewTerminal,
         /// Open a new browser tab in the active pane (cmd-shift-b).
@@ -116,6 +120,10 @@ pub fn init(cx: &mut App) {
         // Shift is held.
         KeyBinding::new("secondary-shift-s", SettleSession, None),
         KeyBinding::new("secondary-shift-S", SettleSession, None),
+        KeyBinding::new("secondary-shift-p", PinSession, None),
+        KeyBinding::new("secondary-shift-P", PinSession, None),
+        KeyBinding::new("secondary-shift-d", DeleteSession, None),
+        KeyBinding::new("secondary-shift-D", DeleteSession, None),
         // cmd-o / cmd-p — same as Zed; our File menu owns the key equivalents
         // so AppKit routes them to us instead of the system Open/Print handlers.
         KeyBinding::new("secondary-o", AddProject, None),
@@ -229,6 +237,26 @@ pub fn init_handlers(cx: &mut App) {
     cx.on_action(|_: &SettleSession, cx| {
         if let Some((_, app)) = crate::window::get_active_window(cx) {
             app.update(cx, |this, cx| this.toggle_settle_selected_session(cx));
+        }
+    });
+
+    cx.on_action(|_: &PinSession, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.toggle_pin_selected_session(cx));
+        }
+    });
+
+    cx.on_action(|_: &DeleteSession, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.delete_selected_session(window, cx);
+                        });
+                    })
+                    .ok();
+            });
         }
     });
 

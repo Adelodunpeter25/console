@@ -49,6 +49,9 @@ import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
 import console.v1.FsTreeEntry
+import com.console.mobile.SharedNative.GitBadgeInfo
+import com.console.mobile.core.util.gitBadges
+import com.console.mobile.core.util.gitRoleColor
 import com.console.mobile.data.model.getFilePreviewBlock
 import com.console.mobile.core.util.resolveFilePath
 import com.console.mobile.data.model.isMarkdownPath
@@ -105,6 +108,8 @@ fun FilesScreen(onBack: () -> Unit) {
     var expanded by remember { mutableStateOf(setOf<String>()) }
     var childrenByPath by remember { mutableStateOf<Map<String, List<FsTreeEntry>>>(emptyMap()) }
     var loadingDirs by remember { mutableStateOf(setOf<String>()) }
+    // The git badge of every changed path, and of every folder above one.
+    var gitBadges by remember { mutableStateOf<Map<String, GitBadgeInfo>>(emptyMap()) }
     var selectedPath by remember { mutableStateOf<String?>(null) }
     // True while the open file came from a chat link rather than the tree.
     var openedFromLink by remember { mutableStateOf(false) }
@@ -136,6 +141,7 @@ fun FilesScreen(onBack: () -> Unit) {
         } finally {
             entriesLoading = false
         }
+        gitBadges = loadGitBadges(projectRoot)
     }
 
     LaunchedEffect(searchQuery, projectRoot) {
@@ -336,6 +342,7 @@ fun FilesScreen(onBack: () -> Unit) {
                         } finally {
                             entriesLoading = false
                         }
+                        gitBadges = loadGitBadges(projectRoot)
                     }
                 })
             },
@@ -368,13 +375,13 @@ fun FilesScreen(onBack: () -> Unit) {
                     } else {
                         LazyColumn(state = resultsListState, modifier = Modifier.fillMaxSize()) {
                             items(results, key = { it.path }) { r ->
-                                TreeRowEntry(entry = r, depth = 0, selected = false, expanded = false, onPressDir = { toggleDir(r.path) }, onPressFile = { selectFile(r.path, null) })
+                                TreeRowEntry(entry = r, depth = 0, selected = false, expanded = false, badge = gitBadges[r.path], onPressDir = { toggleDir(r.path) }, onPressFile = { selectFile(r.path, null) })
                             }
                         }
                     }
                 }
                 else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(flattenTree(entries, expanded, childrenByPath), key = { it.key }) { row ->
+                    items(flattenTree(entries, expanded, childrenByPath, loadingDirs), key = { it.key }) { row ->
                         when (row.kind) {
                             TreeKind.Loading -> Row(modifier = Modifier.fillMaxWidth().padding(start = (16 + row.depth * 18).dp).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
@@ -383,15 +390,7 @@ fun FilesScreen(onBack: () -> Unit) {
                             TreeKind.Empty -> Text("(empty)", color = NewTheme.TextMuted, fontSize = 13.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, modifier = Modifier.padding(start = (16 + row.depth * 18).dp, top = 2.dp, bottom = 8.dp))
                             TreeKind.Entry -> {
                                 val e = row.entry!!
-                                val isLoadingDir = e.is_dir && loadingDirs.contains(e.path)
-                                if (isLoadingDir && !childrenByPath.containsKey(e.path)) {
-                                    Row(modifier = Modifier.fillMaxWidth().padding(start = (16 + row.depth * 18).dp).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                                        Text(e.name, color = NewTheme.TextSecondary, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
-                                    }
-                                } else {
-                                    TreeRowEntry(entry = e, depth = row.depth, selected = selectedPath == e.path, expanded = expanded.contains(e.path), onPressDir = { toggleDir(e.path) }, onPressFile = { selectFile(e.path, e.size) })
-                                }
+                                TreeRowEntry(entry = e, depth = row.depth, selected = selectedPath == e.path, expanded = expanded.contains(e.path), badge = gitBadges[e.path], onPressDir = { toggleDir(e.path) }, onPressFile = { selectFile(e.path, e.size) })
                             }
                         }
                     }
@@ -403,10 +402,29 @@ fun FilesScreen(onBack: () -> Unit) {
     }
 }
 
+/**
+ * The git badge of every changed path under [root], and of every folder above
+ * one — the rules come from the shared crate, so the phone and the desktop
+ * badge the same file the same way.
+ *
+ * Empty when the folder is not a repository or the server cannot be reached:
+ * the tree then shows no badges rather than wrong ones.
+ */
+private suspend fun loadGitBadges(root: String?): Map<String, GitBadgeInfo> = withContext(Dispatchers.IO) {
+    val repo = root ?: return@withContext emptyMap()
+    try {
+        val status = AppContainer.consoleApi.getGitStatus(repo) ?: return@withContext emptyMap()
+        val files = status.files
+        gitBadges(files.map { it.path }, files.map { it.status })
+    } catch (_: Exception) {
+        emptyMap()
+    }
+}
+
 private enum class TreeKind { Entry, Loading, Empty }
 private data class FlatRow(val key: String, val kind: TreeKind, val entry: FsTreeEntry? = null, val depth: Int)
 
-private fun flattenTree(roots: List<FsTreeEntry>, expanded: Set<String>, children: Map<String, List<FsTreeEntry>>): List<FlatRow> {
+private fun flattenTree(roots: List<FsTreeEntry>, expanded: Set<String>, children: Map<String, List<FsTreeEntry>>, loading: Set<String>): List<FlatRow> {
     val out = mutableListOf<FlatRow>()
     fun visit(list: List<FsTreeEntry>, depth: Int) {
         val sorted = list.sortedWith(compareBy({ !it.is_dir }, { it.name.lowercase() }))
@@ -414,12 +432,16 @@ private fun flattenTree(roots: List<FsTreeEntry>, expanded: Set<String>, childre
             out.add(FlatRow("row:${e.path}", TreeKind.Entry, e, depth))
             if (e.is_dir && expanded.contains(e.path)) {
                 val kids = children[e.path]
-                if (kids == null) {
-                    out.add(FlatRow("loading:${e.path}", TreeKind.Loading, null, depth + 1))
-                } else if (kids.isEmpty()) {
-                    out.add(FlatRow("empty:${e.path}", TreeKind.Empty, null, depth + 1))
-                } else {
-                    visit(kids, depth + 1)
+                when {
+                    // Only a fetch that is still running shows a spinner. An
+                    // expanded folder with no children and no fetch in flight
+                    // is one whose load failed, and a spinner there would spin
+                    // forever.
+                    kids == null -> if (loading.contains(e.path)) {
+                        out.add(FlatRow("loading:${e.path}", TreeKind.Loading, null, depth + 1))
+                    }
+                    kids.isEmpty() -> out.add(FlatRow("empty:${e.path}", TreeKind.Empty, null, depth + 1))
+                    else -> visit(kids, depth + 1)
                 }
             }
         }
@@ -429,7 +451,7 @@ private fun flattenTree(roots: List<FsTreeEntry>, expanded: Set<String>, childre
 }
 
 @Composable
-private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expanded: Boolean, onPressDir: () -> Unit, onPressFile: () -> Unit) {
+private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expanded: Boolean, badge: GitBadgeInfo?, onPressDir: () -> Unit, onPressFile: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth()
             .background(if (selected) Color.White.copy(alpha = 0.06f) else Color.Transparent)
@@ -447,14 +469,31 @@ private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expa
                 Icon(
                     if (expanded) TablerIcons.Outline.FolderOpen else TablerIcons.Outline.Folder,
                     contentDescription = null,
-                    tint = NewTheme.TextPrimary,
+                    // A folder carries the strongest badge beneath it, so the
+                    // tint says what changed inside it.
+                    tint = badge?.let { gitRoleColor(it.role) } ?: NewTheme.TextPrimary,
                     modifier = Modifier.size(20.dp),
                 )
             } else {
                 FileIcon(filename = entry.name, sizeDp = 20)
             }
         }
-        Text(entry.name, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 12.dp))
+        Text(
+            entry.name,
+            // The name carries the badge too, so a change is visible on the
+            // label and not only on the icon.
+            color = if (selected) NewTheme.TextPrimary else badge?.let { gitRoleColor(it.role) } ?: NewTheme.TextPrimary,
+            fontSize = 16.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(start = 12.dp),
+        )
+        // The letter sits after the name, so a long name truncates instead of
+        // pushing the badge off the row.
+        if (badge != null) {
+            Text(badge.label, color = gitRoleColor(badge.role), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(14.dp))
+        }
     }
 }
 

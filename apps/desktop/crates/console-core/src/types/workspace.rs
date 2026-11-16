@@ -314,6 +314,16 @@ impl WorkspaceNode {
         }
     }
 
+    /// Find the leaf with the given id.
+    pub fn find_leaf(&self, id: &str) -> Option<&LeafPaneNode> {
+        match self {
+            Self::Leaf(node) => (node.id == id).then_some(node),
+            Self::Split(node) => {
+                node.children[0].find_leaf(id).or_else(|| node.children[1].find_leaf(id))
+            }
+        }
+    }
+
     /// Find the leaf with the given id, mutably.
     pub fn leaf_mut(&mut self, id: &str) -> Option<&mut LeafPaneNode> {
         match self {
@@ -351,17 +361,113 @@ pub fn split_node(
 /// always splits the two.
 const WORKTREE_KEY_SEP: &str = "::wt::";
 
-/// The workspace key for a git worktree of `project_id`. A plain project's
-/// workspace keeps using the bare project id, so saved layouts keep working;
-/// only worktrees get this composite key, which gives each checkout its own
-/// tabs, terminals, files and diffs while the chat still belongs to the project.
+/// The workspace key for a git worktree of `project_id`. Only worktrees get
+/// this composite key, which gives each checkout its own tabs, terminals,
+/// files and diffs while the chat still belongs to the project.
 pub fn worktree_workspace_key(project_id: &str, worktree_path: &str) -> String {
     format!("{project_id}{WORKTREE_KEY_SEP}{worktree_path}")
 }
 
+/// Separator between a project id and a chat session id inside a workspace
+/// key. Session ids never contain it, so the first occurrence splits the two.
+const SESSION_KEY_SEP: &str = "::session::";
+
+/// The workspace key of a plain project chat: one chat, one desk. Every chat
+/// owns its own tabs, terminals, files and diffs — even inside the same
+/// project — while the chat still belongs to that project (the id stays the
+/// prefix, so project grouping and lookups keep working).
+pub fn session_workspace_key(project_id: &str, session_id: &str) -> String {
+    format!("{project_id}{SESSION_KEY_SEP}{session_id}")
+}
+
+/// The chat session behind a session-scoped workspace key.
+pub fn session_id_of_workspace_key(key: &str) -> Option<&str> {
+    key.split_once(SESSION_KEY_SEP).map(|(_, id)| id)
+}
+
+/// Marks the start of a desk's namespace inside a pane id.
+const PANE_NAMESPACE_SEP: &str = "::";
+
+/// The prefix a desk's pane ids carry. Pane state — the draft being typed,
+/// the staged comments, the branch a pane loaded — is filed under the pane
+/// id, so two desks must never share one.
+///
+/// `None` (the project-less desk) has no prefix: it keeps the window's
+/// shared `pane-main`.
+pub fn desk_pane_prefix(workspace_key: &Option<String>) -> Option<String> {
+    let key = workspace_key.as_deref()?;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(key, &mut hasher);
+    let digest = format!("{:08x}", std::hash::Hasher::finish(&hasher) as u32);
+    let readable: String = project_id_of_workspace_key(key)
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    Some(format!("pane-{readable}-{digest}{PANE_NAMESPACE_SEP}"))
+}
+
+/// The pane id a fresh desk starts with.
+pub fn desk_leaf_id(workspace_key: &Option<String>) -> String {
+    match desk_pane_prefix(workspace_key) {
+        Some(prefix) => format!("{prefix}main"),
+        None => "pane-main".to_string(),
+    }
+}
+
+/// Rewrite a desk's pane ids so they carry the desk's namespace. Desks
+/// saved by an older build all shared one pane id, so their state bled into
+/// each other. Only the local part of an id is kept, so rewriting is
+/// idempotent: a desk that is saved and restored again keeps its ids.
+pub fn namespace_pane_ids(
+    root: &mut WorkspaceNode,
+    workspace_key: &Option<String>,
+) -> Vec<(String, String)> {
+    let Some(prefix) = desk_pane_prefix(workspace_key) else {
+        return Vec::new();
+    };
+    let mut renamed = Vec::new();
+    namespace_leaf_ids(root, &prefix, &mut renamed);
+    renamed
+}
+
+fn namespace_leaf_ids(
+    node: &mut WorkspaceNode,
+    prefix: &str,
+    renamed: &mut Vec<(String, String)>,
+) {
+    match node {
+        WorkspaceNode::Leaf(leaf) => {
+            let local = leaf
+                .id
+                .rsplit_once(PANE_NAMESPACE_SEP)
+                .map(|(_, local)| local)
+                .unwrap_or(leaf.id.as_str());
+            let next = format!("{prefix}{local}");
+            if next != leaf.id {
+                renamed.push((leaf.id.clone(), next.clone()));
+                leaf.id = next;
+            }
+        }
+        WorkspaceNode::Split(split) => {
+            namespace_leaf_ids(&mut split.children[0], prefix, renamed);
+            namespace_leaf_ids(&mut split.children[1], prefix, renamed);
+        }
+    }
+}
+
+/// Whether `key` belongs to one chat's own workspace rather than a project or
+/// worktree desk.
+pub fn is_session_workspace_key(key: &str) -> bool {
+    key.contains(SESSION_KEY_SEP)
+}
+
 /// Split a workspace key into its real project id and, for a worktree
-/// workspace, the worktree path.
+/// workspace, the worktree path. Session-scoped keys sit in the project
+/// folder, so they split to no path.
 pub fn split_workspace_key(key: &str) -> (&str, Option<&str>) {
+    if let Some((project_id, _)) = key.split_once(SESSION_KEY_SEP) {
+        return (project_id, None);
+    }
     match key.split_once(WORKTREE_KEY_SEP) {
         Some((project_id, path)) if !path.is_empty() => (project_id, Some(path)),
         Some((project_id, _)) => (project_id, None),
@@ -416,7 +522,8 @@ pub fn workspace_key_for_session(
     let project_id = session.project_id.as_deref()?;
     match session_checkout_path(session, project_path) {
         Some(path) => Some(worktree_workspace_key(project_id, path)),
-        None => Some(project_id.to_owned()),
+        // One chat, one desk: plain chats each get their own workspace too.
+        None => Some(session_workspace_key(project_id, &session.id)),
     }
 }
 

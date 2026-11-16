@@ -277,3 +277,24 @@ func TestFilePreviewGatesMatchSharedFixture(t *testing.T) {
 		check("x"+e, "BINARY_FILE")
 	}
 }
+
+func TestResolvePath(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		t.Skip("no home dir")
+	}
+	if got := fssvc.ResolvePath("~"); got != home {
+		t.Errorf("ResolvePath(~) = %q, want %q", got, home)
+	}
+	want := filepath.Join(home, "Downloads", "test.txt")
+	if got := fssvc.ResolvePath("~/Downloads/test.txt"); got != want {
+		t.Errorf("ResolvePath(~/Downloads/test.txt) = %q, want %q", got, want)
+	}
+	if got := fssvc.ResolvePath("/absolute/path"); got != "/absolute/path" {
+		t.Errorf("ResolvePath(/absolute/path) = %q, want /absolute/path", got)
+	}
+	if got := fssvc.ResolvePath("relative/path"); got != "relative/path" {
+		t.Errorf("ResolvePath(relative/path) = %q, want relative/path", got)
+	}
+}
+

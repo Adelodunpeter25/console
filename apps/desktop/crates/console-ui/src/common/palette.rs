@@ -288,7 +288,7 @@ fn compute_layout(
         rows: Vec::new(),
         visible: Vec::new(),
         row_of_visible: Vec::new(),
-        sections,
+        sections: Vec::new(),
     };
     let push_item = |layout: &mut Layout, entry: usize| {
         let visible = layout.visible.len();
@@ -302,11 +302,11 @@ fn compute_layout(
     {
         push_item(&mut layout, ix);
     }
-    for section in layout.sections.clone() {
+    for section in &sections {
         let mut heading_pending = true;
         for &(ix, _) in candidates
             .iter()
-            .filter(|&&(ix, _)| entries[ix].section.as_ref() == Some(&section))
+            .filter(|&&(ix, _)| entries[ix].section.as_ref() == Some(section))
         {
             if heading_pending {
                 layout.rows.push(Row::Heading(section.clone()));
@@ -315,6 +315,7 @@ fn compute_layout(
             push_item(&mut layout, ix);
         }
     }
+    layout.sections = sections;
     layout
 }
 

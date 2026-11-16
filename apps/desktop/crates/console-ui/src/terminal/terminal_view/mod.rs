@@ -203,8 +203,7 @@ impl TerminalView {
                     let handle = handle.clone();
                     async move {
                         let full = handle.snapshot_full().await;
-                        let status = handle.status().await;
-                        let error = handle.error.read().await.clone();
+                        let (status, error) = handle.status_and_error().await;
                         // `full.damage` is intentionally dropped: damage is
                         // consumed per snapshot and can go stale when the
                         // watch loop takes two snapshots between paints, so
@@ -251,8 +250,7 @@ impl TerminalView {
                         cx.background_executor()
                             .spawn(async move {
                                 let full = handle_for_snapshot.snapshot_full().await;
-                                let status = handle_for_snapshot.status().await;
-                                let error = handle_for_snapshot.error.read().await.clone();
+                                let (status, error) = handle_for_snapshot.status_and_error().await;
                                 (
                                     full.snapshot,
                                     full.mouse_mode,

@@ -91,22 +91,22 @@ impl TranscriptView {
         let button = |id: &'static str, icon: IconName, is_left: bool| {
             let mut el = div()
                 .id(id)
-                .w(px(32.0))
-                .h(px(32.0))
+                .w(px(29.0))
+                .h(px(29.0))
                 .flex()
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
                 .hover(|element| element.bg(theme.overlay_strong))
-                .child(app_icon(icon, 15.0, theme.text_secondary));
+                .child(app_icon(icon, 14.0, theme.text_secondary));
             if both {
                 if is_left {
-                    el = el.rounded_tl(px(16.0)).rounded_bl(px(16.0));
+                    el = el.rounded_tl(px(14.5)).rounded_bl(px(14.5));
                 } else {
-                    el = el.rounded_tr(px(16.0)).rounded_br(px(16.0));
+                    el = el.rounded_tr(px(14.5)).rounded_br(px(14.5));
                 }
             } else {
-                el = el.rounded(px(16.0));
+                el = el.rounded(px(14.5));
             }
             el
         };
@@ -115,7 +115,7 @@ impl TranscriptView {
             .flex()
             .items_center()
             .overflow_hidden()
-            .rounded(px(17.0))
+            .rounded(px(15.5))
             .border_1()
             .border_color(theme.border)
             .bg(theme.raised);
@@ -154,7 +154,7 @@ impl TranscriptView {
             );
         }
 
-        let mut layer = div().absolute().inset_0();
+        let mut popup_element = None;
         if self.prompts_open && has_prompts {
             let prompts = self.prompts.clone();
             let entity = cx.entity().downgrade();
@@ -185,50 +185,75 @@ impl TranscriptView {
                 .into_any_element()
             };
 
-            layer = layer
-                .child(
-                    div()
-                        .id("transcript-prompts-backdrop")
-                        .absolute()
-                        .inset_0()
-                        .on_click(cx.listener(|this, _, _, cx| {
+            popup_element = Some(
+                div()
+                    .id("transcript-prompts-popup")
+                    .track_focus(&self.prompts_focus)
+                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                        if event.keystroke.key == "escape" {
                             this.close_prompts(cx);
-                        })),
-                )
-                .child(
-                    div()
-                        .id("transcript-prompts-popup")
-                        .track_focus(&self.prompts_focus)
-                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                            if event.keystroke.key == "escape" {
-                                this.close_prompts(cx);
-                                cx.stop_propagation();
-                            }
-                        }))
-                        .absolute()
-                        .right(px(16.0))
-                        .bottom(px(54.0))
-                        .w(px(340.0))
-                        .max_w_full()
-                        .h(px(visible_rows.max(1) as f32 * PROMPT_ROW_HEIGHT + 8.0))
-                        .occlude()
-                        .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-                        .p(px(4.0))
-                        .rounded(px(12.0))
-                        .border_1()
-                        .border_color(theme.border)
-                        .bg(theme.raised)
-                        .child(body),
-                );
+                            cx.stop_propagation();
+                        }
+                    }))
+                    .absolute()
+                    .right_0()
+                    .bottom(px(41.0))
+                    .w(px(340.0))
+                    .max_w_full()
+                    .h(px(visible_rows.max(1) as f32 * PROMPT_ROW_HEIGHT + 8.0))
+                    .occlude()
+                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                    .p(px(4.0))
+                    .rounded(px(12.0))
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.raised)
+                    .child(body),
+            );
+        }
+
+        let mut layer = div().absolute().inset_0();
+        if self.prompts_open && has_prompts {
+            layer = layer.child(
+                div()
+                    .id("transcript-prompts-backdrop")
+                    .absolute()
+                    .inset_0()
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.close_prompts(cx);
+                    })),
+            );
         }
 
         layer
             .child(
                 div()
                     .absolute()
-                    .right(px(16.0))
+                    .left_0()
+                    .right_0()
                     .bottom(px(10.0))
-                    .child(pill),
+                    .h(px(31.0))
+                    .w_full()
+                    .px(px(20.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .relative()
+                            .w_full()
+                            .max_w(px(768.0))
+                            .h(px(31.0))
+                            .flex()
+                            .items_center()
+                            .when_some(popup_element, |el, popup| el.child(popup))
+                            .child(
+                                div()
+                                    .absolute()
+                                    .right_0()
+                                    .child(pill),
+                            ),
+                    ),
             )
             .into_any_element()
     }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/shared"
 )
 
 const claudeDefaultEndpoint = "https://api.anthropic.com/api/oauth"
@@ -403,7 +404,7 @@ func FetchClaudeUsage(ctx context.Context, client *http.Client, baseURL, accessT
 		return nil, nil
 	}
 	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Second}
+		client = shared.PooledClient(5 * time.Second)
 	}
 	endpoint := normalizeClaudeUsageBaseURL(baseURL) + "/usage"
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)

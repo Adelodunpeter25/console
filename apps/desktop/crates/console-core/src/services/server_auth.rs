@@ -55,11 +55,11 @@ impl ServerAuthService {
         device_name: &str,
     ) -> Result<(PairingData, String)> {
         let base_url = normalize_server_url(host);
-        // An iroh address is dialled through a tunnel that lives for this
-        // call; the address itself is what gets stored for later requests.
+        // An iroh address is dialled through a tunnel; the address itself
+        // is what gets stored for later requests.
         let tunnel = match console_shared::pairing::iroh_node_id(&base_url) {
             Some(node_id) => Some(
-                console_iroh::Tunnel::connect(node_id)
+                crate::utils::http_transport::get_or_create_tunnel(node_id)
                     .await
                     .context("Failed to reach the server over iroh")?,
             ),

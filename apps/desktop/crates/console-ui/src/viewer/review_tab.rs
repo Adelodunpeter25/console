@@ -6,8 +6,8 @@ use std::rc::Rc;
 
 use console_core::types::{ChangesScope, SessionFileChange};
 use gpui::{
-    App, FontWeight, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
+    App, FontWeight, InteractiveElement, IntoElement, ListState, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window, div, list, prelude::FluentBuilder, px,
 };
 
 use crate::markdown::render::MONO_FAMILY;
@@ -15,12 +15,18 @@ use crate::primitives::icons::{IconName, app_icon};
 use crate::primitives::{base_name, file_type_icon};
 use crate::theme::Theme;
 use crate::utils::short_parent_dir;
-use crate::viewer::diff_viewer::{DIFF_LINE_HEIGHT, DiffViewer, EditorDiff, build_editor_diff};
+use crate::viewer::diff_viewer::{
+    DIFF_LINE_HEIGHT, DiffViewer, EditorDiff, build_editor_diff_capped,
+};
 
 /// Longest a file's diff grows inside the review tab before it scrolls
 /// internally. The editor diff view lays out every row it is given room for,
 /// so an unbounded height would render a huge diff's rows all at once.
 const REVIEW_DIFF_MAX_HEIGHT: f32 = 800.0;
+
+/// Maximum diff lines to load for a preview block. Capping keeps tree-sitter
+/// syntax highlighting and widest-line scans bounded for huge files.
+const REVIEW_DIFF_MAX_LINES: usize = 1000;
 
 #[derive(IntoElement)]
 pub struct ReviewTab {
@@ -29,6 +35,7 @@ pub struct ReviewTab {
     collapsed: std::collections::HashSet<String>,
     on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_toggle_reviewed: Rc<dyn Fn(String, u32, &mut Window, &mut App) + 'static>,
+    list_state: Option<ListState>,
 }
 
 impl ReviewTab {
@@ -45,7 +52,13 @@ impl ReviewTab {
             collapsed,
             on_toggle_collapsed,
             on_toggle_reviewed,
+            list_state: None,
         }
+    }
+
+    pub fn list_state(mut self, list_state: ListState) -> Self {
+        self.list_state = Some(list_state);
+        self
     }
 }
 
@@ -105,13 +118,13 @@ impl RenderOnce for ReviewTab {
                         )
                     }),
             )
-            .child(
+            .child(if scoped.is_empty() {
                 div()
                     .id("changes-review-scroll")
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
-                    .child(if scoped.is_empty() {
+                    .child(
                         div()
                             .flex()
                             .items_center()
@@ -119,207 +132,238 @@ impl RenderOnce for ReviewTab {
                             .py(px(48.0))
                             .text_size(px(12.0))
                             .text_color(theme.text_tertiary)
-                            .child("No changes in this scope")
-                            .into_any_element()
-                    } else {
-                        div()
-                            .flex()
-                            .flex_col()
-                            .children(scoped.iter().map(|entry| {
-                                let is_collapsed = self.collapsed.contains(&entry.path);
-                                let file_name = base_name(&entry.path).to_string();
-                                let short_dir = short_parent_dir(&entry.path);
-                                let path_for_toggle = entry.path.clone();
-                                let path_for_reviewed = entry.path.clone();
-                                let turn_index = entry.turn_index;
-                                let on_toggle_collapsed = on_toggle_collapsed.clone();
-                                let on_toggle_reviewed = on_toggle_reviewed.clone();
-                                let reviewed = entry.reviewed;
+                            .child("No changes in this scope"),
+                    )
+                    .into_any_element()
+            } else if let Some(list_state) = self.list_state {
+                let scoped = Rc::new(scoped);
+                let collapsed = Rc::new(self.collapsed);
+                let on_toggle_collapsed = on_toggle_collapsed.clone();
+                let on_toggle_reviewed = on_toggle_reviewed.clone();
 
-                                // One cached editor diff view per file and turn.
-                                // The key carries the row's update time and diff
-                                // length, so a changed diff builds a fresh view.
-                                let editor_diff: Option<EditorDiff> = if is_collapsed {
-                                    None
-                                } else {
-                                    entry
-                                        .diff_text
-                                        .as_deref()
-                                        .filter(|text| !text.trim().is_empty())
-                                        .map(|text| {
-                                            let key = format!(
-                                                "review-diff-{}-{}-{}-{}",
-                                                entry.path,
-                                                entry.turn_index,
-                                                entry.updated_at,
-                                                text.len()
-                                            );
-                                            let state = window.use_keyed_state(
-                                                gpui::ElementId::Name(key.into()),
-                                                cx,
-                                                |_, cx| {
-                                                    build_editor_diff(text, &entry.path, &theme, cx)
-                                                },
-                                            );
-                                            state.read(cx).clone()
-                                        })
-                                };
-
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .border_b_1()
-                                    .border_color(theme.sidebar_border)
-                                    .when(reviewed, |el| el.opacity(0.6))
-                                    .child(
-                                        div()
-                                            .id(gpui::ElementId::Name(
-                                                format!(
-                                                    "review-header-{}-{}",
-                                                    entry.path, entry.turn_index
-                                                )
-                                                .into(),
-                                            ))
-                                            .flex()
-                                            .items_center()
-                                            .justify_between()
-                                            .gap(px(8.0))
-                                            .px(px(16.0))
-                                            .py(px(10.0))
-                                            .cursor_pointer()
-                                            .hover(|s| s.bg(theme.overlay))
-                                            .on_click(move |_, window, cx| {
-                                                (on_toggle_collapsed)(
-                                                    path_for_toggle.clone(),
-                                                    window,
-                                                    cx,
-                                                );
-                                            })
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .items_center()
-                                                    .gap(px(8.0))
-                                                    .min_w_0()
-                                                    .flex_1()
-                                                    .child(app_icon(
-                                                        if is_collapsed {
-                                                            IconName::ChevronRight
-                                                        } else {
-                                                            IconName::ChevronDown
-                                                        },
-                                                        11.0,
-                                                        theme.text_tertiary,
-                                                    ))
-                                                    .child(file_type_icon(&entry.path, 14.0))
-                                                    .child(
-                                                        div()
-                                                            .flex()
-                                                            .items_baseline()
-                                                            .gap(px(6.0))
-                                                            .min_w_0()
-                                                            .flex_1()
-                                                            .child(
-                                                                div()
-                                                                    .flex_none()
-                                                                    .text_size(px(12.5))
-                                                                    .font_weight(FontWeight::MEDIUM)
-                                                                    .text_color(theme.text)
-                                                                    .child(file_name),
-                                                            )
-                                                            .when(!short_dir.is_empty(), |el| {
-                                                                el.child(
-                                                                    div()
-                                                                        .truncate()
-                                                                        .min_w_0()
-                                                                        .flex_1()
-                                                                        .text_size(px(10.5))
-                                                                        .font_family(MONO_FAMILY)
-                                                                        .text_color(
-                                                                            theme.text_ghost,
-                                                                        )
-                                                                        .child(short_dir.clone()),
-                                                                )
-                                                            }),
-                                                    ),
-                                            )
-                                            .child(
-                                                div()
-                                                    .id(gpui::ElementId::Name(
-                                                        format!(
-                                                            "review-mark-{}-{}",
-                                                            entry.path, entry.turn_index
-                                                        )
-                                                        .into(),
-                                                    ))
-                                                    .flex()
-                                                    .items_center()
-                                                    .gap(px(6.0))
-                                                    .px(px(8.0))
-                                                    .h(px(24.0))
-                                                    .rounded(px(6.0))
-                                                    .cursor_pointer()
-                                                    .when(reviewed, |el| {
-                                                        el.bg(theme.overlay_strong)
-                                                    })
-                                                    .when(!reviewed, |el| {
-                                                        el.border_1()
-                                                            .border_color(theme.border_strong)
-                                                    })
-                                                    .hover(|s| s.bg(theme.overlay))
-                                                    .on_click(move |event, window, cx| {
-                                                        cx.stop_propagation();
-                                                        let _ = event;
-                                                        (on_toggle_reviewed)(
-                                                            path_for_reviewed.clone(),
-                                                            turn_index,
-                                                            window,
-                                                            cx,
-                                                        );
-                                                    })
-                                                    .child(app_icon(
-                                                        IconName::Check,
-                                                        10.0,
-                                                        if reviewed {
-                                                            theme.success
-                                                        } else {
-                                                            theme.text_tertiary
-                                                        },
-                                                    ))
-                                                    .child(
-                                                        div()
-                                                            .text_size(px(10.5))
-                                                            .font_weight(FontWeight::MEDIUM)
-                                                            .text_color(if reviewed {
-                                                                theme.success
-                                                            } else {
-                                                                theme.text_tertiary
-                                                            })
-                                                            .child(if reviewed {
-                                                                "Reviewed"
-                                                            } else {
-                                                                "Mark as reviewed"
-                                                            }),
-                                                    ),
-                                            ),
-                                    )
-                                    .when_some(editor_diff, |el, diff| {
-                                        let height = (diff.line_count as f32 * DIFF_LINE_HEIGHT)
-                                            .min(REVIEW_DIFF_MAX_HEIGHT);
-                                        el.child(
-                                            div().px(px(16.0)).pb(px(12.0)).child(
-                                                div()
-                                                    .w_full()
-                                                    .h(px(height))
-                                                    .rounded(px(6.0))
-                                                    .overflow_hidden()
-                                                    .child(DiffViewer::new(diff.view)),
-                                            ),
-                                        )
-                                    })
-                            }))
-                            .into_any_element()
-                    }),
-            )
+                div()
+                    .id("changes-review-scroll")
+                    .flex_1()
+                    .min_h_0()
+                    .size_full()
+                    .child(
+                        list(list_state, move |ix, window, cx| {
+                            let entry = &scoped[ix];
+                            let is_collapsed = collapsed.contains(&entry.path);
+                            render_review_entry(
+                                entry,
+                                is_collapsed,
+                                &on_toggle_collapsed,
+                                &on_toggle_reviewed,
+                                window,
+                                cx,
+                            )
+                        })
+                        .size_full(),
+                    )
+                    .into_any_element()
+            } else {
+                div()
+                    .id("changes-review-scroll")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .child(div().flex().flex_col().children(scoped.iter().map(|entry| {
+                        let is_collapsed = self.collapsed.contains(&entry.path);
+                        render_review_entry(
+                            entry,
+                            is_collapsed,
+                            &on_toggle_collapsed,
+                            &on_toggle_reviewed,
+                            window,
+                            cx,
+                        )
+                    })))
+                    .into_any_element()
+            })
     }
+}
+
+fn render_review_entry(
+    entry: &SessionFileChange,
+    is_collapsed: bool,
+    on_toggle_collapsed: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_toggle_reviewed: &Rc<dyn Fn(String, u32, &mut Window, &mut App) + 'static>,
+    window: &mut Window,
+    cx: &mut App,
+) -> gpui::AnyElement {
+    let theme = Theme::current(cx);
+    let file_name = base_name(&entry.path);
+    let short_dir = short_parent_dir(&entry.path);
+    let path_for_toggle = entry.path.clone();
+    let path_for_reviewed = entry.path.clone();
+    let turn_index = entry.turn_index;
+    let on_toggle_collapsed = on_toggle_collapsed.clone();
+    let on_toggle_reviewed = on_toggle_reviewed.clone();
+    let reviewed = entry.reviewed;
+
+    // One cached editor diff view per file and turn.
+    // The key carries the row's update time and diff
+    // length, so a changed diff builds a fresh view.
+    let editor_diff: Option<EditorDiff> = if is_collapsed {
+        None
+    } else {
+        entry
+            .diff_text
+            .as_deref()
+            .filter(|text| !text.trim().is_empty())
+            .map(|text| {
+                let key = format!(
+                    "review-diff-{}-{}-{}-{}",
+                    entry.path,
+                    entry.turn_index,
+                    entry.updated_at,
+                    text.len()
+                );
+                let state =
+                    window.use_keyed_state(gpui::ElementId::Name(key.into()), cx, |_, cx| {
+                        build_editor_diff_capped(
+                            text,
+                            &entry.path,
+                            &theme,
+                            REVIEW_DIFF_MAX_LINES,
+                            cx,
+                        )
+                        .0
+                    });
+                state.read(cx).clone()
+            })
+    };
+
+    div()
+        .w_full()
+        .flex()
+        .flex_col()
+        .border_b_1()
+        .border_color(theme.sidebar_border)
+        .when(reviewed, |el| el.opacity(0.6))
+        .child(
+            div()
+                .id(gpui::ElementId::Name(
+                    format!("review-header-{}-{}", entry.path, entry.turn_index).into(),
+                ))
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(8.0))
+                .px(px(16.0))
+                .py(px(10.0))
+                .cursor_pointer()
+                .hover(|s| s.bg(theme.overlay))
+                .on_click(move |_, window, cx| {
+                    (on_toggle_collapsed)(path_for_toggle.clone(), window, cx);
+                })
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .min_w_0()
+                        .flex_1()
+                        .child(app_icon(
+                            if is_collapsed {
+                                IconName::ChevronRight
+                            } else {
+                                IconName::ChevronDown
+                            },
+                            11.0,
+                            theme.text_tertiary,
+                        ))
+                        .child(file_type_icon(&entry.path, 14.0))
+                        .child(
+                            div()
+                                .flex()
+                                .items_baseline()
+                                .gap(px(6.0))
+                                .min_w_0()
+                                .flex_1()
+                                .child(
+                                    div()
+                                        .flex_none()
+                                        .text_size(px(12.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(theme.text)
+                                        .child(file_name.to_string()),
+                                )
+                                .when(!short_dir.is_empty(), |el| {
+                                    el.child(
+                                        div()
+                                            .truncate()
+                                            .min_w_0()
+                                            .flex_1()
+                                            .text_size(px(10.5))
+                                            .font_family(MONO_FAMILY)
+                                            .text_color(theme.text_ghost)
+                                            .child(short_dir),
+                                    )
+                                }),
+                        ),
+                )
+                .child(
+                    div()
+                        .id(gpui::ElementId::Name(
+                            format!("review-mark-{}-{}", entry.path, entry.turn_index).into(),
+                        ))
+                        .flex()
+                        .items_center()
+                        .gap(px(6.0))
+                        .px(px(8.0))
+                        .h(px(24.0))
+                        .rounded(px(6.0))
+                        .cursor_pointer()
+                        .when(reviewed, |el| el.bg(theme.overlay_strong))
+                        .when(!reviewed, |el| {
+                            el.border_1().border_color(theme.border_strong)
+                        })
+                        .hover(|s| s.bg(theme.overlay))
+                        .on_click(move |event, window, cx| {
+                            cx.stop_propagation();
+                            let _ = event;
+                            (on_toggle_reviewed)(path_for_reviewed.clone(), turn_index, window, cx);
+                        })
+                        .child(app_icon(
+                            IconName::Check,
+                            10.0,
+                            if reviewed {
+                                theme.success
+                            } else {
+                                theme.text_tertiary
+                            },
+                        ))
+                        .child(
+                            div()
+                                .text_size(px(10.5))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(if reviewed {
+                                    theme.success
+                                } else {
+                                    theme.text_tertiary
+                                })
+                                .child(if reviewed {
+                                    "Reviewed"
+                                } else {
+                                    "Mark as reviewed"
+                                }),
+                        ),
+                ),
+        )
+        .when_some(editor_diff, |el, diff| {
+            let height = (diff.line_count as f32 * DIFF_LINE_HEIGHT).min(REVIEW_DIFF_MAX_HEIGHT);
+            el.child(
+                div().px(px(16.0)).pb(px(12.0)).child(
+                    div()
+                        .w_full()
+                        .h(px(height))
+                        .rounded(px(6.0))
+                        .overflow_hidden()
+                        .child(DiffViewer::new(diff.view)),
+                ),
+            )
+        })
+        .into_any_element()
 }

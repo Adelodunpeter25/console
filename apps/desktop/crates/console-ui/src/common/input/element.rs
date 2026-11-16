@@ -377,11 +377,8 @@ impl Element for InputElement {
         let mut child_layout_ids = vec![text_layout_id];
         let theme = Theme::current(cx);
         let hovered_mention = self.input.read(cx).hovered_mention;
-        let mut mention_index = 0;
-
-        for mention in mentions_to_layout {
+        for (mention_index, mention) in mentions_to_layout.into_iter().enumerate() {
             let hovered = hovered_mention == Some(mention_index);
-            mention_index += 1;
             let mut icon = gpui::div()
                 .absolute()
                 .child(if hovered {

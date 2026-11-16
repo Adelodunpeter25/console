@@ -595,7 +595,11 @@ func (c *channel) Read(p []byte) (int, error) {
 		c.queue[0] = c.queue[0][n:]
 		c.queued -= n
 		if len(c.queue[0]) == 0 {
+			c.queue[0] = nil
 			c.queue = c.queue[1:]
+			if len(c.queue) == 0 {
+				c.queue = c.queue[:0]
+			}
 		}
 		return n, nil
 	}

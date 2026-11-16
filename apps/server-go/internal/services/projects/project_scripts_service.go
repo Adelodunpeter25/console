@@ -59,6 +59,7 @@ func (r *managedRun) publish(event types.ScriptRunEvent) {
 			case ch <- event:
 			case <-time.After(2 * time.Second):
 			}
+			close(ch)
 			continue
 		}
 		select {
@@ -474,6 +475,7 @@ func (s *ProjectScriptsService) Subscribe(projectID, runID string) (chan types.S
 	}
 	if snap.Status != "running" {
 		ch <- types.ScriptRunEvent{Type: "exit", Status: snap.Status, ExitCode: snap.ExitCode}
+		close(ch)
 	} else {
 		run.mu.Lock()
 		run.subscribers[ch] = true

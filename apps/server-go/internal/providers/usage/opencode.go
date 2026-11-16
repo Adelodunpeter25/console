@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/opencode"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/shared"
 )
 
 const openCodeUsagePath = "usage"
@@ -141,7 +142,7 @@ func FetchOpenCodeUsage(ctx context.Context, client *http.Client, baseURL, apiKe
 	}
 	nowMs := time.Now().UnixMilli()
 	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Second}
+		client = shared.PooledClient(5 * time.Second)
 	}
 	endpoint := OpenCodeUsageURL(baseURL)
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)

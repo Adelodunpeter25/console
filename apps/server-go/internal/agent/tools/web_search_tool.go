@@ -152,7 +152,6 @@ func searchBrave(ctx context.Context, query string, numResults int) ([]webSearch
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Accept-Encoding", "gzip")
 	req.Header.Set("X-Subscription-Token", apiKey)
 
 	resp, err := http.DefaultClient.Do(req)

@@ -37,7 +37,8 @@ fun filePathOrNull(text: String): String? {
     val dot = name.lastIndexOf('.')
     val hasExtension = dot > 0 && dot < name.length - 1 && name.substring(dot + 1).any { it.isLetter() }
     val known = getFileIconKey(name) != "file" || name.lowercase() in BARE_FILE_NAMES
-    return if (known || (hasSeparator && hasExtension)) path else null
+    val isHomePath = path.startsWith("~/")
+    return if (known || (hasSeparator && hasExtension) || isHomePath) path else null
 }
 
 /** Host of an http(s) URL worth fetching a favicon for; null for local or private targets. */

@@ -21,6 +21,7 @@ func TestToolLabels(t *testing.T) {
 		"browser": "Browser", "visualize": "Visualize", "subagent": "Subagent",
 		"ask": "Ask Question", "askMany": "Ask Questions", "todo": "Todo",
 		"memory": "Memory", "read_chat": "Read Chat", "readSkill": "Read Skill", "loadTools": "Load Tools",
+		"code": "Code", "code_reset": "Reset Code",
 	}
 	for name, want := range cases {
 		if got := tools.ToolLabel(name); got != want {
@@ -39,6 +40,27 @@ func TestToolLabelMCPServer(t *testing.T) {
 	for _, name := range []string{"mcp__", "mcp____tool", "mcp__server__", "mcp__server", "other"} {
 		if got := tools.ToolLabel(name); got != name {
 			t.Errorf("malformed %q: got %q, want raw name", name, got)
+		}
+	}
+}
+
+func TestToolCallLabel(t *testing.T) {
+	cases := []struct {
+		name string
+		args string
+		want string
+	}{
+		{"code", `{"code":"await $'git status --porcelain'"}`, "$ git status --porcelain"},
+		{"code", `{"code":"const f = await file(\"src/main.go\")"}`, "file(src/main.go)"},
+		{"code", `{"code":"await edit(\"config.json\", \"old\", \"new\")"}`, "edit(config.json)"},
+		{"code", `{"code":"const page = await browser.open({url: \"https://example.com\"})"}`, "browser.open"},
+		{"code", `{"code":"let sum = 0;\nfor (let i = 0; i < 10; i++) sum += i;"}`, "sum = 0;"},
+		{"code", `{}`, "Code"},
+		{"read_file", `{"path":"a.txt"}`, "Read File"},
+	}
+	for _, c := range cases {
+		if got := tools.ToolCallLabel(c.name, []byte(c.args)); got != c.want {
+			t.Errorf("ToolCallLabel(%q, %q) = %q, want %q", c.name, c.args, got, c.want)
 		}
 	}
 }
@@ -72,6 +94,7 @@ func TestToolIconKey(t *testing.T) {
 		"read_file": "file", "list_dir": "folder", "grep": "search", "glob": "search",
 		"webSearch": "globe", "webFetch": "globe", "browser": "globe",
 		"visualize": "chart", "memory": "memory", "read_chat": "memory", "todo": "list",
+		"code": "code", "code_reset": "code",
 		"loadTools": "package", "mcp__gh__x": "package",
 		"unknown_thing": "wrench",
 	}

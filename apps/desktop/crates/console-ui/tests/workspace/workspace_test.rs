@@ -448,3 +448,92 @@ fn test_close_tab_prefers_most_recently_active_tab() {
     let next = ops::close_tab(&mut root, "pane-main", "file:/a/file.rs");
     assert_eq!(next, Some("chat:chat-2".to_string()));
 }
+
+// Leaving a chat for another and coming back must return the desk exactly as
+// it was left: the split and every side pane tab (browser, file, terminal)
+// survive. The old per-chat "subtab sidecar" used to close the side pane
+// whenever it had no chat tab, which silently destroyed those tabs.
+#[test]
+fn test_desk_round_trip_keeps_the_side_pane_tabs() {
+    use std::collections::HashMap;
+
+    let key_a = Some("proj-a::session::chat-a".to_string());
+    let key_b = Some("proj-a::session::chat-b".to_string());
+    let mut desks = HashMap::new();
+
+    let mut desk_a = WorkspaceNode::leaf(console_core::desk_leaf_id(&key_a));
+    let chat_pane = desk_a.first_leaf().expect("leaf").id.clone();
+    ops::open_tab(
+        &mut desk_a,
+        &chat_pane,
+        WorkspaceTabConfig::Chat {
+            session_id: "chat-a".into(),
+            title: "Chat A".into(),
+            provider: None,
+            project_id: Some(key_a.clone().unwrap()),
+            last_active_at_ms: None,
+        },
+    );
+    let side = ops::split_pane(
+        &mut desk_a,
+        &chat_pane,
+        console_core::SplitDirection::Horizontal,
+    )
+    .expect("split");
+    ops::open_tab(
+        &mut desk_a,
+        &side,
+        WorkspaceTabConfig::Browser {
+            browser_id: "browser-1".into(),
+            url: "https://waku.sh".into(),
+            title: "Waku".into(),
+            session_id: None,
+            project_id: Some(key_a.clone().unwrap()),
+            last_active_at_ms: None,
+        },
+    );
+    ops::open_tab(
+        &mut desk_a,
+        &side,
+        WorkspaceTabConfig::File {
+            path: "/a/.gitignore".into(),
+            title: ".gitignore".into(),
+            project_id: Some(key_a.clone().unwrap()),
+            last_active_at_ms: None,
+        },
+    );
+
+    let desk_b = ops::switch_desk(&mut desks, &desk_a, &key_a, &key_b);
+    let desk_a_again = ops::switch_desk(&mut desks, &desk_b, &key_b, &key_a);
+
+    assert_eq!(desk_a_again, desk_a, "the desk comes back unchanged");
+    assert_eq!(desk_a_again.leaves().len(), 2, "the split survives");
+    let side_tabs: Vec<String> = desk_a_again.leaves()[1]
+        .tabs
+        .iter()
+        .map(|tab| tab.id())
+        .collect();
+    assert!(side_tabs.contains(&"browser:browser-1".to_string()));
+    assert!(side_tabs.contains(&"file:/a/.gitignore".to_string()));
+}
+
+// A desk that has never been visited starts on a pane of its own, so its
+// state never shares with another desk's.
+#[test]
+fn test_a_new_desk_starts_on_its_own_pane() {
+    use std::collections::HashMap;
+
+    let key_a = Some("proj-a::session::chat-a".to_string());
+    let key_b = Some("proj-a::session::chat-b".to_string());
+    let mut desks = HashMap::new();
+
+    let desk_a = WorkspaceNode::leaf(console_core::desk_leaf_id(&key_a));
+    let desk_b = ops::switch_desk(&mut desks, &desk_a, &key_a, &key_b);
+
+    assert_eq!(desk_b.leaves().len(), 1);
+    assert_ne!(
+        desk_a.leaves()[0].id, desk_b.leaves()[0].id,
+        "two desks must not share a pane id"
+    );
+    assert!(desk_b.leaves()[0].tabs.is_empty());
+}

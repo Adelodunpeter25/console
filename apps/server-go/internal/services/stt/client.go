@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/shared"
 )
 
 // DefaultBaseURL is the Cloudflare API root. Tests point a Client at a local
@@ -38,7 +40,7 @@ func NewClient(baseURL string) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		// Transcription is batch work: a near-limit clip can take a while.
-		http: &http.Client{Timeout: 120 * time.Second},
+		http: shared.PooledClient(120 * time.Second),
 	}
 }
 

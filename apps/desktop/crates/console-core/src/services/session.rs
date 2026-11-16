@@ -440,6 +440,67 @@ impl SessionService {
         }
     }
 
+    /// `POST /api/sessions/with-worktree` — instant worktree launch: the
+    /// server creates the session immediately and provisions the worktree +
+    /// runs the prompt in the background. The returned header carries
+    /// launchState until the prompt is running.
+    pub async fn launch_with_worktree(&self, payload: LaunchWorktreeDto) -> Result<SessionHeader> {
+        let url = self.transport.url("/api/sessions/with-worktree").await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&payload)
+            .send()
+            .await
+            .context("Failed to launch worktree session")?;
+
+        let body: ApiResponse<SessionHeader> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse worktree launch response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Launched session data is missing"))
+        } else {
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to launch worktree session".into()
+            })))
+        }
+    }
+
+    /// `POST /api/sessions/:id/with-worktree/retry` — re-run a failed
+    /// worktree launch from the payload the server stored.
+    pub async fn retry_worktree_launch(&self, id: &str) -> Result<()> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/with-worktree/retry", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to retry worktree launch")?;
+
+        let body: ApiResponse<Option<serde_json::Value>> =
+            self.transport
+                .decode_json(resp)
+                .await
+                .context("Failed to parse worktree retry response")?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to retry worktree launch".into()
+            })))
+        }
+    }
+
     /// `POST /api/sessions/:id/worktree` — convert an existing, message-less
     /// session in place into a worktree session (branch off its current cwd,
     /// re-point cwd at the new worktree). The session id never changes;

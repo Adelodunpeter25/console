@@ -390,7 +390,7 @@ impl ConsoleDesktopApp {
     pub(crate) fn pills_scroll_for_pane(&mut self, pane_id: &str) -> gpui::ScrollHandle {
         self.pills_scrolls
             .entry(pane_id.to_string())
-            .or_insert_with(gpui::ScrollHandle::new)
+            .or_default()
             .clone()
     }
 

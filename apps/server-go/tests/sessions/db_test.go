@@ -427,3 +427,32 @@ func TestOpsOnMissingSessionNoOp(t *testing.T) {
 		t.Fatalf("GetSubagents on missing session: %+v %v", subs, err)
 	}
 }
+
+func TestDBCacheLRUAndBusyCheck(t *testing.T) {
+	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer manager.Close()
+
+	busySession := "sess_busy"
+	manager.SetBusyCheck(func(sessionID string) bool {
+		return sessionID == busySession
+	})
+
+	conn0, err := manager.Session(busySession, "")
+	if err != nil {
+		t.Fatalf("open busy session: %v", err)
+	}
+
+	for i := 1; i <= 70; i++ {
+		id := "sess_" + string(rune('a'+i))
+		if _, err := manager.Session(id, ""); err != nil {
+			t.Fatalf("open session %s: %v", id, err)
+		}
+	}
+
+	if err := conn0.Ping(); err != nil {
+		t.Fatalf("expected busy session connection to remain open, got: %v", err)
+	}
+}

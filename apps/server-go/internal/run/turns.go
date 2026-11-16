@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	agentflags "github.com/Adelodunpeter25/console/apps/server-go/internal/agent/flags"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/codemode"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/roles"
@@ -459,9 +460,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	}
 	// Lazy built-in tools (CONSOLE_HARNESS_LAZY_TOOLS): the deferred six are
 	// held back; the loadTools loader itself is added once the registry
-	// exists (it needs to know whether MCP groups are in play). The ensure
-	// closure resolves lazyLoaderInst at call time.
-	lazy := agentflags.FromEnv(os.Getenv).LazyTools
+	// exists (it needs to know whether MCP groups are in play). Under Code Mode,
+	// all tools remain directly registered because model-facing declarations
+	// are already collapsed to REPL tools without per-turn schema bloat.
+	codeMode := agentflags.FromEnv(os.Getenv).CodeMode
+	lazy := agentflags.FromEnv(os.Getenv).LazyTools && !codeMode
 	var lazyLoaderInst *lazyLoader
 	var held []tools.Tool
 	if lazy {
@@ -475,6 +478,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	}
 	usage := &loop.UsageTracker{}
 	setup := prompt.Setup
+	if codeMode {
+		setup = strings.TrimSpace(setup + "\n\n" + codemode.SetupHint)
+	}
 	mcpManager := s.mcpManager()
 	if mcpManager != nil && len(mcp.EnabledServers(mcpManager)) > 0 {
 		setup = strings.TrimSpace(setup + "\n\n" + mcpSetupHint)
@@ -600,11 +606,36 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	executor.OnBeforeExecute = func(call tools.ToolCall, _ tools.Tool) {
 		s.snapshots.SnapshotWritePaths(sessionID, writePaths(call))
 	}
+	if codeMode {
+		cmManager := s.CodemodeManager()
+		if cmManager == nil {
+			cmManager = codemode.NewManager()
+		}
+		rt, err := cmManager.Get(sessionID, executor)
+		if err == nil {
+			registry.Add(codemode.NewCodeTool(rt), codemode.NewCodeResetTool(rt))
+		} else {
+			slog.Error("failed to initialize codemode runtime", "session", sessionID, "error", err)
+		}
+	}
 	agent := loop.New(provider, executor, s.sessions)
 	agent.Usage = usage
 	agent.UserMessageID = turn.UserMessageID
 	agent.TodoReminders = mode != permissions.PlanMode
-	agent.ToolDefs = registry.Definitions
+	if codeMode {
+		agent.ToolDefs = func() []tools.Definition {
+			var defs []tools.Definition
+			for _, def := range registry.Definitions() {
+				switch def.Name {
+				case "code", "code_reset":
+					defs = append(defs, def)
+				}
+			}
+			return defs
+		}
+	} else {
+		agent.ToolDefs = registry.Definitions
+	}
 	agent.SystemPrompt = prompt.StableSystem
 	agent.Setup = setup
 	agent.TurnContext = func() string { return s.backgroundContext(sessionID) }
@@ -618,7 +649,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// The run's pinned account: every provider turn (this turn, explicit
 	// compaction summaries, title generation) authenticates as it.
 	agent.AccountID = pins.forProvider(providerID)
-	agent.Compaction = s.compactionHooks(sessionID, model, prompt.SystemPrompt, registry.Definitions(), pins)
+	agent.Compaction = s.compactionHooks(sessionID, model, prompt.SystemPrompt, agent.ToolDefs(), pins)
 
 	if dto.Synthetic {
 		hub.Broadcast(loop.Event{Kind: loop.EventBackgroundContinue, Text: wakeMessage(dto.woken), Message: dto.woken})
@@ -757,7 +788,7 @@ func (t *turnTranslator) translate(event loop.Event) {
 		if event.Call == nil {
 			return
 		}
-		label := tools.ToolLabel(event.Call.Name)
+		label := tools.ToolCallLabel(event.Call.Name, event.Call.Arguments)
 		flags := tools.ToolKindFlags(event.Call.Name)
 		icon := tools.ToolIconKey(event.Call.Name)
 		t.hub.Broadcast(loop.Event{

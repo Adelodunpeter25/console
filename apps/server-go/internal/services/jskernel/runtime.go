@@ -230,6 +230,26 @@ func (r *Runtime) SetCancel(fn func() bool) {
 	r.cancel = fn
 }
 
+// SetGlobal installs a named value on the global object.
+func (r *Runtime) SetGlobal(name string, val any) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.rt.SetGlobal(name, val)
+}
+
+// RunInitScript compiles and executes a script against the runtime without
+// the evaluation wrappers or result rendering.
+func (r *Runtime) RunInitScript(code string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	s, err := moejs.CompileScript("init.js", code)
+	if err != nil {
+		return err
+	}
+	_, err = r.rt.RunScript(s)
+	return err
+}
+
 // print collects text output. The completion value is reported separately, so
 // print is for narration and intermediate values, mirroring a REPL.
 func (r *Runtime) print(realm *moejs.Realm, this moejs.Value, args []moejs.Value) (moejs.Value, error) {

@@ -345,7 +345,7 @@ impl ToolCalls {
             .flex()
             .flex_col()
             .when(!first, |element| {
-                element.border_t_1().border_color(theme.border)
+                element.border_t_1().border_color(transparent_black())
             })
             .child(
                 div()
@@ -633,8 +633,6 @@ impl ToolCalls {
         if open {
             row = row.child(
                 div()
-                    .border_t_1()
-                    .border_color(theme.border)
                     .pl(px(10.0))
                     .children(group.entries.into_iter().enumerate().map(|(index, entry)| {
                         self.call_row(entry, theme, index == 0, on_action.clone(), window, cx)
@@ -850,11 +848,7 @@ impl RenderOnce for ToolCalls {
             header = header.child(div().ml_auto());
         }
 
-        let mut container = div().w_full().border_b_1().border_color(if self.working {
-            transparent_black()
-        } else {
-            theme.border
-        });
+        let mut container = div().w_full();
         container = container.children([header.into_any_element()]);
 
         if expanded {

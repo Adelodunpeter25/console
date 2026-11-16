@@ -170,23 +170,25 @@ pub fn with_diff_popover(
         return chip;
     };
 
-    if open && matches!(body, Body::Loading) && !fetching {
-        if let Some(load_diff) = load_diff {
-            state.update(cx, |s, _| s.fetching = true);
-            let task = load_diff(&change.path, change.turn_index, cx);
-            let state = state.clone();
-            cx.spawn(async move |cx| {
-                let text = task.await;
-                cx.update(|cx| {
-                    state.update(cx, |s, cx| {
-                        s.fetched = Some(text);
-                        s.fetching = false;
-                        cx.notify();
-                    });
+    if open
+        && matches!(body, Body::Loading)
+        && !fetching
+        && let Some(load_diff) = load_diff
+    {
+        state.update(cx, |s, _| s.fetching = true);
+        let task = load_diff(&change.path, change.turn_index, cx);
+        let state = state.clone();
+        cx.spawn(async move |cx| {
+            let text = task.await;
+            cx.update(|cx| {
+                state.update(cx, |s, cx| {
+                    s.fetched = Some(text);
+                    s.fetching = false;
+                    cx.notify();
                 });
-            })
-            .detach();
-        }
+            });
+        })
+        .detach();
     }
 
     let chip_state = state.clone();

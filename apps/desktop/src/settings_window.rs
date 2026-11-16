@@ -623,7 +623,7 @@ impl Render for SettingsWindow {
                 });
                 let ent = entity.clone();
                 cx.spawn(async move |cx| {
-                    let ok = console_core::utils::probe_backend(&url, Duration::from_secs(3)).await;
+                    let ok = console_core::utils::probe_backend(&url, Duration::from_secs(6)).await;
                     let _ = cx.update(|cx| {
                         ent.update(cx, |this, cx| {
                             this.new_env_probe = if ok.is_ok() {

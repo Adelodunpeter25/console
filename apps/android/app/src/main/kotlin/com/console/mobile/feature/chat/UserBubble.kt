@@ -35,7 +35,13 @@ import com.console.mobile.ui.theme.NewTheme
 
 /** Right-aligned user message: attachments, mention text, 4-line fold, copy. */
 @Composable
-fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> = emptyList(), planMode: Boolean = false) {
+fun UserBubble(
+    content: String,
+    createdAt: Long?,
+    attachments: List<ImagePart> = emptyList(),
+    contextFiles: List<String> = emptyList(),
+    planMode: Boolean = false,
+) {
     val context = LocalContext.current
     var preview by remember { mutableStateOf<ImagePart?>(null) }
     var expanded by remember(content) { mutableStateOf(false) }
@@ -60,7 +66,10 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
                 }
                 if (content.isNotEmpty()) {
                     val fileMentions = remember(content) { parseFileMentions(content) }
-                    val skillMentions = remember(content) { com.console.mobile.core.util.parseSkillMentions(content) }
+                    val skillMentions = remember(content, contextFiles) {
+                        val parsed = com.console.mobile.core.util.parseSkillMentions(content)
+                        if (contextFiles.isEmpty()) parsed else parsed.filter { "skill:${it.name}" in contextFiles }
+                    }
                     val chatMentions = remember(content) { com.console.mobile.core.util.parseChatMentions(content) }
                     val maxLines = if (expanded) Int.MAX_VALUE else 4
                     if (fileMentions.isEmpty() && skillMentions.isEmpty() && chatMentions.isEmpty()) {

@@ -17,6 +17,9 @@ pub struct BannerError {
     /// first"). It stops showing the moment one is selected instead of waiting
     /// out the auto-dismiss timer.
     pub(crate) needs_project: bool,
+    /// Persistent errors (e.g. a failed worktree launch) stay until the
+    /// caller clears them — no auto-dismiss timer is scheduled.
+    pub(crate) persistent: bool,
 }
 
 impl ConsoleDesktopApp {
@@ -43,8 +46,31 @@ impl ConsoleDesktopApp {
             message,
             generation: self.error_generation,
             needs_project,
+            persistent: false,
         });
         self.schedule_dismissal(None, self.error_generation, cx);
+        cx.notify();
+    }
+
+    /// Surface a session error that stays until explicitly cleared (a failed
+    /// worktree launch whose Retry/Discard lives in the banner). No
+    /// auto-dismiss timer is scheduled.
+    pub(crate) fn set_persistent_error_for_session(
+        &mut self,
+        session_id: &str,
+        message: impl Into<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.error_generation = self.error_generation.wrapping_add(1);
+        self.session_errors.insert(
+            session_id.to_string(),
+            BannerError {
+                message: message.into(),
+                generation: self.error_generation,
+                needs_project: false,
+                persistent: true,
+            },
+        );
         cx.notify();
     }
 
@@ -65,6 +91,7 @@ impl ConsoleDesktopApp {
                 message: message.into(),
                 generation: self.error_generation,
                 needs_project: false,
+                persistent: false,
             },
         );
         self.schedule_dismissal(Some(session_id.to_string()), self.error_generation, cx);
@@ -125,7 +152,7 @@ impl ConsoleDesktopApp {
             .and_then(|session_id| self.session_errors.get(&session_id))
             .or_else(|| {
                 self.error_message.as_ref().filter(|error| {
-                    !(error.needs_project && self.pane_project_id(pane_id).is_some())
+                    !(error.needs_project && self.pane_workspace_key(pane_id).is_some())
                 })
             })
     }

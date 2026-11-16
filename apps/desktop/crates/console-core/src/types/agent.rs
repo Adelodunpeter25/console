@@ -167,7 +167,7 @@ impl AgentMessage {
                     )
                 },
                 created_at: msg.created_at,
-                approval_mode: u.approval_mode.clone(),
+                approval_mode: u.approval_mode,
             }),
             ProtoMessageEvent::Assistant(a) => Some(AgentMessage::Assistant {
                 id: opt_string(a.id.clone()),

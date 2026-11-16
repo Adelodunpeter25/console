@@ -22,9 +22,10 @@
 //! `null` the caller handles rather than an `abort()` that kills the app.
 
 use console_shared::diff::{self, DiffLineKind, DiffResult};
+use console_shared::git_badges::{self, ChangedFile, GitBadge, GitBadgeRole};
 use console_shared::{composer, format, icons, markdown, page_title, pairing, throughput};
 use console_shared::tool;
-use jni::objects::{JClass, JString};
+use jni::objects::{JClass, JObjectArray, JString};
 use jni::sys::{jbyteArray, jdouble, jint, jstring};
 use jni::JNIEnv;
 
@@ -34,7 +35,7 @@ const VERSION: u16 = 1;
 
 /// Bumped whenever a symbol is added, removed, or changes shape. Kotlin's
 /// `SharedNative.EXPECTED_ABI` must match.
-const ABI_VERSION: jint = 3;
+const ABI_VERSION: jint = 4;
 
 // ── Encoding ──────────────────────────────────────────────────────────────
 
@@ -78,6 +79,18 @@ impl Frame {
             self.i32(line.new_no.map_or(-1, |n| n as i32));
             self.str(&line.text);
         }
+        self
+    }
+    /// A badge as the pair Kotlin draws: the letter, then the role that says
+    /// how loudly it reports itself.
+    fn badge(&mut self, badge: GitBadge) -> &mut Self {
+        self.str(badge.label());
+        self.u8(match badge.role() {
+            GitBadgeRole::Success => 0,
+            GitBadgeRole::Warning => 1,
+            GitBadgeRole::Danger => 2,
+            GitBadgeRole::Muted => 3,
+        });
         self
     }
 }
@@ -407,13 +420,101 @@ pub extern "system" fn Java_com_console_mobile_SharedNative_nativeIrohTunnel(
         let url = read(&mut env, &node_id).and_then(|id| {
             let mut map = tunnels().lock().ok()?;
             if let Some(existing) = map.get(&id) {
+                let _guard = runtime().enter();
+                existing.warm_up();
                 return Some(existing.base_url());
             }
+            let _guard = runtime().enter();
             let tunnel = runtime().block_on(console_iroh::Tunnel::new(&id)).ok()?;
+            tunnel.warm_up();
             let url = tunnel.base_url();
             map.insert(id, tunnel);
             Some(url)
         });
         text(&mut env, url)
     })
+}
+
+/// `SharedNative.nativeGitBadgeTable()` — framed: `[u32 count]` then per entry
+/// `[str code][str label][u8 role]`.
+///
+/// Every status code the shared rules know, so a client can label and color a
+/// code without asking about it one at a time.
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_SharedNative_nativeGitBadgeTable(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jbyteArray {
+    crate::init_logging();
+    crate::guard(std::ptr::null_mut(), || {
+        let table = git_badges::git_badge_table();
+        let mut payload = Frame::new();
+        payload.u32(table.len() as u32);
+        for (code, badge) in table {
+            payload.str(code);
+            payload.badge(badge);
+        }
+        frame(&mut env, payload)
+    })
+}
+
+/// `SharedNative.nativeGitBadges(paths, statuses)` — framed: `[u32 count]` then
+/// per entry `[str path][str label][u8 role]`.
+///
+/// The badge for every path a changed file sits under, not just the file
+/// itself: a folder carries the strongest badge beneath it.
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_SharedNative_nativeGitBadges(
+    mut env: JNIEnv,
+    _class: JClass,
+    paths: JObjectArray,
+    statuses: JObjectArray,
+) -> jbyteArray {
+    crate::init_logging();
+    crate::guard(std::ptr::null_mut(), || {
+        let Some(changes) = read_changes(&mut env, &paths, &statuses) else {
+            return std::ptr::null_mut();
+        };
+        let files: Vec<ChangedFile<'_>> = changes
+            .iter()
+            .map(|(path, status)| ChangedFile { path, status })
+            .collect();
+        let badges = git_badges::aggregate_git_badges(&files);
+        let mut payload = Frame::new();
+        payload.u32(badges.len() as u32);
+        for (path, badge) in badges {
+            payload.str(&path);
+            payload.badge(badge);
+        }
+        frame(&mut env, payload)
+    })
+}
+
+/// Reads two parallel string arrays into `(path, status)` pairs. `None` when
+/// the arrays disagree in length or hold a value that is not a string — a
+/// mismatch would silently drop a file, so it fails instead.
+fn read_changes(
+    env: &mut JNIEnv,
+    paths: &JObjectArray,
+    statuses: &JObjectArray,
+) -> Option<Vec<(String, String)>> {
+    let path_count = env.get_array_length(paths).ok()?;
+    let status_count = env.get_array_length(statuses).ok()?;
+    if path_count != status_count {
+        return None;
+    }
+    let mut changes: Vec<(String, String)> = Vec::with_capacity(path_count as usize);
+    for index in 0..path_count {
+        let path = string_at(env, paths, index)?;
+        let status = string_at(env, statuses, index)?;
+        changes.push((path, status));
+    }
+    Some(changes)
+}
+
+/// The string at `index` of a string array.
+fn string_at(env: &mut JNIEnv, array: &JObjectArray, index: jint) -> Option<String> {
+    let element = env.get_object_array_element(array, index).ok()?;
+    let value = JString::from(element);
+    env.get_string(&value).ok().map(|value| value.into())
 }

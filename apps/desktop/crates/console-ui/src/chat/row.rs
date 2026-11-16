@@ -109,6 +109,8 @@ pub fn transcript_row(
                     move |element, (entries, started_at, elapsed, working)| {
                         // Visual artifacts render as their own item after the
                         // run block, so folding the run never hides the card.
+                        // Entries is consumed by `ToolCalls::new` below, so visual items must be collected first.
+                        #[expect(clippy::needless_collect)]
                         let visuals: Vec<_> = entries
                             .iter()
                             .filter_map(|event| match event {

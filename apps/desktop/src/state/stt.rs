@@ -286,10 +286,15 @@ impl ConsoleDesktopApp {
     }
 
     /// Append the transcript to the pane's draft. Existing text is kept, so
-    /// dictating mid-draft composes rather than clobbers.
+    /// dictating mid-draft composes rather than clobbers. The floating
+    /// composer's reserved key routes to the card's input instead of a pane.
     fn insert_transcript(&mut self, pane_id: &str, text: &str, cx: &mut Context<Self>) {
         let text = text.trim();
-        let composer = self.composer_for_pane(pane_id);
+        let composer = if pane_id == super::floating_composer::FLOATING_KEY {
+            self.floating_composer.input.clone()
+        } else {
+            self.composer_for_pane(pane_id)
+        };
         let existing = composer.read(cx).content().to_string();
         let body = if existing.trim().is_empty() {
             text.to_string()

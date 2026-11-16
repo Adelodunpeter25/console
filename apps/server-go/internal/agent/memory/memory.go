@@ -4,12 +4,13 @@
 package memory
 
 import (
+	"cmp"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
@@ -242,7 +243,9 @@ func RecallMemories(entries []Entry, query Query, limit int) []Match {
 			scored = append(scored, Match{Entry: entry, Score: score})
 		}
 	}
-	sort.SliceStable(scored, func(i, j int) bool { return scored[i].Score > scored[j].Score })
+	slices.SortStableFunc(scored, func(a, b Match) int {
+		return cmp.Compare(b.Score, a.Score)
+	})
 	if len(scored) > limit {
 		scored = scored[:limit]
 	}

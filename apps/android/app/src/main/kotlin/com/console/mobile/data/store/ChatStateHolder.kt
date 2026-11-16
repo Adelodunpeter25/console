@@ -5,6 +5,7 @@ import com.console.mobile.core.chat.createChatSessionState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 class ChatStateHolder(initial: Map<String, ChatSessionState> = emptyMap()) {
     private val _sessions = MutableStateFlow(initial)
@@ -13,7 +14,10 @@ class ChatStateHolder(initial: Map<String, ChatSessionState> = emptyMap()) {
     fun get(id: String): ChatSessionState = _sessions.value[id] ?: createChatSessionState()
 
     fun update(id: String, fn: (ChatSessionState) -> ChatSessionState) {
-        _sessions.value = _sessions.value + (id to fn(get(id)))
+        _sessions.update { map ->
+            val cur = map[id] ?: createChatSessionState()
+            map + (id to fn(cur))
+        }
     }
 
     fun setAll(all: Map<String, ChatSessionState>) {
@@ -21,8 +25,8 @@ class ChatStateHolder(initial: Map<String, ChatSessionState> = emptyMap()) {
     }
 
     fun setInput(id: String, value: String) = update(id) { it.copy(input = value) }
-    fun clear(id: String) { _sessions.value = _sessions.value + (id to createChatSessionState()) }
+    fun clear(id: String) { _sessions.update { it + (id to createChatSessionState()) } }
     /** Drop a session's local state entirely (not reset to empty), so a draft can't outlive it. */
-    fun remove(id: String) { _sessions.value = _sessions.value - id }
-    fun clearAll() { _sessions.value = emptyMap() }
+    fun remove(id: String) { _sessions.update { it - id } }
+    fun clearAll() { _sessions.update { emptyMap() } }
 }

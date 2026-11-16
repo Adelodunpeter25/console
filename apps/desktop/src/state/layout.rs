@@ -43,13 +43,33 @@ fn strip_diff_tabs(mut root: console_core::WorkspaceNode) -> console_core::Works
     root
 }
 
+fn total_tabs(node: &console_core::WorkspaceNode) -> usize {
+    match node {
+        console_core::WorkspaceNode::Leaf(leaf) => leaf.tabs.len(),
+        console_core::WorkspaceNode::Split(split) => {
+            total_tabs(&split.children[0]) + total_tabs(&split.children[1])
+        }
+    }
+}
+
 fn clean_root_for_workspace(
-    root: console_core::WorkspaceNode,
+    root: &console_core::WorkspaceNode,
     project_id: &Option<String>,
 ) -> console_core::WorkspaceNode {
-    let mut clean = strip_diff_tabs(root);
+    let mut clean = strip_diff_tabs(root.clone());
     // A workspace must never persist tabs pointing at another folder.
+    let before = total_tabs(&clean);
     console_ui::workspace::ops::retain_project_tabs(&mut clean, project_id);
+    let after = total_tabs(&clean);
+    if after < before {
+        // A tab whose folder no longer matches its desk is dropped at write
+        // time. Silent loss here is what made an earlier tab-loss bug look
+        // like a save/restore failure.
+        log::warn!(
+            "workspace {} dropped {before} -> {after} tab(s) with a foreign folder",
+            project_id.as_deref().unwrap_or("<none>"),
+        );
+    }
     clean
 }
 
@@ -148,7 +168,7 @@ impl ConsoleDesktopApp {
             let wid = proj_id_opt
                 .clone()
                 .unwrap_or_else(|| "__default__".to_string());
-            let clean_root = clean_root_for_workspace(root.clone(), proj_id_opt);
+            let clean_root = clean_root_for_workspace(root, proj_id_opt);
             // Remembered split focus when still present, else the first leaf.
             // The top-level active tab follows that pane (not always the first).
             let pane_id = self
@@ -222,7 +242,7 @@ impl ConsoleDesktopApp {
             .clone()
             .unwrap_or_else(|| "__default__".to_string());
         let clean_cur_root =
-            clean_root_for_workspace(self.workspace_root.clone(), &self.selected_project_id);
+            clean_root_for_workspace(&self.workspace_root, &self.selected_project_id);
         let cur_pane_id = self
             .active_pane_id
             .clone()

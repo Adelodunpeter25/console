@@ -14,7 +14,7 @@ impl ConsoleDesktopApp {
     /// checkout, so everything that reads it — terminals, file tree, search,
     /// quick open, new chats — follows the checkout the workspace is for.
     pub(crate) fn selected_project_for_pane(&self, pane_id: &str) -> Option<ProjectInfo> {
-        let key = self.pane_project_id(pane_id)?;
+        let key = self.pane_workspace_key(pane_id)?;
         let (project_id, worktree) = console_core::split_workspace_key(&key);
         let mut project = self.projects.iter().find(|p| p.id == project_id)?.clone();
         if let Some(path) = worktree {
@@ -27,7 +27,7 @@ impl ConsoleDesktopApp {
     /// project lookups need this; the workspace key itself also encodes which
     /// worktree the pane is in.
     pub(crate) fn pane_real_project_id(&self, pane_id: &str) -> Option<String> {
-        self.pane_project_id(pane_id)
+        self.pane_workspace_key(pane_id)
             .map(|key| console_core::project_id_of_workspace_key(&key).to_owned())
     }
 
@@ -45,8 +45,8 @@ impl ConsoleDesktopApp {
     }
 
     /// The workspace a session's tabs live in: its worktree's workspace when
-    /// it runs outside the project folder, else the project's. Falls back to
-    /// what the header alone says while projects are still loading.
+    /// it runs outside the project folder, else the chat's own desk. Falls
+    /// back to what the header alone says while projects are still loading.
     pub(crate) fn workspace_key_for_header(
         &self,
         session: &console_core::SessionHeader,
@@ -64,7 +64,9 @@ impl ConsoleDesktopApp {
             Some(project) => Some(
                 match console_core::session_checkout_path(session, Some(&project.path)) {
                     Some(path) => console_core::worktree_workspace_key(&project.id, path),
-                    None => project.id.clone(),
+                    // One chat, one desk: plain chats each get their own
+                    // workspace too.
+                    None => console_core::session_workspace_key(&project.id, &session.id),
                 },
             ),
             None => console_core::workspace_key_for_session(session, None),
@@ -120,7 +122,9 @@ impl ConsoleDesktopApp {
                 .project_workspace_roots
                 .get(&new_workspace_id)
                 .cloned()
-                .unwrap_or_else(|| console_core::WorkspaceNode::leaf(pane_id.clone()));
+                .unwrap_or_else(|| {
+                    console_core::WorkspaceNode::leaf(console_core::desk_leaf_id(&new_workspace_id))
+                });
             // Drop any stale tabs from other folders (heals legacy mixed saves).
             console_ui::workspace::ops::retain_project_tabs(&mut target_root, &new_workspace_id);
             let target_pane_id = target_root
@@ -154,6 +158,10 @@ impl ConsoleDesktopApp {
                 state.branch_is_git_repository = false;
             }
             self.selected_project_id = new_workspace_id.clone();
+            // The old tree (with its browser tabs) just went into the stash,
+            // so its webviews must be hidden now: the native view paints
+            // above everything until a sync marks it inactive.
+            self.sync_workspace_webviews(cx);
             self.persist_layout();
             self.persist_workspaces();
         } else {
@@ -297,7 +305,9 @@ impl ConsoleDesktopApp {
                 .project_workspace_roots
                 .get(&new_workspace_id)
                 .cloned()
-                .unwrap_or_else(|| console_core::WorkspaceNode::leaf(pane_id.clone()));
+                .unwrap_or_else(|| {
+                    console_core::WorkspaceNode::leaf(console_core::desk_leaf_id(&new_workspace_id))
+                });
             console_ui::workspace::ops::retain_project_tabs(&mut target_root, &new_workspace_id);
             let target_pane_id = target_root
                 .leaves()
@@ -609,6 +619,7 @@ impl ConsoleDesktopApp {
                                     &pane_id,
                                     new_session.id.clone(),
                                     "New Chat",
+                                    cx,
                                 );
                                 this.sync_workspace_webviews(cx);
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {

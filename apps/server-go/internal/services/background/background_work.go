@@ -1,8 +1,9 @@
 package background
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -238,7 +239,9 @@ func (m *Manager) List(sessionID string) []Work {
 			out = append(out, cloneWork(rec.work))
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
+	slices.SortFunc(out, func(a, b Work) int {
+		return cmp.Compare(a.CreatedAt, b.CreatedAt)
+	})
 	return out
 }
 
@@ -256,7 +259,9 @@ func (m *Manager) TakeCompletions(sessionID string) []Work {
 		rec.delivered = true
 		out = append(out, cloneWork(rec.work))
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].FinishedAt < out[j].FinishedAt })
+	slices.SortFunc(out, func(a, b Work) int {
+		return cmp.Compare(a.FinishedAt, b.FinishedAt)
+	})
 	return out
 }
 

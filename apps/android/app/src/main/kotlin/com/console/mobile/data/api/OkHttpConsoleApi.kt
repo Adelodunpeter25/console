@@ -190,6 +190,18 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             ?: throw ApiException("Failed to create session")
     }
 
+    override suspend fun launchWorktreeSession(payload: com.console.mobile.data.model.LaunchWorktreeDto): SessionHeader {
+        val raw = http.post("/api/sessions/with-worktree", http.encodeBody(com.console.mobile.data.model.LaunchWorktreeDto.serializer(), payload))
+        val element = http.unwrap(raw, JsonElement.serializer(), "launch worktree session")
+        return sessionAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to launch worktree session")
+    }
+
+    override suspend fun retryWorktreeLaunch(id: String) {
+        val raw = http.post("/api/sessions/${enc(id)}/with-worktree/retry")
+        ensureOk(raw, "retry worktree launch")
+    }
+
     override suspend fun updateSession(id: String, payload: UpdateSessionDto): SessionHeader {
         var body = http.encodeBody(UpdateSessionDto.serializer(), payload)
         if (payload.clearProject) {

@@ -19,19 +19,19 @@ impl ConsoleDesktopApp {
         // A bare name (`file_tree.rs`) only resolves when the file sits in the
         // cwd itself. Open the direct guess when it exists; otherwise search
         // the project for the name instead of opening a path that is not there.
+        let target_pane = self.target_subtab_pane_id();
         let direct_exists = std::path::Path::new(&resolved).is_file();
         if !links::is_bare_file_name(&link) || direct_exists {
             if let Some(line) = line {
-                self.open_file_tab_at_line(pane_id, resolved, line, None, cx);
+                self.open_file_tab_at_line(&target_pane, resolved, line, None, cx);
             } else {
-                self.open_file_tab_in_pane(pane_id, resolved, cx);
+                self.open_file_tab_in_pane(&target_pane, resolved, cx);
             }
             return;
         }
         let name = links::strip_line_suffix(link.trim()).to_owned();
         let root = project_path.clone().or_else(|| cwd.clone());
         let client = self.client.clone();
-        let pane_id = pane_id.to_owned();
         cx.spawn(async move |entity, cx| {
             let found = client
                 .assist
@@ -57,10 +57,11 @@ impl ConsoleDesktopApp {
             cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
+                        let target_pane = this.target_subtab_pane_id();
                         if let Some(line) = line {
-                            this.open_file_tab_at_line(&pane_id, chosen, line, None, cx);
+                            this.open_file_tab_at_line(&target_pane, chosen, line, None, cx);
                         } else {
-                            this.open_file_tab_in_pane(&pane_id, chosen, cx);
+                            this.open_file_tab_in_pane(&target_pane, chosen, cx);
                         }
                     });
                 }
@@ -70,10 +71,7 @@ impl ConsoleDesktopApp {
     }
 
     pub fn open_file_tab(&mut self, path: String, cx: &mut Context<Self>) {
-        let pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".into());
+        let pane_id = self.target_subtab_pane_id();
         self.open_file_tab_in_pane(&pane_id, path, cx);
     }
 
@@ -118,7 +116,7 @@ impl ConsoleDesktopApp {
         let tab = WorkspaceTabConfig::File {
             path: path.clone(),
             title,
-            project_id: self.pane_project_id(pane_id),
+            project_id: self.pane_workspace_key(pane_id),
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
 
@@ -388,10 +386,7 @@ impl ConsoleDesktopApp {
     }
 
     pub fn open_diff_tab(&mut self, path: String, cx: &mut Context<Self>) {
-        let pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".into());
+        let pane_id = self.target_subtab_pane_id();
         self.open_diff_tab_in_pane(&pane_id, path, cx);
     }
 
@@ -428,7 +423,7 @@ impl ConsoleDesktopApp {
         let tab = WorkspaceTabConfig::Diff {
             path: path.clone(),
             title,
-            project_id: self.pane_project_id(pane_id),
+            project_id: self.pane_workspace_key(pane_id),
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
 

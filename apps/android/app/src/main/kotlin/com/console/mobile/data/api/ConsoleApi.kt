@@ -48,6 +48,14 @@ interface ConsoleApi {
     suspend fun getSession(id: String, limit: Int? = null, before: Long? = null): SessionDetailResponse
     suspend fun getSessionPrompts(id: String): List<com.console.mobile.data.model.SessionPrompt>
     suspend fun createSession(payload: CreateSessionDto): SessionHeader
+    /**
+     * POST /api/sessions/with-worktree — instant launch: the session header
+     * returns immediately, the worktree provisions and the prompt runs in the
+     * background (header launchState tracks it).
+     */
+    suspend fun launchWorktreeSession(payload: com.console.mobile.data.model.LaunchWorktreeDto): SessionHeader
+    /** POST /api/sessions/:id/with-worktree/retry — re-run a failed launch. */
+    suspend fun retryWorktreeLaunch(id: String)
     suspend fun updateSession(id: String, payload: com.console.mobile.data.model.UpdateSessionDto): SessionHeader
     suspend fun deleteSession(id: String)
     suspend fun restoreSession(id: String)

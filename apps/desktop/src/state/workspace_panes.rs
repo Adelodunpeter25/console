@@ -37,6 +37,19 @@ impl ConsoleDesktopApp {
         self.save_pane_scroll_position(pane_id, cx);
         self.close_workspace_tab(pane_id, tab_id, cx);
         self.active_pane_id = Some(pane_id.to_string());
+        if let Some(leaf) = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|l| l.id == pane_id)
+        {
+            if leaf.tabs.is_empty() && self.workspace_root.leaves().len() > 1 {
+                console_ui::workspace::ops::close_pane(&mut self.workspace_root, pane_id);
+                if let Some(chat_pane) = self.active_chat_pane_id() {
+                    self.active_pane_id = Some(chat_pane);
+                }
+            }
+        }
         self.clear_project_if_workspace_empty();
 
         let next_session = self.active_session_for_pane(pane_id);
@@ -95,6 +108,9 @@ impl ConsoleDesktopApp {
             Rc::make_mut(&mut state.branches).clear();
             state.branch_loaded = true;
             state.branch_is_git_repository = false;
+            // Otherwise a reopen against the same cwd looks already-loaded and
+            // the header apply skips re-fetching these cleared branches.
+            state.branch_cwd = None;
         }
         self.persist_layout();
         self.persist_workspaces();
@@ -207,14 +223,15 @@ impl ConsoleDesktopApp {
         }
     }
 
-    /// Drop every worktree workspace that no live chat maps to — its worktree
-    /// (or all its chats) was deleted — and with it that workspace's tabs,
-    /// terminals, split layout and remembered state. If the workspace on
-    /// screen is one of them, fall back to the project's own workspace.
+    /// Drop every workspace that no live chat maps to — a worktree whose
+    /// checkout (or all its chats) was deleted, or a chat desk whose chat is
+    /// gone — and with it that workspace's tabs, terminals, split layout and
+    /// remembered state. If the workspace on screen is one of them, fall back
+    /// to the project's own desk.
     /// Skipped until projects have loaded: a chat started inside an existing
     /// worktree is only recognised as a worktree chat once its project's
     /// folder is known, and sweeping earlier would discard live workspaces.
-    pub(crate) fn sweep_dead_worktree_workspaces(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn sweep_dead_workspaces(&mut self, cx: &mut Context<Self>) {
         if self.projects.is_empty() {
             return;
         }
@@ -232,10 +249,34 @@ impl ConsoleDesktopApp {
             candidates.push(current);
         }
         let mut dead = console_core::dead_worktree_workspace_keys(candidates, &live);
+        // Session-scoped desks die with their chat: once no live chat maps to
+        // the key any more, the workspace (and its terminals) go too.
+        dead.extend(
+            self.project_workspace_roots
+                .keys()
+                .filter_map(|key| key.as_deref())
+                .filter(|key| console_core::is_session_workspace_key(key) && !live.contains(*key))
+                .map(str::to_owned),
+        );
         dead.sort();
         dead.dedup();
-        if dead.is_empty() {
+        let migrated = self.has_stale_project_chat_tabs();
+        if dead.is_empty() && !migrated {
             return;
+        }
+
+        // Chat tabs parked on bare project desks are leftovers from before
+        // the per-chat switch: every live session opens into its own desk,
+        // so close them here on later sweeps.
+        if migrated {
+            console_ui::workspace::ops::close_matching_tabs(&mut self.workspace_root, |t| {
+                matches!(t, WorkspaceTabConfig::Chat { .. })
+            });
+            for root in self.project_workspace_roots.values_mut() {
+                console_ui::workspace::ops::close_matching_tabs(root, |t| {
+                    matches!(t, WorkspaceTabConfig::Chat { .. })
+                });
+            }
         }
 
         let current_dead = self
@@ -266,15 +307,13 @@ impl ConsoleDesktopApp {
             let key = self.selected_project_id.clone().unwrap_or_default();
             removed_roots.push(self.workspace_root.clone());
             let project_slot = Some(console_core::project_id_of_workspace_key(&key).to_owned());
-            let pane_id = self
-                .active_pane_id
-                .clone()
-                .unwrap_or_else(|| "pane-main".to_string());
             self.workspace_root = self
                 .project_workspace_roots
                 .get(&project_slot)
                 .cloned()
-                .unwrap_or_else(|| console_core::WorkspaceNode::leaf(&pane_id));
+                .unwrap_or_else(|| {
+                    console_core::WorkspaceNode::leaf(console_core::desk_leaf_id(&project_slot))
+                });
             self.selected_project_id = project_slot.clone();
             self.restore_active_pane(&project_slot);
         }
@@ -316,6 +355,11 @@ impl ConsoleDesktopApp {
                     view.update(cx, |terminal, _| terminal.kill());
                 }
             }
+            for leaf in root.leaves() {
+                self.workspace_pane_states.remove(&leaf.id);
+                self.todo_items.remove(&leaf.id);
+                self.browser_annotations.remove(&leaf.id);
+            }
         }
         self.sweep_unreferenced_browser_views(cx);
         self.trim_file_caches(cx);
@@ -326,6 +370,36 @@ impl ConsoleDesktopApp {
             self.maybe_refresh_inspector(cx);
         }
         cx.notify();
+    }
+
+    /// Whether any chat tab still sits on a bare project desk. Since the
+    /// per-chat switch, live sessions always open into their own desk, so a
+    /// chat tab on the project desk is a leftover from an older layout.
+    fn has_stale_project_chat_tabs(&self) -> bool {
+        let has_chat = |root: &console_core::WorkspaceNode| {
+            root.leaves().iter().any(|leaf| {
+                leaf.tabs
+                    .iter()
+                    .any(|t| matches!(t, WorkspaceTabConfig::Chat { .. }))
+            })
+        };
+        // The on-screen root, when the selection is a bare project desk.
+        if self.selected_project_id.as_deref().is_some_and(|key| {
+            !console_core::is_session_workspace_key(key)
+                && !console_core::is_worktree_workspace_key(key)
+        }) && has_chat(&self.workspace_root)
+        {
+            return true;
+        }
+        self.project_workspace_roots
+            .iter()
+            .filter(|(slot, _)| {
+                slot.as_deref().is_some_and(|key| {
+                    !console_core::is_session_workspace_key(key)
+                        && !console_core::is_worktree_workspace_key(key)
+                })
+            })
+            .any(|(_, root)| has_chat(root))
     }
 
     /// Release resources owned by a tab leaving the current tree: terminal
@@ -389,6 +463,8 @@ impl ConsoleDesktopApp {
                 if !still_referenced {
                     self.changes_review_data.remove(&tab_id);
                     self.changes_review_collapsed.remove(&tab_id);
+                    self.viewer_list_states
+                        .remove(&format!("changes-review:{}", tab_id));
                 }
             }
         }
@@ -848,5 +924,81 @@ impl ConsoleDesktopApp {
         }
         self.persist_workspaces();
         cx.notify();
+    }
+
+    /// Locate the pane currently hosting the active chat tab, if one is open.
+    pub fn active_chat_pane_ref(&self) -> Option<&str> {
+        let session_id = self.selected_session_id.as_deref()?;
+        for leaf in self.workspace_root.leaves() {
+            if leaf.tabs.iter().any(|t| match t {
+                WorkspaceTabConfig::Chat { session_id: s, .. } => s == session_id,
+                _ => false,
+            }) {
+                return Some(&leaf.id);
+            }
+        }
+        None
+    }
+
+    /// Locate the pane currently hosting the active chat tab, if one is open.
+    pub fn active_chat_pane_id(&self) -> Option<String> {
+        self.active_chat_pane_ref().map(str::to_owned)
+    }
+
+    /// The chat this workspace's composer state belongs to, as
+    /// `(pane_id, session_id)`: the selected chat, or — while a terminal,
+    /// file, or browser tab is in front — the workspace's only chat. Staged
+    /// file comments, browser annotations, and the sidebar highlight all
+    /// follow it.
+    ///
+    /// Distinct from [`Self::active_chat_pane_id`], which answers "is a chat
+    /// actually selected". Opening a subtab or falling back after a pane
+    /// close must not be redirected to a chat that is not in front.
+    pub(crate) fn focused_chat(&self) -> Option<(&str, &str)> {
+        if let Some(pane_id) = self.active_chat_pane_ref() {
+            return self.selected_session_id.as_deref().map(|sid| (pane_id, sid));
+        }
+        let mut sole = None;
+        for leaf in self.workspace_root.leaves() {
+            for tab in &leaf.tabs {
+                if let WorkspaceTabConfig::Chat { session_id, .. } = tab {
+                    if sole.is_some() {
+                        return None;
+                    }
+                    sole = Some((leaf.id.as_str(), session_id.as_str()));
+                }
+            }
+        }
+        sole
+    }
+
+    /// Target pane for secondary subtabs (Files, Diffs, Terminals, Browsers).
+    /// If a chat is open, opens or targets the right-hand split so the chat stays pinned left.
+    pub fn target_subtab_pane_id(&mut self) -> String {
+        let chat_pane_id = self.active_chat_pane_id();
+        if let Some(chat_pane_id) = chat_pane_id {
+            let other_pane = self
+                .workspace_root
+                .leaves()
+                .into_iter()
+                .find(|l| l.id != chat_pane_id)
+                .map(|l| l.id.clone());
+
+            if let Some(other_id) = other_pane {
+                other_id
+            } else if let Some(new_id) = console_ui::workspace::ops::split_pane(
+                &mut self.workspace_root,
+                &chat_pane_id,
+                console_core::SplitDirection::Horizontal,
+            ) {
+                new_id
+            } else {
+                chat_pane_id
+            }
+        } else {
+            self.active_pane_id
+                .clone()
+                .unwrap_or_else(|| "pane-main".to_string())
+        }
     }
 }

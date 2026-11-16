@@ -36,7 +36,7 @@ func (p *Provider) httpClient() *http.Client {
 	if p.HTTPClient != nil {
 		return p.HTTPClient
 	}
-	return &http.Client{Timeout: 0}
+	return &http.Client{Transport: shared.Transport, Timeout: 0}
 }
 
 // RunTurn implements loop.Provider. Discovery is a deliberate preflight for

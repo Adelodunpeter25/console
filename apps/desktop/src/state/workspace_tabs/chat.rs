@@ -464,7 +464,7 @@ impl ConsoleDesktopApp {
             .unwrap_or(self.approval_mode)
     }
 
-    pub(crate) fn pane_project_id(&self, pane_id: &str) -> Option<String> {
+    pub(crate) fn pane_workspace_key(&self, pane_id: &str) -> Option<String> {
         self.workspace_pane_states
             .get(pane_id)
             .and_then(|state| state.selected_project_id.clone())
@@ -839,6 +839,7 @@ impl ConsoleDesktopApp {
         &mut self,
         session_id: impl Into<String>,
         title: impl Into<String>,
+        cx: &mut Context<Self>,
     ) -> String {
         let session_id = session_id.into();
         let tab_id = format!("chat:{session_id}");
@@ -854,6 +855,7 @@ impl ConsoleDesktopApp {
         }) {
             workspace_ops::select_tab(&mut self.workspace_root, &existing_pane_id, &tab_id);
             self.active_pane_id = Some(existing_pane_id);
+            self.sync_workspace_webviews(cx);
             self.persist_workspaces();
             return tab_id;
         }
@@ -862,7 +864,7 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".into());
-        self.open_chat_tab_in_pane(&pane_id, session_id, title)
+        self.open_chat_tab_in_pane(&pane_id, session_id, title, cx)
     }
 
     pub fn open_chat_tab_in_pane(
@@ -870,6 +872,7 @@ impl ConsoleDesktopApp {
         pane_id: &str,
         session_id: impl Into<String>,
         title: impl Into<String>,
+        cx: &mut Context<Self>,
     ) -> String {
         let session_id = session_id.into();
         let tab_id = format!("chat:{session_id}");
@@ -883,6 +886,7 @@ impl ConsoleDesktopApp {
         {
             workspace_ops::select_tab(&mut self.workspace_root, pane_id, &tab_id);
             self.active_pane_id = Some(pane_id.to_string());
+            self.sync_workspace_webviews(cx);
             self.persist_workspaces();
             return tab_id;
         }
@@ -894,7 +898,7 @@ impl ConsoleDesktopApp {
         let known_project_id = known_session.map(|s| self.workspace_key_for_header(s));
         let project_id = known_project_id
             .clone()
-            .unwrap_or_else(|| self.pane_project_id(pane_id));
+            .unwrap_or_else(|| self.pane_workspace_key(pane_id));
         let provider = known_session.map(|s| s.provider.clone());
         if known_project_id.is_some()
             && let Some(state) = self.workspace_pane_states.get_mut(pane_id)
@@ -911,6 +915,7 @@ impl ConsoleDesktopApp {
         };
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
         self.active_pane_id = Some(pane_id.to_string());
+        self.sync_workspace_webviews(cx);
         self.persist_workspaces();
         format!("chat:{session_id}")
     }

@@ -52,6 +52,10 @@ message SessionHeader {
   // A run finished or needs the user after any client last showed this chat.
   // Computed on the server from two timestamps, so no client re-derives it.
   bool unread = 17;
+  // Worktree launch in progress or failed (with-worktree endpoint).
+  // "provisioning" | "failed"; absent once ready.
+  optional string launch_state = 18;
+  optional string launch_error = 19;
 }
 
 message SessionDeleteResponse {

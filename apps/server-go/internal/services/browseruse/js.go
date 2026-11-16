@@ -404,6 +404,9 @@ func (r *JSRuntime) open(ctx context.Context, args map[string]any) (any, error) 
 		return nil, err
 	}
 	r.setActive(tabID)
+	if liveURL == "" {
+		liveURL = url
+	}
 	return map[string]any{"tabId": tabID, "url": liveURL, "title": title}, nil
 }
 

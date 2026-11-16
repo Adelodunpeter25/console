@@ -93,6 +93,12 @@ type CallAwareTool interface {
 	ExecuteCall(ctx context.Context, call ToolCall) (any, error)
 }
 
+// MethodDescriptor is implemented by tools that expose sub-methods
+// (such as browser, console, or subkernel capabilities) instead of a single schema.
+type MethodDescriptor interface {
+	Methods() []string
+}
+
 type typedTool[I any] struct {
 	name        string
 	description string

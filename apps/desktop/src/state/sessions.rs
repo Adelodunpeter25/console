@@ -78,7 +78,7 @@ impl ConsoleDesktopApp {
                                 // workspace too — unless the response may predate
                                 // a chat just created (it would look dead).
                                 if !created_meanwhile {
-                                    this.sweep_dead_worktree_workspaces(cx);
+                                    this.sweep_dead_workspaces(cx);
                                 }
                                 cx.notify();
                             });
@@ -398,25 +398,11 @@ impl ConsoleDesktopApp {
         self.set_settled(session_id, false, cx);
     }
 
-    /// Toggle the settled mark on the chat the user is looking at: the active
-    /// pane's chat, falling back to the last session picked in the sidebar.
-    /// A settled chat comes back to active; an active one files away.
-    pub(crate) fn toggle_settle_selected_session(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.settle_target_session_id() else {
-            return;
-        };
-        let settled = self
-            .sessions
-            .iter()
-            .find(|session| session.id == session_id)
-            .is_some_and(|session| session.settled_at.is_some());
-        self.set_settled(session_id, !settled, cx);
-    }
-
-    /// The chat a settle shortcut acts on. Drafts are excluded: the sidebar
-    /// offers no settle affordance on them, and settling one would list it
-    /// in the Drafts and the Settled section at once.
-    fn settle_target_session_id(&self) -> Option<String> {
+    /// The focused chat a session shortcut acts on: the active pane's chat,
+    /// falling back to the last session picked in the sidebar. Drafts are
+    /// excluded: the sidebar and workspace treat them differently from
+    /// saved sessions.
+    pub(crate) fn focused_session_id(&self) -> Option<String> {
         let pane_id = self
             .active_pane_id
             .clone()
@@ -428,6 +414,125 @@ impl ConsoleDesktopApp {
             return None;
         }
         Some(session_id)
+    }
+
+    /// Toggle the pinned mark on the chat the user is looking at.
+    pub(crate) fn toggle_pin_selected_session(&mut self, cx: &mut Context<Self>) {
+        if let Some(session_id) = self.focused_session_id() {
+            self.toggle_pin_session(session_id, cx);
+        }
+    }
+
+    /// Toggle the settled mark on the chat the user is looking at: the active
+    /// pane's chat, falling back to the last session picked in the sidebar.
+    /// A settled chat comes back to active; an active one files away.
+    pub(crate) fn toggle_settle_selected_session(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self.focused_session_id() else {
+            return;
+        };
+        let settled = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .is_some_and(|session| session.settled_at.is_some());
+        self.set_settled(session_id, !settled, cx);
+    }
+
+    /// Delete a session: tear down its open tabs, cleanup in-memory state,
+    /// select the next appropriate session, and notify the backend to soft-delete.
+    pub(crate) fn delete_session(&mut self, id: String, cx: &mut Context<Self>) {
+        let del_id = id.clone();
+        Rc::make_mut(&mut self.sessions).retain(|s| s.id != id);
+        self.refresh_dock_badge();
+        // The chat is gone, so its remembered position is too.
+        self.forget_transcript_scroll_position(&id, cx);
+        self.close_matching_workspace_tabs(|t| t.id() == format!("chat:{}", id), cx);
+        for root in self.project_workspace_roots.values_mut() {
+            console_ui::workspace::ops::close_matching_tabs(root, |t| {
+                t.id() == format!("chat:{}", id)
+            });
+        }
+        // Deleting a chat removes its own desk with it (worktree desks too,
+        // once their last chat goes).
+        self.sweep_dead_workspaces(cx);
+        // The chat's agent browser tabs go with it.
+        self.close_session_browser_tabs(&id, cx);
+        // Drop all run-derived state for the deleted session, now keyed by session id.
+        self.running_sessions.remove(&id);
+        self.pending_questions.remove(&id);
+        self.question_selected.remove(&id);
+        self.todo_items.remove(&id);
+        self.agent_notices.remove(&id);
+        if self.selected_session_id.as_deref() == Some(&id) {
+            self.selected_session_id = self
+                .active_pane_id
+                .as_deref()
+                .and_then(|pane_id| self.active_session_for_pane(pane_id));
+            let pane_id = self
+                .active_pane_id
+                .clone()
+                .unwrap_or_else(|| "pane-main".to_string());
+            let composer = self.composer_for_pane(&pane_id);
+            let transcript = self.transcript_for_pane(&pane_id);
+            composer.update(cx, |input, cx| {
+                input.set_prompt_history(Vec::new(), cx);
+            });
+            transcript.update(cx, |t, cx| {
+                t.set_messages(Vec::new(), cx);
+            });
+            if let Some(next_id) = self.selected_session_id.clone() {
+                self.load_session_messages_for_pane(pane_id, next_id, cx);
+            }
+        }
+        self.maybe_refresh_inspector(cx);
+        cx.notify();
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            if let Err(error) = client.sessions.delete(&del_id).await {
+                let message = format!("Unable to delete the session: {error}");
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.set_error(message, cx));
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Delete the currently focused chat session. If the session is running
+    /// an active task/agent, presents a confirmation dialog first to prevent
+    /// unintentional interruption; otherwise soft-deletes it immediately.
+    pub(crate) fn delete_selected_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(session_id) = self.focused_session_id() else {
+            return;
+        };
+
+        if self.is_session_running(&session_id) {
+            let session_title = self
+                .sessions
+                .iter()
+                .find(|s| s.id == session_id)
+                .map(|s| s.title.clone())
+                .unwrap_or_else(|| "Untitled".to_string());
+            let to_delete = session_id;
+            let entity = cx.entity().downgrade();
+            crate::window::confirm_then(
+                window,
+                cx,
+                &format!("Delete \"{session_title}\"?"),
+                move |_window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.delete_session(to_delete, cx);
+                        });
+                    }
+                },
+            );
+        } else {
+            self.delete_session(session_id, cx);
+        }
     }
 
     fn set_settled(&mut self, session_id: String, settled: bool, cx: &mut Context<Self>) {
@@ -789,7 +894,7 @@ impl ConsoleDesktopApp {
         // against that — skipped when already loaded for this folder.
         if !header.cwd.is_empty()
             && !self.pending_project_override.contains_key(&header.id)
-            && self.pane_project_id(pane_id).is_some()
+            && self.pane_workspace_key(pane_id).is_some()
             && self
                 .workspace_pane_states
                 .get(pane_id)
@@ -825,7 +930,7 @@ impl ConsoleDesktopApp {
         // just-cleared No project whose update hasn't landed): apply it and
         // skip header resolution plus the branch fetch.
         if let Some(override_project) = self.pending_project_override.get(&header.id).cloned() {
-            if override_project != self.pane_project_id(pane_id) {
+            if override_project != self.pane_workspace_key(pane_id) {
                 if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
                     state.selected_project_id = override_project.clone();
                     Rc::make_mut(&mut state.branches).clear();
@@ -864,7 +969,7 @@ impl ConsoleDesktopApp {
             (None, None) => true,
             _ => false,
         };
-        if same_project(&target_id, &self.pane_project_id(pane_id)) {
+        if same_project(&target_id, &self.pane_workspace_key(pane_id)) {
             return;
         }
         if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
@@ -909,19 +1014,18 @@ impl ConsoleDesktopApp {
     }
 
     /// The workspace key a session opens in: its worktree's workspace when it
-    /// runs in one, else its project's. A project the user just picked in the
-    /// footer wins (and means the project's own folder), like it does for
-    /// `target_project_for_session`.
+    /// runs in one, else its own chat workspace. A project the user just
+    /// picked in the footer wins (and means the project's own folder), like it
+    /// does for `target_project_for_session`.
     pub(crate) fn target_workspace_for_session(&self, session_id: &str) -> Option<String> {
         let project = self.target_project_for_session(session_id)?;
-        if self.pending_project_override.contains_key(session_id) {
-            return Some(project.id);
-        }
         let session = self.sessions.iter().find(|s| s.id == session_id)?;
+        // One chat, one desk: even a footer-project override opens the chat
+        // into its own workspace rooted at the picked project's folder.
         Some(
             match console_core::session_checkout_path(session, Some(&project.path)) {
                 Some(path) => console_core::worktree_workspace_key(&project.id, path),
-                None => project.id,
+                None => console_core::session_workspace_key(&project.id, session_id),
             },
         )
     }
@@ -996,6 +1100,10 @@ impl ConsoleDesktopApp {
         let target_project = self.target_project_for_session(id);
         // The workspace key: the project id, or project + worktree path.
         let target_project_id = self.target_workspace_for_session(id);
+        // The desk we're leaving goes cached with its live transcript entity,
+        // but the persisted scroll map is only as fresh as the last snapshot —
+        // record the outgoing chat's position before the tree swap.
+        self.save_pane_scroll_position(active_pane_id, cx);
 
         // A workspace switch occurs if target_project_id differs from current project,
         // or if switching from an unassociated workspace into a project when tabs are already open.
@@ -1025,12 +1133,14 @@ impl ConsoleDesktopApp {
             }
             // Remember this workspace's focused pane before leaving it.
             self.remember_active_pane();
-            // Save current project's workspace tabs
-            self.project_workspace_roots.insert(
-                self.selected_project_id.clone(),
-                self.workspace_root.clone(),
+            // Park the desk whole under its key and load the target desk.
+            let outgoing_key = self.selected_project_id.clone();
+            self.workspace_root = console_ui::workspace::ops::switch_desk(
+                &mut self.project_workspace_roots,
+                &self.workspace_root,
+                &outgoing_key,
+                &target_project_id,
             );
-
             // Switch active project
             self.selected_project_id = target_project_id.clone();
             if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
@@ -1041,15 +1151,7 @@ impl ConsoleDesktopApp {
             }
 
             // Restore previously opened tabs for this project, or start a clean leaf
-            if let Some(saved_root) = self
-                .project_workspace_roots
-                .get(&target_project_id)
-                .cloned()
-            {
-                self.workspace_root = saved_root;
-            } else {
-                self.workspace_root = console_core::WorkspaceNode::leaf(active_pane_id);
-            }
+            // (a desk that has never been visited starts with a pane of its own).
             // Back on this workspace's remembered split focus before opening.
             self.restore_active_pane(&target_project_id);
             // Heal legacy mixed saves and keep any existing copy's folder in step.
@@ -1075,6 +1177,10 @@ impl ConsoleDesktopApp {
             }
             self.persist_layout();
             self.persist_workspaces();
+            // The swapped-out tree may have had the visible browser tab; the
+            // new tree's webview set is entirely different, so re-sync
+            // visibility or the old browser keeps painting above everything.
+            self.sync_workspace_webviews(cx);
         } else if self.selected_project_id.is_none() && target_project_id.is_some() {
             self.selected_project_id = target_project_id.clone();
             if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
@@ -1098,7 +1204,7 @@ impl ConsoleDesktopApp {
             // project: pin pane + global to explicit None and persist.
             if target_project_id.is_none() {
                 let mut changed = false;
-                if self.pane_project_id(active_pane_id).is_some() {
+                if self.pane_workspace_key(active_pane_id).is_some() {
                     if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
                         state.selected_project_id = None;
                         std::rc::Rc::make_mut(&mut state.branches).clear();
@@ -1145,7 +1251,9 @@ impl ConsoleDesktopApp {
             .as_ref()
             .map(|s| s.display_title().to_string())
             .unwrap_or_else(|| "Chat".to_string());
-        self.open_chat_tab(id.clone(), title);
+        self.open_chat_tab(id.clone(), title, cx);
+        // The swapped-in tree decides which webview may stay on screen.
+        self.sync_workspace_webviews(cx);
 
         if !is_different_project && prev_sid.as_deref() == Some(&id) {
             // Already on screen, so nothing reloads. Opening it from a banner

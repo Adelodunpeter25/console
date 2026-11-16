@@ -23,6 +23,9 @@ type Flags struct {
 	// them on demand through loadTools. Default off until a bench A/B shows
 	// no drop in success at lower cost.
 	LazyTools bool
+	// CodeMode replaces standard tool declarations with a single JavaScript
+	// orchestration tool. Standard tools become callable JS primitives.
+	CodeMode bool
 }
 
 // FromEnv builds Flags from CONSOLE_HARNESS_* environment variables. getenv
@@ -31,5 +34,6 @@ func FromEnv(getenv func(string) string) Flags {
 	return Flags{
 		SparseLineNumbers: getenv(HarnessEnvPrefix+"SPARSE_LINE_NUMBERS") == "1",
 		LazyTools:         getenv(HarnessEnvPrefix+"LAZY_TOOLS") == "1",
+		CodeMode:          getenv(HarnessEnvPrefix+"CODEMODE") == "1",
 	}
 }

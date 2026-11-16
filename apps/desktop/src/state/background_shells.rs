@@ -26,8 +26,11 @@ impl ConsoleDesktopApp {
             .or_insert_with(|| Rc::new(Vec::new()));
         let list = Rc::make_mut(entry);
         match list.iter_mut().find(|w| w.id == work.id) {
-            Some(existing) => *existing = work,
-            None => list.push(work),
+            Some(existing) => *existing = work.clone(),
+            None => list.push(work.clone()),
+        }
+        if work.is_running_shell() {
+            self.poll_background_shells(session_id.to_string(), cx);
         }
         cx.notify();
     }
@@ -53,11 +56,42 @@ impl ConsoleDesktopApp {
             let Ok(list) = client.runs.list_background_work(&session_id).await else {
                 return;
             };
+            let has_running = list.iter().any(|w| w.is_running_shell());
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.session_background_work
                             .insert(session_id.clone(), Rc::new(list));
+                        if has_running {
+                            this.poll_background_shells(session_id, cx);
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Poll while detached shells are running in the session to keep the pill honest.
+    pub(crate) fn poll_background_shells(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(3))
+                .await;
+            let Ok(list) = client.runs.list_background_work(&session_id).await else {
+                return;
+            };
+            let has_running = list.iter().any(|w| w.is_running_shell());
+            let _ = cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.session_background_work
+                            .insert(session_id.clone(), Rc::new(list));
+                        if has_running {
+                            this.poll_background_shells(session_id, cx);
+                        }
                         cx.notify();
                     });
                 }

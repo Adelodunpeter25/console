@@ -1,6 +1,8 @@
 package com.console.mobile.data.api
 
 import com.squareup.moshi.JsonAdapter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -42,24 +44,24 @@ class HttpTransport(
         return b
     }
 
-    private fun execute(request: Request): String {
+    private suspend fun execute(request: Request): String = withContext(Dispatchers.IO) {
         callClient.newCall(request).execute().use { res ->
             val raw = try { res.body?.string().orEmpty() } catch (_: Exception) { "" }
             if (!res.isSuccessful) {
                 throw ApiException(extractError(raw) ?: "Request failed with status ${res.code}", code = res.code.toString())
             }
-            return raw
+            raw
         }
     }
 
     /** GET that returns the response body as raw bytes (image/SVG preview). */
-    fun getBytes(path: String, params: Map<String, String?> = emptyMap()): ByteArray {
+    suspend fun getBytes(path: String, params: Map<String, String?> = emptyMap()): ByteArray = withContext(Dispatchers.IO) {
         callClient.newCall(requestBuilder(url(path, params)).get().build()).execute().use { res ->
             if (!res.isSuccessful) {
                 val raw = try { res.body?.string().orEmpty() } catch (_: Exception) { "" }
                 throw ApiException(extractError(raw) ?: "Request failed with status ${res.code}", code = res.code.toString())
             }
-            return res.body?.bytes() ?: ByteArray(0)
+            res.body?.bytes() ?: ByteArray(0)
         }
     }
 
@@ -74,10 +76,10 @@ class HttpTransport(
         }
     }
 
-    fun get(path: String, params: Map<String, String?> = emptyMap()): String =
+    suspend fun get(path: String, params: Map<String, String?> = emptyMap()): String =
         execute(requestBuilder(url(path, params)).get().build())
 
-    fun post(path: String, bodyJson: String? = null): String {
+    suspend fun post(path: String, bodyJson: String? = null): String {
         val body = (bodyJson ?: "").toRequestBody(jsonMedia)
         return execute(requestBuilder(url(path)).post(body).build())
     }
@@ -88,24 +90,24 @@ class HttpTransport(
      * Used by pairing: the pasted URL names the server to pair with, which
      * may not be the one the app is currently pointed at.
      */
-    fun postAbsolute(absoluteUrl: String, path: String, bodyJson: String? = null): String {
+    suspend fun postAbsolute(absoluteUrl: String, path: String, bodyJson: String? = null): String {
         val base = "$absoluteUrl${path}".toHttpUrlOrNull()
             ?: throw ApiException("Invalid backend URL: $absoluteUrl$path")
         val body = (bodyJson ?: "").toRequestBody(jsonMedia)
         return execute(requestBuilder(base.toString()).post(body).build())
     }
 
-    fun patch(path: String, bodyJson: String? = null): String {
+    suspend fun patch(path: String, bodyJson: String? = null): String {
         val body = (bodyJson ?: "").toRequestBody(jsonMedia)
         return execute(requestBuilder(url(path)).patch(body).build())
     }
 
-    fun put(path: String, bodyJson: String? = null): String {
+    suspend fun put(path: String, bodyJson: String? = null): String {
         val body = (bodyJson ?: "").toRequestBody(jsonMedia)
         return execute(requestBuilder(url(path)).put(body).build())
     }
 
-    fun delete(path: String, params: Map<String, String?> = emptyMap(), bodyJson: String? = null): String {
+    suspend fun delete(path: String, params: Map<String, String?> = emptyMap(), bodyJson: String? = null): String {
         val b = requestBuilder(url(path, params))
         if (bodyJson != null) b.delete(bodyJson.toRequestBody(jsonMedia)) else b.delete()
         return execute(b.build())
@@ -116,7 +118,7 @@ class HttpTransport(
      * sends binary (dictation audio). The file lives only for this request;
      * nothing here retains it.
      */
-    fun postMultipart(path: String, fieldName: String, fileName: String, bytes: ByteArray, contentType: String): String {
+    suspend fun postMultipart(path: String, fieldName: String, fileName: String, bytes: ByteArray, contentType: String): String {
         val part = okhttp3.MultipartBody.Part.createFormData(
             fieldName,
             fileName,

@@ -43,7 +43,7 @@ fun detectComposerTrigger(text: String, cursor: Int): ComposerTrigger? {
     val at = text.lastIndexOf('@', startIndex = cursor - 1)
     if (at >= 0) {
         val span = text.substring(at, cursor)
-        if (!span.contains(Regex("\\s"))) {
+        if (span.none(Char::isWhitespace)) {
             return ComposerTrigger.Mention(start = at, query = span.removePrefix("@"))
         }
     }

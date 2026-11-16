@@ -223,53 +223,53 @@ impl RenderOnce for ApiKeyProviderSection {
             );
         }
 
-        if self.form_open {
-            if let Some(input) = self.key_input.clone() {
-                // Clone for the widget, keep the original for the click
-                // handler that reads the typed value.
-                let submit_input = input.clone();
-                row = row.child(
-                    div()
-                        .border_1()
-                        .border_color(theme.border)
-                        .bg(theme.canvas)
-                        .rounded(px(6.0))
-                        .px(px(8.0))
-                        .py(px(6.0))
-                        .child(input.clone()),
-                );
-                row = row.child(
-                    div()
-                        .id(ElementId::from(format!("btn-apikey-save-{pid}")))
-                        .px(px(10.0))
-                        .py(px(5.0))
-                        .rounded(px(6.0))
-                        .bg(theme.accent)
-                        .cursor_pointer()
-                        .hover(|s| s.opacity(0.9))
-                        .child(
-                            div()
-                                .text_size(px(12.0))
-                                .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(theme.on_inverse)
-                                .child("Save"),
-                        )
-                        .on_mouse_down(MouseButton::Left, {
-                            let on_submit = self.on_submit.clone();
-                            move |_event, window, cx| {
-                                cx.stop_propagation();
-                                // Read the key out of the input at click time and
-                                // hand ownership to the caller, which drops it once
-                                // the request completes.
-                                let key = submit_input.read(cx).content().to_string();
-                                if key.trim().is_empty() {
-                                    return;
-                                }
-                                (on_submit)(key.trim().to_string(), window, cx);
+        if self.form_open
+            && let Some(input) = self.key_input.clone()
+        {
+            // Clone for the widget, keep the original for the click
+            // handler that reads the typed value.
+            let submit_input = input.clone();
+            row = row.child(
+                div()
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.canvas)
+                    .rounded(px(6.0))
+                    .px(px(8.0))
+                    .py(px(6.0))
+                    .child(input.clone()),
+            );
+            row = row.child(
+                div()
+                    .id(ElementId::from(format!("btn-apikey-save-{pid}")))
+                    .px(px(10.0))
+                    .py(px(5.0))
+                    .rounded(px(6.0))
+                    .bg(theme.accent)
+                    .cursor_pointer()
+                    .hover(|s| s.opacity(0.9))
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(theme.on_inverse)
+                            .child("Save"),
+                    )
+                    .on_mouse_down(MouseButton::Left, {
+                        let on_submit = self.on_submit.clone();
+                        move |_event, window, cx| {
+                            cx.stop_propagation();
+                            // Read the key out of the input at click time and
+                            // hand ownership to the caller, which drops it once
+                            // the request completes.
+                            let key = submit_input.read(cx).content().to_string();
+                            if key.trim().is_empty() {
+                                return;
                             }
-                        }),
-                );
-            }
+                            (on_submit)(key.trim().to_string(), window, cx);
+                        }
+                    }),
+            );
         }
 
         row.into_any_element()

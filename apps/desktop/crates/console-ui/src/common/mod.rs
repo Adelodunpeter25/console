@@ -11,6 +11,7 @@ pub mod github_menu;
 pub mod global_search_panel;
 pub mod image_viewer;
 pub mod input;
+pub mod mic_button;
 pub mod model_picker;
 pub mod notice_banner;
 pub mod palette;
@@ -37,7 +38,7 @@ pub use composer_pills::{
 pub(crate) use composer_view::plan_mode_stripes;
 pub use composer_view::{ComposerAnnotation, ComposerComment, ComposerView};
 pub use copy_button::{copy_button, copy_button_with_action};
-pub use error_banner::error_banner;
+pub use error_banner::{BannerAction, error_banner};
 pub use file_browser::FileBrowser;
 pub use file_mention_chip::{
     FILE_MENTION_ICON_SIZE, FILE_MENTION_RADIUS, file_mention_chip, file_mention_colors,

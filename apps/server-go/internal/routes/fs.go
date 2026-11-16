@@ -216,6 +216,7 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		if dirPath == "" {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'path' is required."))
 		}
+		dirPath = fssvc.ResolvePath(dirPath)
 		maxDepth := c.QueryInt("depth", 6)
 		if maxDepth < 1 || maxDepth > 25 {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'depth' must be an integer between 1 and 25."))
@@ -262,6 +263,7 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		if dirPath == "" {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'path' is required."))
 		}
+		dirPath = fssvc.ResolvePath(dirPath)
 		maxDepth := c.QueryInt("depth", 3)
 		if maxDepth < 1 || maxDepth > 10 {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'depth' must be an integer between 1 and 10."))
@@ -279,6 +281,7 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		if filePath == "" {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'path' is required."))
 		}
+		filePath = fssvc.ResolvePath(filePath)
 		meta, err := fs.GetImageMeta(filePath)
 		if err != nil {
 			return fail(c, previewStatus(err), err)
@@ -304,6 +307,7 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		if filePath == "" {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'path' is required."))
 		}
+		filePath = fssvc.ResolvePath(filePath)
 		result, err := fs.ReadFileContentWithMeta(filePath, c.QueryInt("startLine", 0), c.QueryInt("endLine", 0))
 		if err != nil {
 			return fail(c, previewStatus(err), err)

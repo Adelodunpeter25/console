@@ -1,5 +1,7 @@
 package com.console.mobile.core.util
 
+import java.util.concurrent.ConcurrentHashMap
+
 /**
  * Remembers list scroll positions for the lifetime of the process, so leaving a
  * screen and coming back resumes the same place. Not persisted across launches:
@@ -13,7 +15,7 @@ internal object ScrollMemory {
         val atEnd: Boolean = false,
     )
 
-    private val positions = mutableMapOf<String, Position>()
+    private val positions = ConcurrentHashMap<String, Position>()
 
     fun get(key: String): Position? = positions[key]
 

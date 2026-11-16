@@ -4,6 +4,8 @@
 package tests
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -96,6 +98,33 @@ func TestWebSearchBraveSuccess(t *testing.T) {
 	}
 	s := resultText(t, out)
 	if !strings.Contains(s, "Brave Title") {
+		t.Fatalf("output: %v", out)
+	}
+}
+
+func TestWebSearchBraveGzipResponse(t *testing.T) {
+	braveSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
+		_, _ = gz.Write([]byte(`{"web":{"results":[{"title":"Brave Gzip Title","url":"https://brave.example.com/gzip","description":"gzip desc"}]}}`))
+		_ = gz.Close()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "gzip")
+		_, _ = w.Write(buf.Bytes())
+	}))
+	defer braveSrv.Close()
+	restore := tools.SetBraveSearchURLForTest(braveSrv.URL)
+	defer restore()
+	t.Setenv("BRAVE_SEARCH_API_KEY", "test-key")
+
+	args, _ := json.Marshal(map[string]any{"query": "x", "searchEngine": "brave"})
+	out, err := tools.WebSearch.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	s := resultText(t, out)
+	if !strings.Contains(s, "Brave Gzip Title") {
 		t.Fatalf("output: %v", out)
 	}
 }

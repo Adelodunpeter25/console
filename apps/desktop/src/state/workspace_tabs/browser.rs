@@ -40,9 +40,14 @@ impl ConsoleDesktopApp {
         let app_entity = cx.entity().downgrade();
         view.update(cx, |v, _cx| {
             v.set_annotation_handler(move |annotation, cx| {
-                let _ = app_entity.update(cx, |this, cx| {
-                    this.stage_browser_annotation(&handler_bid, annotation, cx);
-                });
+                // When the chip lands on a chat composer, the handler moves
+                // keyboard focus there — the page must not take it back, so
+                // the view skips its refocus.
+                app_entity
+                    .update(cx, |this, cx| {
+                        this.stage_browser_annotation(&handler_bid, annotation, cx)
+                    })
+                    .unwrap_or(false)
             });
         });
 
@@ -171,10 +176,7 @@ impl ConsoleDesktopApp {
             return;
         }
 
-        let pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".into());
+        let pane_id = self.target_subtab_pane_id();
         let (browser_id, tab) = self.new_browser_tab(url.clone(), None, None, &pane_id);
         if focus {
             workspace_ops::open_tab(&mut self.workspace_root, &pane_id, tab);
@@ -400,7 +402,7 @@ impl ConsoleDesktopApp {
             url: url.unwrap_or_default(),
             title,
             session_id: owner_session,
-            project_id: project_key.or_else(|| self.pane_project_id(pane_id)),
+            project_id: project_key.or_else(|| self.pane_workspace_key(pane_id)),
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
         (browser_id, tab)

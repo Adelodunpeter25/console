@@ -13,8 +13,9 @@
 package session
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -177,7 +178,9 @@ func (s *Service) Search(scope SearchScope, query string, opts SearchOptions) (*
 		}
 	}
 	// Newest message first across sessions.
-	sort.SliceStable(res.Hits, func(i, j int) bool { return res.Hits[i].CreatedAt > res.Hits[j].CreatedAt })
+	slices.SortStableFunc(res.Hits, func(a, b SearchHit) int {
+		return cmp.Compare(b.CreatedAt, a.CreatedAt)
+	})
 	return res, nil
 }
 
@@ -297,7 +300,9 @@ func findMatches(text string, words []string) []Match {
 			return nil
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Start < out[j].Start })
+	slices.SortFunc(out, func(a, b Match) int {
+		return cmp.Compare(a.Start, b.Start)
+	})
 	return out
 }
 

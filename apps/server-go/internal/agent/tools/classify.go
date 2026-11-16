@@ -15,7 +15,9 @@
 package tools
 
 import (
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -87,6 +89,10 @@ func builtinLabel(name string) string {
 		return "Write Plan"
 	case "requestFullAccess":
 		return "Request Full Access"
+	case "code":
+		return "Code"
+	case "code_reset":
+		return "Reset Code"
 	default:
 		return ""
 	}
@@ -115,6 +121,94 @@ func ToolLabel(name string) string {
 		return fmt.Sprintf("%s (%s)", strings.ReplaceAll(tool, "_", " "), server)
 	}
 	return name
+}
+
+var (
+	shellCmdRegex   = regexp.MustCompile("(?s)\\$\\s*(?:`([^`]+)`|['\"]([^'\"]+)['\"]|\\(\\s*[\"'`]([^\"'`]+)[\"'`]\\s*\\))")
+	helperCallRegex = regexp.MustCompile(`\b(file|write|edit|glob|grep|fetch|webSearch|webFetch|todo|readChat|readSkill)\s*\(\s*["']([^"']+)["']`)
+	subkernelRegex  = regexp.MustCompile(`\b(browser\.[a-zA-Z0-9_]+|console\.[a-zA-Z0-9_.]+)`)
+)
+
+// codeScriptSummary extracts a concise one-line action label from a code tool's arguments.
+func codeScriptSummary(rawArgs json.RawMessage) string {
+	if len(rawArgs) == 0 {
+		return ""
+	}
+	var in struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(rawArgs, &in); err != nil || in.Code == "" {
+		return ""
+	}
+
+	trimmed := strings.TrimSpace(in.Code)
+	if trimmed == "" {
+		return ""
+	}
+
+	// 1. Shell commands: $`cmd` or $'cmd' or $("cmd")
+	if m := shellCmdRegex.FindStringSubmatch(trimmed); len(m) > 1 {
+		cmd := ""
+		for _, part := range m[1:] {
+			if strings.TrimSpace(part) != "" {
+				cmd = strings.TrimSpace(part)
+				break
+			}
+		}
+		if cmd != "" {
+			if len(cmd) > 50 {
+				cmd = cmd[:47] + "..."
+			}
+			return "$ " + cmd
+		}
+	}
+
+	// 2. Common tool helper functions: file(path), edit(path), write(path), etc.
+	if m := helperCallRegex.FindStringSubmatch(trimmed); len(m) > 2 {
+		fnName := m[1]
+		arg := strings.TrimSpace(m[2])
+		if len(arg) > 40 {
+			arg = arg[:37] + "..."
+		}
+		return fmt.Sprintf("%s(%s)", fnName, arg)
+	}
+
+	// 3. Subkernel calls: browser.open, console.ports.list, etc.
+	if m := subkernelRegex.FindStringSubmatch(trimmed); len(m) > 1 {
+		return m[1]
+	}
+
+	// 4. First non-empty non-comment line
+	for _, line := range strings.Split(trimmed, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") || strings.HasPrefix(line, "*") {
+			continue
+		}
+		for _, prefix := range []string{"const ", "let ", "var ", "return ", "await "} {
+			line = strings.TrimPrefix(line, prefix)
+		}
+		line = strings.TrimSpace(line)
+		if len(line) > 50 {
+			line = line[:47] + "..."
+		}
+		if line != "" {
+			return line
+		}
+	}
+
+	return ""
+}
+
+// ToolCallLabel renders the display label for a tool call, using its arguments
+// (such as code scripts) when they carry descriptive details.
+func ToolCallLabel(name string, arguments json.RawMessage) string {
+	if name == "code" {
+		if summary := codeScriptSummary(arguments); summary != "" {
+			return summary
+		}
+		return "Code"
+	}
+	return ToolLabel(name)
 }
 
 // IsEditFile reports a file edit whose arguments carry oldContent/newContent.
@@ -191,6 +285,8 @@ func ToolIconKey(name string) string {
 		return "terminal"
 	case "computer", "computer_reset":
 		return "globe"
+	case "code", "code_reset":
+		return "code"
 	case "writePlan":
 		return "file"
 	default:

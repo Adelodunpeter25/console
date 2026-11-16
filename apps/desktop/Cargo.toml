@@ -90,6 +90,13 @@ block2 = { version = "0.6" }
 # costs no extra compilation.
 futures = "0.3"
 
+[workspace.lints.clippy]
+collapsible_if = "warn"
+explicit_counter_loop = "warn"
+new_without_default = "warn"
+unnecessary_lazy_evaluations = "warn"
+needless_collect = "warn"
+
 [profile.release]
 opt-level = 3
 lto = "thin"

@@ -75,11 +75,11 @@ pub fn display_script_shortcut(shortcut: &str) -> String {
 
 /// One-line status summary for a script row. Unknown statuses render as
 /// "Unknown" rather than failing: the server owns the vocabulary.
-pub fn script_row_status_label(status: Option<String>, starting: bool) -> &'static str {
+pub fn script_row_status_label(status: Option<&str>, starting: bool) -> &'static str {
     if starting {
         return "Starting…";
     }
-    match status.as_deref() {
+    match status {
         None => "Not run yet",
         Some("running") => "Running…",
         Some("succeeded") => "Succeeded",
@@ -89,11 +89,11 @@ pub fn script_row_status_label(status: Option<String>, starting: bool) -> &'stat
     }
 }
 
-fn status_dot_color(status: Option<String>, starting: bool, theme: &Theme) -> gpui::Hsla {
+fn status_dot_color(status: Option<&str>, starting: bool, theme: &Theme) -> gpui::Hsla {
     if starting {
         return theme.success;
     }
-    match status.as_deref() {
+    match status {
         None => theme.text_ghost,
         Some("running") => theme.success,
         Some("succeeded") => theme.text_tertiary,
@@ -258,9 +258,9 @@ impl RenderOnce for RunPanel {
             let expand_id = row.script_id.clone();
             let toggle_id = row.script_id.clone();
             let is_running = row.status.as_deref() == Some("running");
-            let dot = status_dot_color(row.status.clone(), row.starting, &theme);
+            let dot = status_dot_color(row.status.as_deref(), row.starting, &theme);
             let mut status_text =
-                script_row_status_label(row.status.clone(), row.starting).to_string();
+                script_row_status_label(row.status.as_deref(), row.starting).to_string();
             if row
                 .status
                 .as_ref()

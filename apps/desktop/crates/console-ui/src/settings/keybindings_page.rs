@@ -88,6 +88,16 @@ const ACTION_META: &[ActionMeta] = &[
         description: "Settle the selected chat / move it back to active",
     },
     ActionMeta {
+        action: "PinSession",
+        category: "Global & Window",
+        description: "Pin or unpin the selected chat",
+    },
+    ActionMeta {
+        action: "DeleteSession",
+        category: "Global & Window",
+        description: "Delete the selected chat",
+    },
+    ActionMeta {
         action: "NewTerminal",
         category: "Global & Window",
         description: "New terminal tab",
@@ -763,7 +773,9 @@ pub fn keybinding_categories(shortcuts: &[ShortcutInfo]) -> Vec<KeybindingCatego
             Some((category, description)) => (category.to_string(), description.to_string()),
             None => ("Other".to_string(), shortcut.action_name.clone()),
         };
-        let index = category_index(&category).unwrap_or_else(|| category_index("Other").unwrap());
+        let index = category_index(&category)
+            .or_else(|| category_index("Other"))
+            .unwrap_or(0);
         categories[index].entries.push(KeybindingEntry {
             action_name: shortcut.action_name.clone(),
             description,

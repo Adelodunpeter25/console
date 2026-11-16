@@ -63,7 +63,7 @@ impl ConsoleClient {
             local_forwards: LocalForwardManager::new(transport.clone()),
             scripts: ProjectScriptsService::new(transport.clone()),
             mcp: McpService::new(transport.clone()),
-            transport: transport.clone(),
+            transport,
         }
     }
 

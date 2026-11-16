@@ -99,7 +99,7 @@ impl TerminalService {
         } else if base.starts_with("http://") {
             base.replacen("http://", "ws://", 1)
         } else {
-            base.clone()
+            base
         };
         let mut url = format!(
             "{}/api/terminals?cwd={}&cols={}&rows={}",
@@ -311,6 +311,17 @@ impl TerminalHandle {
 
     pub async fn status(&self) -> TerminalStatus {
         *self.status.read().await
+    }
+
+    pub async fn error(&self) -> Option<String> {
+        self.error.read().await.clone()
+    }
+
+    /// Read terminal status and error together.
+    pub async fn status_and_error(&self) -> (TerminalStatus, Option<String>) {
+        let status = *self.status.read().await;
+        let error = self.error.read().await.clone();
+        (status, error)
     }
 }
 

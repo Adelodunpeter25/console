@@ -75,9 +75,7 @@ pub fn is_github_not_connected(err: &anyhow::Error) -> bool {
 fn bootstrap_error(status: reqwest::StatusCode, message: Option<String>) -> anyhow::Error {
     let message = message.unwrap_or_else(|| format!("Request failed ({status})"));
     if status == reqwest::StatusCode::CONFLICT {
-        return anyhow::Error::new(GithubNotConnected {
-            message: message.clone(),
-        });
+        return anyhow::Error::new(GithubNotConnected { message });
     }
     anyhow!(message)
 }

@@ -69,7 +69,7 @@ impl ConsoleDesktopApp {
     pub fn active_project_id_or_global(&self) -> String {
         self.active_pane_id
             .as_deref()
-            .and_then(|pane_id| self.pane_project_id(pane_id))
+            .and_then(|pane_id| self.pane_workspace_key(pane_id))
             .or_else(|| self.selected_project_id.clone())
             .map(|key| console_core::project_id_of_workspace_key(&key).to_owned())
             .unwrap_or_else(|| "global".to_string())

@@ -1,5 +1,5 @@
 //! "View all" session changes review tab: opening, fetching, and toggling
-//! per-file reviewed state (§6 of `docs/session-changes-turn-diff-plan.md`).
+//! per-file reviewed state.
 
 use console_core::WorkspaceTabConfig;
 use console_core::types::ChangesScope;
@@ -27,7 +27,7 @@ impl ConsoleDesktopApp {
             session_id: session_id.clone(),
             scope,
             title,
-            project_id: self.pane_project_id(&pane_id),
+            project_id: self.pane_workspace_key(&pane_id),
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
         let tab_id = tab.id();
@@ -120,17 +120,13 @@ impl ConsoleDesktopApp {
         };
 
         if let Some(data) = self.changes_review_data.get_mut(tab_id) {
-            let updated: Vec<_> = data
-                .iter()
-                .map(|c| {
-                    let mut c = c.clone();
-                    if c.path == path && c.turn_index == turn_index {
-                        c.reviewed = new_reviewed;
-                    }
-                    c
-                })
-                .collect();
-            *data = std::rc::Rc::new(updated);
+            let data_vec = std::rc::Rc::make_mut(data);
+            if let Some(entry) = data_vec
+                .iter_mut()
+                .find(|c| c.path == path && c.turn_index == turn_index)
+            {
+                entry.reviewed = new_reviewed;
+            }
         }
         let collapsed = self
             .changes_review_collapsed
