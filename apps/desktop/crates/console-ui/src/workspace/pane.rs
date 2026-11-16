@@ -12,7 +12,9 @@ use gpui::{
 
 use crate::theme::Theme;
 
+use super::tab_bar::NewTabMenuProvider;
 use super::{TabStripFollow, WorkspaceDrag, WorkspaceDropAction, WorkspaceTabBar};
+use crate::primitives::{ContextMenuHandle, MenuItem};
 
 /// Renders the content area for a leaf's active tab. The app shell supplies
 /// this (chat transcript + composer today); file/terminal/diff views can be
@@ -41,7 +43,7 @@ pub struct WorkspacePane {
         Rc<dyn Fn(String, WorkspaceDrag, WorkspaceDropAction, &mut Window, &mut App) + 'static>,
     on_close_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_new_tab: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    new_tab_menu: Option<NewTabMenuProvider>,
     tab_follow: Option<TabFollowProvider>,
     dirty_paths: std::collections::HashSet<String>,
     on_resize_split: Option<
@@ -79,18 +81,19 @@ impl WorkspacePane {
             on_drop_tab,
             on_close_pane,
             on_focus_pane,
-            on_new_tab: None,
+            new_tab_menu: None,
             tab_follow: None,
             dirty_paths: std::collections::HashSet::new(),
             on_resize_split: None,
         }
     }
 
-    pub fn with_new_tab(
+    pub fn with_new_tab_menu(
         mut self,
-        on_new_tab: impl Fn(String, &mut Window, &mut App) + 'static,
+        provider: impl Fn(&str) -> Option<(ContextMenuHandle, Rc<dyn Fn(&mut App) -> Vec<MenuItem>>)>
+            + 'static,
     ) -> Self {
-        self.on_new_tab = Some(Rc::new(on_new_tab));
+        self.new_tab_menu = Some(Rc::new(provider));
         self
     }
 
@@ -199,7 +202,7 @@ fn render_leaf(
     >,
     on_close_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_new_tab: &Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    new_tab_menu: &Option<NewTabMenuProvider>,
     tab_follow: &Option<TabFollowProvider>,
     dirty_paths: &std::collections::HashSet<String>,
     can_close_pane: bool,
@@ -227,9 +230,7 @@ fn render_leaf(
     )
     .with_scroll_follow(follow);
     bar = bar.with_dirty_paths(dirty_paths.clone());
-    if let Some(on_new) = on_new_tab.clone() {
-        bar = bar.with_new_tab(move |pane_id, window, cx| (on_new)(pane_id, window, cx));
-    }
+    bar = bar.with_new_tab_menu(new_tab_menu.clone());
 
     div()
         .id(ElementId::Name(
@@ -324,7 +325,7 @@ fn render_node(
     >,
     on_close_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_new_tab: &Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    new_tab_menu: &Option<NewTabMenuProvider>,
     tab_follow: &Option<TabFollowProvider>,
     dirty_paths: &std::collections::HashSet<String>,
     on_resize_split: &Option<
@@ -352,7 +353,7 @@ fn render_node(
             on_drop_tab,
             on_close_pane,
             on_focus_pane,
-            on_new_tab,
+            new_tab_menu,
             tab_follow,
             dirty_paths,
             can_close_pane,
@@ -396,7 +397,7 @@ fn render_node(
                             on_drop_tab,
                             on_close_pane,
                             on_focus_pane,
-                            on_new_tab,
+                            new_tab_menu,
                             tab_follow,
                             dirty_paths,
                             on_resize_split,
@@ -462,7 +463,7 @@ fn render_node(
                             on_drop_tab,
                             on_close_pane,
                             on_focus_pane,
-                            on_new_tab,
+                            new_tab_menu,
                             tab_follow,
                             dirty_paths,
                             on_resize_split,
@@ -488,7 +489,7 @@ impl RenderOnce for WorkspacePane {
             &self.on_drop_tab,
             &self.on_close_pane,
             &self.on_focus_pane,
-            &self.on_new_tab,
+            &self.new_tab_menu,
             &self.tab_follow,
             &self.dirty_paths,
             &self.on_resize_split,

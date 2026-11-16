@@ -1048,6 +1048,8 @@ impl Render for ConsoleDesktopApp {
                             .overflow_hidden()
                             .child({
                                 let entity_for_split = entity.clone();
+                                self.ensure_new_tab_menus(cx);
+                                let new_tab_menus = self.new_tab_menus.clone();
                                 let tab_follows: std::collections::HashMap<
                                     String,
                                     console_ui::workspace::TabStripFollow,
@@ -1072,14 +1074,18 @@ impl Render for ConsoleDesktopApp {
                                 )
                                 .with_tab_follow(move |pane_id| tab_follows.get(pane_id).cloned())
                                 .with_dirty_paths(dirty_file_paths.clone())
-                                .with_new_tab({
+                                .with_new_tab_menu({
                                     let entity = entity.clone();
-                                    move |_pane_id, window, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.open_floating_composer(window, cx);
-                                            });
-                                        }
+                                    let menus = new_tab_menus.clone();
+                                    move |pane_id| {
+                                        let handle = menus.get(pane_id)?.clone();
+                                        Some((
+                                            handle,
+                                            crate::state::new_tab_menu_items(
+                                                entity.clone(),
+                                                pane_id.to_string(),
+                                            ),
+                                        ))
                                     }
                                 })
                                 .with_resize_split(

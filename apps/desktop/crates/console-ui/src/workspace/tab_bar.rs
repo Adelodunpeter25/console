@@ -11,10 +11,16 @@ use gpui::{
 use crate::primitives::file_icon;
 use crate::primitives::file_icons::file_icon_for_name;
 use crate::primitives::tooltip::Tooltip;
+use crate::primitives::{ContextMenuHandle, MenuAlign, MenuItem, dropdown_menu};
 use crate::primitives::{IconName, app_icon, provider_app_icon};
 use crate::theme::{TABBAR_HEIGHT, Theme};
 
 use super::{WorkspaceDrag, WorkspaceDragPreview};
+
+/// Supplies a pane's `+` dropdown: the handle that holds its open state and
+/// the rows to show, both keyed by pane id so panes never share a menu.
+pub type NewTabMenuProvider =
+    Rc<dyn Fn(&str) -> Option<(ContextMenuHandle, Rc<dyn Fn(&mut App) -> Vec<MenuItem>>)>>;
 
 /// Retained follow state for a pane's tab strip scroll handle.
 /// Automatically scrolls the strip the minimum distance to bring the active
@@ -109,7 +115,7 @@ pub struct WorkspaceTabBar {
     on_close: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     can_close_pane: bool,
     on_close_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_new_tab: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    new_tab_menu: Option<NewTabMenuProvider>,
     follow: Option<TabStripFollow>,
     /// Files whose buffer has unsaved edits, so their tab shows a dot in place
     /// of the close button. The desktop app owns the editors, so it computes
@@ -133,17 +139,15 @@ impl WorkspaceTabBar {
             on_close: Rc::new(on_close),
             can_close_pane,
             on_close_pane: Rc::new(on_close_pane),
-            on_new_tab: None,
+            new_tab_menu: None,
             follow: None,
             dirty_paths: std::collections::HashSet::new(),
         }
     }
 
-    pub fn with_new_tab(
-        mut self,
-        on_new_tab: impl Fn(String, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        self.on_new_tab = Some(Rc::new(on_new_tab));
+    /// The `+` button's dropdown. Called with this pane's id; `None` hides the button.
+    pub fn with_new_tab_menu(mut self, provider: Option<NewTabMenuProvider>) -> Self {
+        self.new_tab_menu = provider;
         self
     }
 
@@ -170,7 +174,7 @@ impl RenderOnce for WorkspaceTabBar {
         let on_cls = self.on_close;
         let can_close_pane = self.can_close_pane;
         let on_close_pane = self.on_close_pane;
-        let on_new_tab = self.on_new_tab;
+        let new_tab_menu = self.new_tab_menu.and_then(|provider| (provider)(&pane_id));
         let follow = self.follow;
         let dirty_paths = self.dirty_paths;
 
@@ -426,9 +430,9 @@ impl RenderOnce for WorkspaceTabBar {
                                     .into_any_element()
                             })
                     }))
-                    .when_some(on_new_tab, |scroll, on_new| {
-                        let pane_id = pane_id.clone();
-                        scroll.child(
+                    .when_some(new_tab_menu, |scroll, (handle, items)| {
+                        let menu_id = format!("workspace-new-tab-menu-{}", pane_id);
+                        scroll.child(dropdown_menu(
                             div()
                                 .id(ElementId::Name(
                                     format!("workspace-new-tab-{}", pane_id).into(),
@@ -441,13 +445,13 @@ impl RenderOnce for WorkspaceTabBar {
                                 .items_center()
                                 .justify_center()
                                 .hover(|s| s.bg(theme.overlay))
-                                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                    cx.stop_propagation();
-                                    (on_new)(pane_id.clone(), window, cx);
-                                })
                                 .tooltip(Tooltip::text("New tab"))
                                 .child(app_icon(IconName::Plus, 12.0, theme.text_ghost)),
-                        )
+                            menu_id,
+                            &handle,
+                            MenuAlign::BelowLeft,
+                            move |cx| (items)(cx),
+                        ))
                     }),
             )
             .when(can_close_pane, |bar| {

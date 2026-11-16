@@ -178,6 +178,19 @@ impl ConsoleDesktopApp {
         }
 
         let pane_id = self.target_subtab_pane_id();
+        self.open_browser_tab_in_pane(&pane_id, url, focus, window, cx);
+    }
+
+    /// Open a Browser tab in a specific pane.
+    pub fn open_browser_tab_in_pane(
+        &mut self,
+        pane_id: &str,
+        url: Option<String>,
+        focus: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let pane_id = pane_id.to_string();
         let (browser_id, tab) = self.new_browser_tab(url.clone(), None, None, &pane_id);
         if focus {
             workspace_ops::open_tab(&mut self.workspace_root, &pane_id, tab);

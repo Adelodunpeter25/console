@@ -12,6 +12,17 @@ impl ConsoleDesktopApp {
     /// "." may not exist there, especially after switching servers).
     pub fn open_terminal_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let pane_id = self.target_subtab_pane_id();
+        self.open_terminal_tab_for_pane_project(&pane_id, window, cx);
+    }
+
+    /// Open a Terminal tab in `pane_id`, at that pane's selected project.
+    pub fn open_terminal_tab_for_pane_project(
+        &mut self,
+        pane_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let pane_id = pane_id.to_string();
         let Some(cwd) = self
             .selected_project_for_pane(&pane_id)
             .map(|project| project.path.clone())
