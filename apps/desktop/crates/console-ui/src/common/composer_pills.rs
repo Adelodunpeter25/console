@@ -23,9 +23,8 @@ use crate::theme::Theme;
 type ClickHandler = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
 pub(crate) type StopHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 /// Every pill in the row, status and suggestion alike, is this tall so they
-/// read as one set. Fixed rather than padding-derived, so it does not drift
-/// with the font's line height.
-const PILL_HEIGHT: f32 = 29.0;
+/// read as one set and match the 34px scroll controls.
+const PILL_HEIGHT: f32 = 34.0;
 type PickHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 
 /// Follow-up prompts that fill the rest of the row and scroll sideways.
@@ -226,6 +225,9 @@ pub fn composer_pills(
                     .relative()
                     .w_full()
                     .max_w(px(768.0))
+                    .h(px(34.0))
+                    .flex()
+                    .items_center()
                     // The transcript's jump / scroll-to-bottom pill floats at the
                     // bottom right (~67px wide, 16px in); keep pills inside the
                     // max-w column from sliding under it.

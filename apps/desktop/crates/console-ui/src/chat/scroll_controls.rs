@@ -243,12 +243,14 @@ impl TranscriptView {
                             .relative()
                             .w_full()
                             .max_w(px(768.0))
+                            .h(px(34.0))
+                            .flex()
+                            .items_center()
                             .when_some(popup_element, |el, popup| el.child(popup))
                             .child(
                                 div()
                                     .absolute()
                                     .right_0()
-                                    .bottom(px(1.0))
                                     .child(pill),
                             ),
                     ),
