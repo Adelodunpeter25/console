@@ -9,8 +9,8 @@ use gpui::{App, Context, WeakEntity, Window};
 
 use crate::state::app::ConsoleDesktopApp;
 
-fn kbd(mac: &'static str) -> Option<&'static str> {
-    cfg!(target_os = "macos").then_some(mac)
+fn kbd(mac: &'static str, other: &'static str) -> Option<&'static str> {
+    Some(if cfg!(target_os = "macos") { mac } else { other })
 }
 
 impl ConsoleDesktopApp {
@@ -62,25 +62,25 @@ pub(crate) fn new_tab_menu_items(
             row(
                 "New Chat",
                 IconName::ChatRoundLine,
-                kbd("⌃N"),
+                kbd("⌘N", "Ctrl+N"),
                 Rc::new(|this, window, cx| this.open_floating_composer(window, cx)),
             ),
             row(
                 "Files",
                 IconName::FolderOpen,
-                kbd("⌃F"),
+                None,
                 Rc::new(|this, _, cx| this.open_file_tree_tab(cx)),
             ),
             row(
                 "Changes",
                 IconName::FileDiff,
-                kbd("⌃G"),
+                None,
                 Rc::new(|this, _, cx| this.open_changes_for_active_pane(cx)),
             ),
             row(
                 "Terminal",
                 IconName::Terminal,
-                kbd("⌃T"),
+                kbd("⇧⌘T", "Ctrl+Shift+T"),
                 Rc::new(|this, window, cx| this.open_terminal_tab(window, cx)),
             ),
         ];
@@ -88,7 +88,7 @@ pub(crate) fn new_tab_menu_items(
             items.push(row(
                 "Browser",
                 IconName::Global,
-                kbd("⌃B"),
+                kbd("⇧⌘B", "Ctrl+Shift+B"),
                 Rc::new(|this, window, cx| this.open_browser_tab(window, cx)),
             ));
         }
@@ -96,7 +96,7 @@ pub(crate) fn new_tab_menu_items(
             items.push(row(
                 "Devices",
                 IconName::Smartphone,
-                kbd("⌃D"),
+                None,
                 Rc::new(|this, _, cx| this.open_device_tab(cx)),
             ));
         }

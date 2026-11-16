@@ -152,11 +152,6 @@ impl PaletteEntry {
         self
     }
 
-    /// Set the shortcut only when `show` is true, for keys bound on some platforms.
-    pub fn shortcut_if(self, show: bool, shortcut: impl Into<SharedString>) -> Self {
-        if show { self.shortcut(shortcut) } else { self }
-    }
-
     /// Muted text on the row's right edge.
     pub fn detail(mut self, detail: impl Into<SharedString>) -> Self {
         self.detail = Some(detail.into());

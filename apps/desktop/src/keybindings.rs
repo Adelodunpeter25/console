@@ -89,23 +89,12 @@ actions!(
         SwitchWorkspaceTab7,
         SwitchWorkspaceTab8,
         SwitchWorkspaceTab9,
-        /// Open a Files tab in the active pane.
-        OpenFilesTab,
-        /// Open the changes review for the active pane's chat.
-        OpenChangesTab,
-        /// Open a Devices tab in the active pane.
-        OpenDevicesTab,
     ]
 );
 
 /// Register the global shortcuts. Called once at startup, after the more
 /// specific context bindings, so those keep winning ties inside their own
 /// contexts.
-/// Keeps the `+` menu's ctrl shortcuts from stealing shell keys (ctrl-d EOF,
-/// ctrl-b/f/n cursor and history) and the composer's emacs-style editing.
-#[cfg(target_os = "macos")]
-const NEW_TAB_KEY_SCOPE: &str = "!Terminal && !ComposerInput";
-
 pub fn init(cx: &mut App) {
     cx.bind_keys([
         // `secondary` is cmd on macOS and ctrl on Linux/Windows.
@@ -123,20 +112,6 @@ pub fn init(cx: &mut App) {
         #[cfg(not(target_os = "windows"))]
         KeyBinding::new("secondary-shift-B", NewBrowser, None),
         KeyBinding::new("secondary-w", CloseTab, None),
-        // The `+` menu's shortcuts. macOS only: elsewhere `secondary` is ctrl
-        // and these letters are already taken (sidebar, search, tab palette).
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("ctrl-n", NewChat, Some(NEW_TAB_KEY_SCOPE)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("ctrl-f", OpenFilesTab, Some(NEW_TAB_KEY_SCOPE)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("ctrl-g", OpenChangesTab, Some(NEW_TAB_KEY_SCOPE)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("ctrl-t", NewTerminal, Some(NEW_TAB_KEY_SCOPE)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("ctrl-b", NewBrowser, Some(NEW_TAB_KEY_SCOPE)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("ctrl-d", OpenDevicesTab, Some(NEW_TAB_KEY_SCOPE)),
         KeyBinding::new("secondary-n", NewChat, None),
         // ⇧⌘S files the chat away. Both letter spellings are bound for the
         // reason spelled out above: macOS reports an uppercase "S" while
@@ -513,24 +488,6 @@ pub fn init_handlers(cx: &mut App) {
     cx.on_action(|_: &SwitchSession9, cx| {
         if let Some((_, app)) = crate::window::get_active_window(cx) {
             app.update(cx, |this, cx| this.select_session_by_visible_index(8, cx));
-        }
-    });
-
-    cx.on_action(|_: &OpenFilesTab, cx| {
-        if let Some((_, app)) = crate::window::get_active_window(cx) {
-            app.update(cx, |this, cx| this.open_file_tree_tab(cx));
-        }
-    });
-
-    cx.on_action(|_: &OpenChangesTab, cx| {
-        if let Some((_, app)) = crate::window::get_active_window(cx) {
-            app.update(cx, |this, cx| this.open_changes_for_active_pane(cx));
-        }
-    });
-
-    cx.on_action(|_: &OpenDevicesTab, cx| {
-        if let Some((_, app)) = crate::window::get_active_window(cx) {
-            app.update(cx, |this, cx| this.open_device_tab(cx));
         }
     });
 

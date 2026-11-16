@@ -22,7 +22,7 @@ running app yet; `cargo check --workspace --tests` is clean and
 | 2 | Device tab | Done | `26f974c0` |
 | 3 | ChangesReview redesign | Done, partial (see below) | `a5ec284a` |
 | 4 | Browser retarget | Done | `ab25ad9b` |
-| 5 | `+` dropdown and shortcuts | Done | `9188203c` |
+| 5 | `+` dropdown | Done | `9188203c` |
 | 6 | Delete the panel | Done | `a77a1fa8`, `e49ff3ae` |
 
 Also done, beyond the original slices:
@@ -47,9 +47,6 @@ Also done, beyond the original slices:
   split. The state (`project_scripts.rs`, script-log and terminal state, `run/`
   components) is intentionally kept for a future home, so the compiler warns
   about unused code until then.
-- **`ctrl-*` shortcuts are macOS only** and are not active while a terminal or
-  the composer has focus (they would break `ctrl-d`, `ctrl-b/f/n`). Letters
-  remain open for review.
 - **Manual verification** from section 9 is still to do: every menu item, the
   split placement, device/browser surfaces showing only after canvas sync, an
   old `layout.json` loading, and an agent browser action hitting the right tab.
@@ -143,15 +140,9 @@ calls `with_new_tab`, which opens the floating composer
 
 ### Shortcuts
 
-Implemented on macOS only, scoped to `!Terminal && !ComposerInput`. Amp-style
-`ctrl-<key>` bindings for the menu items. Note: plain `ctrl-*`
-keystrokes are the project-script dispatch namespace
-(`normalize_script_keystroke`, `src/keybindings.rs:569`) — they only fire for
-keystrokes no binding consumed, so adding real `ctrl-*` bindings in the
-keymap takes precedence safely. Script ids still dispatch on whatever keys
-remain. Proposed set: `ctrl-n` New Chat, `ctrl-f` Files, `ctrl-g` Changes,
-`ctrl-t` Terminal, `ctrl-b` Browser, `ctrl-d` Devices. Add as actions in
-`src/keybindings.rs` alongside `SwitchWorkspaceTab1..9`.
+Decided: no new shortcuts. The proposed `ctrl-*` set was built and then removed.
+The menu rows only show the keys that already exist: New Chat `⌘N`, Terminal
+`⇧⌘T`, Browser `⇧⌘B`. Files, Changes and Devices have no shortcut.
 
 ## 4. Watch policies move with the views
 
@@ -236,6 +227,4 @@ After every slice:
 
 - **Run panel / script logs**: decided: removed from the UI, state and
   components kept, no stopgap. A new home is still open.
-- **Shortcut keys**: `ctrl-f`/`ctrl-b`/`ctrl-d` may collide with muscle memory
-  in the editor and browser views; the keymap-vs-script-dispatch precedence
-  above handles correctness, but the choice of letters is open.
+- **Shortcut keys**: decided: none added (see section 3).

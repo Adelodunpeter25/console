@@ -88,8 +88,7 @@ fn command_palette_entries(
                 }
             }
         })
-        .icon(IconName::FolderOpen)
-        .shortcut_if(cfg!(target_os = "macos"), "⌃F"),
+        .icon(IconName::FolderOpen),
         PaletteEntry::new("open-changes", "Open Changes", {
             let entity = entity.clone();
             move |_window, cx| {
@@ -98,8 +97,7 @@ fn command_palette_entries(
                 }
             }
         })
-        .icon(IconName::FileDiff)
-        .shortcut_if(cfg!(target_os = "macos"), "⌃G"),
+        .icon(IconName::FileDiff),
         PaletteEntry::new("open-settings", "Open Settings", {
             let entity = entity.clone();
             move |window, cx| {
@@ -121,8 +119,7 @@ fn command_palette_entries(
                 }
             }
         })
-        .icon(IconName::Smartphone)
-        .shortcut("⌃D"),
+        .icon(IconName::Smartphone),
     );
     // Browser tabs are deferred on Windows.
     #[cfg(not(target_os = "windows"))]
