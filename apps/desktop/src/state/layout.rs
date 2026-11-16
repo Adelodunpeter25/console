@@ -83,10 +83,6 @@ impl ConsoleDesktopApp {
         persistence::layout::save(persistence::PersistedLayoutState {
             sidebar_visible: self.sidebar_visible,
             sidebar_width: self.sidebar_width,
-            right_sidebar_visible: self.right_sidebar_visible,
-            right_sidebar_width: self.right_sidebar_width,
-            right_sidebar_bottom_height: self.right_sidebar_bottom_height,
-            right_sidebar_bottom_collapsed: self.right_sidebar_bottom_collapsed,
             active_workspace_id: Some(
                 self.selected_project_id
                     .clone()
@@ -100,7 +96,6 @@ impl ConsoleDesktopApp {
             sidebar_sort_mode: self.sidebar_sort_mode.label().to_string(),
             collapsed_projects: self.collapsed_projects.iter().cloned().collect(),
             pinned_collapsed: self.pinned_collapsed,
-            open_auxiliary_tabs: self.inspector_open_auxiliary_tabs.clone(),
         });
     }
 

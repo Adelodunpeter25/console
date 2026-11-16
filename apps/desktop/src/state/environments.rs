@@ -404,7 +404,6 @@ impl ConsoleDesktopApp {
                         this.pagination_in_flight.clear();
                         this.session_subagents.clear();
                         this.session_background_work.clear();
-                        this.sidebar_session_browsers.clear();
 
                         // Old server's file and review payloads must never be
                         // shown as the new server's.
@@ -419,7 +418,6 @@ impl ConsoleDesktopApp {
                         this.git_badges =
                             std::rc::Rc::new(std::collections::HashMap::new());
                         this.file_tree_selected_path = None;
-                        this.inspector_session_changes = std::rc::Rc::new(Vec::new());
 
                         // Reload data from new server
                         this.load_sessions(cx);

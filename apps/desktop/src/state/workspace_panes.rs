@@ -459,8 +459,7 @@ impl ConsoleDesktopApp {
                     .iter()
                     .flat_map(|leaf| leaf.tabs.iter())
                     .any(|open_tab| matches!(open_tab, WorkspaceTabConfig::Device { .. }));
-                let sidebar_uses = self.inspector_open_auxiliary_tabs.contains(&console_ui::AuxiliaryTab::Devices);
-                if !still_open && !sidebar_uses && let Some(device) = self.device_view.take() {
+                if !still_open && let Some(device) = self.device_view.take() {
                     device.update(cx, |view, cx| view.close(cx));
                 }
             }

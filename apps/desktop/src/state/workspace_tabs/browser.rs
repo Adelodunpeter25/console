@@ -130,16 +130,6 @@ impl ConsoleDesktopApp {
             })
             .collect();
 
-        // The right sidebar's Browser tab hosts a webview too: it is the
-        // visible surface while that tab is open, and hidden otherwise.
-        if self.right_sidebar_visible
-            && self.inspector_active_tab
-                == console_ui::InspectorTab::Auxiliary(console_ui::AuxiliaryTab::Browser)
-            && let Some(id) = &self.inspector_browser_tab_id
-        {
-            active_browser_ids.insert(id.clone());
-        }
-
         // Settings take over the window; native webviews paint above GPUI, so
         // they must be hidden rather than left at their old bounds.
         if self.settings_open {
@@ -204,75 +194,6 @@ impl ConsoleDesktopApp {
         if focus {
             // Focus the browser so keyboard input works immediately (address bar via ⌘L, etc.)
             window.focus(&view.read(cx).focus_handle(cx), cx);
-        }
-    }
-
-    /// Create a browser tab hosted in the right sidebar's Browser tab (no
-    /// workspace tab entry), owned by `session_id`, and make it the one on
-    /// screen. Existing tabs stay in the sidebar's tab strip; a chat with
-    /// none gets its first.
-    pub fn open_sidebar_browser_tab(
-        &mut self,
-        session_id: &str,
-        url: Option<String>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<Entity<BrowserView>> {
-        if cfg!(target_os = "windows") {
-            if let Some(url) = url {
-                cx.open_url(&url);
-            }
-            return None;
-        }
-
-        let browser_id = format!(
-            "browser-{}-{}",
-            chrono::Utc::now().timestamp_millis(),
-            self.browser_views.len(),
-        );
-        self.sidebar_session_browsers
-            .entry(session_id.to_string())
-            .or_default()
-            .push(browser_id.clone());
-        self.inspector_browser_tab_id = Some(browser_id.clone());
-        let view = self.get_or_create_browser_view(&browser_id, url, window, cx);
-        // The view renders next frame; create the native browser now so the
-        // page starts loading while the kernel's wait loop is polling.
-        view.update(cx, |view, cx| view.ensure_host(window, cx));
-        cx.notify();
-        Some(view)
-    }
-
-    /// Drop a browser tab's workspace entries so it renders only in the
-    /// right sidebar, keeping the view itself alive. A sidebar takeover of
-    /// a tab the agent opened while the sidebar was closed.
-    pub(crate) fn detach_browser_tab_from_workspaces(
-        &mut self,
-        browser_id: &str,
-        cx: &mut Context<Self>,
-    ) {
-        let key = format!("browser:{browser_id}");
-        let pane_id = self
-            .workspace_root
-            .leaves()
-            .iter()
-            .find(|leaf| leaf.tabs.iter().any(|t| t.id() == key))
-            .map(|leaf| leaf.id.clone());
-        match pane_id {
-            Some(pane_id) => self.close_tab_and_sync_pane(&pane_id, &key, cx),
-            None => {
-                let had_tab = self.project_workspace_roots.values().any(|root| {
-                    root.leaves()
-                        .iter()
-                        .any(|leaf| leaf.tabs.iter().any(|t| t.id() == key))
-                });
-                if had_tab {
-                    for root in self.project_workspace_roots.values_mut() {
-                        console_ui::workspace::ops::close_matching_tabs(root, |t| t.id() == key);
-                    }
-                    self.persist_workspaces();
-                }
-            }
         }
     }
 

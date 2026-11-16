@@ -227,10 +227,6 @@ fn fold_legacy_files(document: &mut StorageDocument) {
     let mut layout = document.layout.clone().unwrap_or_default();
     layout.sidebar_visible = legacy.sidebar_visible;
     layout.sidebar_width = legacy.sidebar_width;
-    layout.right_sidebar_visible = legacy.right_sidebar_visible;
-    layout.right_sidebar_width = legacy.right_sidebar_width;
-    layout.right_sidebar_bottom_height = legacy.right_sidebar_bottom_height;
-    layout.right_sidebar_bottom_collapsed = legacy.right_sidebar_bottom_collapsed;
     layout.active_workspace_id = legacy.active_workspace_id;
     document.layout = Some(layout);
 }

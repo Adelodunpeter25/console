@@ -1314,16 +1314,6 @@ impl ConsoleDesktopApp {
                 view.update(cx, |bv, cx| bv.close(cx));
             }
         }
-        // Sidebar-hosted tabs have no workspace entry; drop their registry
-        // rows and the on-screen pointer with them.
-        self.sidebar_session_browsers.remove(session_id);
-        if self
-            .inspector_browser_tab_id
-            .as_ref()
-            .is_some_and(|id| owned.contains(id))
-        {
-            self.inspector_browser_tab_id = None;
-        }
         self.agent_browser_tabs.remove(session_id);
         self.persist_workspaces();
         self.sync_workspace_webviews(cx);

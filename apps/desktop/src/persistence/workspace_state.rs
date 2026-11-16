@@ -16,18 +16,6 @@ pub struct WorkspaceStateDocument {
     pub sidebar_visible: bool,
     #[serde(default)]
     pub sidebar_width: f32,
-    #[serde(default)]
-    pub right_sidebar_visible: bool,
-    #[serde(default)]
-    pub right_sidebar_width: f32,
-    #[serde(default = "default_right_sidebar_bottom_height")]
-    pub right_sidebar_bottom_height: f32,
-    #[serde(default)]
-    pub right_sidebar_bottom_collapsed: bool,
-}
-
-fn default_right_sidebar_bottom_height() -> f32 {
-    180.0
 }
 
 /// The pre-v2 file that held the sidebar layout. The layout is a section of

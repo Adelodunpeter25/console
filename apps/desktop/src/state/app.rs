@@ -47,12 +47,6 @@ const SIDEBAR_DEFAULT_WIDTH: f32 = 260.0;
 pub(crate) const SIDEBAR_MIN_WIDTH: f32 = 180.0;
 /// Shared with `layout` for clamping the sidebar's drag-resize width.
 pub(crate) const SIDEBAR_MAX_WIDTH: f32 = 520.0;
-pub(crate) const RIGHT_SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
-pub(crate) const RIGHT_SIDEBAR_MIN_WIDTH: f32 = 220.0;
-pub(crate) const RIGHT_SIDEBAR_MAX_WIDTH: f32 = 550.0;
-pub(crate) const RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT: f32 = 180.0;
-pub(crate) const RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT: f32 = 100.0;
-pub(crate) const RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT: f32 = 450.0;
 
 pub use super::types::{ConsoleDesktopApp, ImageFileState};
 
@@ -113,10 +107,6 @@ impl ConsoleDesktopApp {
         let (
             sidebar_visible,
             sidebar_width,
-            right_sidebar_visible,
-            right_sidebar_width,
-            right_sidebar_bottom_height,
-            right_sidebar_bottom_collapsed,
             initial_selected_project_id,
             initial_root,
             initial_saved_window_state,
@@ -130,26 +120,6 @@ impl ConsoleDesktopApp {
                 } else {
                     SIDEBAR_DEFAULT_WIDTH
                 };
-                let rsb_visible = layout.right_sidebar_visible;
-                let rsb_width =
-                    if layout.right_sidebar_width.is_finite() && layout.right_sidebar_width > 0.0 {
-                        layout
-                            .right_sidebar_width
-                            .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
-                    } else {
-                        RIGHT_SIDEBAR_DEFAULT_WIDTH
-                    };
-                let rsb_bottom_height = if layout.right_sidebar_bottom_height.is_finite()
-                    && layout.right_sidebar_bottom_height > 0.0
-                {
-                    layout.right_sidebar_bottom_height.clamp(
-                        RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
-                        RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
-                    )
-                } else {
-                    RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
-                };
-                let rsb_bottom_collapsed = layout.right_sidebar_bottom_collapsed;
                 let proj_id = layout.active_workspace_id.as_ref().and_then(|wid| {
                     if wid == "__default__" {
                         None
@@ -165,10 +135,6 @@ impl ConsoleDesktopApp {
                 (
                     sb_visible,
                     sb_width,
-                    rsb_visible,
-                    rsb_width,
-                    rsb_bottom_height,
-                    rsb_bottom_collapsed,
                     proj_id,
                     root,
                     startup.window,
@@ -184,33 +150,9 @@ impl ConsoleDesktopApp {
                 } else {
                     SIDEBAR_DEFAULT_WIDTH
                 };
-                let rsb_visible = layout.right_sidebar_visible;
-                let rsb_width =
-                    if layout.right_sidebar_width.is_finite() && layout.right_sidebar_width > 0.0 {
-                        layout
-                            .right_sidebar_width
-                            .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
-                    } else {
-                        RIGHT_SIDEBAR_DEFAULT_WIDTH
-                    };
-                let rsb_bottom_height = if layout.right_sidebar_bottom_height.is_finite()
-                    && layout.right_sidebar_bottom_height > 0.0
-                {
-                    layout.right_sidebar_bottom_height.clamp(
-                        RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
-                        RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
-                    )
-                } else {
-                    RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
-                };
-                let rsb_bottom_collapsed = layout.right_sidebar_bottom_collapsed;
                 (
                     sb_visible,
                     sb_width,
-                    rsb_visible,
-                    rsb_width,
-                    rsb_bottom_height,
-                    rsb_bottom_collapsed,
                     None,
                     WorkspaceNode::leaf("pane-main"),
                     None,
@@ -723,30 +665,19 @@ impl ConsoleDesktopApp {
             stream_render_pending: std::collections::HashMap::new(),
             sidebar_visible,
             sidebar_width,
-            right_sidebar_visible,
-            right_sidebar_width,
-            right_sidebar_resize_start: None,
-            right_sidebar_bottom_height,
-            right_sidebar_bottom_resize_start: None,
-            right_sidebar_bottom_collapsed,
             right_sidebar_terminals_by_cwd: std::collections::HashMap::new(),
             persisted_bottom_terminals,
             persisted_script_tabs,
-            right_sidebar_bottom_run_selected: false,
             project_scripts_by_project: std::collections::HashMap::new(),
             project_script_streams: std::collections::HashMap::new(),
             project_script_stream_seq: 0,
             active_project_shortcuts: std::collections::HashMap::new(),
-            inspector_active_tab: console_ui::InspectorTab::default(),
-            inspector_open_auxiliary_tabs: layout.open_auxiliary_tabs(),
             device_view: None,
             forwarded_ports_by_project: std::collections::HashMap::new(),
             ports_menu_handle: console_ui::ContextMenuHandle::new(cx),
             menubar_file_menu: console_ui::ContextMenuHandle::new(cx),
             menubar_edit_menu: console_ui::ContextMenuHandle::new(cx),
             new_tab_menus: std::collections::HashMap::new(),
-            inspector_add_tab_menu: console_ui::ContextMenuHandle::new(cx),
-            inspector_search_query: String::new(),
             file_tree_nodes: Rc::new(Vec::new()),
             working_changes: Rc::new(Vec::new()),
             git_badges: Rc::new(std::collections::HashMap::new()),
@@ -754,19 +685,13 @@ impl ConsoleDesktopApp {
             file_tree_git_watch: None,
             port_stream: None,
             fs_tree_fetch_pending: false,
-            inspector_session_changes: Rc::new(Vec::new()),
-            inspector_changes_scope: console_core::types::ChangesScope::default(),
-            inspector_changes_scope_menu: console_ui::ContextMenuHandle::new(cx),
             changes_review_data: std::collections::HashMap::new(),
             file_tree_data: std::collections::HashMap::new(),
             file_tree_expanded: std::collections::HashMap::new(),
             changes_review_collapsed: std::collections::HashMap::new(),
-            inspector_expanded_folders: Rc::new(std::collections::HashSet::new()),
             file_tree_selected_path: None,
             session_subagents: std::collections::HashMap::new(),
             session_background_work: std::collections::HashMap::new(),
-            sidebar_session_browsers: std::collections::HashMap::new(),
-            inspector_browser_tab_id: None,
             preview_tab: None,
             open_file_contents: std::collections::HashMap::new(),
             open_file_errors: std::collections::HashMap::new(),

@@ -229,17 +229,10 @@ pub struct ConsoleDesktopApp {
     pub(crate) stream_render_pending: std::collections::HashMap<String, bool>,
     pub sidebar_visible: bool,
     pub sidebar_width: f32,
-    pub right_sidebar_visible: bool,
-    pub right_sidebar_width: f32,
-    pub(crate) right_sidebar_resize_start: Option<(f32, f32)>,
-    pub right_sidebar_bottom_height: f32,
-    pub(crate) right_sidebar_bottom_resize_start: Option<(f32, f32)>,
-    pub right_sidebar_bottom_collapsed: bool,
     pub right_sidebar_terminals_by_cwd: std::collections::HashMap<String, WorkspaceTerminalState>,
     pub(crate) persisted_bottom_terminals: std::collections::HashMap<String, (usize, usize)>,
     pub(crate) persisted_script_tabs:
         std::collections::HashMap<String, crate::persistence::PersistedScriptTabs>,
-    pub right_sidebar_bottom_run_selected: bool,
     pub project_scripts_by_project:
         std::collections::HashMap<String, super::project_scripts::ProjectScriptsPanelState>,
     pub(crate) project_script_streams:
@@ -250,8 +243,6 @@ pub struct ConsoleDesktopApp {
     /// scripts in the same project sharing a shortcut) are omitted and surfaced
     /// via `shortcut_conflict` on the row's view model instead.
     pub active_project_shortcuts: std::collections::HashMap<String, String>,
-    pub inspector_active_tab: console_ui::InspectorTab,
-    pub inspector_open_auxiliary_tabs: Vec<console_ui::AuxiliaryTab>,
     pub device_view: Option<gpui::Entity<console_ui::DeviceViewer>>,
     pub forwarded_ports_by_project:
         std::collections::HashMap<String, Rc<Vec<console_core::ForwardedPort>>>,
@@ -261,8 +252,6 @@ pub struct ConsoleDesktopApp {
     pub menubar_edit_menu: console_ui::ContextMenuHandle,
     /// The `+` dropdown's open state, one per workspace pane.
     pub(crate) new_tab_menus: std::collections::HashMap<String, console_ui::ContextMenuHandle>,
-    pub inspector_add_tab_menu: console_ui::ContextMenuHandle,
-    pub inspector_search_query: String,
     pub file_tree_nodes: Rc<Vec<console_ui::FileTreeNode>>,
     pub working_changes: Rc<Vec<console_core::types::GitFileEntry>>,
     /// Derived from `working_changes`; only set through
@@ -278,9 +267,6 @@ pub struct ConsoleDesktopApp {
     pub(crate) port_stream: Option<gpui::Task<()>>,
     /// Trailing-debounce latch so bursts of fs events fetch the tree once.
     pub(crate) fs_tree_fetch_pending: bool,
-    pub inspector_session_changes: Rc<Vec<console_core::types::SessionFileChange>>,
-    pub inspector_changes_scope: console_core::types::ChangesScope,
-    pub inspector_changes_scope_menu: console_ui::ContextMenuHandle,
     /// Fetched change list for each open "View all" review tab, keyed by the
     /// tab id (`changesReview:<sessionId>:<Scope>`). Populated once on open;
     /// `diffText` per row is already included by the `GET /changes` response
@@ -297,7 +283,6 @@ pub struct ConsoleDesktopApp {
         std::collections::HashMap<String, Rc<Vec<console_ui::FileTreeNode>>>,
     pub(crate) file_tree_expanded:
         std::collections::HashMap<String, std::collections::HashSet<String>>,
-    pub inspector_expanded_folders: Rc<std::collections::HashSet<String>>,
     pub file_tree_selected_path: Option<String>,
     pub session_subagents:
         std::collections::HashMap<String, Rc<Vec<console_core::types::SubagentInfo>>>,
@@ -305,13 +290,6 @@ pub struct ConsoleDesktopApp {
     /// run stream and hydrated from the work list endpoint.
     pub session_background_work:
         std::collections::HashMap<String, Rc<Vec<console_core::BackgroundWork>>>,
-    /// Browser tabs hosted in the right sidebar's Browser tab, by owning
-    /// session id, in open order. Sidebar tabs have no workspace tab entry,
-    /// so this registry is their ownership record (the kernel's session-tab
-    /// list unions it with the workspace-derived ids).
-    pub sidebar_session_browsers: std::collections::HashMap<String, Vec<String>>,
-    /// The browser tab on screen in the right sidebar's Browser tab.
-    pub inspector_browser_tab_id: Option<String>,
     pub preview_tab: Option<(String, std::time::Instant)>,
     pub open_file_contents: std::collections::HashMap<String, String>,
     /// Why a file tab could not load, by path. A path in here is not asked

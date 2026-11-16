@@ -506,17 +506,6 @@ impl ConsoleDesktopApp {
             || self.global_search_panel.read(cx).is_open()
     }
 
-    pub fn select_bottom_run_tab(&mut self, cx: &mut Context<Self>) {
-        if self.right_sidebar_bottom_collapsed {
-            self.right_sidebar_bottom_collapsed = false;
-            self.persist_layout();
-        }
-        self.right_sidebar_bottom_run_selected = true;
-        // Selecting the tab re-reads console.toml, so edits show up without
-        // an app restart. Merge-by-id keeps open output and live tails.
-        self.refresh_project_scripts(cx);
-        cx.notify();
-    }
 
     /// Follow one run: backfill its record, stream live events, then
     /// reconcile once the stream ends. Replacing the stored task cancels a

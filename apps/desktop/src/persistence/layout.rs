@@ -8,15 +8,6 @@ pub struct PersistedLayoutState {
     pub sidebar_visible: bool,
     #[serde(default = "default_sidebar_width")]
     pub sidebar_width: f32,
-    #[serde(default = "default_right_sidebar_visible")]
-    pub right_sidebar_visible: bool,
-    #[serde(default = "default_right_sidebar_width")]
-    pub right_sidebar_width: f32,
-    #[serde(default = "default_right_sidebar_bottom_height")]
-    pub right_sidebar_bottom_height: f32,
-    /// Whether the right sidebar's bottom split is collapsed.
-    #[serde(default)]
-    pub right_sidebar_bottom_collapsed: bool,
     /// The project whose workspace is selected, or `None` for the default one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_workspace_id: Option<String>,
@@ -31,28 +22,9 @@ pub struct PersistedLayoutState {
     pub collapsed_projects: Vec<String>,
     #[serde(default)]
     pub pinned_collapsed: bool,
-    /// Auxiliary inspector tabs mounted in the right-sidebar tab strip.
-    #[serde(default)]
-    pub open_auxiliary_tabs: Vec<console_ui::AuxiliaryTab>,
 }
 
 impl PersistedLayoutState {
-    /// The persisted tabs that can still be mounted. Subagents and Shells
-    /// moved to popovers on the chat's pill row, so layouts saved while they
-    /// were openable drop them here instead of mounting dead tabs.
-    pub fn open_auxiliary_tabs(&self) -> Vec<console_ui::AuxiliaryTab> {
-        self.open_auxiliary_tabs
-            .iter()
-            .filter(|tab| {
-                matches!(
-                    tab,
-                    console_ui::AuxiliaryTab::Browser | console_ui::AuxiliaryTab::Devices
-                )
-            })
-            .copied()
-            .collect()
-    }
-
     pub fn sidebar_sort_mode(&self) -> console_ui::utils::SidebarSortMode {
         match self.sidebar_sort_mode.as_str() {
             "project" => console_ui::utils::SidebarSortMode::Project,
@@ -69,33 +41,16 @@ fn default_sidebar_width() -> f32 {
     260.0
 }
 
-fn default_right_sidebar_visible() -> bool {
-    false
-}
-
-fn default_right_sidebar_width() -> f32 {
-    280.0
-}
-
-fn default_right_sidebar_bottom_height() -> f32 {
-    180.0
-}
-
 impl Default for PersistedLayoutState {
     fn default() -> Self {
         Self {
             sidebar_visible: true,
             sidebar_width: default_sidebar_width(),
-            right_sidebar_visible: default_right_sidebar_visible(),
-            right_sidebar_width: default_right_sidebar_width(),
-            right_sidebar_bottom_height: default_right_sidebar_bottom_height(),
-            right_sidebar_bottom_collapsed: false,
             active_workspace_id: None,
             collapsed_groups: Vec::new(),
             sidebar_sort_mode: String::new(),
             collapsed_projects: Vec::new(),
             pinned_collapsed: false,
-            open_auxiliary_tabs: Vec::new(),
         }
     }
 }
