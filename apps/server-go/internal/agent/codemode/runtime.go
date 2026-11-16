@@ -190,6 +190,8 @@ func (r *Runtime) dispatchCall(ctx context.Context, args map[string]any) (*jsker
 		toolName = "bashJob"
 	case "batch_write":
 		toolName = "batchWrite"
+	case "write_plan":
+		toolName = "writePlan"
 	}
 
 	input, _ := args["input"].(map[string]any)
@@ -425,6 +427,8 @@ func formatSummary(tool string, input map[string]any) string {
 		return fmt.Sprintf("todo(%v)", input["op"])
 	case "visualize":
 		return "visualize(...)"
+	case "writePlan":
+		return fmt.Sprintf("writePlan(%v)", input["name"])
 	case "readChat":
 		return fmt.Sprintf("readChat(%v)", input["ref"])
 	default:

@@ -486,6 +486,67 @@ func TestCodemodeJSONUnwrapping(t *testing.T) {
 	}
 }
 
+func TestCodemodePlanMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	sampleFile := filepath.Join(tmpDir, "sample.txt")
+	if err := os.WriteFile(sampleFile, []byte("read-only content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg := tools.NewRegistry(
+		tools.DefaultTools()...,
+	)
+	reg.Add(tools.NewWritePlanTool(tmpDir))
+
+	exec := loop.NewExecutor(reg, permissions.PlanMode)
+	exec.Guard = permissions.NewGuard(tmpDir)
+
+	rt, err := codemode.NewRuntime(exec)
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Reading file in plan mode succeeds
+	readScript := `await file(` + jsonString(sampleFile) + `);`
+	resRead, err := rt.Eval(ctx, readScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("plan mode read eval: %v", err)
+	}
+	envRead := resRead.(tools.Envelope)
+	if envRead.IsError || !strings.Contains(envRead.Content.(string), "read-only content") {
+		t.Fatalf("expected read success, got: %v", envRead.Content)
+	}
+
+	// 2. Writing a plan via writePlan succeeds in plan mode
+	planScript := `await writePlan("test-plan", "# Test Plan\nEverything looks good.");`
+	resPlan, err := rt.Eval(ctx, planScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("plan mode writePlan eval: %v", err)
+	}
+	envPlan := resPlan.(tools.Envelope)
+	if envPlan.IsError || !strings.Contains(envPlan.Content.(string), "test-plan") {
+		t.Fatalf("expected writePlan success, got: %v", envPlan.Content)
+	}
+	// Verify plan file on disk
+	planPath := filepath.Join(tmpDir, "docs/plan/test-plan.md")
+	if data, err := os.ReadFile(planPath); err != nil || !strings.Contains(string(data), "Test Plan") {
+		t.Fatalf("expected plan file on disk at %s, got: %v (data: %s)", planPath, err, string(data))
+	}
+
+	// 3. Attempting to write or edit ordinary files in plan mode is denied
+	writeScript := `await write(` + jsonString(filepath.Join(tmpDir, "denied.txt")) + `, "bad write");`
+	resWrite, err := rt.Eval(ctx, writeScript, 5*time.Second)
+	if err != nil {
+		t.Fatalf("plan mode write eval: %v", err)
+	}
+	envWrite := resWrite.(tools.Envelope)
+	if !envWrite.IsError || !strings.Contains(envWrite.Content.(string), "denied") {
+		t.Fatalf("expected write to be denied in plan mode, got: %v", envWrite.Content)
+	}
+}
+
 func jsonString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)

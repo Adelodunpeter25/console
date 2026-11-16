@@ -126,6 +126,17 @@ const bootstrapScript = `
         return await bridge.call({ tool: "readSkill", input: input });
     };
 
+    // Plan mode design plan writer
+    globalThis.writePlan = async function(arg1, arg2) {
+        let input = {};
+        if (typeof arg1 === "object" && arg1 !== null) {
+            input = arg1;
+        } else {
+            input = { name: String(arg1 || ""), content: String(arg2 || "") };
+        }
+        return await bridge.call({ tool: "writePlan", input: input });
+    };
+
     // Generic subkernel proxy factory for kernel-backed capabilities (browser, console, cua)
     function makeSubkernelProxy(rootName, directCaller) {
         function createTarget(path) {

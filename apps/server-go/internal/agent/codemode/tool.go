@@ -18,8 +18,8 @@ type codeResetInput struct{}
 func NewCodeTool(rt *Runtime) tools.Tool {
 	return tools.NewTool(
 		"code",
-		"Execute JavaScript in the session REPL to orchestrate file operations, shell commands, searches, and tools. Built-ins: $`cmd`, file(path), write(path, content), edit(path, old, new), glob(pat), grep(pat, opts), list(path), fetch(url), webSearch(query), todo(op, arg), visualize(spec), tools.X(args), searchTools(query), describeTool(name), log(...args), spawnContext(args).",
-		tools.TierExec,
+		"Execute JavaScript in the session REPL to orchestrate file operations, shell commands, searches, and tools. Built-ins: $`cmd`, file(path), write(path, content), edit(path, old, new), glob(pat), grep(pat, opts), list(path), fetch(url), webSearch(query), todo(op, arg), writePlan(name, content), visualize(spec), tools.X(args), searchTools(query), describeTool(name), log(...args), spawnContext(args).",
+		tools.TierRead,
 		func(ctx context.Context, in codeInput) (any, error) {
 			timeout := time.Duration(in.TimeoutMs) * time.Millisecond
 			if timeout <= 0 {
@@ -56,6 +56,7 @@ Direct tools are replaced by asynchronous JavaScript functions inside the script
   Throws on non-zero exit code unless .nothrow() is called: (await $` + "`git status`" + `).nothrow()
 - file(path) reads file text contents. Relative to process CWD or absolute.
 - write(path, content) writes/overwrites file (creates parent directories automatically).
+- writePlan(name, content) saves Markdown design plan to docs/plan/<name>.md (in plan mode).
 - edit(path, oldStr, newStr) performs exact replacement (throws if oldStr is missing or not unique).
 - glob(pattern, [root]) finds matching file paths.
 - grep(pattern, [options]) searches file contents.
