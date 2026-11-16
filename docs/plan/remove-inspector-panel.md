@@ -10,6 +10,53 @@ Design references: the Ampcode screenshot (right panel = one view at a time,
 dropdown switcher) and the two `2026-11-16 11.36` screenshots showing the
 redesigned Changes review tab.
 
+## Status
+
+All six slices are implemented and committed. Nothing has been exercised in the
+running app yet; `cargo check --workspace --tests` is clean and
+`git_badges_test` passes.
+
+| # | Slice | State | Commit |
+|---|---|---|---|
+| 1 | FileTree tab | Done | `2fbcdc16` |
+| 2 | Device tab | Done | `26f974c0` |
+| 3 | ChangesReview redesign | Done, partial (see below) | `a5ec284a` |
+| 4 | Browser retarget | Done | `ab25ad9b` |
+| 5 | `+` dropdown and shortcuts | Done | `9188203c` |
+| 6 | Delete the panel | Done | `a77a1fa8`, `e49ff3ae` |
+
+Also done, beyond the original slices:
+
+- ⌘K command palette: "Toggle Inspector" replaced by **Open Files**, **Open
+  Changes** and (macOS) **Open Devices**.
+- Title-bar inspector toggle, `alt-b`, the `ToggleRightSidebar` action, its
+  app-menu item and its keybindings-page row are gone.
+- Files, Changes, Devices, Terminal and Browser from the `+` menu and the
+  palette open in the right-hand split beside the chat (the same pane
+  `target_subtab_pane_id` picks for new browser tabs). New Chat still opens the
+  floating composer.
+
+### Not done
+
+- **ChangesReview redesign is partial.** Rows now show filename and folder, `+N`
+  `-N`, an A/M/D badge and the existing Mark as reviewed button, with
+  full-bleed diffs. Not built from the reference screenshot: the commit header
+  bar (branch and ahead/behind), "N unmodified lines" expanders, and the "…"
+  row menu. The expanders need support in the diff viewer.
+- **Run panel and script logs have no UI.** Their only surface was the bottom
+  split. The state (`project_scripts.rs`, script-log and terminal state, `run/`
+  components) is intentionally kept for a future home, so the compiler warns
+  about unused code until then.
+- **`ctrl-*` shortcuts are macOS only** and are not active while a terminal or
+  the composer has focus (they would break `ctrl-d`, `ctrl-b/f/n`). Letters
+  remain open for review.
+- **Manual verification** from section 9 is still to do: every menu item, the
+  split placement, device/browser surfaces showing only after canvas sync, an
+  old `layout.json` loading, and an agent browser action hitting the right tab.
+- **Not implemented from the plan text:** the Files tab has no header row or
+  search box (just the tree); `open_auxiliary_tabs` entries are dropped on load
+  without an explicit migration (the field is simply no longer read).
+
 ## 1. What gets deleted, what stays
 
 ### Deleted (the whole column)
@@ -81,21 +128,23 @@ calls `with_new_tab`, which opens the floating composer
 
 - `MenuItem::new` rows with `icon(...)` and `shortcut(...)`:
   - **New Chat** — same action as today's `+` (`open_floating_composer`)
-  - **Files** — opens a `FileTree` tab in the active pane
+  - **Files** — opens a `FileTree` tab in the right-hand split
   - **Changes** — opens the redesigned `ChangesReview` tab for the focused
-    chat (see section 5)
-  - **Terminal** — opens a terminal tab in the active pane
-  - **Browser** — opens a browser tab in the active pane
-  - **Devices** — opens a `Device` tab in the active pane (macOS only)
+    chat (see section 5), in the right-hand split
+  - **Terminal** — opens a terminal tab in the right-hand split
+  - **Browser** — opens a browser tab in the right-hand split
+  - **Devices** — opens a `Device` tab in the right-hand split (macOS only)
 - `+` is fully replaced; no chevron beside it.
-- Opening always targets the active pane (same pane resolution
-  `open_changes_review_tab` uses: `active_pane_id` or `pane-main`).
+- Everything except New Chat opens in the right-hand split beside the chat
+  (`target_subtab_pane_id`: reuse the other pane, or split the chat's pane),
+  not the clicked pane. This replaced the original "active pane" rule.
 - Each open goes through the same `sync_workspace_webviews` treatment chat /
   file / terminal / browser opens already use.
 
 ### Shortcuts
 
-Amp-style `ctrl-<key>` bindings for the menu items. Note: plain `ctrl-*`
+Implemented on macOS only, scoped to `!Terminal && !ComposerInput`. Amp-style
+`ctrl-<key>` bindings for the menu items. Note: plain `ctrl-*`
 keystrokes are the project-script dispatch namespace
 (`normalize_script_keystroke`, `src/keybindings.rs:569`) — they only fire for
 keystrokes no binding consumed, so adding real `ctrl-*` bindings in the
@@ -152,6 +201,8 @@ without one, actions no-op as today.
 
 ## 8. Slices (each independently shippable, one commit each)
 
+Status of each is in the table at the top; slice 6 landed as two commits.
+
 1. **FileTree tab** — variant, render, tree state, watch-policy move. Nothing
    is removed yet; the inspector keeps working beside it.
 2. **Device tab** — variant, render, native-surface show/hide following the
@@ -183,9 +234,8 @@ After every slice:
 
 ## 10. Open decisions (flagged, not blocking)
 
-- **Run panel / script logs**: their only surface is the bottom split, so
-  slice 6 removes them from the UI. State stays intact for a future home;
-  tell me before slice 6 if you want a stopgap.
+- **Run panel / script logs**: decided: removed from the UI, state and
+  components kept, no stopgap. A new home is still open.
 - **Shortcut keys**: `ctrl-f`/`ctrl-b`/`ctrl-d` may collide with muscle memory
   in the editor and browser views; the keymap-vs-script-dispatch precedence
   above handles correctness, but the choice of letters is open.
