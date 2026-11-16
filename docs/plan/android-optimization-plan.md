@@ -8,7 +8,7 @@ Plan for Kotlin coroutines, state management, Compose performance, and memory op
 - [x] **Task 2: Fix SSE Streaming Token Dropping** (`data/stream/ChatStreamClient.kt`)
 - [x] **Task 3: Enforce Main-Safety in `HttpTransport`** (`data/api/HttpTransport.kt`)
 - [x] **Task 4: Cap Terminal Buffer Growth to Prevent OOM** (`data/store/MiscState.kt`)
-- [ ] **Task 5: Make `ScrollMemory` Thread-Safe** (`core/util/ScrollMemory.kt`)
+- [x] **Task 5: Make `ScrollMemory` Thread-Safe** (`core/util/ScrollMemory.kt`)
 - [ ] **Task 6: Optimize Date & Time Formatting** (`core/util/Time.kt`)
 - [ ] **Task 7: Prevent Coroutine Cancellation Swallowing** (`core/forward/LocalForwardManager.kt`, `core/notification/NotificationCoordinator.kt`)
 - [ ] **Task 8: Optimize Keystroke Trigger & Duration Formatting** (`core/util/ComposerAutocomplete.kt`, `core/util/Format.kt`)
