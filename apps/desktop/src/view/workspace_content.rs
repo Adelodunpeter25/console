@@ -1101,7 +1101,6 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        let theme = Theme::current(cx);
         let pane_composer = self.composer_for_pane(pane_id);
         let pane_selected_model = self.effective_model_for_pane(pane_id);
         let pane_picker_tab = self.pane_picker_tab(pane_id);
