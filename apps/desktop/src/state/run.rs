@@ -1261,7 +1261,7 @@ impl ConsoleDesktopApp {
                     .iter_mut()
                     .find(|session| session.id == run_session_id)
                 {
-                    session.approval_mode = Some(mode.value().to_string());
+                    session.approval_mode = mode.value().to_string();
                 }
                 self.set_pane_approval_mode(run_pane_id, mode);
                 let pane_ids: Vec<String> = self.workspace_pane_states.keys().cloned().collect();
