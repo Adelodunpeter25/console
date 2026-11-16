@@ -1,5 +1,11 @@
 package com.console.mobile.ui.navigation
 
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -45,6 +51,13 @@ import com.console.mobile.ui.components.common.new.ConfirmPromptHost
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.X
+
+private const val PAGE_ENTER_MS = 240
+private const val PAGE_EXIT_MS = 200
+// Fractions of the screen width: the incoming page travels further than the
+// outgoing one, which gives the push its depth.
+private const val PAGE_ENTER_SHIFT = 0.3f
+private const val PAGE_EXIT_SHIFT = 0.15f
 
 @Composable
 fun AppNavGraph() {
@@ -135,6 +148,24 @@ fun AppNavGraph() {
             navController = navController,
             startDestination = startDestination,
             modifier = Modifier.padding(padding),
+            // Forward pushes the new screen in from the right while the old
+            // one drifts left; back is the same motion reversed.
+            enterTransition = {
+                slideInHorizontally(tween(PAGE_ENTER_MS, easing = LinearOutSlowInEasing)) { (it * PAGE_ENTER_SHIFT).toInt() } +
+                    fadeIn(tween(PAGE_ENTER_MS, easing = LinearOutSlowInEasing))
+            },
+            exitTransition = {
+                slideOutHorizontally(tween(PAGE_EXIT_MS, easing = LinearOutSlowInEasing)) { -(it * PAGE_EXIT_SHIFT).toInt() } +
+                    fadeOut(tween(PAGE_EXIT_MS, easing = LinearOutSlowInEasing))
+            },
+            popEnterTransition = {
+                slideInHorizontally(tween(PAGE_ENTER_MS, easing = LinearOutSlowInEasing)) { -(it * PAGE_EXIT_SHIFT).toInt() } +
+                    fadeIn(tween(PAGE_ENTER_MS, easing = LinearOutSlowInEasing))
+            },
+            popExitTransition = {
+                slideOutHorizontally(tween(PAGE_EXIT_MS, easing = LinearOutSlowInEasing)) { (it * PAGE_ENTER_SHIFT).toInt() } +
+                    fadeOut(tween(PAGE_EXIT_MS, easing = LinearOutSlowInEasing))
+            },
         ) {
             composable<RouteHome> {
                 HomeScreen(
