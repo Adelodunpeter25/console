@@ -413,8 +413,11 @@ pub fn composer_attachment_row(
     theme: Theme,
 ) -> impl IntoElement {
     div()
+        .w_full()
         .flex()
+        .flex_row()
         .flex_wrap()
+        .items_center()
         .gap(px(8.0))
         .px(px(12.0))
         .pb(px(8.0))
@@ -487,8 +490,11 @@ impl ComposerView {
 
     fn render_comments(comments: Rc<Vec<ComposerComment>>, theme: Theme) -> impl IntoElement {
         div()
+            .w_full()
             .flex()
+            .flex_row()
             .flex_wrap()
+            .items_center()
             .gap(px(6.0))
             .px(px(12.0))
             .pb(px(7.0))
@@ -501,6 +507,7 @@ impl ComposerView {
                     .id(ElementId::Name(
                         format!("composer-comment-{}", comment.id).into(),
                     ))
+                    .flex_none()
                     .flex()
                     .items_center()
                     .gap(px(1.0))
@@ -540,8 +547,11 @@ impl ComposerView {
         theme: Theme,
     ) -> impl IntoElement {
         div()
+            .w_full()
             .flex()
+            .flex_row()
             .flex_wrap()
+            .items_center()
             .gap(px(6.0))
             .px(px(12.0))
             .pb(px(7.0))
@@ -558,6 +568,7 @@ impl ComposerView {
                             .id(ElementId::Name(
                                 format!("composer-annotation-{}", ann.id).into(),
                             ))
+                            .flex_none()
                             .flex()
                             .items_center()
                             .gap(px(4.0))
