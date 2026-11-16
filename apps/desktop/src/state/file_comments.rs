@@ -377,44 +377,54 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         let pane_id = pane_id.to_string();
         cx.spawn(async move |entity, cx| {
-            let Ok(items) = client.file_comments.list(&project_id).await else {
-                // A restored workspace asks before the server is reachable. The
-                // pane is marked loaded, so without this it would never ask again.
-                cx.background_executor()
-                    .timer(std::time::Duration::from_secs(3))
-                    .await;
-                let _ = cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            if let Some(pane) = this.workspace_pane_states.get_mut(&pane_id)
-                                && pane.comments_project.as_deref() == Some(project_id.as_str())
-                            {
-                                pane.comments_project = None;
-                            }
-                            cx.notify();
-                        });
-                    }
+            let items = client.file_comments.list(&project_id).await.ok();
+            let mut adopted = false;
+            if let Some(items) = items {
+                adopted = cx.update(|cx| {
+                    let Some(handle) = cx.active_window() else {
+                        return false;
+                    };
+                    handle
+                        .update(cx, |_, window, cx| {
+                            let Some(app) = entity.upgrade() else {
+                                return false;
+                            };
+                            app.update(cx, |this, cx| {
+                                this.adopt_loaded_comments(
+                                    &pane_id,
+                                    &project_id,
+                                    &root,
+                                    items,
+                                    window,
+                                    cx,
+                                )
+                            });
+                            true
+                        })
+                        .unwrap_or(false)
                 });
+            }
+            if adopted {
                 return;
-            };
+            }
+            // A restored workspace asks before the server is reachable or the
+            // window is active. The pane is already marked loaded, so without
+            // this it would never ask again and the comments stay missing until
+            // the tab is closed and reopened.
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(3))
+                .await;
             cx.update(|cx| {
-                let Some(handle) = cx.active_window() else {
-                    return;
-                };
-                let _ = handle.update(cx, |_, window, cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.adopt_loaded_comments(
-                                &pane_id,
-                                &project_id,
-                                &root,
-                                items,
-                                window,
-                                cx,
-                            )
-                        });
-                    }
-                });
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        if let Some(pane) = this.workspace_pane_states.get_mut(&pane_id)
+                            && pane.comments_project.as_deref() == Some(project_id.as_str())
+                        {
+                            pane.comments_project = None;
+                        }
+                        cx.notify();
+                    });
+                }
             });
         })
         .detach();
