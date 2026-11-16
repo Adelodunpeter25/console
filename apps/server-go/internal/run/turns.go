@@ -38,14 +38,14 @@ func (s *Service) setStatus(sessionID, status string) {
 	}
 }
 
-// markActivity records that the chat finished or needs the user, which is what
-// makes it unread. Best-effort like setStatus: it must never fail a run.
-func (s *Service) markActivity(sessionID string) {
+// finishRun settles the status and marks the chat unread in one write.
+// Best-effort like setStatus: it must never fail a run.
+func (s *Service) finishRun(sessionID, status string) {
 	if s.sessions == nil {
 		return
 	}
-	if err := s.sessions.MarkActivity(sessionID); err != nil {
-		slog.Warn("run: mark activity failed", "session", sessionID, "error", err)
+	if err := s.sessions.FinishRun(sessionID, status); err != nil {
+		slog.Warn("run: finish run failed", "session", sessionID, "status", status, "error", err)
 	}
 }
 
@@ -103,11 +103,9 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 				// never needs_attention.
 				s.setStatus(sessionID, "done")
 			} else if runErr == nil {
-				s.setStatus(sessionID, "done")
-				s.markActivity(sessionID)
+				s.finishRun(sessionID, "done")
 			} else {
-				s.setStatus(sessionID, "needs_attention")
-				s.markActivity(sessionID)
+				s.finishRun(sessionID, "needs_attention")
 			}
 			// Release the session before the hub closes: a run that has
 			// observably finished must leave the session free, or a client

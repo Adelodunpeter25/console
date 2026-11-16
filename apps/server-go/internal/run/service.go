@@ -119,8 +119,7 @@ func NewService(sessions *services.SessionService) *Service {
 		// answers, so the session reads as needing attention rather than
 		// working. It flips back on resolve — see resolveDecision.
 		if event.Kind == loop.EventAskQuestion {
-			s.setStatus(sessionID, "needs_attention")
-			s.markActivity(sessionID)
+			s.finishRun(sessionID, "needs_attention")
 		}
 	}
 	return s

@@ -373,8 +373,8 @@ func (s *SessionService) SetPinned(sessionID string, pinned bool) error {
 	return s.inner.SetPinned(sessionID, pinned)
 }
 
-func (s *SessionService) MarkActivity(sessionID string) error {
-	return s.inner.MarkActivity(sessionID)
+func (s *SessionService) FinishRun(sessionID, status string) error {
+	return s.inner.FinishRun(sessionID, status)
 }
 
 func (s *SessionService) MarkRead(sessionID string) (bool, error) {

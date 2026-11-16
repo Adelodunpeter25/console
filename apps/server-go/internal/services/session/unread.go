@@ -18,13 +18,15 @@ func IsUnread(h types.SessionHeader) bool {
 	return h.LastReadAt == nil || *h.LastActivityAt > *h.LastReadAt
 }
 
-// MarkActivity records that a run finished or needs the user. It deliberately
-// leaves updated_at alone: it is a notification marker, not a content change,
-// and updated_at orders the sidebar.
-func (s *Service) MarkActivity(sessionID string) error {
+// FinishRun settles a run that finished or needs the user: it sets the status
+// and last_activity_at in one write, so a reader never sees the chat settled
+// but not yet unread. updated_at moves like UpdateStatus, since it orders the
+// sidebar.
+func (s *Service) FinishRun(sessionID, status string) error {
+	now := utils.NowMillis()
 	_, err := s.manager.Global().Exec(
-		`UPDATE sessions SET last_activity_at = ? WHERE id = ?`,
-		utils.NowMillis(), sessionID)
+		`UPDATE sessions SET status = ?, updated_at = ?, last_activity_at = ? WHERE id = ?`,
+		status, now, now, sessionID)
 	return err
 }
 
