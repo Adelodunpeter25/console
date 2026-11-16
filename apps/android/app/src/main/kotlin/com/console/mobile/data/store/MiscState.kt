@@ -48,7 +48,7 @@ class AuthStateHolder(initial: AuthState = AuthState()) {
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<AuthState> = _state.asStateFlow()
     fun set(v: AuthState) { _state.value = v }
-    fun patch(fn: (AuthState) -> AuthState) { _state.value = fn(_state.value) }
+    fun patch(fn: (AuthState) -> AuthState) { _state.update(fn) }
 }
 
 data class FsState(
@@ -65,7 +65,7 @@ class FsStateHolder(initial: FsState = FsState()) {
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<FsState> = _state.asStateFlow()
     fun set(v: FsState) { _state.value = v }
-    fun patch(fn: (FsState) -> FsState) { _state.value = fn(_state.value) }
+    fun patch(fn: (FsState) -> FsState) { _state.update(fn) }
     fun markBusy(path: String) { patch { it.copy(busyPaths = it.busyPaths + path) } }
     fun clearBusy(path: String) { patch { it.copy(busyPaths = it.busyPaths - path) } }
     fun invalidateFile(path: String) { patch { it.copy(fileContentsByPath = it.fileContentsByPath - path) } }
@@ -83,7 +83,7 @@ class UsageStateHolder(initial: UsageState = UsageState()) {
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<UsageState> = _state.asStateFlow()
     fun set(v: UsageState) { _state.value = v }
-    fun patch(fn: (UsageState) -> UsageState) { _state.value = fn(_state.value) }
+    fun patch(fn: (UsageState) -> UsageState) { _state.update(fn) }
     fun invalidate(providerId: String? = null) {
         patch { s ->
             if (providerId != null) s.copy(reports = s.reports - providerId, loadingByProvider = s.loadingByProvider + (providerId to false))
@@ -103,7 +103,7 @@ class McpStateHolder(initial: McpState = McpState()) {
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<McpState> = _state.asStateFlow()
     fun set(v: McpState) { _state.value = v }
-    fun patch(fn: (McpState) -> McpState) { _state.value = fn(_state.value) }
+    fun patch(fn: (McpState) -> McpState) { _state.update(fn) }
     fun entry(id: String): McpServerEntry? = _state.value.servers.firstOrNull { it.id == id }
 }
 
@@ -152,7 +152,7 @@ class TerminalStateHolder {
         if (cwd != null) cands.firstOrNull { it.cwd == cwd }?.let { return it.id }
         return cands.firstOrNull()?.id
     }
-    fun clear() { _terminals.value = emptyMap(); _buffers.value = emptyMap() }
+    fun clear() { _terminals.update { emptyMap() }; _buffers.update { emptyMap() } }
 }
 
 @Serializable
@@ -170,7 +170,7 @@ class EnvironmentsStateHolder(initial: EnvironmentsState = EnvironmentsState()) 
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<EnvironmentsState> = _state.asStateFlow()
     fun set(v: EnvironmentsState) { _state.value = v }
-    fun patch(fn: (EnvironmentsState) -> EnvironmentsState) { _state.value = fn(_state.value) }
+    fun patch(fn: (EnvironmentsState) -> EnvironmentsState) { _state.update(fn) }
 }
 
 data class IntegrationsState(
@@ -183,5 +183,5 @@ class IntegrationsStateHolder(initial: IntegrationsState = IntegrationsState()) 
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<IntegrationsState> = _state.asStateFlow()
     fun set(v: IntegrationsState) { _state.value = v }
-    fun patch(fn: (IntegrationsState) -> IntegrationsState) { _state.value = fn(_state.value) }
+    fun patch(fn: (IntegrationsState) -> IntegrationsState) { _state.update(fn) }
 }
