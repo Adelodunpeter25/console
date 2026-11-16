@@ -565,6 +565,9 @@ impl ConsoleDesktopApp {
         // mark lands first so the pane sync below sees the settled session.
         if settled {
             self.close_session_chat_tabs(&session_id, cx);
+            // Settling closes the whole workspace, not just the chat tab: the
+            // splits, terminals and browsers go with it.
+            self.sweep_dead_workspaces(cx);
         }
         cx.notify();
 

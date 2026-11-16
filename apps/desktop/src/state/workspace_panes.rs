@@ -239,6 +239,8 @@ impl ConsoleDesktopApp {
         let live: std::collections::HashSet<String> = self
             .sessions
             .iter()
+            // A settled chat is filed away, and its workspace with it.
+            .filter(|session| session.settled_at.is_none())
             .filter_map(|session| self.workspace_key_for_header(session))
             .collect();
         let mut candidates: Vec<&str> = self
