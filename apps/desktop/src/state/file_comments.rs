@@ -418,12 +418,13 @@ impl ConsoleDesktopApp {
         if pane.comments_project.as_deref() != Some(project_id) {
             return;
         }
-        let staged: Vec<String> = pane
+        let mut staged: Vec<String> = pane
             .file_comments
             .iter()
             .filter(|c| c.staged)
             .filter_map(|c| c.server_id.clone())
             .collect();
+        staged.append(&mut pane.pending_staged_comments);
         let mut touched: Vec<String> = Vec::new();
         pane.file_comments.retain(|comment| {
             let keep = comment.state != FileCommentState::Added || comment.server_id.is_none();
@@ -702,6 +703,44 @@ impl ConsoleDesktopApp {
             }
         }
         cx.notify();
+    }
+
+    /// A closing pane takes its comment state with it, and the composer only
+    /// reads panes still in the tree. Hand its staged comments to the chat
+    /// pane, which reloads them from the server with the staged flag set.
+    pub(crate) fn carry_staged_comments(&mut self, closing_pane: &str, cx: &mut Context<Self>) {
+        let Some(closing) = self.workspace_pane_states.get(closing_pane) else {
+            return;
+        };
+        let staged: Vec<String> = closing
+            .file_comments
+            .iter()
+            .filter(|c| c.staged && c.state != FileCommentState::Draft)
+            .filter_map(|c| c.server_id.clone())
+            .collect();
+        if staged.is_empty() {
+            return;
+        }
+        let Some(target) = self
+            .active_chat_pane_id()
+            .filter(|pane| pane != closing_pane)
+            .or_else(|| {
+                self.workspace_root
+                    .leaves()
+                    .into_iter()
+                    .map(|leaf| leaf.id.clone())
+                    .find(|id| id != closing_pane)
+            })
+        else {
+            return;
+        };
+        let Some(pane) = self.workspace_pane_states.get_mut(&target) else {
+            return;
+        };
+        pane.pending_staged_comments.extend(staged);
+        // Force a reload so the comments land in this pane's list.
+        pane.comments_project = None;
+        self.ensure_file_comments_loaded(&target, cx);
     }
 
     /// Stage a saved comment for the next message, or take it back out.

@@ -45,6 +45,7 @@ impl ConsoleDesktopApp {
         {
             if leaf.tabs.is_empty() && self.workspace_root.leaves().len() > 1 {
                 console_ui::workspace::ops::close_pane(&mut self.workspace_root, pane_id);
+                self.carry_staged_comments(pane_id, cx);
                 if let Some(chat_pane) = self.active_chat_pane_id() {
                     self.active_pane_id = Some(chat_pane);
                 }
@@ -723,6 +724,7 @@ impl ConsoleDesktopApp {
             self.dispose_closed_tab(tab, cx);
         }
         self.trim_file_caches(cx);
+        self.carry_staged_comments(pane_id, cx);
         self.workspace_pane_states.remove(pane_id);
         self.todo_items.remove(pane_id);
         if self.active_pane_id.as_deref() == Some(pane_id) {

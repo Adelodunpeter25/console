@@ -100,6 +100,9 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) comments_project: Option<String>,
     /// The project's saved comments plus any card still being typed.
     pub(crate) file_comments: Vec<FileComment>,
+    /// Server ids of comments staged in a pane that has since closed. The next
+    /// load of this pane's comments restores their staged flag.
+    pub(crate) pending_staged_comments: Vec<String>,
     pub(crate) next_file_comment_id: u64,
     /// Retained tab strip scroll-follow state for this pane.
     pub(crate) tab_strip_follow: TabStripFollow,
