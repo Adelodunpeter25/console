@@ -93,7 +93,8 @@ class NotificationCoordinator(
                         }
                     }
                     backoffMs = 1_000L // a clean end-of-stream shouldn't escalate
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                 }
                 delay(backoffMs)
                 backoffMs = (backoffMs * 2).coerceAtMost(30_000L)
