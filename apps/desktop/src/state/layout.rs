@@ -25,23 +25,6 @@ const WORKSPACES_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 /// a drag still coalesces through [`WINDOW_SAVE_DEBOUNCE`].
 const WINDOW_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
-fn strip_diff_tabs(mut root: console_core::WorkspaceNode) -> console_core::WorkspaceNode {
-    for leaf in root.leaves_mut() {
-        leaf.tabs.retain(|tab| {
-            !matches!(
-                tab,
-                console_core::WorkspaceTabConfig::Diff { .. }
-            )
-        });
-        if let Some(active) = &leaf.active_tab_id
-            && active.starts_with("diff:")
-        {
-            leaf.active_tab_id = leaf.tabs.last().map(|t| t.id());
-        }
-    }
-    root
-}
-
 fn total_tabs(node: &console_core::WorkspaceNode) -> usize {
     match node {
         console_core::WorkspaceNode::Leaf(leaf) => leaf.tabs.len(),
@@ -55,7 +38,7 @@ fn clean_root_for_workspace(
     root: &console_core::WorkspaceNode,
     project_id: &Option<String>,
 ) -> console_core::WorkspaceNode {
-    let mut clean = strip_diff_tabs(root.clone());
+    let mut clean = root.clone();
     // A workspace must never persist tabs pointing at another folder.
     let before = total_tabs(&clean);
     console_ui::workspace::ops::retain_project_tabs(&mut clean, project_id);

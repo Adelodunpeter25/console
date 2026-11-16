@@ -527,6 +527,15 @@ impl ConsoleDesktopApp {
         self.ensure_workspace_pane_state(pane_id, window, cx);
         let path = path.to_owned();
 
+        // A tab restored from disk has no diff loaded; fetch it once.
+        if !self.open_diff_contents.contains_key(&path) {
+            self.open_diff_contents.insert(
+                path.clone(),
+                (console_core::DiffResult::default(), String::new()),
+            );
+            self.load_diff_for_tab(pane_id, path.clone(), cx);
+        }
+
         let (diff_result, raw_diff) = self
             .open_diff_contents
             .get(&path)

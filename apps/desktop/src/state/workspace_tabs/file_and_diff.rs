@@ -441,6 +441,24 @@ impl ConsoleDesktopApp {
         self.trim_file_caches(cx);
         self.persist_workspaces();
 
+        self.fetch_diff_into_cache(pane_id, path, turn_index, diff_override, cx);
+        cx.notify();
+    }
+
+    /// Load the diff for a tab restored from disk: the working-tree diff, as
+    /// the turn it came from is not saved with the tab.
+    pub(crate) fn load_diff_for_tab(&mut self, pane_id: &str, path: String, cx: &mut Context<Self>) {
+        self.fetch_diff_into_cache(pane_id, path, None, None, cx);
+    }
+
+    fn fetch_diff_into_cache(
+        &mut self,
+        pane_id: &str,
+        path: String,
+        turn_index: Option<u32>,
+        diff_override: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         let client = self.client.clone();
         let file_path = path.clone();
         let session_change_diff = diff_override.filter(|d| !d.trim().is_empty());
@@ -493,8 +511,6 @@ impl ConsoleDesktopApp {
             });
         })
         .detach();
-
-        cx.notify();
     }
 
     /// Maximum retained file/viewer cache entries per map. Bounds long-session
