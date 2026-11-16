@@ -108,6 +108,9 @@ impl ConsoleDesktopApp {
             Rc::make_mut(&mut state.branches).clear();
             state.branch_loaded = true;
             state.branch_is_git_repository = false;
+            // Otherwise a reopen against the same cwd looks already-loaded and
+            // the header apply skips re-fetching these cleared branches.
+            state.branch_cwd = None;
         }
         self.persist_layout();
         self.persist_workspaces();

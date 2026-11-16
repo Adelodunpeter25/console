@@ -982,9 +982,17 @@ impl ConsoleDesktopApp {
             "Generating title…",
             cx,
         );
-        // The project folder's branch just changed, so the
-        // footer's branch list is stale until it reloads.
-        if let Some((_, cwd)) = checkout {
+        // The footer's branches describe this chat's own folder. A fresh
+        // desk's pane has no branch state yet, and a checkout just moved the
+        // project folder, so load against the cwd the chat will actually use.
+        let branch_cwd = checkout
+            .map(|(_, cwd)| cwd)
+            .or_else(|| Some(new_session.cwd.clone()).filter(|cwd| !cwd.is_empty()))
+            .or_else(|| {
+                self.selected_project_for_pane(&target_pane)
+                    .map(|project| project.path.clone())
+            });
+        if let Some(cwd) = branch_cwd {
             self.reload_branches_for_pane(target_pane.clone(), cwd, cx);
         }
         self.sync_workspace_webviews(cx);
