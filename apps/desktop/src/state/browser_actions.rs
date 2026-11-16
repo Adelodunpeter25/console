@@ -923,15 +923,13 @@ impl ConsoleDesktopApp {
     }
 
     /// Ids of every browser tab in the same workspace tree as the chat —
-    /// whether the agent or the user opened it — plus the tabs hosted in the
-    /// right sidebar (they have no workspace tab entry; the sidebar registry
-    /// is their ownership record). Always the same tree as the chat, never
+    /// whether the agent or the user opened it. Always the same tree as the chat, never
     /// another workspace's; browser actions are scoped to this set. Falls
     /// back to the active tree when the chat isn't rendered in any tree.
     /// Sorted, deduplicated.
     pub(crate) fn session_workspace_browser_ids(&self, session_id: &str) -> Vec<String> {
         let chat_tab_id = format!("chat:{session_id}");
-        let mut ids = if Self::tree_contains_chat(&self.workspace_root, &chat_tab_id) {
+        let ids = if Self::tree_contains_chat(&self.workspace_root, &chat_tab_id) {
             console_ui::workspace::ops::browser_ids(&self.workspace_root)
         } else {
             let mut found = Vec::new();
@@ -948,9 +946,6 @@ impl ConsoleDesktopApp {
                 found
             }
         };
-        if let Some(sidebar_ids) = self.sidebar_session_browsers.get(session_id) {
-            ids.extend(sidebar_ids.iter().cloned());
-        }
         Self::sorted_browser_ids(ids)
     }
 
@@ -1051,11 +1046,6 @@ impl ConsoleDesktopApp {
                     record(tab);
                 }
             }
-        }
-        // Tabs hosted in the right sidebar have no workspace tab entry; the
-        // sidebar registry is their ownership record.
-        if let Some(sidebar_ids) = self.sidebar_session_browsers.get(session_id) {
-            ids.extend(sidebar_ids.iter().cloned());
         }
         ids.sort();
         ids.dedup();

@@ -194,18 +194,6 @@ impl ConsoleDesktopApp {
         }
     }
 
-    /// Whether agent browsing for `session_id` should land in the right
-    /// sidebar's Browser tab: the sidebar is visible, the Browser tab is
-    /// open, and it targets this chat's workspace. When true, agent-opened
-    /// tabs render there instead of opening workspace tabs.
-    pub fn sidebar_browser_targets(&self, session_id: &str) -> bool {
-        self.right_sidebar_visible
-            && self
-                .inspector_open_auxiliary_tabs
-                .contains(&console_ui::AuxiliaryTab::Browser)
-            && self.active_inspector_target().0.as_deref() == Some(session_id)
-    }
-
     /// Create a browser tab hosted in the right sidebar's Browser tab (no
     /// workspace tab entry), owned by `session_id`, and make it the one on
     /// screen. Existing tabs stay in the sidebar's tab strip; a chat with
@@ -290,12 +278,6 @@ impl ConsoleDesktopApp {
         if cfg!(target_os = "windows") {
             cx.open_url(&url);
             return None;
-        }
-
-        // The sidebar's Browser tab owns agent browsing while it is open on
-        // this chat's workspace: tabs open there, never as workspace tabs.
-        if self.sidebar_browser_targets(session_id) {
-            return self.open_sidebar_browser_tab(session_id, Some(url), window, cx);
         }
 
         let chat_tab_id = format!("chat:{session_id}");
