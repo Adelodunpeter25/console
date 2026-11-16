@@ -12,7 +12,17 @@ name: Build console-desktop
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - "proto/**"
+      - "rust-toolchain.toml"
+      - ".github/workflows/console-desktop.yml"
   workflow_dispatch:
+
+# A newer push supersedes an in-flight build, freeing scarce macOS runners.
+concurrency:
+  group: console-desktop-build-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write

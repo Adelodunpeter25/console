@@ -13,6 +13,15 @@ name: Build console
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/server-go/**"
+      - "proto/**"
+      - ".github/workflows/console-server.yml"
+
+# A newer push supersedes an in-flight build, freeing scarce macOS runners.
+concurrency:
+  group: console-server-build-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write

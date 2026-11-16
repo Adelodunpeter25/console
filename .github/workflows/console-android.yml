@@ -20,6 +20,13 @@ name: Build console-android
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/android/**"
+      - "apps/desktop/crates/**"
+      - "apps/desktop/Cargo.lock"
+      - "proto/**"
+      - "rust-toolchain.toml"
+      - ".github/workflows/console-android.yml"
   workflow_dispatch:
 
 permissions:
@@ -75,7 +82,7 @@ jobs:
           # Must match rust-toolchain.toml (source of truth), the same pin the
           # desktop workflow uses.
           toolchain: 1.97.1
-          targets: aarch64-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -119,7 +126,7 @@ jobs:
             NDK_DIR="$SDK/ndk/$NDK_VERSION"
           fi
           echo "Staging the shared native library with NDK at $NDK_DIR"
-          ANDROID_NDK_HOME="$NDK_DIR" bash shared-native/build.sh
+          ANDROID_ABIS=arm64-v8a ANDROID_NDK_HOME="$NDK_DIR" bash shared-native/build.sh
 
       - name: Build the release APK
         working-directory: apps/android
