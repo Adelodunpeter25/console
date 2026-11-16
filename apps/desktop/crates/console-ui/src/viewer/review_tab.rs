@@ -93,7 +93,7 @@ impl RenderOnce for ReviewTab {
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme.text)
                             .child(format!(
-                                "{} — {} file{} changed",
+                                "{} · {} file{} changed",
                                 self.scope.label(),
                                 file_count,
                                 if file_count == 1 { "" } else { "s" }
@@ -201,6 +201,14 @@ fn render_review_entry(
     let on_toggle_collapsed = on_toggle_collapsed.clone();
     let on_toggle_reviewed = on_toggle_reviewed.clone();
     let reviewed = entry.reviewed;
+    let (status_label, status_color) = match entry.status.as_str() {
+        "modified" => ("M", theme.warning),
+        "added" => ("A", theme.success),
+        "deleted" => ("D", theme.danger),
+        _ => ("?", theme.text_tertiary),
+    };
+    let additions = entry.additions;
+    let deletions = entry.deletions;
 
     // One cached editor diff view per file and turn.
     // The key carries the row's update time and diff
@@ -252,7 +260,7 @@ fn render_review_entry(
                 .justify_between()
                 .gap(px(8.0))
                 .px(px(16.0))
-                .py(px(10.0))
+                .py(px(14.0))
                 .cursor_pointer()
                 .hover(|s| s.bg(theme.overlay))
                 .on_click(move |_, window, cx| {
@@ -285,8 +293,8 @@ fn render_review_entry(
                                 .child(
                                     div()
                                         .flex_none()
-                                        .text_size(px(12.5))
-                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_size(px(13.0))
+                                        .font_weight(FontWeight::SEMIBOLD)
                                         .text_color(theme.text)
                                         .child(file_name.to_string()),
                                 )
@@ -304,6 +312,45 @@ fn render_review_entry(
                                 }),
                         ),
                 )
+                .child(
+                    div()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .gap(px(8.0))
+                        .when(additions > 0, |el| {
+                            el.child(
+                                div()
+                                    .text_size(px(12.0))
+                                    .font_family(MONO_FAMILY)
+                                    .text_color(theme.success)
+                                    .child(format!("+{additions}")),
+                            )
+                        })
+                        .when(deletions > 0, |el| {
+                            el.child(
+                                div()
+                                    .text_size(px(12.0))
+                                    .font_family(MONO_FAMILY)
+                                    .text_color(theme.danger)
+                                    .child(format!("-{deletions}")),
+                            )
+                        })
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .w(px(22.0))
+                                .h(px(22.0))
+                                .rounded(px(5.0))
+                                .border_1()
+                                .border_color(status_color)
+                                .text_size(px(11.0))
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(status_color)
+                                .child(status_label),
+                        )
                 .child(
                     div()
                         .id(gpui::ElementId::Name(
@@ -351,18 +398,12 @@ fn render_review_entry(
                                 }),
                         ),
                 ),
+                ),
         )
         .when_some(editor_diff, |el, diff| {
             let height = (diff.line_count as f32 * DIFF_LINE_HEIGHT).min(REVIEW_DIFF_MAX_HEIGHT);
             el.child(
-                div().px(px(16.0)).pb(px(12.0)).child(
-                    div()
-                        .w_full()
-                        .h(px(height))
-                        .rounded(px(6.0))
-                        .overflow_hidden()
-                        .child(DiffViewer::new(diff.view)),
-                ),
+                div().w_full().h(px(height)).overflow_hidden().child(DiffViewer::new(diff.view)),
             )
         })
         .into_any_element()
