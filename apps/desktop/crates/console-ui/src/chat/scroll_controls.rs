@@ -154,7 +154,7 @@ impl TranscriptView {
             );
         }
 
-        let mut layer = div().absolute().inset_0();
+        let mut popup_element = None;
         if self.prompts_open && has_prompts {
             let prompts = self.prompts.clone();
             let entity = cx.entity().downgrade();
@@ -185,50 +185,73 @@ impl TranscriptView {
                 .into_any_element()
             };
 
-            layer = layer
-                .child(
-                    div()
-                        .id("transcript-prompts-backdrop")
-                        .absolute()
-                        .inset_0()
-                        .on_click(cx.listener(|this, _, _, cx| {
+            popup_element = Some(
+                div()
+                    .id("transcript-prompts-popup")
+                    .track_focus(&self.prompts_focus)
+                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                        if event.keystroke.key == "escape" {
                             this.close_prompts(cx);
-                        })),
-                )
-                .child(
-                    div()
-                        .id("transcript-prompts-popup")
-                        .track_focus(&self.prompts_focus)
-                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                            if event.keystroke.key == "escape" {
-                                this.close_prompts(cx);
-                                cx.stop_propagation();
-                            }
-                        }))
-                        .absolute()
-                        .right(px(16.0))
-                        .bottom(px(54.0))
-                        .w(px(340.0))
-                        .max_w_full()
-                        .h(px(visible_rows.max(1) as f32 * PROMPT_ROW_HEIGHT + 8.0))
-                        .occlude()
-                        .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-                        .p(px(4.0))
-                        .rounded(px(12.0))
-                        .border_1()
-                        .border_color(theme.border)
-                        .bg(theme.raised)
-                        .child(body),
-                );
+                            cx.stop_propagation();
+                        }
+                    }))
+                    .absolute()
+                    .right_0()
+                    .bottom(px(44.0))
+                    .w(px(340.0))
+                    .max_w_full()
+                    .h(px(visible_rows.max(1) as f32 * PROMPT_ROW_HEIGHT + 8.0))
+                    .occlude()
+                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                    .p(px(4.0))
+                    .rounded(px(12.0))
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.raised)
+                    .child(body),
+            );
+        }
+
+        let mut layer = div().absolute().inset_0();
+        if self.prompts_open && has_prompts {
+            layer = layer.child(
+                div()
+                    .id("transcript-prompts-backdrop")
+                    .absolute()
+                    .inset_0()
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.close_prompts(cx);
+                    })),
+            );
         }
 
         layer
             .child(
                 div()
                     .absolute()
-                    .right(px(16.0))
+                    .left_0()
+                    .right_0()
                     .bottom(px(10.0))
-                    .child(pill),
+                    .h(px(34.0))
+                    .w_full()
+                    .px(px(20.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .relative()
+                            .w_full()
+                            .max_w(px(768.0))
+                            .when_some(popup_element, |el, popup| el.child(popup))
+                            .child(
+                                div()
+                                    .absolute()
+                                    .right_0()
+                                    .bottom(px(1.0))
+                                    .child(pill),
+                            ),
+                    ),
             )
             .into_any_element()
     }
