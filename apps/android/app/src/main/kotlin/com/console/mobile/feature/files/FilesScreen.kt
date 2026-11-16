@@ -478,12 +478,22 @@ private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expa
                 FileIcon(filename = entry.name, sizeDp = 20)
             }
         }
-        Box(modifier = Modifier.width(14.dp).padding(start = 6.dp)) {
-            badge?.takeIf { !entry.is_dir }?.let {
-                Text(it.label, color = gitRoleColor(it.role), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
+        Text(
+            entry.name,
+            // The name carries the badge too, so a change is visible on the
+            // label and not only on the icon.
+            color = if (selected) NewTheme.TextPrimary else badge?.let { gitRoleColor(it.role) } ?: NewTheme.TextPrimary,
+            fontSize = 16.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(start = 12.dp),
+        )
+        // The letter sits after the name, so a long name truncates instead of
+        // pushing the badge off the row.
+        if (badge != null) {
+            Text(badge.label, color = gitRoleColor(badge.role), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(14.dp))
         }
-        Text(entry.name, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 6.dp))
     }
 }
 
