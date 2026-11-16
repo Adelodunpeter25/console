@@ -9,9 +9,11 @@
 /// True for `http(s)://` destinations, which keep opening in the browser.
 pub fn is_http_url(link: &str) -> bool {
     let link = link.trim_start();
-    link.len() >= 7
-        && (link[..7].eq_ignore_ascii_case("http://")
-            || (link.len() >= 8 && link[..8].eq_ignore_ascii_case("https://")))
+    let starts = |prefix: &str| {
+        link.get(..prefix.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
+    };
+    starts("http://") || starts("https://")
 }
 
 /// Extensionless file names common enough to treat as files when they stand

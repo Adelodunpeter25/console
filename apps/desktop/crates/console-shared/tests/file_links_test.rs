@@ -105,3 +105,10 @@ fn ties_prefer_shallower_then_alphabetical() {
 fn no_candidates_means_no_match() {
     assert_eq!(closest_match(Some("/p"), &[]), None);
 }
+
+#[test]
+fn multibyte_link_does_not_panic() {
+    assert!(!is_http_url("src/…/mod.rs"));
+    assert!(!is_http_url("abcdef…"));
+    assert!(!is_file_link("…"));
+}
