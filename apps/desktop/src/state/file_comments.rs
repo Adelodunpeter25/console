@@ -412,18 +412,21 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // A saved comment can be loaded into several panes; it counts as staged
+        // if any copy is, so a reopened file does not offer it a second time.
+        let mut staged: Vec<String> = self
+            .workspace_pane_states
+            .values()
+            .flat_map(|pane| pane.file_comments.iter())
+            .filter(|c| c.staged)
+            .filter_map(|c| c.server_id.clone())
+            .collect();
         let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
             return;
         };
         if pane.comments_project.as_deref() != Some(project_id) {
             return;
         }
-        let mut staged: Vec<String> = pane
-            .file_comments
-            .iter()
-            .filter(|c| c.staged)
-            .filter_map(|c| c.server_id.clone())
-            .collect();
         staged.append(&mut pane.pending_staged_comments);
         let mut touched: Vec<String> = Vec::new();
         pane.file_comments.retain(|comment| {
@@ -632,12 +635,18 @@ impl ConsoleDesktopApp {
         };
 
         let mut blocks = Vec::new();
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
         for pid in pids {
             let Some(pane) = self.workspace_pane_states.get(pid) else {
                 continue;
             };
             for comment in &pane.file_comments {
                 if !comment.staged || comment.state == FileCommentState::Draft {
+                    continue;
+                }
+                if let Some(server_id) = comment.server_id.as_deref()
+                    && !seen.insert(server_id)
+                {
                     continue;
                 }
                 let text = comment.text.trim();
@@ -761,6 +770,17 @@ impl ConsoleDesktopApp {
             return;
         }
         comment.staged = !comment.staged;
+        let (staged, server_id) = (comment.staged, comment.server_id.clone());
+        // Every pane's copy of the same saved comment follows.
+        if let Some(server_id) = server_id {
+            for pane in self.workspace_pane_states.values_mut() {
+                for copy in &mut pane.file_comments {
+                    if copy.server_id.as_deref() == Some(server_id.as_str()) {
+                        copy.staged = staged;
+                    }
+                }
+            }
+        }
         cx.notify();
     }
 
@@ -794,12 +814,18 @@ impl ConsoleDesktopApp {
 
         let entity = cx.entity().downgrade();
         let mut all_comments = Vec::new();
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
         for pid in pids {
             let Some(pane) = self.workspace_pane_states.get(pid) else {
                 continue;
             };
             for comment in &pane.file_comments {
                 if !comment.staged || comment.state == FileCommentState::Draft {
+                    continue;
+                }
+                if let Some(server_id) = comment.server_id.as_deref()
+                    && !seen.insert(server_id)
+                {
                     continue;
                 }
                 let edit_entity = entity.clone();
