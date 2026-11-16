@@ -577,6 +577,7 @@ impl ConsoleDesktopApp {
         let entity = cx.entity().downgrade();
         let on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App)> = {
             let entity = entity.clone();
+            let tab_id = tab_id.clone();
             Rc::new(move |path, _w, cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
@@ -590,18 +591,26 @@ impl ConsoleDesktopApp {
                 app.update(cx, |this, cx| this.open_file_tab(path, cx));
             }
         });
+        let scroll_handle = self
+            .file_tree_scrolls
+            .entry(tab_id)
+            .or_default()
+            .clone();
         div()
             .size_full()
             .min_h_0()
-            .child(console_ui::FileTreeView::new(
-                tree,
-                expanded,
-                self.file_tree_selected_path.clone(),
-                String::new(),
-                on_toggle_folder,
-                self.git_badges.clone(),
-                on_select_file,
-            ))
+            .child(
+                console_ui::FileTreeView::new(
+                    tree,
+                    expanded,
+                    self.file_tree_selected_path.clone(),
+                    String::new(),
+                    on_toggle_folder,
+                    self.git_badges.clone(),
+                    on_select_file,
+                )
+                .track_scroll(scroll_handle),
+            )
             .into_any_element()
     }
 

@@ -7,8 +7,8 @@ use std::rc::Rc;
 use console_core::types::{FsTreeEntry, GitFileEntry};
 use gpui::Hsla;
 use gpui::{
-    App, InteractiveElement, IntoElement, ParentElement, RenderOnce, StatefulInteractiveElement,
-    Styled, Window, div, prelude::FluentBuilder, px,
+    App, InteractiveElement, IntoElement, ParentElement, RenderOnce, ScrollHandle,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
 use crate::primitives::file_icon;
@@ -65,6 +65,7 @@ pub struct FileTreeView {
     on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     git_badges: Rc<HashMap<String, GitBadge>>,
     on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    scroll_handle: Option<ScrollHandle>,
 }
 
 impl FileTreeView {
@@ -85,7 +86,13 @@ impl FileTreeView {
             on_toggle_folder,
             git_badges,
             on_select_file,
+            scroll_handle: None,
         }
+    }
+
+    pub fn track_scroll(mut self, scroll_handle: ScrollHandle) -> Self {
+        self.scroll_handle = Some(scroll_handle);
+        self
     }
 
     fn render_node(
@@ -312,14 +319,20 @@ impl RenderOnce for FileTreeView {
             children.append(&mut els);
         }
 
-        div()
+        let mut container = div()
             .id("file-tree-container")
             .flex_1()
             .w_full()
             .h_full()
             .min_h_0()
             .overflow_y_scroll()
-            .p(px(6.0))
+            .p(px(6.0));
+
+        if let Some(scroll_handle) = self.scroll_handle {
+            container = container.track_scroll(&scroll_handle);
+        }
+
+        container
             .child(if children.is_empty() {
                 div()
                     .flex_1()

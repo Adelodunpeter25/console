@@ -517,6 +517,7 @@ impl ConsoleDesktopApp {
                 if !still_referenced {
                     self.file_tree_data.remove(&tab_id);
                     self.file_tree_expanded.remove(&tab_id);
+                    self.file_tree_scrolls.remove(&tab_id);
                 }
             }
             WorkspaceTabConfig::ChangesReview { .. } => {

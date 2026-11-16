@@ -413,6 +413,7 @@ impl ConsoleDesktopApp {
                         this.open_diff_contents.clear();
                         this.changes_review_data.clear();
                         this.changes_review_collapsed.clear();
+                        this.file_tree_scrolls.clear();
                         this.file_tree_nodes = std::rc::Rc::new(Vec::new());
                         this.working_changes = std::rc::Rc::new(Vec::new());
                         this.git_badges =
