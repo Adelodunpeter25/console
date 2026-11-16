@@ -18,7 +18,7 @@ type codeResetInput struct{}
 func NewCodeTool(rt *Runtime) tools.Tool {
 	return tools.NewTool(
 		"code",
-		"Execute JavaScript in the session REPL to orchestrate file operations, shell commands, searches, and tools. Built-ins: $`cmd`, file(path), write(path, content), edit(path, old, new), glob(pat), grep(pat, opts), list(path), fetch(url), webSearch(query), todo(op, arg), ask(q, opts), writePlan(name, content), visualize(spec), tools.X(args), searchTools(query), describeTool(name), log(...args), spawnContext(args).",
+		"Execute JavaScript in the session REPL to orchestrate file operations, shell commands, searches, and tools. Built-ins: $`cmd`, file(path), write(path, content), edit(path, old, new), glob(pat), grep(pat, opts), list(path), fetch(url), webSearch(query), todo(op, arg), ask(q, opts), writePlan(name, content), requestFullAccess(reason), visualize(spec), tools.X(args), searchTools(query), describeTool(name), log(...args), spawnContext(args).",
 		tools.TierRead,
 		func(ctx context.Context, in codeInput) (any, error) {
 			timeout := time.Duration(in.TimeoutMs) * time.Millisecond
@@ -35,7 +35,7 @@ func NewCodeTool(rt *Runtime) tools.Tool {
 // NewCodeResetTool returns the harness code_reset tool.
 func NewCodeResetTool(rt *Runtime) tools.Tool {
 	return tools.NewTool(
-		"code_reset",
+		"codeReset",
 		"Reset the session JavaScript REPL state (clears all variables and in-memory session store).",
 		tools.TierRead,
 		func(ctx context.Context, in codeResetInput) (any, error) {

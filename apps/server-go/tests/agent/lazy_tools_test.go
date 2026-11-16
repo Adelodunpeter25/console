@@ -108,7 +108,7 @@ func TestLazyToolsHoldBackAndLoad(t *testing.T) {
 	if !firstNames["loadTools"] {
 		t.Fatal("loadTools must be in the first request")
 	}
-	if !firstNames["read_file"] || !firstNames["bash"] {
+	if (!firstNames["readFile"] && !firstNames["read_file"]) || !firstNames["bash"] {
 		t.Fatal("core tools must stay in the first request")
 	}
 	if !strings.Contains(first.Setup, "Deferred tools") {

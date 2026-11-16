@@ -20,7 +20,7 @@ const bootstrapScript = `
 
     // File primitives
     globalThis.file = async function(path) {
-        const res = await bridge.call({ tool: "read_file", input: { path: String(path) } });
+        const res = await bridge.call({ tool: "readFile", input: { path: String(path) } });
         if (typeof res === "string") return res;
         if (Array.isArray(res) && res.length > 0 && res[0].text !== undefined) {
             return res[0].text;
@@ -28,10 +28,12 @@ const bootstrapScript = `
         if (res && typeof res.text === "string") return res.text;
         return typeof res === "object" ? JSON.stringify(res) : String(res);
     };
+    globalThis.readFile = globalThis.file;
 
     globalThis.write = async function(path, content) {
-        return await bridge.call({ tool: "write_file", input: { path: String(path), content: String(content) } });
+        return await bridge.call({ tool: "writeFile", input: { path: String(path), content: String(content) } });
     };
+    globalThis.writeFile = globalThis.write;
 
     globalThis.edit = async function(path, oldContent, newContent) {
         return await bridge.call({
@@ -43,6 +45,7 @@ const bootstrapScript = `
             }
         });
     };
+    globalThis.editFile = globalThis.edit;
 
     globalThis.glob = async function(pattern, root) {
         const input = { pattern: String(pattern) };
@@ -69,8 +72,9 @@ const bootstrapScript = `
     };
 
     globalThis.list = async function(path) {
-        return await bridge.call({ tool: "list_dir", input: { path: String(path || ".") } });
+        return await bridge.call({ tool: "listDir", input: { path: String(path || ".") } });
     };
+    globalThis.listDir = globalThis.list;
 
     // Web primitives
     globalThis.fetch = async function(url, options) {
@@ -118,7 +122,7 @@ const bootstrapScript = `
     globalThis.readChat = async function(ref, limit) {
         const input = { ref: String(ref) };
         if (limit) input.limit = limit;
-        return await bridge.call({ tool: "read_chat", input: input });
+        return await bridge.call({ tool: "readChat", input: input });
     };
 
     globalThis.readSkill = async function(name) {

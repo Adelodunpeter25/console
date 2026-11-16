@@ -100,7 +100,7 @@ type browserResetTool struct {
 // Closing tabs changes what the user sees, but only among tabs the kernel
 // itself opened, which is why the tool is read-tier like computer_reset.
 func NewResetTool(manager *Manager, sessionID string, handler tools.BrowserHandler) tools.Tool {
-	inner := tools.NewTool("browser_reset",
+	inner := tools.NewTool("browserReset",
 		"Clean up browser use: close the tabs the kernel opened (all of them, or one with tabId). A full reset also forgets every browser variable. Tabs you or the user opened another way are never closed.",
 		tools.TierRead,
 		func(ctx context.Context, in browserResetInput) (any, error) {

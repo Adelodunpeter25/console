@@ -106,7 +106,7 @@ type consoleResetTool struct {
 // NewConsoleResetTool builds the `console_reset` tool: clearing variables
 // changes nothing on the machine, so it is a read-tier lifecycle operation.
 func NewConsoleResetTool(manager *Manager, sessionID string) tools.Tool {
-	inner := tools.NewTool("console_reset",
+	inner := tools.NewTool("consoleReset",
 		"Forget the console session: clear every variable and binding created by prior console calls. The console object itself is reinstalled fresh.",
 		tools.TierRead,
 		func(ctx context.Context, in struct{}) (any, error) {

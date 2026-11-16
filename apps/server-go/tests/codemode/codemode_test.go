@@ -286,7 +286,7 @@ func TestCodemodeToolReplacementDefinitions(t *testing.T) {
 		var defs []tools.Definition
 		for _, def := range reg.Definitions() {
 			switch def.Name {
-			case "code", "code_reset":
+			case "code", "codeReset", "code_reset":
 				defs = append(defs, def)
 			}
 		}
@@ -295,11 +295,11 @@ func TestCodemodeToolReplacementDefinitions(t *testing.T) {
 
 	filtered := filterDefs()
 	if len(filtered) != 2 {
-		t.Fatalf("expected exactly code and code_reset tools, got %d", len(filtered))
+		t.Fatalf("expected exactly code and codeReset tools, got %d", len(filtered))
 	}
 
 	for _, d := range filtered {
-		if d.Name != "code" && d.Name != "code_reset" {
+		if d.Name != "code" && d.Name != "codeReset" && d.Name != "code_reset" {
 			t.Fatalf("unexpected tool in filtered definitions: %s", d.Name)
 		}
 	}

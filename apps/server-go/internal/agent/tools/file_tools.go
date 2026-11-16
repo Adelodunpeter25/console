@@ -66,7 +66,7 @@ func NewReadFileTool(opts ReadFileOptions) Tool {
 	if maxImageBytes <= 0 {
 		maxImageBytes = readMaxImageBytes
 	}
-	return NewTool("read_file", "Read a file on disk. Images (png, jpeg, gif, webp) are returned for viewing; other binary files are rejected. Without startLine/endLine, returns the first 300 lines; pass a range to read further.", TierRead,
+	return NewTool("readFile", "Read a file on disk. Images (png, jpeg, gif, webp) are returned for viewing; other binary files are rejected. Without startLine/endLine, returns the first 300 lines; pass a range to read further.", TierRead,
 		func(ctx context.Context, in readFileInput) (any, error) {
 			return readFileExecute(ctx, in, opts, maxImageBytes)
 		})
@@ -224,7 +224,7 @@ type writeFileInput struct {
 	Content string `json:"content" jsonschema:"required,description=Full file content to write (overwrites)"`
 }
 
-var WriteFile = NewTool("write_file", "Create or overwrite a file with the given content. Parent directories are created automatically.", TierWrite,
+var WriteFile = NewTool("writeFile", "Create or overwrite a file with the given content. Parent directories are created automatically.", TierWrite,
 	func(ctx context.Context, in writeFileInput) (any, error) {
 		if in.Path == "" {
 			return nil, NewToolError("path is required")
@@ -282,7 +282,7 @@ func renderDirTree(entries []dirEntry) []string {
 	return lines
 }
 
-var ListDir = NewTool("list_dir", "List files and directories at a path.", TierRead,
+var ListDir = NewTool("listDir", "List files and directories at a path.", TierRead,
 	func(ctx context.Context, in listDirInput) (any, error) {
 		if in.Path == "" {
 			return nil, NewToolError("path is required")

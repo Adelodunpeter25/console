@@ -195,8 +195,8 @@ func countUserMessages(history []any) int {
 // Unparseable or empty argument payloads yield no paths, which simply means
 // the later recording step falls back to argument-only information.
 func writePaths(call tools.ToolCall) []string {
-	switch call.Name {
-	case "write_file", "batchWrite", "editFile":
+	switch tools.CanonicalName(call.Name) {
+	case "writeFile", "batchWrite", "editFile":
 	default:
 		return nil
 	}
@@ -428,7 +428,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			}
 		case "bashJob":
 			toolList = append(toolList, tools.NewBashJobTool(s.bashJobManager(), sessionID))
-		case "read_file":
+		case "readFile", "read_file":
 			toolList = append(toolList, tools.NewReadFileTool(s.ReadFileToolOptions(model, providerID, modelID, pins)))
 		default:
 			toolList = append(toolList, t)
@@ -627,7 +627,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			var defs []tools.Definition
 			for _, def := range registry.Definitions() {
 				switch def.Name {
-				case "code", "code_reset":
+				case "code", "codeReset", "code_reset":
 					defs = append(defs, def)
 				}
 			}

@@ -17,6 +17,7 @@ func TestWritePathsRecognisesEveryRegisteredWriteTool(t *testing.T) {
 		want []string
 	}{
 		{"write_file", `{"path":"/p/a.txt","content":"x"}`, []string{"/p/a.txt"}},
+		{"writeFile", `{"path":"/p/a.txt","content":"x"}`, []string{"/p/a.txt"}},
 		{"editFile", `{"path":"/p/b.txt","oldContent":"a","newContent":"b"}`, []string{"/p/b.txt"}},
 		{"batchWrite", `{"files":[{"path":"/p/c.txt","content":"x"},{"path":"/p/d.txt","content":"y"}]}`, []string{"/p/c.txt", "/p/d.txt"}},
 	} {
@@ -29,7 +30,7 @@ func TestWritePathsRecognisesEveryRegisteredWriteTool(t *testing.T) {
 
 // Anything that does not write files touches nothing, whatever its arguments say.
 func TestWritePathsIgnoresToolsThatDoNotWriteFiles(t *testing.T) {
-	for _, name := range []string{"read_file", "bash", "grep", "list_dir", "console", "writePlan", "memory", "browser"} {
+	for _, name := range []string{"readFile", "read_file", "bash", "grep", "listDir", "list_dir", "console", "writePlan", "memory", "browser"} {
 		if got := writePaths(tools.ToolCall{Name: name, Arguments: []byte(`{"path":"/p/a.txt","content":"x"}`)}); len(got) != 0 {
 			t.Errorf("%s: writePaths = %v, want none", name, got)
 		}

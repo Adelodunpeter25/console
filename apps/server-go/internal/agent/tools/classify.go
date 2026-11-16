@@ -32,10 +32,10 @@ const (
 
 // builtinLabel is the exact-match label for a built-in tool name.
 func builtinLabel(name string) string {
-	switch name {
-	case "read_file":
+	switch CanonicalName(name) {
+	case "readFile":
 		return "Read File"
-	case "write_file":
+	case "writeFile":
 		return "Write File"
 	case "batchWrite":
 		return "Batch Write"
@@ -49,7 +49,7 @@ func builtinLabel(name string) string {
 		return "Search Code"
 	case "glob":
 		return "Find Files"
-	case "list_dir":
+	case "listDir":
 		return "List Directory"
 	case "webFetch":
 		return "Fetch URL"
@@ -57,7 +57,7 @@ func builtinLabel(name string) string {
 		return "Web Search"
 	case "browser":
 		return "Browser"
-	case "browser_reset":
+	case "browserReset":
 		return "Reset Browser"
 	case "visualize":
 		return "Visualize"
@@ -71,7 +71,7 @@ func builtinLabel(name string) string {
 		return "Todo"
 	case "memory":
 		return "Memory"
-	case "read_chat":
+	case "readChat":
 		return "Read Chat"
 	case "readSkill":
 		return "Read Skill"
@@ -79,11 +79,11 @@ func builtinLabel(name string) string {
 		return "Load Tools"
 	case "console":
 		return "Console"
-	case "console_reset":
+	case "consoleReset":
 		return "Reset Console"
 	case "computer":
 		return "Computer"
-	case "computer_reset":
+	case "computerReset":
 		return "Reset Computer"
 	case "writePlan":
 		return "Write Plan"
@@ -91,7 +91,7 @@ func builtinLabel(name string) string {
 		return "Request Full Access"
 	case "code":
 		return "Code"
-	case "code_reset":
+	case "codeReset":
 		return "Reset Code"
 	default:
 		return ""
@@ -213,7 +213,7 @@ func ToolCallLabel(name string, arguments json.RawMessage) string {
 
 // IsEditFile reports a file edit whose arguments carry oldContent/newContent.
 func IsEditFile(name string) bool {
-	switch name {
+	switch CanonicalName(name) {
 	case "editFile":
 		return true
 	}
@@ -222,8 +222,8 @@ func IsEditFile(name string) bool {
 
 // IsWriteFile reports a whole-file write: only the new content is known.
 func IsWriteFile(name string) bool {
-	switch name {
-	case "write_file", "batchWrite":
+	switch CanonicalName(name) {
+	case "writeFile", "batchWrite":
 		return true
 	}
 	return false
@@ -231,8 +231,8 @@ func IsWriteFile(name string) bool {
 
 // IsReadFile reports a call that reads file content into its result.
 func IsReadFile(name string) bool {
-	switch name {
-	case "read_file":
+	switch CanonicalName(name) {
+	case "readFile":
 		return true
 	}
 	return false
@@ -248,7 +248,7 @@ func IsFileTargetTool(name string) bool {
 
 // IsSubagent reports a subagent call, whose result is prose meant to be
 // read as markdown.
-func IsSubagent(name string) bool { return name == "subagent" }
+func IsSubagent(name string) bool { return CanonicalName(name) == "subagent" }
 
 // ToolIconKey is the icon key from the server's activity-icon table
 // (sparkle, terminal, pencil, file, folder, search, globe, chart, list,
@@ -257,35 +257,35 @@ func ToolIconKey(name string) string {
 	if _, _, ok := ParseMCPToolName(name); ok {
 		return "package"
 	}
-	switch name {
+	switch CanonicalName(name) {
 	case "bash", "bashJob":
 		return "terminal"
-	case "editFile", "write_file", "batchWrite", "requestFullAccess":
+	case "editFile", "writeFile", "batchWrite", "requestFullAccess":
 		return "pencil"
-	case "read_file":
+	case "readFile":
 		return "file"
-	case "list_dir":
+	case "listDir":
 		return "folder"
 	case "grep", "glob":
 		return "search"
-	case "webSearch", "webFetch", "browser", "browser_reset":
+	case "webSearch", "webFetch", "browser", "browserReset":
 		return "globe"
 	case "visualize":
 		return "chart"
 	case "todo":
 		return "list"
-	case "memory", "read_chat":
+	case "memory", "readChat":
 		// Cross-session recall: reading another chat is the same kind
 		// of act as recalling a stored memory.
 		return "memory"
 	case "loadTools":
 		return "package"
-	case "console", "console_reset":
+	case "console", "consoleReset":
 		// A script that drives the app: the terminal glyph, like bash.
 		return "terminal"
-	case "computer", "computer_reset":
+	case "computer", "computerReset":
 		return "globe"
-	case "code", "code_reset":
+	case "code", "codeReset":
 		return "code"
 	case "writePlan":
 		return "file"
