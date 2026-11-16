@@ -33,6 +33,9 @@ impl ConsoleDesktopApp {
         self.active_pane_id = Some(pane_id);
         self.persist_workspaces();
 
+        self.changes_review_data
+            .entry(tab_id.clone())
+            .or_insert_with(|| std::rc::Rc::new(Vec::new()));
         self.fetch_changes_review_data(&tab_id, session_id, cx);
         cx.notify();
     }

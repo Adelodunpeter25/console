@@ -548,6 +548,13 @@ impl ConsoleDesktopApp {
 
     /// Files tab: the project's file tree; selecting a file opens it as a tab.
     fn render_file_tree_tab(&mut self, tab_id: String, cx: &mut Context<Self>) -> gpui::AnyElement {
+        // A tab restored from disk has no tree yet; load it once. The fetch
+        // fills every open Files tab's entry.
+        if !self.file_tree_data.contains_key(&tab_id) {
+            self.file_tree_data
+                .insert(tab_id.clone(), self.file_tree_nodes.clone());
+            self.refresh_file_tree(cx);
+        }
         let tree = self
             .file_tree_data
             .get(&tab_id)
@@ -598,6 +605,12 @@ impl ConsoleDesktopApp {
         tab_id: String,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        // A tab restored from disk has no data yet; fetch it once.
+        if !self.changes_review_data.contains_key(&tab_id) {
+            self.changes_review_data
+                .insert(tab_id.clone(), Rc::new(Vec::new()));
+            self.fetch_changes_review_data(&tab_id, session_id.clone(), cx);
+        }
         let changes = self
             .changes_review_data
             .get(&tab_id)
