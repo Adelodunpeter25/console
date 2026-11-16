@@ -382,10 +382,19 @@ func globalExportEpilogue(code string) string {
 	return "\n" + strings.Join(exports, "\n") + "\n"
 }
 
+// replDeclRegex matches column-0 const/let declarations. In a REPL each
+// evaluation shares one global scope, so `const content = ...` on two turns
+// would throw "Identifier has already been declared"; var rebinds instead.
+var replDeclRegex = regexp.MustCompile(`(?m)^(const|let)\s+`)
+
+func relaxTopLevelDecls(code string) string {
+	return replDeclRegex.ReplaceAllString(code, "var ")
+}
+
 // wrapTopLevelAwait compiles code directly as a script, or wraps top-level
 // await in an async IIFE if top-level await is encountered.
 func wrapTopLevelAwait(code string) (*moejs.Script, error) {
-	s, err := moejs.CompileScript("eval.js", code)
+	s, err := moejs.CompileScript("eval.js", relaxTopLevelDecls(code))
 	if err == nil {
 		return s, nil
 	}

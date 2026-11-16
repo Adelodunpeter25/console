@@ -209,3 +209,28 @@ func TestKernelAsyncVariablePersistence(t *testing.T) {
 		t.Fatalf("expected %s, got %#v", expected, res)
 	}
 }
+
+func TestKernelRedeclaringConstAcrossEvals(t *testing.T) {
+	kernel, err := New(Options{Root: "test"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, code := range []string{
+		"const content = 'first';\ncontent;",
+		"const content = 'second';\ncontent;",
+		"let lines = [1, 2];\nlines.length;",
+		"let lines = [1, 2, 3];\nlines.length;",
+	} {
+		if _, err := kernel.Eval(context.Background(), code, time.Second); err != nil {
+			t.Fatalf("eval %d (%q) failed: %v", i, code, err)
+		}
+	}
+	res, err := kernel.Eval(context.Background(), "content;", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := res.([]map[string]any)
+	if len(parts) == 0 || parts[0]["text"] != `"second"` {
+		t.Fatalf("expected latest binding to persist, got %#v", res)
+	}
+}
