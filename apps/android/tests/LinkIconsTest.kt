@@ -5,6 +5,8 @@ import com.console.mobile.core.util.BARE_FILE_PATH_REGEX
 import com.console.mobile.core.util.FILE_LINK_PREFIX
 import com.console.mobile.core.util.closestMatch
 import com.console.mobile.core.util.isBareFileName
+import com.console.mobile.core.util.parseLineSuffix
+import com.console.mobile.core.util.withLineSuffix
 import com.console.mobile.core.util.isBareFilePathMatch
 import com.console.mobile.core.util.faviconHostOrNull
 import com.console.mobile.core.util.fileLinkTarget
@@ -134,5 +136,13 @@ class LinkIconsTest {
         assertEquals("/p/a/x/main.rs", closestMatch("/p/a/x", c))
         assertEquals(true, isBareFileName("main.rs:3"))
         assertEquals(false, isBareFileName("src/main.rs"))
+    }
+
+    @Test
+    fun lineSuffixSurvivesTheLink() {
+        assertEquals(12, parseLineSuffix("src/lib.rs:12:3"))
+        assertEquals(null, parseLineSuffix("src/lib.rs"))
+        assertEquals("/a/b.rs:4:2", withLineSuffix("/a/b.rs", "file:///a/b.rs:4:2"))
+        assertEquals("src/lib.rs", resolveFilePath("src/lib.rs:12", null))
     }
 }

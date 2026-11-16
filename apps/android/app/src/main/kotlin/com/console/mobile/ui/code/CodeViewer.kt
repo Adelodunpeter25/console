@@ -167,6 +167,15 @@ class ConsoleLanguage(
     }
 }
 
+/** Jump once per (text, line): `update` runs on every recomposition and must not fight the user's scrolling. */
+private fun scrollToLine(editor: CodeEditor, code: String, line: Int?) {
+    if (line == null) return
+    val key = code.hashCode() to line
+    if (editor.tag == key) return
+    editor.tag = key
+    editor.post { editor.jumpToLine((line - 1).coerceIn(0, (editor.lineCount - 1).coerceAtLeast(0))) }
+}
+
 @Composable
 fun CodeViewer(
     code: String,
@@ -178,6 +187,8 @@ fun CodeViewer(
     removeLines: Set<Int> = emptySet(),
     /** What the viewer sits on, so the pinned line-number gutter blends in. */
     gutterColor: androidx.compose.ui.graphics.Color = NewTheme.Background,
+    /** 1-based line to scroll to once the text is in. */
+    jumpToLine: Int? = null,
 ) {
     val colorScheme = remember(gutterColor) { ConsoleColorScheme(gutterColor) }
     val soraLanguage = remember(language, addLines, removeLines) {
@@ -216,12 +227,14 @@ fun CodeViewer(
                 setScrollBarEnabled(true)
                 tabWidth = 4
                 setText(code)
+                scrollToLine(this, code, jumpToLine)
             }
         },
         update = { editor ->
             if (editor.editorLanguage !== soraLanguage) editor.setEditorLanguage(soraLanguage)
             if (editor.isLineNumberEnabled != showLineNumbers) editor.isLineNumberEnabled = showLineNumbers
             if (editor.text.toString() != code) editor.setText(code)
+            scrollToLine(editor, code, jumpToLine)
         },
         onRelease = { it.release() },
     )

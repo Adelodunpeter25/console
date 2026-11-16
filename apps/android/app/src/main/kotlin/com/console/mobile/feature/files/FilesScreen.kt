@@ -55,6 +55,7 @@ import com.console.mobile.core.util.gitRoleColor
 import com.console.mobile.data.model.getFilePreviewBlock
 import com.console.mobile.core.util.closestMatch
 import com.console.mobile.core.util.isBareFileName
+import com.console.mobile.core.util.parseLineSuffix
 import com.console.mobile.core.util.resolveFilePath
 import com.console.mobile.core.util.stripLineSuffix
 import com.console.mobile.data.model.isMarkdownPath
@@ -116,6 +117,7 @@ fun FilesScreen(onBack: () -> Unit) {
     var selectedPath by remember { mutableStateOf<String?>(null) }
     // True while the open file came from a chat link rather than the tree.
     var openedFromLink by remember { mutableStateOf(false) }
+    var targetLine by remember { mutableStateOf<Int?>(null) }
     // System back follows where you came from; the header arrow always shows the tree.
     BackHandler(enabled = selectedPath != null) {
         when (previewBackAction(openedFromLink)) {
@@ -191,8 +193,9 @@ fun FilesScreen(onBack: () -> Unit) {
         }
     }
 
-    fun selectFile(path: String, size: Long?, fromLink: Boolean = false) {
+    fun selectFile(path: String, size: Long?, fromLink: Boolean = false, line: Int? = null) {
         openedFromLink = fromLink
+        targetLine = line
         selectedPath = path
         selectedSize = size
         fileContent = null
@@ -224,16 +227,20 @@ fun FilesScreen(onBack: () -> Unit) {
     LaunchedEffect(pendingFile, projectRoot) {
         if (pendingFile == null || projectRoot == null) return@LaunchedEffect
         AppContainer.appStateHolder.consumePendingFile()
-        var target = resolveFilePath(pendingFile, projectRoot)
+        // Relative paths are the agent's, so they resolve from where it ran (a
+        // worktree chat's cwd is not the project folder), like desktop.
+        val cwd = appState.selectedSessionId?.let { AppContainer.sessionStateHolder.views.value[it]?.sessionCwd }?.takeIf { it.isNotBlank() }
+        val line = parseLineSuffix(pendingFile)
+        var target = resolveFilePath(pendingFile, cwd ?: projectRoot)
         // A bare name only resolves when the file sits in the project root, so look it up.
         if (isBareFileName(pendingFile) && !pendingFile.startsWith("~")) {
             val name = stripLineSuffix(pendingFile.trim())
             val found = runCatching { AppContainer.fsRepository.searchFiles(projectRoot, name, 20, false) }.getOrDefault(emptyList())
                 .filter { !it.is_dir && it.absolute_path.substringAfterLast('/').equals(name, ignoreCase = true) }
                 .map { it.absolute_path }
-            if (target !in found) closestMatch(projectRoot, found)?.let { target = it }
+            if (target !in found) closestMatch(cwd ?: projectRoot, found)?.let { target = it }
         }
-        selectFile(target, null, fromLink = true)
+        selectFile(target, null, fromLink = true, line = line)
     }
 
     // File preview view.
@@ -313,7 +320,7 @@ fun FilesScreen(onBack: () -> Unit) {
                             // The code viewer scrolls itself and cannot pad its
                             // own content, so it starts below the header.
                             Box(modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight)) {
-                                CodePreview(content = content, path = sel)
+                                CodePreview(content = content, path = sel, line = targetLine)
                             }
                         }
                     }
@@ -510,7 +517,7 @@ private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expa
 }
 
 @Composable
-private fun CodePreview(content: String, path: String?) {
+private fun CodePreview(content: String, path: String?, line: Int?) {
     // Cap render size; Sora virtualizes so 2k+ line files stay smooth.
     val capped = if (content.length > 200_000) content.take(200_000) + "\n…(truncated)" else content
     val language = remember(path) { languageForPath(path) }
@@ -521,6 +528,7 @@ private fun CodePreview(content: String, path: String?) {
         showLineNumbers = true,
         // The screen is pure black, so the pinned gutter has to be too.
         gutterColor = NewTheme.Black,
+        jumpToLine = line,
     )
 }
 

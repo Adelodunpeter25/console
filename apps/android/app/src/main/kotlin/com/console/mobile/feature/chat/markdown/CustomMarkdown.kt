@@ -71,6 +71,8 @@ import com.console.mobile.core.util.BARE_FILE_PATH_REGEX
 import com.console.mobile.core.util.BARE_FILE_URL_REGEX
 import com.console.mobile.core.util.PageTitles
 import com.console.mobile.core.util.isBareFilePathMatch
+import com.console.mobile.core.util.stripLineSuffix
+import com.console.mobile.core.util.withLineSuffix
 import com.console.mobile.core.util.bareWebUrls
 import com.console.mobile.core.util.faviconHostOrNull
 import com.console.mobile.core.util.fileLinkTarget
@@ -539,10 +541,10 @@ private inline fun AnnotatedString.Builder.link(url: String, block: () -> Unit) 
     // File paths get their file-type icon and open in the Files tab; web
     // links get the site favicon.
     val host = faviconHostOrNull(url)
-    val path = if (host == null) fileLinkTarget(url) else null
+    val path = if (host == null) fileLinkTarget(url)?.let { withLineSuffix(it, url) } else null
     when {
         host != null -> appendIcon("favicon", host)
-        path != null -> appendIcon("file", path)
+        path != null -> appendIcon("file", stripLineSuffix(path))
     }
     pushLink(LinkAnnotation.Url(if (path != null) FILE_LINK_PREFIX + path else url, LINK_STYLES)); block(); pop()
 }
@@ -560,12 +562,13 @@ private fun AnnotatedString.Builder.appendInline(nodes: List<ASTNode>, src: Stri
         GFMElementTypes.STRIKETHROUGH -> styled(STRIKE_SPAN) { appendInline(withoutMarkers(n.children), src, refs, linked) }
         MarkdownElementTypes.CODE_SPAN -> {
             val code = n.children.filter { it.type != MarkdownTokenTypes.BACKTICK }
-            val path = if (linked) null else filePathOrNull(code.joinToString("") { it.text(src) })
+            val codeText = code.joinToString("") { it.text(src) }
+            val path = if (linked) null else filePathOrNull(codeText)?.let { withLineSuffix(it, codeText) }
             if (path == null) {
                 styled(CODE_SPAN) { code.forEach { append(src, it.startOffset, it.endOffset) } }
             } else {
                 // A path in backticks: icon, then a tappable code chip that opens the file.
-                appendIcon("file", path)
+                appendIcon("file", stripLineSuffix(path))
                 pushLink(LinkAnnotation.Url(FILE_LINK_PREFIX + path, LINK_STYLES))
                 styled(CODE_SPAN) { code.forEach { append(src, it.startOffset, it.endOffset) } }
                 pop()
@@ -695,14 +698,14 @@ private fun AnnotatedString.Builder.appendFileLinkified(src: String, start: Int,
     val text = src.substring(start, end)
     var cursor = 0
     fun filePath(target: String, shown: String) {
-        appendIcon("file", target)
+        appendIcon("file", stripLineSuffix(target))
         pushLink(LinkAnnotation.Url(FILE_LINK_PREFIX + target, LINK_STYLES))
         styled(CODE_SPAN) { append(shown) }
         pop()
     }
     for (m in BARE_FILE_URL_REGEX.findAll(text)) {
         val shown = trimmedBareUrl(m.value)
-        val target = fileLinkTarget(shown)
+        val target = fileLinkTarget(shown)?.let { withLineSuffix(it, shown) }
         if (shown.isEmpty() || target == null || m.range.first < cursor) continue
         appendFilePaths(text, cursor, m.range.first, ::filePath)
         filePath(target, shown)

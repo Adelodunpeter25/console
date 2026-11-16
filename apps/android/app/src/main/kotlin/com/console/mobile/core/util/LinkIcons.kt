@@ -63,6 +63,14 @@ fun closestMatch(cwd: String?, candidates: List<String>): String? {
     )
 }
 
+/** `foo.kt:12:3` -> 12; null without a suffix. */
+fun parseLineSuffix(path: String): Int? =
+    LINE_SUFFIX.find(path.trim())?.value?.trimStart(':')?.substringBefore(':')?.toIntOrNull()?.takeIf { it > 0 }
+
+/** [target] with the `:line:col` suffix [source] carried, so a link keeps where it pointed. */
+fun withLineSuffix(target: String, source: String): String =
+    target + (LINE_SUFFIX.find(source.trim().substringBefore('#'))?.value ?: "")
+
 /** `foo.kt:12:3` -> `foo.kt`. */
 fun stripLineSuffix(path: String): String = path.replace(LINE_SUFFIX, "")
 
