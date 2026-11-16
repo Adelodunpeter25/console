@@ -4,9 +4,11 @@ package routes
 import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/accounts"
@@ -59,6 +61,18 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	})
 	app.Use(recover.New())
 
+	app.Use(compress.New(compress.Config{
+		Next: func(c *fiber.Ctx) bool {
+			// SSE uses SetBodyStreamWriter; the Next hook runs before handlers
+			// set Content-Type, so exclude streams by path instead. /run is a
+			// POST so plain paths stay compressible.
+			path := c.Path()
+			return strings.HasSuffix(path, "/stream") ||
+				strings.HasSuffix(path, "/watch") ||
+				(c.Method() == fiber.MethodPost && strings.HasSuffix(path, "/run"))
+		},
+	}))
+
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
@@ -76,7 +90,8 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	app.Use(RequireDeviceToken(authManager))
 
 	RegisterFavoriteRoutes(app, services.NewFavoriteService(cfg.DB))
-	RegisterDraftRoutes(app, services.NewDraftService(cfg.DB))
+	draftService := services.NewDraftService(cfg.DB)
+	RegisterDraftRoutes(app, draftService)
 	RegisterFileCommentRoutes(app, services.NewFileCommentService(cfg.DB))
 	RegisterPortRoutes(app, cfg.Ports)
 	RegisterSettingsRoutes(app, services.NewSettingsService())
@@ -122,7 +137,9 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	runSvc.SetMCP(mcpManager)
 	go mcpManager.AutoConnect()
 	registerMCPRoutes(app, mcpManager)
-	RegisterSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
+	sessionService := services.NewSessionService(cfg.DB)
+	RegisterSessionRoutes(app, sessionService, runSvc)
+	RegisterBootstrapRoutes(app, sessionService, runSvc, draftService)
 	RegisterWorktreeLaunchRoutes(app, services.NewSessionService(cfg.DB), runSvc)
 	registerWorktreeRoutes(app, services.NewSessionService(cfg.DB), git.NewWorktreeService())
 	// The provider account store backs multi-account support. Configure
