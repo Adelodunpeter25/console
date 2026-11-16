@@ -473,15 +473,39 @@ class SessionRepository(
     suspend fun loadDetail(sessionId: String, limit: Int = FIRST_PAGE): SessionHeader? {
         return try {
             val detail: SessionDetailResponse = withContext(Dispatchers.IO) { api.getSession(sessionId, limit, null) }
-            applyHeader(sessionId, detail.header)
-            chatRepo.loadMessages(sessionId, detail.messages)
-            chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
+            applyDetail(sessionId, detail)
             chatRepo.loadQueuedPrompt(sessionId)
             detail.header
         } catch (e: Exception) {
             android.util.Log.w("SessionRepository", "loadDetail($sessionId) failed; chat keeps empty state", e)
             null
         }
+    }
+
+    /**
+     * Opening a chat in one request: the newest page plus the draft, tasks,
+     * follow-ups, queue, background shells and file changes. Returns null when
+     * it could not be done, so the caller falls back to [loadDetail] and the
+     * individual loaders. A server that predates the endpoint answers 404; any
+     * other failure also falls back rather than leaving the chat empty.
+     */
+    suspend fun loadBootstrap(sessionId: String): SessionHeader? {
+        return try {
+            val b = withContext(Dispatchers.IO) { api.getSessionBootstrap(sessionId) }
+            applyDetail(sessionId, b.detail)
+            chatRepo.applyBootstrap(sessionId, b)
+            sessions.setSessionChanges(sessionId, b.changes)
+            b.detail.header
+        } catch (e: Exception) {
+            android.util.Log.w("SessionRepository", "loadBootstrap($sessionId) failed; falling back", e)
+            null
+        }
+    }
+
+    private fun applyDetail(sessionId: String, detail: SessionDetailResponse) {
+        applyHeader(sessionId, detail.header)
+        chatRepo.loadMessages(sessionId, detail.messages)
+        chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
     }
 
     /**

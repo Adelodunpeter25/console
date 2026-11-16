@@ -7,6 +7,7 @@ import com.console.mobile.data.model.toUi
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.BackgroundWorkOutput
+import com.console.mobile.data.model.SessionBootstrapResponse
 import console.v1.AuthStatusResponse
 import console.v1.OAuthLoginUrlResponse
 import console.v1.SessionSettleResponse
@@ -164,6 +165,10 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         // Envelope stays kotlinx; header and messages decode through the
         // shared schema, scalars read field by field.
         val obj = http.unwrap(raw, JsonObject.serializer(), "load session")
+        return decodeSessionDetail(obj)
+    }
+
+    private fun decodeSessionDetail(obj: JsonObject): SessionDetailResponse {
         val header = obj["header"]?.let { sessionAdapter.fromJson(it.toString()) }
             ?: throw ApiException("Failed to load session")
         // Rows are the canonical oneof shape; unparseable rows are skipped.
@@ -175,6 +180,24 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             messages = messages,
             hasMore = obj["hasMore"]?.jsonPrimitive?.booleanOrNull ?: false,
             nextCursor = obj["nextCursor"]?.jsonPrimitive?.longOrNull,
+        )
+    }
+
+    override suspend fun getSessionBootstrap(id: String): SessionBootstrapResponse {
+        val raw = http.get("/api/sessions/${enc(id)}/bootstrap")
+        val obj = http.unwrap(raw, JsonObject.serializer(), "load session bootstrap")
+        fun <T : Any> list(key: String, decode: (JsonElement) -> T?): List<T> =
+            (obj[key] as? JsonArray)?.mapNotNull { decode(it) } ?: emptyList()
+        return SessionBootstrapResponse(
+            detail = decodeSessionDetail(obj),
+            changes = list("changes") { sessionChangeAdapter.fromJson(it.toString()) },
+            todos = list("todos") { todoAdapter.fromJson(it.toString()) },
+            suggestions = list("suggestions") { it.jsonPrimitive.content },
+            queuedPrompts = list("queuedPrompts") { queuedPromptAdapter.fromJson(it.toString()) },
+            backgroundWork = list("backgroundWork") {
+                runCatching { ConsoleJson.decodeFromJsonElement(BackgroundWork.serializer(), it) }.getOrNull()
+            },
+            draft = obj["draft"]?.takeIf { it !is JsonNull }?.let { chatDraftAdapter.fromJson(it.toString()) },
         )
     }
 
