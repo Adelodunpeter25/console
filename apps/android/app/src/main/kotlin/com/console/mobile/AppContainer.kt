@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 
 object AppContainer {
@@ -210,6 +211,9 @@ object AppContainer {
         appContext = app
 
         httpCallClient = OkHttpClient.Builder()
+            // REST, SSE, terminal WS and port tunnels share this pool; the
+            // default 5 idle connections churn when a run fans out requests.
+            .connectionPool(ConnectionPool(16, 5, TimeUnit.MINUTES))
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
