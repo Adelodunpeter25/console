@@ -11,6 +11,6 @@ Plan for Kotlin coroutines, state management, Compose performance, and memory op
 - [x] **Task 5: Make `ScrollMemory` Thread-Safe** (`core/util/ScrollMemory.kt`)
 - [x] **Task 6: Optimize Date & Time Formatting** (`core/util/Time.kt`)
 - [x] **Task 7: Prevent Coroutine Cancellation Swallowing** (`core/forward/LocalForwardManager.kt`, `core/notification/NotificationCoordinator.kt`)
-- [ ] **Task 8: Optimize Keystroke Trigger & Duration Formatting** (`core/util/ComposerAutocomplete.kt`, `core/util/Format.kt`)
+- [x] **Task 8: Optimize Keystroke Trigger & Duration Formatting** (`core/util/ComposerAutocomplete.kt`, `core/util/Format.kt`)
 - [ ] **Task 9: Eliminate $O(N^2)$ List Growth in `reconstructRuns`** (`core/chat/ReconstructRuns.kt`)
 - [ ] **Task 10: Memoize Markdown Block Parsing** (`feature/chat/markdown/CustomMarkdown.kt`)

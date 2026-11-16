@@ -18,8 +18,10 @@ fun isDraftSession(state: ChatSessionState): Boolean =
 
 fun hasPersistableDraft(state: ChatSessionState): Boolean = isDraftSession(state)
 
+private val WHITESPACE_REGEX = Regex("\\s+")
+
 fun draftPreview(state: ChatSessionState, maxLen: Int = 48): String {
-    val text = state.input.trim().replace("\\s+".toRegex(), " ")
+    val text = state.input.trim().replace(WHITESPACE_REGEX, " ")
     if (text.isNotEmpty()) {
         return if (text.length > maxLen) "Draft: ${text.take(maxLen)}…" else "Draft: $text"
     }

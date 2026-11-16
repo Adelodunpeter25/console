@@ -22,8 +22,8 @@ fun formatDurationMs(ms: Long): String {
     val seconds = maxOf(0L, Math.round(ms / 1000.0))
     if (seconds < 60) return "${seconds}s"
     val minutes = seconds / 60
-    return "$minutes m ${(seconds % 60).toString().padStart(2, '0')}s".replace(" ", "")
-        .let { "${minutes}m ${(seconds % 60).toString().padStart(2, '0')}s" }
+    val secs = (seconds % 60).toString().padStart(2, '0')
+    return "${minutes}m ${secs}s"
 }
 
 /** Footer label for the server-computed output rate, e.g. "42.1 tok/s".
