@@ -1,6 +1,6 @@
 # Remote transport optimization — before QUIC
 
-Status: **in progress** (2026-11-16). Items 1, 2 and the connection-pool part of 5 are in scope for the first pass; the rest are sequenced but not scheduled.
+Status: **in progress** (2026-11-16). Items 1, 2 and the connection-pool part of 5 are **implemented**; the rest are sequenced but not scheduled.
 
 ## Context
 
@@ -24,18 +24,20 @@ An agent run is dominated by provider token latency, so transport work mostly af
 
 ## Work items
 
-### 1. gzip on the API — [planned]
+### 1. gzip on the API — [implemented]
 
-- Add `github.com/gofiber/compression` to the Fiber app, excluding `text/event-stream` (SSE + gzip buffering do not mix; WebSocket upgrades are unaffected).
-- Add the `gzip` feature to the desktop's reqwest dependency. Android's OkHttp already sends `Accept-Encoding: gzip` and decompresses transparently, so it needs no client change.
+- fiber v2 ships the middleware in-tree as `github.com/gofiber/fiber/v2/middleware/compress` — no new module dependency. Installed in `routes.New` just after `recover.New()`.
+- SSE is excluded **by path** (`/stream`, `/watch`, and POST `/run`), not by response `Content-Type`: the middleware's `Next` hook runs before handlers set headers, so a content-type check would miss every stream. WebSocket upgrades are unaffected.
+- The desktop's reqwest dependency now enables the `gzip` feature. Android's OkHttp already sends `Accept-Encoding: gzip` and decompresses transparently, so it needed no client change.
 - No wire or schema change. Expect the largest reduction on text-heavy transcripts (base64'd tool output compresses well; already-compressed image bytes do not).
 
-### 2. Session bootstrap endpoint — [planned]
+### 2. Session bootstrap endpoint — [implemented]
 
-- Add `GET /api/sessions/:id/bootstrap` returning, in one response: session header + first 50 messages (same shape as `GET /api/sessions/:id`), changes-without-diff, todos, suggestions, queued prompts, background work, and the draft.
-- Reuse the existing service calls; do not reimplement any query logic in the new handler.
-- Keep every existing endpoint intact — this is additive. Clients switch to the single call; older clients keep working.
-- Desktop wires this into `load_session_messages_for_pane` and feeds the existing state setters from the combined result, preserving the stale-response guards (pane/session switch check) already in place.
+- `GET /api/sessions/:id/bootstrap` returns, in one response: session header + first 50 messages (same shape as `GET /api/sessions/:id`), changes-without-diff, todos, suggestions, queued prompts, background work, and the draft. All keys are always present; an absent draft is a literal JSON `null`.
+- The handler reuses the existing service methods and proto helpers; no query logic was duplicated. The stale-run status settle from `GET /:id` is mirrored.
+- Every existing endpoint is intact — this is additive, so older clients keep working.
+- Desktop `load_session_messages_for_pane` now makes one call and feeds the existing state setters from the combined result. `report_session_read` still runs up front; the separate draft poll and the todo/suggestion/queue/background fetches are gone. The stale-response guard (pane/session switch check) covers all bootstrap-fed updates.
+- The response type uses `#[serde(flatten)]` over `SessionDetailResponse`. A permanent decode test (`tests/session/bootstrap_dto_test.rs`) pins both the flattened fields and the custom message deserializer.
 
 ### 3. Lazy-load images — [not scheduled]
 
@@ -47,7 +49,7 @@ All three clients already generate binary protobuf types (prost, Wire, protoc-ge
 
 ### 5. Smaller items
 
-- **OkHttp connection pool — [planned]**: the default max idle connections is 5, which is low for REST + SSE + terminal WS + port tunnels. Raise it in `AppContainer`. reqwest's pool is fine.
+- **OkHttp connection pool — [implemented]**: `AppContainer` now configures `ConnectionPool(16, 5, TimeUnit.MINUTES)` on the shared builder, so both the unary and streaming clients inherit it. The default max idle of 5 was low for REST + SSE + terminal WS + port tunnels. reqwest's pool is fine.
 - **Skip iroh locally — [not scheduled]**: when the paired server is on the same machine, use `http://localhost:3000` directly instead of a node-ID tunnel. Cosmetic, since local is already fast.
 - **Cache static responses — [not scheduled]**: provider catalog/models already use stale-while-revalidate; check settings, favorites and session list for unnecessary refetches on pane switches.
 
@@ -59,8 +61,20 @@ The only recorded number is the tunnel p50/p95 on localhost, which measures tunn
 
 Revisit native QUIC streams only if items 1–5 are shipped and measured and a gap remains. If so, the shape to use is **iroh for identity/encryption/NAT, native iroh bidirectional streams for the app transport**, reusing the old `wt.proto` framing — not a resurrection of the deleted HTTP/3 + TLS + cert-pinning stack. Keep side-effecting control ops on unary REST in any race-based rollout.
 
+## Shipped in the first pass
+
+| Change | Verification |
+|---|---|
+| gzip: Fiber middleware + reqwest `gzip` feature | `go build ./...` and `cargo check --manifest-path apps/desktop/Cargo.toml` |
+| Bootstrap endpoint (server) | `go test ./tests/api/ -run TestSessionBootstrapRoute -v` |
+| Bootstrap client + single-call session open (desktop) | `cargo test -p console-core --test bootstrap_dto_test` (2 tests) |
+| OkHttp pool of 16 idle / 5 min | `./gradlew :app:assembleDebug` |
+
+No wire schema changed and no endpoint was removed. The next gate is item 6 — measure against a real remote server before deciding whether any QUIC work is warranted.
+
 ## Verification
 
 - Go: `cd apps/server-go && go test ./tests/api/ -run <TestName> -v`, plus `go build ./...`
-- Desktop: `cargo check --locked --manifest-path apps/desktop/Cargo.toml`
+- Desktop: `cargo check --manifest-path apps/desktop/Cargo.toml` (also `--locked` once the lockfile is committed)
+- Desktop contract test: `cargo test --manifest-path apps/desktop/Cargo.toml -p console-core --test bootstrap_dto_test`
 - Android: `cd apps/android && ./gradlew :app:assembleDebug`
