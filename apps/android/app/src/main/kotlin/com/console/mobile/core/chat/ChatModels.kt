@@ -33,6 +33,22 @@ data class RunActivityState(
     val elapsedMs: Long = 0,
     val events: List<ActivityEvent> = emptyList(),
     val status: RunStatus = RunStatus.Completed,
+    // Set on a server wake turn (backgroundWorkContinue): the run renders
+    // under the same user message as the run before it, introduced by this
+    // divider label instead of a new prompt bubble.
+    val dividerLabel: String? = null,
+)
+
+/**
+ * One recorded wake turn for a session: when a `backgroundWorkContinue`
+ * frame arrived and what it said. Mirrors the desktop WakeRecord; kept so
+ * run boundaries can be rebuilt after history reloads.
+ */
+@Serializable
+data class WakeRecord(
+    val message: String,
+    /** Client receipt time, epoch millis. */
+    val at: Long,
 )
 
 data class ChatSessionState(
@@ -60,6 +76,9 @@ data class ChatSessionState(
     val hasMoreMessages: Boolean = false,
     val nextCursor: Long? = null,
     val loadingOlder: Boolean = false,
+    // Recorded backgroundWorkContinue frames; drives wake-run splitting in
+    // reconstructRuns after history reloads. Mirrors desktop wake_records.
+    val wakeRecords: List<WakeRecord> = emptyList(),
 )
 
 val EMPTY_CHAT_SESSION = ChatSessionState()

@@ -72,7 +72,7 @@ impl TranscriptView {
                         AgentMessage::Assistant { content, .. } => content
                             .iter()
                             .any(|part| matches!(part, AssistantContentPart::ToolCall { .. })),
-                        AgentMessage::User { .. } => false,
+                        AgentMessage::User { .. } | AgentMessage::RunBoundary { .. } => false,
                         AgentMessage::ToolResult { .. } => false,
                     })
             });

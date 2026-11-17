@@ -1708,15 +1708,31 @@ impl ConsoleDesktopApp {
                                     return;
                                 }
                                 this.apply_session_header_for_pane(&pane_id, &detail.header, cx);
-                                if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
-                                    state.loaded_session_id = Some(session_id.clone());
-                                }
                                 let composer = this.composer_for_pane(&pane_id);
                                 let transcript = this.transcript_for_pane(&pane_id);
                                 let running_started_at = this
                                     .is_session_running(&session_id)
                                     .then(|| this.running_sessions.get(&session_id).copied())
                                     .flatten();
+                                // A working session whose last user message is
+                                // followed by assistant/tool messages is a
+                                // live wake turn (the synthetic user message is
+                                // stripped from history). Infer a wake record so
+                                // run boundaries reconstruct and the resumed
+                                // timer seeds from the wake, not the prompt.
+                                if detail.header.status == "working"
+                                    && !this.wake_records.contains_key(&session_id)
+                                {
+                                    if let Some(at) = infer_wake_at(&detail.messages) {
+                                        this.wake_records.insert(
+                                            session_id.clone(),
+                                            vec![console_core::WakeRecord {
+                                                message: "Background work completed, continuing agent".to_string(),
+                                                at,
+                                            }],
+                                        );
+                                    }
+                                }
                                 composer.update(cx, |input, cx| {
                                     input.set_prompt_history(
                                         user_prompt_history(&detail.messages),
@@ -1725,6 +1741,13 @@ impl ConsoleDesktopApp {
                                 });
                                 let app_entity_for_older = entity.clone();
                                 transcript.update(cx, |t, cx| {
+                                    t.set_wake_records(
+                                        this.wake_records
+                                            .get(&session_id)
+                                            .cloned()
+                                            .unwrap_or_default(),
+                                        cx,
+                                    );
                                     t.set_session_changes(Rc::new(bootstrap.changes), cx);
                                     t.set_messages(detail.messages, cx);
                                     t.set_pagination(detail.has_more, detail.next_cursor);
@@ -1795,6 +1818,7 @@ impl ConsoleDesktopApp {
                                     this.attach_session_run_for_pane(
                                         pane_id.clone(),
                                         session_id.clone(),
+                                        None,
                                         cx,
                                     );
                                 }
@@ -1831,4 +1855,24 @@ impl ConsoleDesktopApp {
         })
         .detach();
     }
+}
+
+/// Earliest `created_at` (unix seconds) among messages that follow the last
+/// user message — i.e. output of a turn with no visible prompt, which on a
+/// `working` session means a server wake turn. Used to seed wake records when
+/// a session is opened mid-wake and the live `backgroundWorkContinue` frame
+/// was missed.
+fn infer_wake_at(messages: &[console_core::AgentMessage]) -> Option<i64> {
+    let last_user = messages
+        .iter()
+        .rposition(|m| matches!(m, console_core::AgentMessage::User { .. }))?;
+    messages[last_user + 1..]
+        .iter()
+        .filter_map(|m| match m {
+            console_core::AgentMessage::Assistant { created_at, .. }
+            | console_core::AgentMessage::ToolResult { created_at, .. } => *created_at,
+            _ => None,
+        })
+        .filter_map(console_ui::utils::time::normalize_unix_timestamp)
+        .min()
 }

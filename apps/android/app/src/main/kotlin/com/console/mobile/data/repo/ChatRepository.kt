@@ -15,6 +15,8 @@ import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.core.chat.mergeLiveHistory
 import com.console.mobile.core.chat.prependOlderMessages
 import com.console.mobile.core.chat.withLiveRun
+import com.console.mobile.core.chat.WakeRecord
+import com.console.mobile.core.chat.inferWakeAt
 import com.console.mobile.core.util.mentionPaths
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
@@ -401,7 +403,7 @@ class ChatRepository(
             // activity, which is re-paired with the latest prompt here.
             if (current.running) {
                 val merged = mergeLiveHistory(withIds, current.messages)
-                current.copy(messages = merged, runs = withLiveRun(merged, current.runs))
+                current.copy(messages = merged, runs = withLiveRun(merged, current.runs, wakeRecords = current.wakeRecords))
             } else {
                 current.copy(
                     messages = withIds,
@@ -409,7 +411,7 @@ class ChatRepository(
                     streamingThinking = "",
                     activeToolCalls = emptyList(),
                     pendingQuestions = emptyList(),
-                    runs = reconstructRuns(withIds),
+                    runs = reconstructRuns(withIds, current.wakeRecords),
                 )
             }
         }
@@ -765,8 +767,27 @@ class ChatRepository(
     fun attachServerRun(sessionId: String) {
         val current = chats.get(sessionId)
         if (current.running || controllers[sessionId]?.isActive == true) return
+        // A working session whose history continues past the last user
+        // message may be a live wake turn whose backgroundWorkContinue frame
+        // was missed; infer a record so run boundaries reconstruct and the
+        // timer seeds from the wake, not the original prompt.
+        val inferred = if (current.wakeRecords.isEmpty()) {
+            inferWakeAt(current.messages)?.let {
+                listOf(WakeRecord(message = "Background work completed, continuing agent", at = it))
+            }
+        } else {
+            null
+        }
         chats.update(sessionId) {
-            it.copy(running = true, runs = withLiveRun(it.messages, it.runs))
+            it.copy(
+                running = true,
+                wakeRecords = it.wakeRecords.ifEmpty { inferred.orEmpty() },
+                runs = withLiveRun(
+                    it.messages,
+                    it.runs,
+                    wakeRecords = it.wakeRecords.ifEmpty { inferred.orEmpty() },
+                ),
+            )
         }
         sessions.setStatus(sessionId, SessionStatus.Working)
         persistence?.setSuppress(true)

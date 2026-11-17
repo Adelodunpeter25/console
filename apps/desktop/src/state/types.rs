@@ -220,6 +220,10 @@ pub struct ConsoleDesktopApp {
     /// pane to a different chat never transfers the working indicator or
     /// streamed text.
     pub running_sessions: std::collections::HashMap<String, i64>,
+    /// Recorded `backgroundWorkContinue` frames per session. Drives wake-turn
+    /// run-boundary reconstruction after history reloads and the wake-time
+    /// timer seed on `resumed` re-attach. FIFO-capped per session.
+    pub wake_records: std::collections::HashMap<String, Vec<console_core::WakeRecord>>,
     /// Monotonic token per session incremented on each prompt submission.
     /// Ensures out-of-order or late settling calls cannot overwrite newer runs.
     pub session_run_tokens: std::collections::HashMap<String, u64>,

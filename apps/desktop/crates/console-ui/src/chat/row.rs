@@ -132,14 +132,15 @@ pub fn transcript_row(
                 .flex_col()
                 .gap(px(6.0))
                 .child(bubble)
-                .when_some(
-                    activity,
-                    move |element, (entries, started_at, elapsed, working)| {
+                .when_some(activity, |mut element, blocks| {
+                    for block in blocks {
                         // Visual artifacts render as their own item after the
                         // run block, so folding the run never hides the card.
-                        // Entries is consumed by `ToolCalls::new` below, so visual items must be collected first.
+                        // Events is consumed by `ToolCalls::new` below, so
+                        // visual items must be collected first.
                         #[expect(clippy::needless_collect)]
-                        let visuals: Vec<_> = entries
+                        let visuals: Vec<_> = block
+                            .events
                             .iter()
                             .filter_map(|event| match event {
                                 ActivityEvent::ToolCall(entry) => entry
@@ -151,35 +152,58 @@ pub fn transcript_row(
                             })
                             .collect();
                         let visual_selection = view_ref.selection.clone();
-                        let activity = ToolCalls::new(
-                            format!("run-{index}"),
-                            entries,
-                            working,
-                            started_at,
-                            elapsed,
-                            activity_state,
-                        )
-                        .cwd(view_ref.session_cwd.clone())
-                        .selection(view_ref.selection.clone())
-                        .link_handler(link_handler.clone())
-                        .on_action(move |action, window, cx| {
-                            if let Some(view) = activity_entity.upgrade() {
-                                view.update(cx, |view, cx| {
-                                    view.apply_tool_calls_action(action, window, cx);
-                                });
-                            }
-                        });
-                        element.child(activity).children(visuals.into_iter().map(
-                            |(call_id, visual)| {
+                        let run_id = block.run_id.clone();
+                        let mut segment = div()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .gap(px(6.0));
+                        if let Some(label) = block.divider_label {
+                            let theme = Theme::current(cx);
+                            segment = segment.child(
+                                div()
+                                    .px(px(10.0))
+                                    .py(px(5.0))
+                                    .text_size(px(11.5))
+                                    .text_color(theme.text_tertiary)
+                                    .child(label),
+                            );
+                        }
+                        segment = segment.child(
+                            ToolCalls::new(
+                                run_id,
+                                block.events,
+                                block.working,
+                                block.started_at,
+                                block.elapsed,
+                                activity_state.clone(),
+                            )
+                            .cwd(view_ref.session_cwd.clone())
+                            .selection(view_ref.selection.clone())
+                            .link_handler(link_handler.clone())
+                            .on_action({
+                                let activity_entity = activity_entity.clone();
+                                move |action, window, cx| {
+                                    if let Some(view) = activity_entity.upgrade() {
+                                        view.update(cx, |view, cx| {
+                                            view.apply_tool_calls_action(action, window, cx);
+                                        });
+                                    }
+                                }
+                            }),
+                        );
+                        element = element.child(segment).children(
+                            visuals.into_iter().map(|(call_id, visual)| {
                                 crate::chat::visual::VisualCard::new(
                                     call_id,
                                     visual,
                                     visual_selection.clone(),
                                 )
-                            },
-                        ))
-                    },
-                )
+                            }),
+                        );
+                    }
+                    element
+                })
                 .into_any_element()
         }
         AgentMessage::Assistant {
@@ -251,6 +275,9 @@ pub fn transcript_row(
         // Tool-result messages are persistence transport. Their results are
         // joined to the calls and rendered in the owning user's run activity.
         AgentMessage::ToolResult { .. } => div().into_any_element(),
+        // Client-side wake-turn marker: hidden like tool transport (the
+        // early return above keeps it zero-height), unreachable here.
+        AgentMessage::RunBoundary { .. } => div().into_any_element(),
     };
 
     div()
@@ -265,7 +292,7 @@ pub fn transcript_row(
 
 pub fn is_hidden_tool_transport(message: &AgentMessage) -> bool {
     match message {
-        AgentMessage::ToolResult { .. } => true,
+        AgentMessage::ToolResult { .. } | AgentMessage::RunBoundary { .. } => true,
         AgentMessage::Assistant { content, .. } => content
             .iter()
             .any(|part| matches!(part, AssistantContentPart::ToolCall { .. })),

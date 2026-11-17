@@ -152,7 +152,6 @@ impl TranscriptView {
         self.markdown_cache
             .borrow_mut()
             .retain(|key, _| valid_keys.contains(key));
-        self.presentation_cache.borrow_mut().clear();
         let anchor = self.scroll_anchor();
         self.messages = messages;
         self.content_revisions = vec![0; self.messages.len()];
@@ -164,6 +163,7 @@ impl TranscriptView {
         self.invalidate_activity_cache();
         self.is_streaming = false;
         self.streaming_started_at = None;
+        self.rebuild_run_boundaries();
         // Keep following tail if the user was already at the tail or this is a
         // freshly loaded session; otherwise restore their previous scroll anchor
         // so settling never teleports an inspecting user back down or up.
@@ -218,6 +218,10 @@ impl TranscriptView {
         let mut combined = older;
         combined.append(&mut self.messages);
         self.messages = combined;
+
+        // Boundaries are keyed by message index; the prepend shifted every
+        // index, so rebuild them from the (timestamp-stable) wake records.
+        self.rebuild_run_boundaries();
 
         // The activity cache is keyed by user index and would now point at
         // the wrong messages — invalidate it.
@@ -311,6 +315,10 @@ fn messages_match(a: &AgentMessage, b: &AgentMessage) -> bool {
             AgentMessage::ToolResult { results: r1, .. },
             AgentMessage::ToolResult { results: r2, .. },
         ) => !r1.is_empty() && !r2.is_empty() && r1[0].tool_call_id == r2[0].tool_call_id,
+        (
+            AgentMessage::RunBoundary { label: l1, at: t1 },
+            AgentMessage::RunBoundary { label: l2, at: t2 },
+        ) => l1 == l2 && t1 == t2,
         _ => false,
     }
 }

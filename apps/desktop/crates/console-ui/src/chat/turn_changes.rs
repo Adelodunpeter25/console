@@ -56,7 +56,9 @@ pub fn turn_changes_for_assistant(
     }
     let closes_turn = messages[index + 1..]
         .iter()
-        .take_while(|message| !matches!(message, AgentMessage::User { .. }))
+        .take_while(|message| {
+            !matches!(message, AgentMessage::User { .. } | AgentMessage::RunBoundary { .. })
+        })
         .all(|message| !matches!(message, AgentMessage::Assistant { .. }) || is_hidden(message));
     if !closes_turn {
         return None;

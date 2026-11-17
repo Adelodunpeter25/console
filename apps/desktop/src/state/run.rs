@@ -876,6 +876,13 @@ impl ConsoleDesktopApp {
                                         cx,
                                     );
                                     this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
+                                        t.set_wake_records(
+                                            this.wake_records
+                                                .get(&session_id)
+                                                .cloned()
+                                                .unwrap_or_default(),
+                                            cx,
+                                        );
                                         if detail.messages.len() >= t.message_count() {
                                             t.set_messages(detail.messages, cx);
                                         } else {
@@ -1172,9 +1179,31 @@ impl ConsoleDesktopApp {
                 // transcript itself is untouched.
                 self.upsert_background_work(run_session_id, work, cx);
             }
-            AgentSessionEvent::BackgroundWorkContinue { work, .. } => {
+            AgentSessionEvent::BackgroundWorkContinue { message, work } => {
                 for item in work {
                     self.upsert_background_work(run_session_id, item, cx);
+                }
+                // Record the wake for post-reload boundary reconstruction and
+                // the resumed-attach timer seed, then split the transcript's
+                // run grouping so wake-turn tool calls don't merge into the
+                // previous prompt's block.
+                let records = self
+                    .wake_records
+                    .entry(run_session_id.to_string())
+                    .or_default();
+                records.push(console_core::WakeRecord {
+                    message: message.clone(),
+                    at: chrono::Utc::now().timestamp(),
+                });
+                if records.len() > 16 {
+                    let excess = records.len() - 16;
+                    records.drain(..excess);
+                }
+                if pane_shows_run {
+                    let at = chrono::Utc::now().timestamp();
+                    self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                        t.push_run_boundary(message.clone(), at, cx);
+                    });
                 }
             }
             AgentSessionEvent::Compaction { summary, .. } => {
@@ -1349,6 +1378,13 @@ impl ConsoleDesktopApp {
                                                 this.transcript_for_pane(&pane).update(
                                                     cx,
                                                     |t, cx| {
+                                                        t.set_wake_records(
+                                                            this.wake_records
+                                                                .get(&sid)
+                                                                .cloned()
+                                                                .unwrap_or_default(),
+                                                            cx,
+                                                        );
                                                         if detail.messages.len()
                                                             >= t.message_count()
                                                         {
@@ -1389,23 +1425,32 @@ impl ConsoleDesktopApp {
         &mut self,
         pane_id: String,
         session_id: String,
+        wake_at: Option<i64>,
         cx: &mut Context<Self>,
     ) {
         if self.is_session_running(&session_id) {
             return;
         }
 
-        // Resume the elapsed timer from the prompt's persisted send time so a
-        // run attached after a restart does not restart from zero.
-        let now = if self.active_session_for_pane(&pane_id).as_deref() == Some(session_id.as_str())
-        {
-            self.transcript_for_pane(&pane_id)
-                .read(cx)
-                .latest_user_prompt_at()
-        } else {
-            None
-        }
-        .unwrap_or_else(|| chrono::Utc::now().timestamp());
+        // Resume the elapsed timer. A wake re-attach (`resumed` notification)
+        // passes `wake_at` — the boundary's timestamp — because the run that
+        // just started is the wake turn, not the original prompt; seeding from
+        // `latest_user_prompt_at` would count the whole background-job idle
+        // stretch. Other attaches keep the prompt's persisted send time so a
+        // run re-attached after a restart does not restart from zero.
+        let now = wake_at
+            .or_else(|| {
+                if self.active_session_for_pane(&pane_id).as_deref()
+                    == Some(session_id.as_str())
+                {
+                    self.transcript_for_pane(&pane_id)
+                        .read(cx)
+                        .latest_user_prompt_at()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| chrono::Utc::now().timestamp());
         self.set_session_running(&session_id, Some(now));
         let run_token = self.next_run_token_for_session(&session_id);
 
@@ -1518,6 +1563,13 @@ impl ConsoleDesktopApp {
                                     cx,
                                 );
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
+                                    t.set_wake_records(
+                                        this.wake_records
+                                            .get(&session_id)
+                                            .cloned()
+                                            .unwrap_or_default(),
+                                        cx,
+                                    );
                                     if detail.messages.len() >= t.message_count() {
                                         t.set_messages(detail.messages, cx);
                                     } else {

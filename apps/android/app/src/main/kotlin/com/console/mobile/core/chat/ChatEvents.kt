@@ -321,7 +321,39 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             }
             session.copy(subagents = updatedList)
         }
-        "backgroundWorkStarted", "backgroundWorkProgress", "backgroundWorkCompleted", "backgroundWorkFailed", "backgroundWorkCancelled", "backgroundWorkContinue" -> {
+        "backgroundWorkContinue" -> {
+            val items = event.works
+            var updated = session.backgroundWork
+            for (w in items) {
+                updated = upsertBackgroundWork(updated, w)
+            }
+            // A synthetic wake turn: the previous run finished, a new run
+            // opens under the same user message with this label as its
+            // divider. Mirrors desktop's RunBoundary split.
+            val now = System.currentTimeMillis()
+            val settled = updateLatestRun(session) { run ->
+                if (run.status != RunStatus.Working) run
+                else run.copy(
+                    status = RunStatus.Completed,
+                    events = finalizePendingToolCalls(run.events),
+                    elapsedMs = if (run.startedAt != null) now - run.startedAt else run.elapsedMs,
+                )
+            }
+            settled.copy(
+                backgroundWork = updated,
+                runs = settled.runs + RunActivityState(
+                    runId = newMessageId(),
+                    startedAt = now,
+                    status = RunStatus.Working,
+                    dividerLabel = event.message ?: "Background work completed, continuing agent",
+                ),
+                wakeRecords = (settled.wakeRecords + WakeRecord(
+                    message = event.message ?: "Background work completed, continuing agent",
+                    at = now,
+                )).takeLast(8),
+            )
+        }
+        "backgroundWorkStarted", "backgroundWorkProgress", "backgroundWorkCompleted", "backgroundWorkFailed", "backgroundWorkCancelled" -> {
             val items = event.works
             if (items.isEmpty()) return session
             var updated = session.backgroundWork

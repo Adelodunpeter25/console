@@ -32,6 +32,8 @@ mod scroll;
 mod selection;
 mod streaming;
 mod tool_activity;
+pub use tool_activity::{RunActivityBlock, compute_run_blocks};
+mod wake;
 
 type MarkdownViewCache = Rc<RefCell<HashMap<(usize, usize), Rc<RefCell<MarkdownView>>>>>;
 
@@ -53,7 +55,7 @@ pub(crate) struct AssistantPresentation {
 pub fn message_id_at(messages: &[AgentMessage], row: usize) -> Option<String> {
     messages.get(row).and_then(|message| match message {
         AgentMessage::User { id, .. } | AgentMessage::Assistant { id, .. } => id.clone(),
-        AgentMessage::ToolResult { .. } => None,
+        AgentMessage::ToolResult { .. } | AgentMessage::RunBoundary { .. } => None,
     })
 }
 
@@ -66,7 +68,7 @@ pub fn row_for_message_id(messages: &[AgentMessage], id: &str) -> Option<usize> 
     messages.iter().position(|message| match message {
         AgentMessage::User { id: message_id, .. }
         | AgentMessage::Assistant { id: message_id, .. } => message_id.as_deref() == Some(id),
-        AgentMessage::ToolResult { .. } => false,
+        AgentMessage::ToolResult { .. } | AgentMessage::RunBoundary { .. } => false,
     })
 }
 
@@ -166,8 +168,15 @@ pub struct TranscriptView {
     /// Cache for run activity derived from messages. Keyed by user_index,
     /// invalidated when messages or streaming state changes.
     tool_activity_cache:
-        RefCell<HashMap<usize, (u64, Option<(Vec<ActivityEvent>, Option<i64>, u64, bool)>)>>,
+        RefCell<HashMap<usize, (u64, Option<Vec<tool_activity::RunActivityBlock>>) >>,
     tool_activity_cache_version: std::cell::Cell<u64>,
+    /// Recorded wake turns for this session (`backgroundWorkContinue`
+    /// frames). Used to rebuild `wake_boundaries` after history reloads.
+    wake_records: Vec<console_core::WakeRecord>,
+    /// `(first_message_index, label, at)` for each wake boundary in
+    /// `messages`, sorted by index. Rebuilt by `set_messages` and
+    /// `prepend_older_messages`.
+    wake_boundaries: Vec<(usize, String, Option<i64>)>,
     /// Pagination for incremental loading: whether older messages exist and cursor.
     has_more: bool,
     next_cursor: Option<i64>,
@@ -246,6 +255,8 @@ impl TranscriptView {
             session_cwd: None,
             tool_activity_cache: RefCell::new(HashMap::new()),
             tool_activity_cache_version: std::cell::Cell::new(0),
+            wake_records: Vec::new(),
+            wake_boundaries: Vec::new(),
             has_more: false,
             next_cursor: None,
             loading_older: false,

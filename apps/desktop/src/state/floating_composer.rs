@@ -1192,6 +1192,7 @@ impl ConsoleDesktopApp {
                             this.attach_session_run_for_pane(
                                 pane_id.clone(),
                                 session_id.clone(),
+                                None,
                                 cx,
                             );
                             true

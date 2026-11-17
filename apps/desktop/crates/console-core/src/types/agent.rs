@@ -257,6 +257,30 @@ pub enum AgentMessage {
         #[serde(default, rename = "createdAt")]
         created_at: Option<i64>,
     },
+    /// Client-side marker where a server-initiated wake turn (finished
+    /// background work) begins. Never produced by `from_proto` or received
+    /// from the server; inserted into the transcript to split run-block
+    /// grouping so wake-turn tool calls don't merge into the previous
+    /// user message's activity.
+    #[serde(rename = "runBoundary")]
+    RunBoundary {
+        /// Divider label — the `backgroundWorkContinue` message verbatim.
+        #[serde(default, skip_serializing)]
+        label: String,
+        /// Wake time in unix seconds; seeds the segment's elapsed timer.
+        #[serde(default, skip_serializing)]
+        at: Option<i64>,
+    },
+}
+
+/// One recorded wake turn for a session: when a `backgroundWorkContinue`
+/// frame arrived and what it said. Kept per session so run boundaries can be
+/// rebuilt after history reloads (the frame itself is live-only).
+#[derive(Clone, Debug, PartialEq)]
+pub struct WakeRecord {
+    pub message: String,
+    /// Client receipt time, unix seconds.
+    pub at: i64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

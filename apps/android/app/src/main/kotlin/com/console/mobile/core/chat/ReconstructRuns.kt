@@ -9,26 +9,62 @@ import com.console.mobile.data.model.ToolResult
 import com.console.mobile.data.model.ToolResultMessage
 import com.console.mobile.data.model.UserMessage
 
-fun reconstructRuns(messages: List<AgentMessage>): List<RunActivityState> {
+fun reconstructRuns(
+    messages: List<AgentMessage>,
+    wakeRecords: List<WakeRecord> = emptyList(),
+): List<RunActivityState> {
     val runs = mutableListOf<RunActivityState>()
     var current: RunActivityState? = null
     var runIndex = 0
     val pending = mutableMapOf<String, ToolResult>()
+
+    // Wake boundaries: a record splits the run at the first assistant or
+    // tool-result message at/after its time (5s slack, same as desktop).
+    // Records are consumed in `at` order so an earlier wake cannot steal a
+    // later wake's first message.
+    val sortedRecords = wakeRecords.sortedBy { it.at }
+    var recordIndex = 0
+
+    fun closeCurrent(lastMessageIndex: Int) {
+        current?.let { run ->
+            var done = finalizeRun(run, messages, lastMessageIndex)
+            done = applyPending(done, pending)
+            runs.add(done)
+            pending.clear()
+        }
+        current = null
+    }
+
     for (i in messages.indices) {
         val msg = messages[i]
-        if (msg is UserMessage) {
-            if (current != null) {
-                var done = finalizeRun(current, messages, i - 1)
-                done = applyPending(done, pending)
-                runs.add(done)
-                pending.clear()
+
+        // Wake split: this message is the first output of a wake turn.
+        while (recordIndex < sortedRecords.size) {
+            val record = sortedRecords[recordIndex]
+            val threshold = record.at - 5_000L
+            val matches = when (msg) {
+                is AssistantMessage, is ToolResultMessage -> (msg.createdAt ?: 0L) >= threshold
+                else -> false
             }
+            if (!matches) break
+            closeCurrent(i - 1)
+            current = RunActivityState(
+                runId = "reconstructed-${runIndex++}",
+                startedAt = msg.createdAt,
+                status = RunStatus.Completed,
+                dividerLabel = record.message,
+            )
+            recordIndex++
+        }
+
+        if (msg is UserMessage) {
+            closeCurrent(i - 1)
             current = RunActivityState(runId = "reconstructed-${runIndex++}", startedAt = msg.createdAt, status = RunStatus.Completed)
         } else if (current != null) {
             when (msg) {
                 is AssistantMessage -> {
                     if (msg.content.any { it is ToolCallPart }) {
-                        val events = current.events.toMutableList()
+                        val events = current!!.events.toMutableList()
                         for (part in msg.content) {
                             when (part) {
                                 is ThinkingPart -> if (part.text.isNotBlank()) events.add(ActivityEvent.Thinking("reconstructed-thinking-$runIndex-${events.size}", part.text))
@@ -37,7 +73,7 @@ fun reconstructRuns(messages: List<AgentMessage>): List<RunActivityState> {
                                 else -> {}
                             }
                         }
-                        current = current.copy(events = events)
+                        current = current!!.copy(events = events)
                     }
                 }
                 is ToolResultMessage -> for (r in msg.results) pending[r.toolCallId] = r
@@ -45,7 +81,7 @@ fun reconstructRuns(messages: List<AgentMessage>): List<RunActivityState> {
         }
     }
     if (current != null) {
-        var done = finalizeRun(current, messages, messages.lastIndex)
+        var done = finalizeRun(current!!, messages, messages.lastIndex)
         done = applyPending(done, pending)
         runs.add(done)
     }
@@ -68,9 +104,10 @@ fun withLiveRun(
     messages: List<AgentMessage>,
     runs: List<RunActivityState>,
     nowMs: Long = System.currentTimeMillis(),
+    wakeRecords: List<WakeRecord> = emptyList(),
 ): List<RunActivityState> {
     val live = runs.lastOrNull()?.takeIf { it.status == RunStatus.Working }
-    val base = reconstructRuns(messages)
+    val base = reconstructRuns(messages, wakeRecords)
     if (base.isEmpty()) {
         return if (live != null) runs else runs + RunActivityState(
             runId = newMessageId(),
@@ -102,6 +139,7 @@ fun withLiveRun(
         startedAt = live?.startedAt ?: last.startedAt ?: nowMs,
         elapsedMs = 0,
         status = RunStatus.Working,
+        dividerLabel = live?.dividerLabel ?: last.dividerLabel,
         events = last.events.map { e ->
             if (e is ActivityEvent.ToolCallEvent && e.result == null) e.copy(result = liveResults[e.id]) else e
         } + extra,
@@ -154,7 +192,7 @@ fun prependOlderMessages(session: ChatSessionState, older: List<AgentMessage>): 
     // keeping the old list left fewer runs than prompts after the prepend, and
     // the live run slid up under an older prompt — every later tool call and
     // committed text then rendered there instead of under the newest prompt.
-    val rebuilt = if (streaming) withLiveRun(merged, session.runs) else reconstructRuns(merged)
+    val rebuilt = if (streaming) withLiveRun(merged, session.runs, wakeRecords = session.wakeRecords) else reconstructRuns(merged, session.wakeRecords)
     // A page can straddle a run (assistant/tool rows whose user turn is still
     // on an unfetched page), and then reconstruct yields nothing — keep what
     // we had rather than blanking the transcript.
@@ -174,4 +212,26 @@ private fun finalizeRun(run: RunActivityState, messages: List<AgentMessage>, las
     val started = run.startedAt
     val lastAt = last?.createdAt
     return if (started != null && lastAt != null && lastAt > started) run.copy(elapsedMs = lastAt - started) else run
+}
+
+/**
+ * Infer a wake boundary when a session is opened mid-wake-turn: the live
+ * `backgroundWorkContinue` frame may have been missed, but a working session
+ * whose history has assistant/tool output after the last user message is a
+ * wake in progress. Returns the earliest such output's timestamp (epoch ms)
+ * as the boundary `at`, or null when nothing follows the last user message.
+ */
+fun inferWakeAt(messages: List<AgentMessage>): Long? {
+    val lastUser = messages.indexOfLast { it is UserMessage }
+    if (lastUser < 0) return null
+    return messages.drop(lastUser + 1)
+        .filterIsInstance<AgentMessage>()
+        .mapNotNull { msg ->
+            val at = msg.createdAt ?: return@mapNotNull null
+            when (msg) {
+                is AssistantMessage, is ToolResultMessage -> at
+                else -> null
+            }
+        }
+        .minOrNull()
 }

@@ -135,6 +135,10 @@ name = "user_fold_test"
 path = "tests/chat/user_fold_test.rs"
 
 [[test]]
+name = "run_blocks_test"
+path = "tests/chat/run_blocks_test.rs"
+
+[[test]]
 name = "browser_agent_script_test"
 path = "tests/browser/agent_script_test.rs"
 

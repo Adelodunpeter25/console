@@ -126,6 +126,8 @@ data class AgentSessionEvent(
     // event frames); decoded with Moshi in ChatEvents.
     val items: List<JsonElement>? = null,
     val action: String? = null,
+    // backgroundWorkContinue label ("Bash tool completed, continuing agent").
+    val message: String? = null,
     val summary: String? = null,
     val originalMessageCount: Int? = null,
     val compactedMessageCount: Int? = null,

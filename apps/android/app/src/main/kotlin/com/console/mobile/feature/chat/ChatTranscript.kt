@@ -6,12 +6,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.console.mobile.core.chat.RunActivityState
 import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.ui.components.common.new.PageHeaderHeight
+import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionFileChange
 
 /**
@@ -24,7 +27,7 @@ internal fun ChatTranscript(
     messages: List<AgentMessage>,
     listState: LazyListState,
     runs: List<RunActivityState>,
-    userRunMap: Map<Int, Int>,
+    userRunMap: Map<Int, List<Int>>,
     assistantTurnChanges: Map<Int, List<SessionFileChange>>,
     latestUserIndex: Int,
     running: Boolean,
@@ -49,10 +52,21 @@ internal fun ChatTranscript(
                 onFork = onFork,
                 onReply = onReply,
             )
-            val runIdx = userRunMap[index]
-            if (runIdx != null && runIdx < runs.size) {
-                RunActivity(activity = runs[runIdx], running = running && index == latestUserIndex, cwd = cwd)
-                RunVisuals(runs[runIdx])
+            val runIndices = userRunMap[index].orEmpty()
+            for (runIdx in runIndices) {
+                if (runIdx < runs.size) {
+                    val run = runs[runIdx]
+                    run.dividerLabel?.let { label ->
+                        Text(
+                            text = label,
+                            color = NewTheme.TextSecondary,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp),
+                        )
+                    }
+                    RunActivity(activity = run, running = running && index == latestUserIndex, cwd = cwd)
+                    RunVisuals(run)
+                }
             }
         }
         if (isStreaming && (streamingText.isNotEmpty() || streamingThinking.isNotEmpty())) {

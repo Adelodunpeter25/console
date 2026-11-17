@@ -112,6 +112,7 @@ impl ConsoleDesktopApp {
                                                             cx,
                                                         );
                                                     }
+                                                    this.wake_records.remove(&session_id);
                                                     this.close_session_browser_tabs(
                                                         &session_id,
                                                         cx,
@@ -202,6 +203,13 @@ impl ConsoleDesktopApp {
         if session_id.is_empty() || self.is_session_running(session_id) {
             return;
         }
+        // The wake turn just started: seed timers from the recorded
+        // backgroundWorkContinue receipt time, not the original prompt.
+        let wake_at = self
+            .wake_records
+            .get(session_id)
+            .and_then(|records| records.last())
+            .map(|record| record.at);
         let pane = self
             .workspace_root
             .leaves()
@@ -209,7 +217,7 @@ impl ConsoleDesktopApp {
             .map(|leaf| leaf.id.clone())
             .find(|id| self.active_session_for_pane(id).as_deref() == Some(session_id));
         if let Some(pane_id) = pane {
-            self.attach_session_run_for_pane(pane_id, session_id.to_string(), cx);
+            self.attach_session_run_for_pane(pane_id, session_id.to_string(), wake_at, cx);
         }
     }
 }

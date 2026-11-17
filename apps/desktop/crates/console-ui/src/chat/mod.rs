@@ -20,7 +20,7 @@ pub use message_bubble::{AssistantMessageBubble, UserMessageBubble};
 pub use thinking_block::ThinkingBlock;
 pub use toolcalls::{ToolCalls, ToolCallsAction, ToolCallsState};
 pub use transcript_view::{
-    TranscriptScrollAnchor, TranscriptView, anchor_row, message_id_at, resolve_anchor_row,
-    row_for_message_id,
+    RunActivityBlock, TranscriptScrollAnchor, TranscriptView, anchor_row, compute_run_blocks,
+    message_id_at, resolve_anchor_row, row_for_message_id,
 };
 pub use working_indicator::WorkingIndicator;
