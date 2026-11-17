@@ -1,4 +1,4 @@
-use console_core::types::SessionBootstrapResponse;
+use console_core::types::{SessionBootstrapResponse, SessionDetailResponse};
 use prost::Message;
 
 const HEADER: &str = r#"{"id":"s1","title":"Demo","cwd":"/tmp","projectId":"p1","modelId":"gpt-5","provider":"openai","approvalMode":"always-ask","thinkingLevel":"medium","createdAt":"1700000000000","updatedAt":"1700000000001","messageCount":3,"status":"done","worktree":{"path":"/tmp/wt","branch":"feat","repo":"/tmp"}}"#;
@@ -67,4 +67,32 @@ fn decodes_binary_bootstrap_envelope() {
     assert_eq!(value.detail.messages.len(), 1);
     assert_eq!(value.todos[0].content, "task");
     assert_eq!(value.background_work[0].id, "w1");
+}
+
+#[test]
+fn decodes_binary_history_page() {
+    let wire = console_proto::SessionMessagesPage {
+        header: Some(console_proto::SessionHeader {
+            id: "s1".into(),
+            ..Default::default()
+        }),
+        messages: vec![console_proto::AgentMessage {
+            message: Some(console_proto::agent_message::Message::User(
+                console_proto::AgentUserMessage {
+                    content: "Hello".into(),
+                    ..Default::default()
+                },
+            )),
+            ..Default::default()
+        }],
+        has_more: true,
+        next_cursor: Some(42),
+    };
+    let decoded = console_proto::SessionMessagesPage::decode(wire.encode_to_vec().as_slice())
+        .expect("encode/decode round trip");
+    let page = SessionDetailResponse::from_proto_page(decoded);
+    assert_eq!(page.header.id, "s1");
+    assert_eq!(page.messages.len(), 1);
+    assert!(page.has_more);
+    assert_eq!(page.next_cursor, Some(42));
 }

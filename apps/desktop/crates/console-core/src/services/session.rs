@@ -90,7 +90,8 @@ impl SessionService {
             .transport
             .client()
             .get(&url)
-            .headers(self.transport.build_headers().await);
+            .headers(self.transport.build_headers().await)
+            .header(reqwest::header::ACCEPT, PROTO_CONTENT_TYPE);
         if let Some(opts) = options {
             if let Some(limit) = opts.limit {
                 req = req.query(&[("limit", limit)]);
@@ -100,6 +101,18 @@ impl SessionService {
             }
         }
         let resp = req.send().await.context("Failed to get session")?;
+
+        let binary = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.starts_with(PROTO_CONTENT_TYPE));
+        if binary {
+            let bytes = resp.bytes().await.context("Failed to read session page")?;
+            let page = console_proto::SessionMessagesPage::decode(&bytes[..])
+                .context("Failed to decode session page protobuf")?;
+            return Ok(SessionDetailResponse::from_proto_page(page));
+        }
 
         let body: ApiResponse<SessionDetailResponse> = self
             .transport

@@ -110,6 +110,23 @@ pub struct SessionBootstrapResponse {
     pub draft: Option<console_proto::ChatDraft>,
 }
 
+impl SessionDetailResponse {
+    /// Convert a binary history page. The JSON path uses the same field
+    /// names, so callers see one type either way.
+    pub fn from_proto_page(p: console_proto::SessionMessagesPage) -> Self {
+        Self {
+            header: p.header.unwrap_or_default(),
+            messages: p
+                .messages
+                .into_iter()
+                .filter_map(AgentMessage::from_proto)
+                .collect(),
+            has_more: p.has_more,
+            next_cursor: p.next_cursor,
+        }
+    }
+}
+
 impl SessionBootstrapResponse {
     /// Convert the binary envelope. Messages are the only field needing a
     /// hand-written decoder; the rest are generated proto types already
