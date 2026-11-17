@@ -14,6 +14,8 @@ impl TranscriptView {
         next_cursor: Option<i64>,
         cx: &mut Context<Self>,
     ) {
+        // Older rows shift every index, so the recorded send position is stale.
+        self.just_sent = None;
         // Filter out any older messages that are already present in self.messages
         let older: Vec<AgentMessage> = older
             .into_iter()
@@ -119,6 +121,7 @@ impl TranscriptView {
     }
 
     pub fn set_messages(&mut self, messages: Vec<AgentMessage>, cx: &mut Context<Self>) {
+        self.just_sent = None;
         // A different chat's prompts must not flash when the popup next opens.
         self.prompts = Rc::new(Vec::new());
         self.prompts_stale = true;
@@ -191,6 +194,8 @@ impl TranscriptView {
     /// prepend plus the number of new messages, so the user does not see the
     /// scroll position jump. Empty input is a no-op.
     pub fn prepend_older_messages(&mut self, older: Vec<AgentMessage>, cx: &mut Context<Self>) {
+        // Older rows shift every index, so the recorded send position is stale.
+        self.just_sent = None;
         if older.is_empty() {
             return;
         }
@@ -270,8 +275,12 @@ impl TranscriptView {
         // The previous latest user's cached run may still say "working"; once
         // a newer prompt exists (e.g. a steer) that run is no longer live.
         self.invalidate_latest_activity_cache();
+        let is_user = matches!(msg, AgentMessage::User { .. });
         self.messages.push(msg);
         self.content_revisions.push(0);
+        if is_user {
+            self.just_sent = Some((self.messages.len() - 1, Instant::now()));
+        }
         // A new prompt means the user wants to see its response: re-engage
         // the tail so streaming stays in view.
         self.list_state.set_follow_mode(FollowMode::Tail);

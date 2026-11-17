@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::chat::change_chips::{ChangesSummary, TurnChanges};
 use crate::chat::{ActivityEvent, ToolCallEntry, ToolCallsAction, ToolCallsState};
@@ -151,6 +151,10 @@ pub struct TranscriptView {
     scroll_restore_generation: u64,
     /// In-flight smooth scroll animation task.
     scroll_animation_task: Option<Task<()>>,
+    /// The prompt the user just sent (row index, send time). Only that row
+    /// plays the send animation, and only briefly, so history loads and
+    /// scrolling back never replay it.
+    pub(crate) just_sent: Option<(usize, Instant)>,
     /// Disclosure state for grouped tool-call activity. This belongs to the
     /// transcript entity so virtualization does not reset it when rows remount.
     pub(crate) tool_calls_state: Rc<RefCell<ToolCallsState>>,
@@ -236,6 +240,7 @@ impl TranscriptView {
             streaming_started_at: None,
             scroll_restore_generation: 0,
             scroll_animation_task: None,
+            just_sent: None,
             tool_calls_state: Rc::new(RefCell::new(ToolCallsState::default())),
             thinking_expanded: Rc::new(RefCell::new(HashSet::new())),
             session_cwd: None,

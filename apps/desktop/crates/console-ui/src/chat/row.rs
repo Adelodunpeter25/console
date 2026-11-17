@@ -1,13 +1,22 @@
 //! Row assembly and message bubble rendering for the transcript list.
 
 use console_core::{ActivityEvent, AgentMessage, ApprovalMode, AssistantContentPart};
-use gpui::{AnyElement, App, IntoElement, WeakEntity, div, prelude::*, px};
+use gpui::{
+    Animation, AnimationExt, AnyElement, App, ElementId, IntoElement, WeakEntity, div, prelude::*,
+    px,
+};
+use std::time::Duration;
 
 use crate::chat::message_bubble::{AssistantMessageBubble, UserMessageBubble};
 use crate::chat::toolcalls::ToolCalls;
 use crate::chat::transcript_view::TranscriptView;
 use crate::chat::working_indicator::WorkingIndicator;
+use crate::primitives::ease_out_cubic;
 use crate::theme::Theme;
+
+const SEND_ANIMATION: Duration = Duration::from_millis(180);
+/// How far below its final spot the bubble starts before settling.
+const SEND_RISE: f32 = 10.0;
 
 /// Builds one transcript row for the list element.
 pub fn transcript_row(
@@ -95,6 +104,25 @@ pub fn transcript_row(
             if let Some(handler) = &preview_handler {
                 bubble = bubble.on_preview_image(handler.clone());
             }
+            // Only the prompt sent a moment ago animates. The window outlives the
+            // animation so a mid-flight re-render keeps its progress; afterwards
+            // the bubble is no longer wrapped, so rows rebuilt by scrolling stay still.
+            let just_sent = view_ref
+                .just_sent
+                .is_some_and(|(sent, at)| sent == index && at.elapsed() < SEND_ANIMATION * 3);
+            let bubble = if just_sent {
+                div()
+                    .w_full()
+                    .child(bubble)
+                    .with_animation(
+                        ElementId::Name(format!("user-send-{index}").into()),
+                        Animation::new(SEND_ANIMATION).with_easing(ease_out_cubic),
+                        |element, delta| element.opacity(delta).mt(px((1.0 - delta) * SEND_RISE)),
+                    )
+                    .into_any_element()
+            } else {
+                bubble.into_any_element()
+            };
             let activity = view_ref.tool_activity_for_user(index);
             let activity_state = view_ref.tool_calls_state.clone();
             let activity_entity = entity.clone();
