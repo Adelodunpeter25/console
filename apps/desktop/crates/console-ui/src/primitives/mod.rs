@@ -101,7 +101,7 @@ pub fn provider_icon(provider: &str) -> &'static str {
     let provider = provider.to_ascii_lowercase();
     match provider.as_str() {
         "antigravity" | "google" | "opencode" | "codex" | "openai" | "chatgpt" | "claude"
-        | "anthropic" | "deepseek" | "grok" | "cursor" | "amp" | "pi" => {
+        | "anthropic" | "deepseek" | "grok" | "cursor" | "amp" | "pi" | "devin" => {
             IconName::provider(&provider).path()
         }
         _ => IconName::Bot.path(),

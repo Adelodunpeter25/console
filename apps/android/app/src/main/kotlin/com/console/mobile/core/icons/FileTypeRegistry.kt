@@ -26,6 +26,7 @@ fun getProviderIconKey(provider: String?): String? {
         "openai", "codex" -> "openai"
         "opencode" -> "opencode"
         "claude", "anthropic" -> "claude"
+        "devin" -> "devin"
         else -> null
     }
 }

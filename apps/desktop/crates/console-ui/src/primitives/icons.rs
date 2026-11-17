@@ -222,6 +222,7 @@ pub enum ProviderIcon {
     Cursor,
     Amp,
     Pi,
+    Devin,
 }
 
 /// File-type logos from `assets/icons/file-types`.
@@ -561,6 +562,7 @@ impl ProviderIcon {
             "cursor" => Self::Cursor,
             "amp" => Self::Amp,
             "pi" => Self::Pi,
+            "devin" => Self::Devin,
             _ => Self::Openai,
         }
     }
@@ -578,6 +580,7 @@ impl ProviderIcon {
             Self::Cursor => "icons/provider-cursor.svg",
             Self::Amp => "icons/provider-amp.svg",
             Self::Pi => "icons/provider-pi.svg",
+            Self::Devin => "icons/providers/devin.svg",
         }
     }
 

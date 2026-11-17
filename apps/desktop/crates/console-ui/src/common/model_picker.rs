@@ -22,7 +22,7 @@ pub fn provider_svg_path(provider: &str) -> &'static str {
     let provider = provider.to_ascii_lowercase();
     match provider.as_str() {
         "google" | "antigravity" | "opencode" | "codex" | "openai" | "chatgpt" | "claude"
-        | "anthropic" | "deepseek" | "grok" | "cursor" | "amp" | "pi" => {
+        | "anthropic" | "deepseek" | "grok" | "cursor" | "amp" | "pi" | "devin" => {
             IconName::provider(&provider).path()
         }
         _ => IconName::Sparkle.path(),
