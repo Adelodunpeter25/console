@@ -45,6 +45,26 @@ class BinaryBootstrapTest {
         assertEquals(true, work.isRunning())
     }
 
+    @Test
+    fun decodesBinaryHistoryPage() {
+        val wire = console.v1.SessionMessagesPage(
+            header_ = SessionHeader(id = "s2"),
+            messages = listOf(
+                AgentMessage(message = AgentMessage.Message.User(AgentUserMessage(content = "older"))),
+            ),
+            has_more = true,
+            next_cursor = 42L,
+        )
+        val decoded = console.v1.SessionMessagesPage.ADAPTER.decode(
+            console.v1.SessionMessagesPage.ADAPTER.encodeByteString(wire),
+        )
+        assertEquals("s2", decoded.header_?.id)
+        val user = decoded.messages[0].message as AgentMessage.Message.User
+        assertEquals("older", user.value.content)
+        assertEquals(true, decoded.has_more)
+        assertEquals(42L, decoded.next_cursor)
+    }
+
     private fun com.console.mobile.data.model.BackgroundWork.isRunning(): Boolean =
         kind == "shell" && status == "running"
 }

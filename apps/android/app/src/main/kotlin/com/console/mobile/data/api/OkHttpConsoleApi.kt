@@ -162,11 +162,19 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         val params = mutableMapOf<String, String?>()
         if (limit != null) params["limit"] = limit.toString()
         if (before != null) params["before"] = before.toString()
-        val raw = http.get("/api/sessions/${enc(id)}", params)
-        // Envelope stays kotlinx; header and messages decode through the
-        // shared schema, scalars read field by field.
-        val obj = http.unwrap(raw, JsonObject.serializer(), "load session")
-        return decodeSessionDetail(obj)
+        val (contentType, bytes) = http.getRaw("/api/sessions/${enc(id)}", "application/x-protobuf", params)
+        if (contentType.startsWith("application/x-protobuf")) {
+            val page = console.v1.SessionMessagesPage.ADAPTER.decode(bytes.toByteString())
+            return SessionDetailResponse(
+                header = page.header_ ?: throw ApiException("Failed to load session"),
+                messages = page.messages.mapNotNull { it.toUi() },
+                hasMore = page.has_more,
+                nextCursor = page.next_cursor,
+            )
+        }
+        // JSON is the explicit opt-out; header and messages still decode
+        // through the shared schema, scalars read field by field.
+        return decodeSessionDetail(http.unwrap(bytes.toString(Charsets.UTF_8), JsonObject.serializer(), "load session"))
     }
 
     private fun decodeSessionDetail(obj: JsonObject): SessionDetailResponse {
