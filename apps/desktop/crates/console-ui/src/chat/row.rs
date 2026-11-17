@@ -14,7 +14,7 @@ use crate::chat::working_indicator::WorkingIndicator;
 use crate::primitives::ease_out_cubic;
 use crate::theme::Theme;
 
-const SEND_ANIMATION: Duration = Duration::from_millis(180);
+const SEND_ANIMATION: Duration = Duration::from_millis(140);
 /// How far below its final spot the bubble starts before settling.
 const SEND_RISE: f32 = 10.0;
 
