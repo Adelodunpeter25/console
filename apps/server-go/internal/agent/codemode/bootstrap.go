@@ -224,6 +224,16 @@ const bootstrapScript = `
     // MCP namespace: method bridge installed under __harness.mcp.
     globalThis.mcp = bridge.mcp;
 
+    // Builtin docs: help({query, group}) searches, describe(name) shows one.
+    globalThis.help = async function(args) {
+        if (typeof args === "string") args = { query: args };
+        return await bridge.help(args || {});
+    };
+    globalThis.describe = async function(name) {
+        if (typeof name === "string") name = { name: name };
+        return await bridge.describe(name || {});
+    };
+
     // Tool discovery
     globalThis.searchTools = async function(query) {
         return await bridge.searchTools({ query: String(query || "") });

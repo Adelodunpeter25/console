@@ -81,6 +81,18 @@ func NewRuntime(caller Caller, opts Options) (*Runtime, error) {
 			},
 		},
 		{
+			Name: "help",
+			Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+				return helpHandler(args)
+			},
+		},
+		{
+			Name: "describe",
+			Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+				return describeHandler(args)
+			},
+		},
+		{
 			Name: "store",
 			Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 				return r.setStore(ctx, args)

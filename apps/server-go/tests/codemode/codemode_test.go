@@ -616,3 +616,61 @@ func jsonString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
+
+func TestCodemodeHelpAndDescribe(t *testing.T) {
+	tmpDir := t.TempDir()
+	exec := newTestExecutor(t, tmpDir)
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+	ctx := context.Background()
+
+	// help() lists every builtin; a query narrows to the best matches.
+	res, err := rt.Eval(ctx, `help()`, 5*time.Second)
+	if err != nil {
+		t.Fatalf("help(): %v", err)
+	}
+	env := res.(tools.Envelope)
+	if env.IsError {
+		t.Fatalf("help() failed: %v", env.Content)
+	}
+	out, _ := env.Content.(string)
+	if !strings.Contains(out, "edit") || !strings.Contains(out, "webSearch") {
+		t.Fatalf("help() output missing builtins: %s", out)
+	}
+
+	res, err = rt.Eval(ctx, `help({query: "shell command"})`, 5*time.Second)
+	if err != nil {
+		t.Fatalf("help({query}): %v", err)
+	}
+	env = res.(tools.Envelope)
+	out, _ = env.Content.(string)
+	if !strings.Contains(out, "$") {
+		t.Fatalf("help({query}) did not surface the shell builtin: %s", out)
+	}
+
+	// describe() returns the full contract for one builtin.
+	res, err = rt.Eval(ctx, `describe("edit")`, 5*time.Second)
+	if err != nil {
+		t.Fatalf("describe(): %v", err)
+	}
+	env = res.(tools.Envelope)
+	if env.IsError {
+		t.Fatalf("describe() failed: %v", env.Content)
+	}
+	out, _ = env.Content.(string)
+	if !strings.Contains(out, "edit(path, oldStr, newStr)") {
+		t.Fatalf("describe(edit) missing signature: %s", out)
+	}
+
+	// Unknown builtins are refused with a pointer to help.
+	res, err = rt.Eval(ctx, `describe("bogus")`, 5*time.Second)
+	if err != nil {
+		t.Fatalf("describe(bogus): %v", err)
+	}
+	env = res.(tools.Envelope)
+	if !env.IsError || !strings.Contains(env.Content.(string), "help") {
+		t.Fatalf("describe(bogus) should fail and point at help: %v", env.Content)
+	}
+}
