@@ -1,5 +1,8 @@
 package com.console.mobile.feature.chat
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,6 +15,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +38,13 @@ import com.console.mobile.ui.components.ImagePreviewDialog
 import com.console.mobile.ui.components.attachmentBytes
 import com.console.mobile.ui.theme.NewTheme
 
+private const val SEND_ANIMATION_MS = 180
+private val SendRise = 10.dp
+
+// A prompt the user just sent is stamped with the local clock, while history
+// carries old timestamps, so age alone separates the two without any state.
+private const val JUST_SENT_WINDOW_MS = 2_000L
+
 /** Right-aligned user message: attachments, mention text, 4-line fold, copy. */
 @Composable
 fun UserBubble(
@@ -46,7 +58,22 @@ fun UserBubble(
     var preview by remember { mutableStateOf<ImagePart?>(null) }
     var expanded by remember(content) { mutableStateOf(false) }
     var hasOverflow by remember(content) { mutableStateOf(false) }
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalAlignment = Alignment.End) {
+    // Starts settled unless the message was sent a moment ago; remembered, so
+    // scrolling a row back into view never replays it.
+    val settle = remember {
+        val age = createdAt?.let { System.currentTimeMillis() - it }
+        Animatable(if (age != null && age in 0..JUST_SENT_WINDOW_MS) 0f else 1f)
+    }
+    LaunchedEffect(Unit) {
+        if (settle.value < 1f) settle.animateTo(1f, tween(SEND_ANIMATION_MS, easing = LinearOutSlowInEasing))
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).graphicsLayer {
+            alpha = settle.value
+            translationY = (1f - settle.value) * SendRise.toPx()
+        },
+        horizontalAlignment = Alignment.End,
+    ) {
         BoxWithConstraints(modifier = Modifier.align(Alignment.End)) {
             Column(
                 modifier = Modifier.widthIn(min = 64.dp, max = maxWidth * 0.85f).clip(RoundedCornerShape(20.dp))
