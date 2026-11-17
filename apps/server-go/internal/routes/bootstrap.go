@@ -16,16 +16,16 @@ import (
 
 const protoContentType = "application/x-protobuf"
 
-// wantsBinaryBootstrap reports whether the client asked for the protobuf
-// encoding. The JSON envelope stays the default so existing clients are
-// unaffected; the binary form removes base64 and field names from messages.
+// wantsBinaryBootstrap reports whether the client accepts protobuf. Binary is
+// the default; JSON is only for callers that explicitly ask for it (curl,
+// debugging, a legacy client). Messages carry raw bytes instead of base64.
 func wantsBinaryBootstrap(c *fiber.Ctx) bool {
 	for _, part := range strings.Split(c.Get("Accept"), ",") {
-		if strings.TrimSpace(strings.SplitN(part, ";", 2)[0]) == protoContentType {
-			return true
+		if strings.TrimSpace(strings.SplitN(part, ";", 2)[0]) == "application/json" {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func backgroundWorkToProto(w background.Work) *consolev1.BackgroundWork {

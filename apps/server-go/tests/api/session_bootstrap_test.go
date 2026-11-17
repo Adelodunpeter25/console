@@ -34,6 +34,7 @@ func TestSessionBootstrapRoute(t *testing.T) {
 	routes.RegisterBootstrapRoutes(app, sessions, runs, services.NewDraftService(manager))
 
 	req := httptest.NewRequest("GET", "/api/sessions/"+header.ID+"/bootstrap", nil)
+	req.Header.Set("Accept", "application/json")
 	resp, err := app.Test(req, 10000)
 	if err != nil {
 		t.Fatal(err)
