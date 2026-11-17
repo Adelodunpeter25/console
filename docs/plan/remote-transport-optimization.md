@@ -45,14 +45,14 @@ Replace the inline base64 image data in message payloads with a digest reference
 
 ### 4. Binary protobuf on heavy endpoints — [implemented for session bootstrap]
 
-`GET /api/sessions/:id/bootstrap` returns binary protobuf when the client sends `Accept: application/x-protobuf`; JSON remains the default, so no client is forced over at once. Added `SessionBootstrapResponse` and `BackgroundWork` to `session.proto` — a generated envelope for the same state the JSON path returns, so tool arguments and results cross as raw bytes rather than base64-in-JSON.
+`GET /api/sessions/:id/bootstrap` returns binary protobuf by default. A caller that explicitly sends `Accept: application/json` gets the legacy envelope — kept for curl and debugging, not as a compatibility tier. No API-version gate. Added `SessionBootstrapResponse` and `BackgroundWork` to `session.proto` — a generated envelope for the same state the JSON path returns, so tool arguments and results cross as raw bytes rather than base64-in-JSON.
 
 - Server mirrors every JSON field into the binary message, skipping message rows that no longer parse (the clients' JSON decoders are equally lenient). `run.QueuedPromptToProto` was exported for reuse.
 - Desktop requests binary, checks `Content-Type`, and decodes with prost. `SessionBootstrapResponse::from_proto` and `BackgroundWork::from_proto` are the only hand-written conversions — header, changes, todos, queued prompts and draft are generated types already used by the JSON path, and messages reuse the existing `AgentMessage::from_proto`.
 - Android requests binary and decodes with Wire's `ADAPTER`; the model already used generated types for every field but background work, which got a `toUi()` converter.
 - Tests: `TestSessionBootstrapBinary` (Go), `bootstrap_dto_test` (Rust, 3 tests), `BinaryBootstrapTest` (Kotlin).
 
-Still open: run events and file content are not binary-negotiated yet. They are separate endpoints and can be migrated the same way — a generated envelope, an `Accept` branch, and a `from_proto` path per client.
+Still open: run events and file content are not binary-negotiated yet. They are separate endpoints and can be migrated the same way — a generated envelope, a binary-by-default `Accept` branch, and a `from_proto` path per client.
 
 ### 5. Smaller items
 
@@ -83,11 +83,11 @@ No wire schema changed and no endpoint was removed. The next gate is item 6 — 
 
 | Change | Verification |
 |---|---|
-| `SessionBootstrapResponse` + `BackgroundWork` proto, server `Accept` branch | `go test ./tests/api/ -run TestSessionBootstrap -v` (2 tests) |
+| `SessionBootstrapResponse` + `BackgroundWork` proto, binary-by-default `Accept` branch | `go test ./tests/api/ -run TestSessionBootstrap -v` (2 tests) |
 | Desktop prost decode + conversions | `cargo test -p console-core --test bootstrap_dto_test` (3 tests) |
 | Android Wire decode + `BackgroundWork.toUi()` | `./gradlew :app:testDebugUnitTest --tests com.console.mobile.BinaryBootstrapTest` |
 
-The JSON envelope is unchanged and still the default — the binary form is opt-in per request. `proto/testdata/` fixtures cover the generated types as before; no new fixtures were needed because the binary form encodes the same messages.
+The JSON envelope is unchanged but is now the explicit opt-out (`Accept: application/json`); binary is the default. `proto/testdata/` fixtures cover the generated types as before; no new fixtures were needed because the binary form encodes the same messages.
 
 ## Verification
 
