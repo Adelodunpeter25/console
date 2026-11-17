@@ -1,6 +1,6 @@
 # Remote transport optimization — before QUIC
 
-Status: **in progress** (2026-11-16). Items 1, 2 and the connection-pool part of 5 are **implemented**; the rest are sequenced but not scheduled.
+Status: **in progress** (2026-11-17). Items 1, 2, 4 and the connection-pool part of 5 are **implemented**; the rest are sequenced but not scheduled.
 
 ## Context
 
@@ -43,9 +43,16 @@ An agent run is dominated by provider token latency, so transport work mostly af
 
 Replace the inline base64 image data in message payloads with a digest reference, served from a dedicated endpoint with `ETag`/`Cache-Control`. The client fetches only images scrolled into view and caches them. Per-endpoint wire change; can be feature-flagged.
 
-### 4. Binary protobuf on heavy endpoints — [not scheduled]
+### 4. Binary protobuf on heavy endpoints — [implemented for session bootstrap]
 
-All three clients already generate binary protobuf types (prost, Wire, protoc-gen-go); only the encoding is protojson. Negotiate `application/x-protobuf` via `Accept` on the heavy endpoints (session detail, run events, file content) and use `proto.Marshal` server-side. This removes the base64 overhead and field names without touching the schema or adding a second transport, and can roll out endpoint-by-endpoint with dual decoding during transition. This is the part of the old WebTransport benefit that has nothing to do with QUIC.
+`GET /api/sessions/:id/bootstrap` returns binary protobuf when the client sends `Accept: application/x-protobuf`; JSON remains the default, so no client is forced over at once. Added `SessionBootstrapResponse` and `BackgroundWork` to `session.proto` — a generated envelope for the same state the JSON path returns, so tool arguments and results cross as raw bytes rather than base64-in-JSON.
+
+- Server mirrors every JSON field into the binary message, skipping message rows that no longer parse (the clients' JSON decoders are equally lenient). `run.QueuedPromptToProto` was exported for reuse.
+- Desktop requests binary, checks `Content-Type`, and decodes with prost. `SessionBootstrapResponse::from_proto` and `BackgroundWork::from_proto` are the only hand-written conversions — header, changes, todos, queued prompts and draft are generated types already used by the JSON path, and messages reuse the existing `AgentMessage::from_proto`.
+- Android requests binary and decodes with Wire's `ADAPTER`; the model already used generated types for every field but background work, which got a `toUi()` converter.
+- Tests: `TestSessionBootstrapBinary` (Go), `bootstrap_dto_test` (Rust, 3 tests), `BinaryBootstrapTest` (Kotlin).
+
+Still open: run events and file content are not binary-negotiated yet. They are separate endpoints and can be migrated the same way — a generated envelope, an `Accept` branch, and a `from_proto` path per client.
 
 ### 5. Smaller items
 
@@ -72,9 +79,19 @@ Revisit native QUIC streams only if items 1–5 are shipped and measured and a g
 
 No wire schema changed and no endpoint was removed. The next gate is item 6 — measure against a real remote server before deciding whether any QUIC work is warranted.
 
+### Second pass — binary bootstrap
+
+| Change | Verification |
+|---|---|
+| `SessionBootstrapResponse` + `BackgroundWork` proto, server `Accept` branch | `go test ./tests/api/ -run TestSessionBootstrap -v` (2 tests) |
+| Desktop prost decode + conversions | `cargo test -p console-core --test bootstrap_dto_test` (3 tests) |
+| Android Wire decode + `BackgroundWork.toUi()` | `./gradlew :app:testDebugUnitTest --tests com.console.mobile.BinaryBootstrapTest` |
+
+The JSON envelope is unchanged and still the default — the binary form is opt-in per request. `proto/testdata/` fixtures cover the generated types as before; no new fixtures were needed because the binary form encodes the same messages.
+
 ## Verification
 
-- Go: `cd apps/server-go && go test ./tests/api/ -run <TestName> -v`, plus `go build ./...`
-- Desktop: `cargo check --manifest-path apps/desktop/Cargo.toml` (also `--locked` once the lockfile is committed)
+- Go: `cd apps/server-go && go test ./tests/api/ -run TestSessionBootstrap -v`, plus `go build ./...`
+- Desktop: `cargo check --locked --manifest-path apps/desktop/Cargo.toml`
 - Desktop contract test: `cargo test --manifest-path apps/desktop/Cargo.toml -p console-core --test bootstrap_dto_test`
-- Android: `cd apps/android && ./gradlew :app:assembleDebug`
+- Android: `cd apps/android && ./gradlew :app:assembleDebug` and `:app:testDebugUnitTest --tests com.console.mobile.BinaryBootstrapTest`
