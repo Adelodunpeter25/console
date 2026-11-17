@@ -153,19 +153,42 @@ class ChatRepository(
         scope.launch {
             try {
                 val remote = withContext(Dispatchers.IO) { api.getDraft(sessionId) } ?: return@launch
-                serverDrafts[sessionId] = remote
-                val local = chats.get(sessionId)
-                if (local.running || remote.updated_at <= (local.draftUpdatedAt ?: 0L)) return@launch
-                chats.update(sessionId) {
-                    it.copy(
-                        input = remote.text,
-                        draftUpdatedAt = if (remote.text.trim().isNotEmpty()) remote.updated_at else null,
-                    )
-                }
+                adoptDraft(sessionId, remote)
             } catch (_: Exception) {
                 // Offline: the local draft stays authoritative until the next push.
             }
         }
+    }
+
+    private fun adoptDraft(sessionId: String, remote: console.v1.ChatDraft) {
+        serverDrafts[sessionId] = remote
+        val local = chats.get(sessionId)
+        if (local.running || remote.updated_at <= (local.draftUpdatedAt ?: 0L)) return
+        chats.update(sessionId) {
+            it.copy(
+                input = remote.text,
+                draftUpdatedAt = if (remote.text.trim().isNotEmpty()) remote.updated_at else null,
+            )
+        }
+    }
+
+    /**
+     * Fold a bootstrap response's side panels into chat state with the same
+     * rules the individual loaders use: the server is authoritative for
+     * todos, suggestions, background work and the queue, and a draft only
+     * wins when it is newer than the local one. Messages and changes are
+     * applied by [SessionRepository].
+     */
+    fun applyBootstrap(sessionId: String, b: com.console.mobile.data.model.SessionBootstrapResponse) {
+        setTodoItems(sessionId, b.todos)
+        setSuggestions(sessionId, if (chats.get(sessionId).running) emptyList() else b.suggestions)
+        chats.update(sessionId) {
+            it.copy(
+                backgroundWork = if (it.backgroundWork == b.backgroundWork) it.backgroundWork else b.backgroundWork,
+                queuedPrompt = b.queuedPrompts.firstOrNull(),
+            )
+        }
+        b.draft?.let { adoptDraft(sessionId, it) }
     }
 
     private fun scheduleDraftPush(sessionId: String) {

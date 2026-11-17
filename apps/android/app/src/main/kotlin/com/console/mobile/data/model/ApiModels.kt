@@ -201,6 +201,18 @@ data class SessionDetailResponse(
     val nextCursor: Long? = null,
 )
 
+// One-call chat open: `GET /api/sessions/:id/bootstrap`. Decoded manually in
+// OkHttpConsoleApi.getSessionBootstrap, like SessionDetailResponse.
+data class SessionBootstrapResponse(
+    val detail: SessionDetailResponse,
+    val changes: List<console.v1.SessionFileChange> = emptyList(),
+    val todos: List<console.v1.TodoItem> = emptyList(),
+    val suggestions: List<String> = emptyList(),
+    val queuedPrompts: List<console.v1.QueuedPrompt> = emptyList(),
+    val backgroundWork: List<BackgroundWork> = emptyList(),
+    val draft: console.v1.ChatDraft? = null,
+)
+
 // FsTreeEntry moved to the shared protobuf schema (console.v1 from
 // proto/console/v1): sizes now arrive as protojson strings, and the
 // never-populated git status is gone. Unset sizes decode as absent.

@@ -148,14 +148,18 @@ fun ChatScreen(
             return@LaunchedEffect
         }
         val header = coroutineScope {
-            val detail = async { AppContainer.sessionRepository.loadDetail(sessionId) }
-            launch { AppContainer.chatRepository.loadDraft(sessionId) }
-            launch { AppContainer.chatRepository.loadTodos(sessionId) }
-            launch { AppContainer.chatRepository.loadSuggestions(sessionId) }
+            // Subagents are not in the bootstrap response, so they stay a separate call.
             launch { AppContainer.chatRepository.loadSubagents(sessionId) }
-            launch { AppContainer.chatRepository.loadBackgroundWork(sessionId) }
-            launch { AppContainer.sessionRepository.loadSessionChanges(sessionId) }
-            detail.await()
+            AppContainer.sessionRepository.loadBootstrap(sessionId) ?: run {
+                // Older server without the endpoint, or a failed fetch: the per-panel calls.
+                val detail = async { AppContainer.sessionRepository.loadDetail(sessionId) }
+                launch { AppContainer.chatRepository.loadDraft(sessionId) }
+                launch { AppContainer.chatRepository.loadTodos(sessionId) }
+                launch { AppContainer.chatRepository.loadSuggestions(sessionId) }
+                launch { AppContainer.chatRepository.loadBackgroundWork(sessionId) }
+                launch { AppContainer.sessionRepository.loadSessionChanges(sessionId) }
+                detail.await()
+            }
         }
         // Do not infer completion from the shared chat state: loadDetail owns
         // applying the initial page, while the other requests can update it in
