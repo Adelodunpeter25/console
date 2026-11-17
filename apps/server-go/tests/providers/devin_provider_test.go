@@ -257,3 +257,64 @@ func TestDevinDiscoveryNormalizesCatalog(t *testing.T) {
 		t.Fatalf("fusion context window: %d", got)
 	}
 }
+
+func effortEntry(key, name string) *exav1.ModelFamilyMetadataEntry {
+	return &exav1.ModelFamilyMetadataEntry{
+		Key:   key,
+		Value: &exav1.ModelFamilyMetadataValue{Name: name},
+	}
+}
+
+func familyConfig(uid, label string, entries ...*exav1.ModelFamilyMetadataEntry) *exav1.ClientModelConfig {
+	return &exav1.ClientModelConfig{
+		ModelUid:  uid,
+		MaxTokens: 200000,
+		ModelFamilyMetadata: &exav1.ModelFamilyMetadata{
+			ModelFamilyLabel: label,
+			Entries:          entries,
+		},
+	}
+}
+
+func TestDevinDiscoveryCollapsesEffortFamilies(t *testing.T) {
+	low := familyConfig("claude-a-low", "Claude A", effortEntry("Effort", "Low"))
+	low.IsDefaultModelInFamily = true
+	high := familyConfig("claude-a-high", "Claude A", effortEntry("Effort", "High"))
+	off := familyConfig("claude-a-off", "Claude A", effortEntry("Effort", "None"))
+	standalone := &exav1.ClientModelConfig{ModelUid: "swe-1-6", MaxTokens: 200000}
+
+	srv := devinCatalogServer(t, []*exav1.ClientModelConfig{low, high, off, standalone})
+	defer srv.Close()
+
+	models, _, err := devin.FetchModels(context.Background(), srv.Client(), srv.URL, "session-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]int{}
+	for i, m := range models {
+		byID[m.ID] = i
+	}
+	for _, id := range []string{"claude-a", "swe-1-6"} {
+		if _, ok := byID[id]; !ok {
+			t.Fatalf("missing model %q in %+v", id, models)
+		}
+	}
+	for _, id := range []string{"claude-a-low", "claude-a-high", "claude-a-off"} {
+		if _, ok := byID[id]; ok {
+			t.Fatalf("family member %q leaked into catalog", id)
+		}
+	}
+	fam := models[byID["claude-a"]]
+	wantLevels := []string{"none", "low", "high"}
+	if len(fam.ThinkingLevels) != len(wantLevels) {
+		t.Fatalf("family levels: %v", fam.ThinkingLevels)
+	}
+	for i, l := range wantLevels {
+		if fam.ThinkingLevels[i] != l {
+			t.Fatalf("family levels: %v", fam.ThinkingLevels)
+		}
+	}
+	if fam.DefaultThinking != "low" {
+		t.Fatalf("family default thinking: %q", fam.DefaultThinking)
+	}
+}

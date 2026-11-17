@@ -330,9 +330,10 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// A session can carry a stale level after switching providers, so
 	// providers without a thinking-level vocabulary discard it instead of
 	// failing the run. OpenCode models are cataloged without levels unless
-	// their family has a known effort vocabulary; Devin models never have
-	// any. Models that do declare levels fall through to normal validation.
-	if (model.Provider == "opencode" && len(model.ThinkingLevels) == 0) || model.Provider == "devin" {
+	// their family has a known effort vocabulary; Devin models are the same
+	// — only collapsed effort families declare levels. Models that do
+	// declare levels fall through to normal validation.
+	if (model.Provider == "opencode" || model.Provider == "devin") && len(model.ThinkingLevels) == 0 {
 		effectiveThinking = ""
 	} else if effectiveThinking == "" {
 		effectiveThinking = model.DefaultThinking

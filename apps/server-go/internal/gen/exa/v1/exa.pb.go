@@ -2206,15 +2206,17 @@ func (x *ModelInfo) GetIsModelRouter() bool {
 }
 
 type ClientModelConfig struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Label          string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`
-	Disabled       bool                   `protobuf:"varint,4,opt,name=disabled,proto3" json:"disabled,omitempty"`
-	SupportsImages bool                   `protobuf:"varint,5,opt,name=supports_images,json=supportsImages,proto3" json:"supports_images,omitempty"`
-	MaxTokens      int32                  `protobuf:"varint,18,opt,name=max_tokens,json=maxTokens,proto3" json:"max_tokens,omitempty"`
-	ModelInfo      *ModelInfo             `protobuf:"bytes,23,opt,name=model_info,json=modelInfo,proto3" json:"model_info,omitempty"`
-	ModelUid       string                 `protobuf:"bytes,22,opt,name=model_uid,json=modelUid,proto3" json:"model_uid,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	Label                  string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`
+	Disabled               bool                   `protobuf:"varint,4,opt,name=disabled,proto3" json:"disabled,omitempty"`
+	SupportsImages         bool                   `protobuf:"varint,5,opt,name=supports_images,json=supportsImages,proto3" json:"supports_images,omitempty"`
+	MaxTokens              int32                  `protobuf:"varint,18,opt,name=max_tokens,json=maxTokens,proto3" json:"max_tokens,omitempty"`
+	ModelInfo              *ModelInfo             `protobuf:"bytes,23,opt,name=model_info,json=modelInfo,proto3" json:"model_info,omitempty"`
+	ModelUid               string                 `protobuf:"bytes,22,opt,name=model_uid,json=modelUid,proto3" json:"model_uid,omitempty"`
+	ModelFamilyMetadata    *ModelFamilyMetadata   `protobuf:"bytes,30,opt,name=model_family_metadata,json=modelFamilyMetadata,proto3" json:"model_family_metadata,omitempty"`
+	IsDefaultModelInFamily bool                   `protobuf:"varint,31,opt,name=is_default_model_in_family,json=isDefaultModelInFamily,proto3" json:"is_default_model_in_family,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *ClientModelConfig) Reset() {
@@ -2289,6 +2291,184 @@ func (x *ClientModelConfig) GetModelUid() string {
 	return ""
 }
 
+func (x *ClientModelConfig) GetModelFamilyMetadata() *ModelFamilyMetadata {
+	if x != nil {
+		return x.ModelFamilyMetadata
+	}
+	return nil
+}
+
+func (x *ClientModelConfig) GetIsDefaultModelInFamily() bool {
+	if x != nil {
+		return x.IsDefaultModelInFamily
+	}
+	return false
+}
+
+type ModelFamilyMetadata struct {
+	state                  protoimpl.MessageState      `protogen:"open.v1"`
+	ModelFamilyLabel       string                      `protobuf:"bytes,1,opt,name=model_family_label,json=modelFamilyLabel,proto3" json:"model_family_label,omitempty"`
+	Entries                []*ModelFamilyMetadataEntry `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"`
+	IsDefaultModelInFamily bool                        `protobuf:"varint,3,opt,name=is_default_model_in_family,json=isDefaultModelInFamily,proto3" json:"is_default_model_in_family,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *ModelFamilyMetadata) Reset() {
+	*x = ModelFamilyMetadata{}
+	mi := &file_exa_v1_exa_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ModelFamilyMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ModelFamilyMetadata) ProtoMessage() {}
+
+func (x *ModelFamilyMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_exa_v1_exa_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ModelFamilyMetadata.ProtoReflect.Descriptor instead.
+func (*ModelFamilyMetadata) Descriptor() ([]byte, []int) {
+	return file_exa_v1_exa_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ModelFamilyMetadata) GetModelFamilyLabel() string {
+	if x != nil {
+		return x.ModelFamilyLabel
+	}
+	return ""
+}
+
+func (x *ModelFamilyMetadata) GetEntries() []*ModelFamilyMetadataEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *ModelFamilyMetadata) GetIsDefaultModelInFamily() bool {
+	if x != nil {
+		return x.IsDefaultModelInFamily
+	}
+	return false
+}
+
+type ModelFamilyMetadataEntry struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	Key           string                    `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value         *ModelFamilyMetadataValue `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ModelFamilyMetadataEntry) Reset() {
+	*x = ModelFamilyMetadataEntry{}
+	mi := &file_exa_v1_exa_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ModelFamilyMetadataEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ModelFamilyMetadataEntry) ProtoMessage() {}
+
+func (x *ModelFamilyMetadataEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_exa_v1_exa_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ModelFamilyMetadataEntry.ProtoReflect.Descriptor instead.
+func (*ModelFamilyMetadataEntry) Descriptor() ([]byte, []int) {
+	return file_exa_v1_exa_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ModelFamilyMetadataEntry) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *ModelFamilyMetadataEntry) GetValue() *ModelFamilyMetadataValue {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+type ModelFamilyMetadataValue struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Order         int32                  `protobuf:"varint,1,opt,name=order,proto3" json:"order,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ModelFamilyMetadataValue) Reset() {
+	*x = ModelFamilyMetadataValue{}
+	mi := &file_exa_v1_exa_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ModelFamilyMetadataValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ModelFamilyMetadataValue) ProtoMessage() {}
+
+func (x *ModelFamilyMetadataValue) ProtoReflect() protoreflect.Message {
+	mi := &file_exa_v1_exa_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ModelFamilyMetadataValue.ProtoReflect.Descriptor instead.
+func (*ModelFamilyMetadataValue) Descriptor() ([]byte, []int) {
+	return file_exa_v1_exa_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ModelFamilyMetadataValue) GetOrder() int32 {
+	if x != nil {
+		return x.Order
+	}
+	return 0
+}
+
+func (x *ModelFamilyMetadataValue) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 type GetCliModelConfigsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Metadata      *Metadata              `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
@@ -2298,7 +2478,7 @@ type GetCliModelConfigsRequest struct {
 
 func (x *GetCliModelConfigsRequest) Reset() {
 	*x = GetCliModelConfigsRequest{}
-	mi := &file_exa_v1_exa_proto_msgTypes[19]
+	mi := &file_exa_v1_exa_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2310,7 +2490,7 @@ func (x *GetCliModelConfigsRequest) String() string {
 func (*GetCliModelConfigsRequest) ProtoMessage() {}
 
 func (x *GetCliModelConfigsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_exa_v1_exa_proto_msgTypes[19]
+	mi := &file_exa_v1_exa_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2323,7 +2503,7 @@ func (x *GetCliModelConfigsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCliModelConfigsRequest.ProtoReflect.Descriptor instead.
 func (*GetCliModelConfigsRequest) Descriptor() ([]byte, []int) {
-	return file_exa_v1_exa_proto_rawDescGZIP(), []int{19}
+	return file_exa_v1_exa_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetCliModelConfigsRequest) GetMetadata() *Metadata {
@@ -2342,7 +2522,7 @@ type GetCliModelConfigsResponse struct {
 
 func (x *GetCliModelConfigsResponse) Reset() {
 	*x = GetCliModelConfigsResponse{}
-	mi := &file_exa_v1_exa_proto_msgTypes[20]
+	mi := &file_exa_v1_exa_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2354,7 +2534,7 @@ func (x *GetCliModelConfigsResponse) String() string {
 func (*GetCliModelConfigsResponse) ProtoMessage() {}
 
 func (x *GetCliModelConfigsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_exa_v1_exa_proto_msgTypes[20]
+	mi := &file_exa_v1_exa_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2367,7 +2547,7 @@ func (x *GetCliModelConfigsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCliModelConfigsResponse.ProtoReflect.Descriptor instead.
 func (*GetCliModelConfigsResponse) Descriptor() ([]byte, []int) {
-	return file_exa_v1_exa_proto_rawDescGZIP(), []int{20}
+	return file_exa_v1_exa_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GetCliModelConfigsResponse) GetClientModelConfigs() []*ClientModelConfig {
@@ -2560,7 +2740,7 @@ const file_exa_v1_exa_proto_rawDesc = "" +
 	"\x11max_output_tokens\x18\r \x01(\x05R\x0fmaxOutputTokens\x12!\n" +
 	"\fharness_uids\x18\x14 \x03(\tR\vharnessUids\x12<\n" +
 	"\x0edisplay_option\x18\x16 \x01(\x0e2\x15.exa.v1.DisplayOptionR\rdisplayOption\x12&\n" +
-	"\x0fis_model_router\x18\x19 \x01(\bR\risModelRouter\"\xdc\x01\n" +
+	"\x0fis_model_router\x18\x19 \x01(\bR\risModelRouter\"\xe9\x02\n" +
 	"\x11ClientModelConfig\x12\x14\n" +
 	"\x05label\x18\x01 \x01(\tR\x05label\x12\x1a\n" +
 	"\bdisabled\x18\x04 \x01(\bR\bdisabled\x12'\n" +
@@ -2569,7 +2749,19 @@ const file_exa_v1_exa_proto_rawDesc = "" +
 	"max_tokens\x18\x12 \x01(\x05R\tmaxTokens\x120\n" +
 	"\n" +
 	"model_info\x18\x17 \x01(\v2\x11.exa.v1.ModelInfoR\tmodelInfo\x12\x1b\n" +
-	"\tmodel_uid\x18\x16 \x01(\tR\bmodelUid\"I\n" +
+	"\tmodel_uid\x18\x16 \x01(\tR\bmodelUid\x12O\n" +
+	"\x15model_family_metadata\x18\x1e \x01(\v2\x1b.exa.v1.ModelFamilyMetadataR\x13modelFamilyMetadata\x12:\n" +
+	"\x1ais_default_model_in_family\x18\x1f \x01(\bR\x16isDefaultModelInFamily\"\xbb\x01\n" +
+	"\x13ModelFamilyMetadata\x12,\n" +
+	"\x12model_family_label\x18\x01 \x01(\tR\x10modelFamilyLabel\x12:\n" +
+	"\aentries\x18\x02 \x03(\v2 .exa.v1.ModelFamilyMetadataEntryR\aentries\x12:\n" +
+	"\x1ais_default_model_in_family\x18\x03 \x01(\bR\x16isDefaultModelInFamily\"d\n" +
+	"\x18ModelFamilyMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x126\n" +
+	"\x05value\x18\x02 \x01(\v2 .exa.v1.ModelFamilyMetadataValueR\x05value\"D\n" +
+	"\x18ModelFamilyMetadataValue\x12\x14\n" +
+	"\x05order\x18\x01 \x01(\x05R\x05order\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"I\n" +
 	"\x19GetCliModelConfigsRequest\x12,\n" +
 	"\bmetadata\x18\x01 \x01(\v2\x10.exa.v1.MetadataR\bmetadata\"i\n" +
 	"\x1aGetCliModelConfigsResponse\x12K\n" +
@@ -2661,7 +2853,7 @@ func file_exa_v1_exa_proto_rawDescGZIP() []byte {
 }
 
 var file_exa_v1_exa_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_exa_v1_exa_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_exa_v1_exa_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_exa_v1_exa_proto_goTypes = []any{
 	(ChatMessageSource)(0),             // 0: exa.v1.ChatMessageSource
 	(ChatMessageRequestType)(0),        // 1: exa.v1.ChatMessageRequestType
@@ -2689,13 +2881,16 @@ var file_exa_v1_exa_proto_goTypes = []any{
 	(*ModelFeatures)(nil),              // 23: exa.v1.ModelFeatures
 	(*ModelInfo)(nil),                  // 24: exa.v1.ModelInfo
 	(*ClientModelConfig)(nil),          // 25: exa.v1.ClientModelConfig
-	(*GetCliModelConfigsRequest)(nil),  // 26: exa.v1.GetCliModelConfigsRequest
-	(*GetCliModelConfigsResponse)(nil), // 27: exa.v1.GetCliModelConfigsResponse
-	(*timestamppb.Timestamp)(nil),      // 28: google.protobuf.Timestamp
+	(*ModelFamilyMetadata)(nil),        // 26: exa.v1.ModelFamilyMetadata
+	(*ModelFamilyMetadataEntry)(nil),   // 27: exa.v1.ModelFamilyMetadataEntry
+	(*ModelFamilyMetadataValue)(nil),   // 28: exa.v1.ModelFamilyMetadataValue
+	(*GetCliModelConfigsRequest)(nil),  // 29: exa.v1.GetCliModelConfigsRequest
+	(*GetCliModelConfigsResponse)(nil), // 30: exa.v1.GetCliModelConfigsResponse
+	(*timestamppb.Timestamp)(nil),      // 31: google.protobuf.Timestamp
 }
 var file_exa_v1_exa_proto_depIdxs = []int32{
 	6,  // 0: exa.v1.Metadata.auth_source:type_name -> exa.v1.AuthSource
-	28, // 1: exa.v1.Metadata.ls_timestamp:type_name -> google.protobuf.Timestamp
+	31, // 1: exa.v1.Metadata.ls_timestamp:type_name -> google.protobuf.Timestamp
 	5,  // 2: exa.v1.Metadata.supported_model_displays:type_name -> exa.v1.DisplayOption
 	7,  // 3: exa.v1.GetUserJwtRequest.metadata:type_name -> exa.v1.Metadata
 	3,  // 4: exa.v1.PromptCacheOptions.type:type_name -> exa.v1.CacheControlType
@@ -2714,20 +2909,23 @@ var file_exa_v1_exa_proto_depIdxs = []int32{
 	15, // 17: exa.v1.GetChatMessageRequest.tool_choice:type_name -> exa.v1.ChatToolChoice
 	12, // 18: exa.v1.GetChatMessageRequest.system_prompt_cache_options:type_name -> exa.v1.PromptCacheOptions
 	2,  // 19: exa.v1.GetChatMessageRequest.planner_mode:type_name -> exa.v1.ConversationalPlannerMode
-	28, // 20: exa.v1.GetChatMessageResponse.timestamp:type_name -> google.protobuf.Timestamp
+	31, // 20: exa.v1.GetChatMessageResponse.timestamp:type_name -> google.protobuf.Timestamp
 	4,  // 21: exa.v1.GetChatMessageResponse.stop_reason:type_name -> exa.v1.StopReason
 	10, // 22: exa.v1.GetChatMessageResponse.delta_tool_calls:type_name -> exa.v1.ChatToolCall
 	21, // 23: exa.v1.GetChatMessageResponse.usage:type_name -> exa.v1.ModelUsageStats
 	23, // 24: exa.v1.ModelInfo.model_features:type_name -> exa.v1.ModelFeatures
 	5,  // 25: exa.v1.ModelInfo.display_option:type_name -> exa.v1.DisplayOption
 	24, // 26: exa.v1.ClientModelConfig.model_info:type_name -> exa.v1.ModelInfo
-	7,  // 27: exa.v1.GetCliModelConfigsRequest.metadata:type_name -> exa.v1.Metadata
-	25, // 28: exa.v1.GetCliModelConfigsResponse.client_model_configs:type_name -> exa.v1.ClientModelConfig
-	29, // [29:29] is the sub-list for method output_type
-	29, // [29:29] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	26, // 27: exa.v1.ClientModelConfig.model_family_metadata:type_name -> exa.v1.ModelFamilyMetadata
+	27, // 28: exa.v1.ModelFamilyMetadata.entries:type_name -> exa.v1.ModelFamilyMetadataEntry
+	28, // 29: exa.v1.ModelFamilyMetadataEntry.value:type_name -> exa.v1.ModelFamilyMetadataValue
+	7,  // 30: exa.v1.GetCliModelConfigsRequest.metadata:type_name -> exa.v1.Metadata
+	25, // 31: exa.v1.GetCliModelConfigsResponse.client_model_configs:type_name -> exa.v1.ClientModelConfig
+	32, // [32:32] is the sub-list for method output_type
+	32, // [32:32] is the sub-list for method input_type
+	32, // [32:32] is the sub-list for extension type_name
+	32, // [32:32] is the sub-list for extension extendee
+	0,  // [0:32] is the sub-list for field type_name
 }
 
 func init() { file_exa_v1_exa_proto_init() }
@@ -2746,7 +2944,7 @@ func file_exa_v1_exa_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_exa_v1_exa_proto_rawDesc), len(file_exa_v1_exa_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   21,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -38,9 +38,18 @@ var (
 
 // modelMeta is what RunTurn needs beyond types.Model.
 type modelMeta struct {
-	// requestUID overrides the wire uid sent as chatModelUid (fusion
-	// pairings run their lead model; the composite uid is unservable).
+	// requestUID overrides the wire uid sent as chatModelUid when no effort
+	// route applies (fusion pairings run their lead model; the composite uid
+	// is unservable).
 	requestUID string
+	// effortUIDs maps a thinking level ("minimal".."max", "none" for the
+	// family's off route) to the chat uid the server declared for it.
+	effortUIDs map[string]string
+	// defaultLevel is the effort routing to the family's default member;
+	// empty when the default member is reached through the off route.
+	defaultLevel string
+	// defaultUID is the family's default member chat uid.
+	defaultUID string
 	// isAssignRouter marks harness-less routing slots ("adaptive") that
 	// must go through AssignModel before GetChatMessage.
 	isAssignRouter bool
@@ -245,21 +254,153 @@ var internalDisplayOptions = map[exav1.DisplayOption]bool{
 	exav1.DisplayOption_DISPLAY_OPTION_INTERNAL_DEFAULT: true,
 }
 
+// devinFamilyLane is one server-declared family lane: fast service and 1M
+// context are separate logical models; reasoning effort is the lane's only
+// selectable axis (port of oh-my-pi's collectDevinFamilyLane).
+type devinFamilyLane struct {
+	id            string
+	members       []string
+	defaultMember string
+	routing       map[string]string // effort or "none" -> member wire uid; first claim wins
+}
+
+// devinEffortByName maps family-metadata effort display names onto Console's
+// thinking-level vocabulary ("none" covers the family's off route).
+var devinEffortByName = map[string]string{
+	"none": "none", "nothinking": "none",
+	"minimal": "minimal", "low": "low", "medium": "medium",
+	"high": "high", "xhigh": "xhigh", "max": "max",
+}
+
+// devinEffortOrder is the picker order for collapsed family levels.
+var devinEffortOrder = []string{"minimal", "low", "medium", "high", "xhigh", "max"}
+
+// normalizeKey lowercases and collapses non-alphanumerics to single spaces
+// ("Reasoning Effort" -> "reasoning effort").
+func normalizeKey(s string) string {
+	var b strings.Builder
+	space := false
+	for _, r := range strings.ToLower(s) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			if space && b.Len() > 0 {
+				b.WriteByte(' ')
+			}
+			space = false
+			b.WriteRune(r)
+		} else {
+			space = true
+		}
+	}
+	return b.String()
+}
+
+// normalizeName lowercases and drops every non-alphanumeric ("X High" and
+// "XHigh" both -> "xhigh").
+func normalizeName(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// collectDevinFamilyLane files config under its server-declared family lane.
+// Configs with no family metadata, or whose family carries no effort axis,
+// are left alone and stay standalone.
+func collectDevinFamilyLane(lanes map[string]*devinFamilyLane, c *exav1.ClientModelConfig, uid string) {
+	fm := c.GetModelFamilyMetadata()
+	if fm == nil {
+		return
+	}
+	label := strings.TrimSpace(fm.GetModelFamilyLabel())
+	if label == "" {
+		return
+	}
+
+	var effort string
+	thinking := -1 // -1 unset, 0 false, 1 true
+	var fast, oneMillion bool
+	for _, e := range fm.GetEntries() {
+		v := e.GetValue()
+		if v == nil {
+			continue
+		}
+		key := normalizeKey(e.GetKey())
+		switch {
+		case key == "fast mode":
+			fast = v.GetOrder() == 1
+		case key == "thinking":
+			if v.GetOrder() == 1 {
+				thinking = 1
+			} else {
+				thinking = 0
+			}
+		case key == "1m context":
+			oneMillion = v.GetOrder() == 1
+		case key == "effort" || key == "reasoning effort":
+			effort = devinEffortByName[normalizeName(v.GetName())]
+		}
+	}
+	// Claude's paired non-thinking/thinking configs share effort labels; the
+	// explicit Thinking axis decides whether the route is off.
+	if thinking == 0 {
+		effort = "none"
+	}
+
+	baseID := strings.ReplaceAll(normalizeKey(label), " ", "-")
+	if baseID == "" {
+		return
+	}
+	laneID := baseID
+	if oneMillion {
+		laneID += "-1m"
+	}
+	if fast {
+		laneID += "-fast"
+	}
+	lane := lanes[laneID]
+	if lane == nil {
+		lane = &devinFamilyLane{id: laneID, routing: map[string]string{}}
+		lanes[laneID] = lane
+	}
+	lane.members = append(lane.members, uid)
+	if lane.defaultMember == "" && (c.GetIsDefaultModelInFamily() || fm.GetIsDefaultModelInFamily()) {
+		lane.defaultMember = uid
+	}
+	if effort != "" {
+		if _, claimed := lane.routing[effort]; !claimed {
+			lane.routing[effort] = uid
+		}
+	}
+}
+
 // normalizeDevinModels filters disabled/internal configs, resolves fusion
-// pairings to their lead, and returns catalog models plus per-uid run
-// metadata. Port of oh-my-pi's normalizeDevinModels minus the effort-family
-// collapse (Console lists each wire uid as its own model).
+// pairings to their lead, collapses server-declared effort families into
+// one logical model per lane, and returns catalog models plus per-id run
+// metadata. Port of oh-my-pi's normalizeDevinModels.
 func normalizeDevinModels(configs []*exav1.ClientModelConfig) ([]DiscoveredModel, map[string]modelMeta, error) {
 	liveUIDs := map[string]bool{}
+	liveConfigs := map[string]*exav1.ClientModelConfig{}
 	for _, c := range configs {
 		uid := strings.TrimSpace(c.GetModelUid())
 		if !c.GetDisabled() && uid != "" {
 			liveUIDs[uid] = true
+			if _, ok := liveConfigs[uid]; !ok {
+				liveConfigs[uid] = c
+			}
 		}
 	}
 
-	var models []DiscoveredModel
-	meta := map[string]modelMeta{}
+	type entry struct {
+		config         *exav1.ClientModelConfig
+		uid            string
+		isAssignRouter bool
+		requestUID     string
+	}
+	var entries []entry
+	lanes := map[string]*devinFamilyLane{}
 	seen := map[string]bool{}
 	for _, c := range configs {
 		if c.GetDisabled() {
@@ -291,61 +432,152 @@ func normalizeDevinModels(configs []*exav1.ClientModelConfig) ([]DiscoveredModel
 		// is unservable, so the request carries the lead uid; a pairing
 		// without a live lead is not listed.
 		requestUID := ""
-		leadUID, isFusion, leadLive := fusionLead(uid, liveUIDs)
-		if isFusion {
+		if leadUID, isFusion, leadLive := fusionLead(uid, liveUIDs); isFusion {
 			if !leadLive {
 				continue
 			}
 			requestUID = leadUID
 		}
 
-		var features *exav1.ModelFeatures
-		if mi != nil {
-			features = mi.GetModelFeatures()
+		entries = append(entries, entry{config: c, uid: uid, isAssignRouter: isAssignRouter, requestUID: requestUID})
+		// A router is a server-side dispatcher, not an effort tier: it stays
+		// a standalone model even when upstream files it under a family.
+		if !isRouter {
+			collectDevinFamilyLane(lanes, c, uid)
 		}
-		supportsImages := c.GetSupportsImages()
-		if features != nil {
-			supportsImages = features.GetSupportsImages()
-		}
-		supportsImages = supportsImages && !imageBlindUIDs[uid]
+	}
 
-		contextWindow := int(c.GetMaxTokens())
-		if contextWindow <= 0 {
-			contextWindow = defaultContextWindow
+	// A lane collapses only when it declares at least one non-off effort
+	// route; member wire uids then leave the standalone list (upstream
+	// collapseWithTable replaces them with the family spec).
+	familyOf := map[string]string{}
+	collapsed := map[string]bool{}
+	for id, lane := range lanes {
+		hasEffort := false
+		for e := range lane.routing {
+			if e != "none" {
+				hasEffort = true
+				break
+			}
 		}
-		// Fusion specs budget against the lead's limits, not the composite
-		// card's (routeDevinFusionLead upstream).
-		if requestUID != "" {
-			if lead, ok := configByUID(configs, requestUID); ok {
-				if cw := int(lead.GetMaxTokens()); cw > 0 {
-					contextWindow = cw
-				}
+		if !hasEffort {
+			continue
+		}
+		collapsed[id] = true
+		for _, m := range lane.members {
+			familyOf[m] = id
+		}
+	}
+
+	var models []DiscoveredModel
+	meta := map[string]modelMeta{}
+	for _, e := range entries {
+		if _, ok := familyOf[e.uid]; ok {
+			continue // emitted with its family below
+		}
+		spec, m := devinModelMeta(e.config, e.uid, liveConfigs, e.requestUID, e.isAssignRouter)
+		models = append(models, spec)
+		meta[e.uid] = m
+	}
+
+	for _, lane := range lanes {
+		if !collapsed[lane.id] {
+			continue
+		}
+		defUID := lane.defaultMember
+		if defUID == "" && len(lane.members) > 0 {
+			defUID = lane.members[0]
+		}
+		defConfig := liveConfigs[defUID]
+		if defConfig == nil {
+			continue
+		}
+		// Chat-resolve every routed uid through the fusion-lead table.
+		effortUIDs := map[string]string{}
+		var levels []string
+		for _, effort := range devinEffortOrder {
+			if uid, ok := lane.routing[effort]; ok {
+				levels = append(levels, effort)
+				effortUIDs[effort] = chatUIDForWire(uid, liveUIDs)
+			}
+		}
+		if uid, ok := lane.routing["none"]; ok {
+			levels = append([]string{"none"}, levels...)
+			effortUIDs["none"] = chatUIDForWire(uid, liveUIDs)
+		}
+		defaultUID := chatUIDForWire(defUID, liveUIDs)
+		defaultLevel := ""
+		for _, effort := range devinEffortOrder {
+			if lane.routing[effort] == defUID {
+				defaultLevel = effort
+				break
 			}
 		}
 
-		models = append(models, DiscoveredModel{
-			ID:             uid,
-			Provider:       "devin",
-			ContextWindow:  contextWindow,
-			SupportsImages: supportsImages,
-		})
-		meta[uid] = modelMeta{
-			requestUID:      requestUID,
-			isAssignRouter:  isAssignRouter,
-			parallelTools:   features != nil && features.GetSupportsParallelToolCalls(),
-			maxOutputTokens: int(mi.GetMaxOutputTokens()),
-		}
+		spec, m := devinModelMeta(defConfig, lane.id, liveConfigs, defaultUID, false)
+		spec.ID = lane.id
+		spec.ThinkingLevels = levels
+		spec.DefaultThinking = defaultLevel
+		m.requestUID = defaultUID
+		m.effortUIDs = effortUIDs
+		m.defaultLevel = defaultLevel
+		m.defaultUID = defaultUID
+		models = append(models, spec)
+		meta[lane.id] = m
 	}
 	return models, meta, nil
 }
 
-func configByUID(configs []*exav1.ClientModelConfig, uid string) (*exav1.ClientModelConfig, bool) {
-	for _, c := range configs {
-		if strings.TrimSpace(c.GetModelUid()) == uid {
-			return c, true
+// chatUIDForWire resolves a member wire uid to the uid actually sent on the
+// wire: fusion pairings route to their live lead.
+func chatUIDForWire(uid string, liveUIDs map[string]bool) string {
+	if lead, isFusion, live := fusionLead(uid, liveUIDs); isFusion && live {
+		return lead
+	}
+	return uid
+}
+
+// devinModelMeta builds the catalog spec + run metadata for one config,
+// mirroring devinModelSpec/routeDevinFusionLead upstream. requestUID is the
+// chat uid override (fusion lead or family default), "" for the raw uid.
+func devinModelMeta(c *exav1.ClientModelConfig, id string, liveConfigs map[string]*exav1.ClientModelConfig, requestUID string, isAssignRouter bool) (DiscoveredModel, modelMeta) {
+	uid := strings.TrimSpace(c.GetModelUid())
+	mi := c.GetModelInfo()
+	var features *exav1.ModelFeatures
+	if mi != nil {
+		features = mi.GetModelFeatures()
+	}
+	supportsImages := c.GetSupportsImages()
+	if features != nil {
+		supportsImages = features.GetSupportsImages()
+	}
+	supportsImages = supportsImages && !imageBlindUIDs[uid]
+
+	contextWindow := int(c.GetMaxTokens())
+	if contextWindow <= 0 {
+		contextWindow = defaultContextWindow
+	}
+	// Fusion specs budget against the lead's limits, not the composite
+	// card's (routeDevinFusionLead upstream).
+	if requestUID != "" {
+		if lead, ok := liveConfigs[requestUID]; ok {
+			if cw := int(lead.GetMaxTokens()); cw > 0 {
+				contextWindow = cw
+			}
 		}
 	}
-	return nil, false
+
+	return DiscoveredModel{
+		ID:             id,
+		Provider:       "devin",
+		ContextWindow:  contextWindow,
+		SupportsImages: supportsImages,
+	}, modelMeta{
+		requestUID:      requestUID,
+		isAssignRouter:  isAssignRouter,
+		parallelTools:   features != nil && features.GetSupportsParallelToolCalls(),
+		maxOutputTokens: int(mi.GetMaxOutputTokens()),
+	}
 }
 
 // fusionLead resolves the lead chat uid of a Fusion pairing
@@ -375,12 +607,23 @@ func fusionLead(uid string, liveUIDs map[string]bool) (string, bool, bool) {
 	return "", true, false
 }
 
-// chatModelUID resolves the catalog id to the wire chatModelUid and whether
-// it needs AssignModel resolution. Falls back to the raw id when discovery
-// has no metadata for it.
-func chatModelUID(modelID string) (uid string, meta modelMeta) {
+// chatModelUID resolves the catalog id plus optional thinking level to the
+// wire chatModelUid and whether it needs AssignModel resolution. Falls back
+// to the raw id when discovery has no metadata for it.
+func chatModelUID(modelID, thinkingLevel string) (uid string, meta modelMeta) {
 	meta = modelMetaFor(modelID)
 	uid = meta.requestUID
+	if len(meta.effortUIDs) > 0 {
+		level := thinkingLevel
+		if level == "" {
+			level = meta.defaultLevel
+		}
+		if routed, ok := meta.effortUIDs[level]; ok {
+			uid = routed
+		} else if meta.defaultUID != "" {
+			uid = meta.defaultUID
+		}
+	}
 	if uid == "" {
 		uid = modelID
 	}

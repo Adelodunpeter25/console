@@ -84,7 +84,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 	prompts := buildPrompts(req.Messages, cascadeID)
 	routerPrompt := lastUserPrompt(prompts)
 
-	chatUID, meta := chatModelUID(req.Model)
+	chatUID, meta := chatModelUID(req.Model, req.ThinkingLevel)
 	toolDefs := buildToolDefinitions(req.Tools, isGeminiModelUID(chatUID))
 
 	auth, err := fetchTurnAuth(ctx, p.httpClient(), p.baseURL(), cred.Token, cascadeID)
