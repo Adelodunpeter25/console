@@ -43,7 +43,12 @@ impl ConsoleDesktopApp {
             .into_iter()
             .find(|l| l.id == pane_id)
         {
-            if leaf.tabs.is_empty() && self.workspace_root.leaves().len() > 1 {
+            // Closing a chat tab parks its workspace when other tabs remain, so
+            // its emptied pane stays: removing it would collapse the saved
+            // layout and the chat would reopen beside the file, not left of it.
+            let parking = tab_id.starts_with("chat:")
+                && !workspace_ops::is_workspace_empty(&self.workspace_root);
+            if leaf.tabs.is_empty() && self.workspace_root.leaves().len() > 1 && !parking {
                 console_ui::workspace::ops::close_pane(&mut self.workspace_root, pane_id);
                 self.carry_staged_comments(pane_id, cx);
                 if let Some((chat_pane, _)) = self.workspace_chat() {
