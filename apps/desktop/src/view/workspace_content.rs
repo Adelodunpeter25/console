@@ -586,16 +586,13 @@ impl ConsoleDesktopApp {
                 }
             })
         };
-        let on_select_file: Rc<dyn Fn(String, &mut Window, &mut App)> = Rc::new(move |path, _w, cx| {
-            if let Some(app) = entity.upgrade() {
-                app.update(cx, |this, cx| this.open_file_tab(path, cx));
-            }
-        });
-        let scroll_handle = self
-            .file_tree_scrolls
-            .entry(tab_id)
-            .or_default()
-            .clone();
+        let on_select_file: Rc<dyn Fn(String, &mut Window, &mut App)> =
+            Rc::new(move |path, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.open_file_tab(path, cx));
+                }
+            });
+        let scroll_handle = self.file_tree_scrolls.entry(tab_id).or_default().clone();
         div()
             .size_full()
             .min_h_0()

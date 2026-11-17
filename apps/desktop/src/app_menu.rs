@@ -259,9 +259,7 @@ pub fn init(cx: &mut App) {
         ]),
         // View menu owns ⌘B / ⌥B key equivalents so AppKit routes them
         // to our actions (same pattern as File for ⌘O / ⌘P).
-        Menu::new("View").items([
-            MenuItem::action("Toggle Left Sidebar", ToggleLeftSidebar),
-        ]),
+        Menu::new("View").items([MenuItem::action("Toggle Left Sidebar", ToggleLeftSidebar)]),
         // GPUI's mac backend makes any menu named "Window" the app's windows
         // menu, so open windows (and tab items) list under ours.
         Menu::new("Window").items([

@@ -1025,7 +1025,10 @@ impl ConsoleDesktopApp {
     /// close must not be redirected to a chat that is not in front.
     pub(crate) fn focused_chat(&self) -> Option<(&str, &str)> {
         if let Some(pane_id) = self.active_chat_pane_ref() {
-            return self.selected_session_id.as_deref().map(|sid| (pane_id, sid));
+            return self
+                .selected_session_id
+                .as_deref()
+                .map(|sid| (pane_id, sid));
         }
         self.workspace_chat()
     }

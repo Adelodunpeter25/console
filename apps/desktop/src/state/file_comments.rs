@@ -832,9 +832,11 @@ impl ConsoleDesktopApp {
         };
 
         let has_any_staged = pids.iter().any(|pid| {
-            self.workspace_pane_states
-                .get(*pid)
-                .is_some_and(|pane| pane.file_comments.iter().any(|c| c.staged && c.state != FileCommentState::Draft))
+            self.workspace_pane_states.get(*pid).is_some_and(|pane| {
+                pane.file_comments
+                    .iter()
+                    .any(|c| c.staged && c.state != FileCommentState::Draft)
+            })
         });
         if !has_any_staged {
             return Rc::new(Vec::new());

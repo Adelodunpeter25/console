@@ -756,7 +756,10 @@ impl ConsoleDesktopApp {
                 let pane_ids: Vec<String> = self.workspace_pane_states.keys().cloned().collect();
                 for pane_id in pane_ids {
                     if self.active_session_for_pane(&pane_id).as_deref() == Some(&session_id) {
-                        self.set_pane_approval_mode(&pane_id, console_core::ApprovalMode::FullAccess);
+                        self.set_pane_approval_mode(
+                            &pane_id,
+                            console_core::ApprovalMode::FullAccess,
+                        );
                     }
                 }
             }

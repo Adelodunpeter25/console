@@ -95,9 +95,7 @@ impl ConsoleDesktopApp {
             | console_core::WorkspaceTabConfig::Browser { project_id, .. }
             | console_core::WorkspaceTabConfig::ChangesReview { project_id, .. }
             | console_core::WorkspaceTabConfig::FileTree { project_id, .. }
-            | console_core::WorkspaceTabConfig::Device { project_id, .. } => {
-                project_id.clone()
-            }
+            | console_core::WorkspaceTabConfig::Device { project_id, .. } => project_id.clone(),
         };
         from_tab.or_else(|| self.pane_workspace_key(pane_id))
     }
@@ -511,7 +509,6 @@ impl ConsoleDesktopApp {
             || self.floating_composer.open
             || self.global_search_panel.read(cx).is_open()
     }
-
 
     /// Follow one run: backfill its record, stream live events, then
     /// reconcile once the stream ends. Replacing the stored task cancels a

@@ -278,12 +278,10 @@ pub struct ConsoleDesktopApp {
     pub(crate) changes_review_collapsed:
         std::collections::HashMap<String, std::collections::HashSet<String>>,
     /// Tree contents and expanded folders for each open Files tab, keyed by tab id.
-    pub(crate) file_tree_data:
-        std::collections::HashMap<String, Rc<Vec<console_ui::FileTreeNode>>>,
+    pub(crate) file_tree_data: std::collections::HashMap<String, Rc<Vec<console_ui::FileTreeNode>>>,
     pub(crate) file_tree_expanded:
         std::collections::HashMap<String, std::collections::HashSet<String>>,
-    pub(crate) file_tree_scrolls:
-        std::collections::HashMap<String, gpui::ScrollHandle>,
+    pub(crate) file_tree_scrolls: std::collections::HashMap<String, gpui::ScrollHandle>,
     pub file_tree_selected_path: Option<String>,
     pub session_subagents:
         std::collections::HashMap<String, Rc<Vec<console_core::types::SubagentInfo>>>,

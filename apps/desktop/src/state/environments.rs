@@ -416,8 +416,7 @@ impl ConsoleDesktopApp {
                         this.file_tree_scrolls.clear();
                         this.file_tree_nodes = std::rc::Rc::new(Vec::new());
                         this.working_changes = std::rc::Rc::new(Vec::new());
-                        this.git_badges =
-                            std::rc::Rc::new(std::collections::HashMap::new());
+                        this.git_badges = std::rc::Rc::new(std::collections::HashMap::new());
                         this.file_tree_selected_path = None;
 
                         // Reload data from new server

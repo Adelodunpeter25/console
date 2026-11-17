@@ -7,9 +7,7 @@ use console_core::ProjectInfoExt;
 use console_ui::workspace::{
     ContentRenderer, WorkspaceDrag, WorkspaceDropAction, WorkspacePane, cancel_workspace_drags,
 };
-use console_ui::{
-    ImageViewerModal, SidebarView, Theme, TitleBar,
-};
+use console_ui::{ImageViewerModal, SidebarView, Theme, TitleBar};
 use gpui::{
     App, Context, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
     MouseUpEvent, ParentElement, Render, Styled, Window, div, prelude::FluentBuilder,
@@ -418,9 +416,7 @@ impl Render for ConsoleDesktopApp {
                         app.update(cx, |this, cx| {
                             let sidebar_changed = this.resize_sidebar(f32::from(event.position.x));
                             let split_changed = this.resize_split_drag(event.position);
-                            if sidebar_changed
-                                || split_changed
-                            {
+                            if sidebar_changed || split_changed {
                                 cx.notify();
                             }
                         });
@@ -434,9 +430,7 @@ impl Render for ConsoleDesktopApp {
                         app.update(cx, |this, cx| {
                             let sidebar_changed = this.finish_sidebar_resize();
                             let split_changed = this.finish_split_resize();
-                            if sidebar_changed
-                                || split_changed
-                            {
+                            if sidebar_changed || split_changed {
                                 cx.notify();
                             }
                         });
@@ -829,9 +823,9 @@ impl Render for ConsoleDesktopApp {
                                     .leaves()
                                     .into_iter()
                                     .filter_map(|leaf| {
-                                        self.workspace_pane_states
-                                            .get(&leaf.id)
-                                            .map(|state| (leaf.id.clone(), state.tab_strip_follow.clone()))
+                                        self.workspace_pane_states.get(&leaf.id).map(|state| {
+                                            (leaf.id.clone(), state.tab_strip_follow.clone())
+                                        })
                                     })
                                     .collect();
                                 WorkspacePane::new(
@@ -873,7 +867,7 @@ impl Render for ConsoleDesktopApp {
                                     },
                                 )
                             }),
-                    )
+                    ),
             )
             .when_some(self.zoomed_image.clone(), |el, image| {
                 el.child(ImageViewerModal::new(image, "Image preview", {

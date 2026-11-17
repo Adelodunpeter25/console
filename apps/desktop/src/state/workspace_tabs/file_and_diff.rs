@@ -459,7 +459,12 @@ impl ConsoleDesktopApp {
 
     /// Load the diff for a tab restored from disk: the working-tree diff, as
     /// the turn it came from is not saved with the tab.
-    pub(crate) fn load_diff_for_tab(&mut self, pane_id: &str, path: String, cx: &mut Context<Self>) {
+    pub(crate) fn load_diff_for_tab(
+        &mut self,
+        pane_id: &str,
+        path: String,
+        cx: &mut Context<Self>,
+    ) {
         let lookup_pane = self
             .workspace_chat()
             .map(|(pane, _)| pane.to_owned())

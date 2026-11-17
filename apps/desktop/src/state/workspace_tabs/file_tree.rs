@@ -31,7 +31,10 @@ impl ConsoleDesktopApp {
     }
 
     pub fn toggle_file_tree_folder(&mut self, tab_id: &str, path: String, cx: &mut Context<Self>) {
-        let expanded = self.file_tree_expanded.entry(tab_id.to_string()).or_default();
+        let expanded = self
+            .file_tree_expanded
+            .entry(tab_id.to_string())
+            .or_default();
         if !expanded.remove(&path) {
             expanded.insert(path);
         }

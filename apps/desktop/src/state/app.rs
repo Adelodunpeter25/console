@@ -132,13 +132,7 @@ impl ConsoleDesktopApp {
                     .and_then(|pid| project_workspace_roots.get(&Some(pid.clone())).cloned())
                     .or_else(|| project_workspace_roots.get(&None).cloned())
                     .unwrap_or_else(|| WorkspaceNode::leaf("pane-main"));
-                (
-                    sb_visible,
-                    sb_width,
-                    proj_id,
-                    root,
-                    startup.window,
-                )
+                (sb_visible, sb_width, proj_id, root, startup.window)
             }
             crate::window::WindowLaunchTarget::Fresh { .. }
             | crate::window::WindowLaunchTarget::Session(_) => {

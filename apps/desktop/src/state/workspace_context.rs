@@ -107,7 +107,7 @@ impl ConsoleDesktopApp {
         }
     }
 
-        /// Open the active pane's subagents popover — the same card the
+    /// Open the active pane's subagents popover — the same card the
     /// subagents pill opens — from a transcript subagent-card click.
     pub fn open_subagents_popover(&self, window: &mut gpui::Window, cx: &mut gpui::Context<Self>) {
         let pane_id = self

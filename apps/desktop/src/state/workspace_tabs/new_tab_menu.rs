@@ -10,7 +10,11 @@ use gpui::{App, Context, WeakEntity, Window};
 use crate::state::app::ConsoleDesktopApp;
 
 fn kbd(mac: &'static str, other: &'static str) -> Option<&'static str> {
-    Some(if cfg!(target_os = "macos") { mac } else { other })
+    Some(if cfg!(target_os = "macos") {
+        mac
+    } else {
+        other
+    })
 }
 
 impl ConsoleDesktopApp {
@@ -40,7 +44,9 @@ pub(crate) fn new_tab_menu_items(
         let row = |label: &'static str,
                    icon: IconName,
                    shortcut: Option<&'static str>,
-                   run: Rc<dyn Fn(&mut ConsoleDesktopApp, &mut Window, &mut Context<ConsoleDesktopApp>)>| {
+                   run: Rc<
+            dyn Fn(&mut ConsoleDesktopApp, &mut Window, &mut Context<ConsoleDesktopApp>),
+        >| {
             let entity = entity.clone();
             let pane_id = pane_id.clone();
             let item = MenuItem::new(label, move |window, cx| {
@@ -108,8 +114,7 @@ impl ConsoleDesktopApp {
     /// Open the changes review for this workspace's chat in the right-hand
     /// split, whichever pane has focus.
     pub fn open_changes_for_active_pane(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.workspace_chat().map(|(_, session)| session.to_owned())
-        else {
+        let Some(session_id) = self.workspace_chat().map(|(_, session)| session.to_owned()) else {
             return;
         };
         self.open_changes_review_tab(session_id, console_core::types::ChangesScope::AllTurns, cx);
