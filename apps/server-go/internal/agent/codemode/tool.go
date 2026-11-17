@@ -50,7 +50,8 @@ func NewCodeResetTool(rt *Runtime) tools.Tool {
 // SetupHint is included in the model's setup instructions when Code Mode is active.
 const SetupHint = `# Code Mode Active
 You interact with the workspace and tools through the ` + "`code`" + ` tool (JavaScript REPL).
-Direct tools are replaced by asynchronous JavaScript functions inside the script:
+Direct tools are replaced by asynchronous JavaScript functions inside the script.
+PLAN MODE: if the user asks for changes, call await requestFullAccess("short reason") inside code FIRST — before any write attempt.
 - $` + "`cmd`" + ` or $("cmd") runs shell commands. Custom options: $({ cwd: "dir" })` + "`cmd`" + `.
   Returns { code, exitCode, stdout, stderr, ok, durationMs, text(), json() }.
   Throws on non-zero exit code unless .nothrow() is called: (await $` + "`git status`" + `).nothrow()

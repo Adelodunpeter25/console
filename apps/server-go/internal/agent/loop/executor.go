@@ -22,6 +22,10 @@ type Executor struct {
 	// tool's input files are still untouched. Used by the run service to
 	// capture pre-write content for the session file-change diff. Optional.
 	OnBeforeExecute func(call tools.ToolCall, tool tools.Tool)
+	// OnAfterExecute, when set, runs after every tool execution with its
+	// result. Unlike provider events it also sees inner calls dispatched
+	// from the codemode REPL (write/edit inside the code tool).
+	OnAfterExecute func(call tools.ToolCall, result tools.ToolResult)
 	// Guard, when set, confines write-capable tool calls to the session's
 	// project root and fills in glob/grep roots that would otherwise resolve
 	// against the server's launch directory. It rewrites the arguments it
@@ -108,14 +112,18 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 	if envelope, ok := out.(tools.Envelope); ok {
 		content, isError, visual = envelope.Content, envelope.IsError, envelope.Visual
 	}
-	return tools.ToolResult{
+	result := tools.ToolResult{
 		ToolCallID: call.ID,
 		ToolName:   call.Name,
 		Content:    content,
 		IsError:    isError,
 		Args:       call.Arguments,
 		Visual:     visual,
-	}, nil
+	}
+	if e.OnAfterExecute != nil {
+		e.OnAfterExecute(call, result)
+	}
+	return result, nil
 }
 
 // executeToolCall prefers CallAwareTool.ExecuteCall (full call incl. id)
@@ -163,7 +171,7 @@ func newRequestID() string {
 // that worked a turn ago now fails.
 func deniedMessage(tool string, mode permissions.Mode) string {
 	if mode == permissions.PlanMode {
-		return tools.NewToolError("Tool '%s' is denied: plan mode is read-only. Describe the change in your plan; to save the plan as a file use writePlan. To make changes, call requestFullAccess so the user can approve Full Access.", tool).Error()
+		return tools.NewToolError("Tool '%s' is denied: plan mode is read-only. Call await requestFullAccess('short reason') in code to request write access; plan with writePlan meanwhile.", tool).Error()
 	}
 	return tools.NewToolError("Tool '%s' is denied in %s mode.", tool, mode).Error()
 }

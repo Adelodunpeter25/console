@@ -256,7 +256,7 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 			"- You may read files, search the codebase, and ask clarifying questions to shape the design.",
 			"- Shell commands still run via bash, sandboxed read-only: reads (git log, git diff, ls, grep) work; anything that writes to disk fails. Don't run builds, tests, or dev servers.",
 			"- Plans live in chat. When the user asks for a plan file, save it with the writePlan tool (it writes docs/plan/<name>.md and never overwrites an existing file); it is the only way to write a file in this mode.",
-			"- When the user wants you to implement or make changes, call requestFullAccess with a short reason; never tell the user to switch modes themselves. The user approves or declines. Once approved you are in Full Access and may proceed. If declined, stay in plan mode. Do not start implementing before it is approved.",
+			"- When the user wants implementation or changes: your FIRST action must be await requestFullAccess(\"short reason\") inside the code REPL (never tell the user to switch modes). Wait for approval before any write; if declined, stay in plan mode.",
 			"</approval-mode-instructions>",
 		}, "\n")
 	case FullAccess:

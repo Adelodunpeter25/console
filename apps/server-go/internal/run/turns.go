@@ -555,6 +555,15 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	executor.OnBeforeExecute = func(call tools.ToolCall, _ tools.Tool) {
 		s.snapshots.SnapshotWritePaths(sessionID, writePaths(call))
 	}
+	executor.OnAfterExecute = func(call tools.ToolCall, result tools.ToolResult) {
+		var args map[string]any
+		if len(result.Args) > 0 {
+			_ = json.Unmarshal(result.Args, &args)
+		}
+		if err := s.generateAndRecordFileChange(s.snapshots, sessionID, call.Name, args, result.IsError, turn); err != nil {
+			slog.Warn("record file change failed", "session", sessionID, "tool", call.Name, "error", err)
+		}
+	}
 	cmManager := s.CodemodeManager()
 	if cmManager == nil {
 		cmManager = codemode.NewManager(mcpManager, executor.Mode)
@@ -642,15 +651,6 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			}
 			s.broadcastContextUsage(ctx, sessionID, hub)
 			return nil
-		}
-
-		// Track file changes on tool execution results
-		if event.Kind == loop.EventToolResult && event.Result != nil {
-			var args map[string]any
-			if len(event.Result.Args) > 0 {
-				_ = json.Unmarshal(event.Result.Args, &args)
-			}
-			_ = s.generateAndRecordFileChange(s.snapshots, sessionID, event.Result.ToolName, args, event.Result.IsError, turn)
 		}
 
 		turner.translate(event)
