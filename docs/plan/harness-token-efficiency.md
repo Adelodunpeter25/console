@@ -490,7 +490,7 @@ The Factory article reinforces several principles for this plan:
   codemode requirements. Bounded autonomy and model-specific tuning are also
   later validation work.
 
-### Task 4.4: `lazy_tools`: load rarely used tools on demand — **done (2026-11-13), behind `CONSOLE_HARNESS_LAZY_TOOLS=1` (default off)**
+### Task 4.4: `lazy_tools`: load rarely used tools on demand — **superseded (codemode is now the default; deferred built-ins and the flag were removed). Kept here for historical context.**
 - **Always sent:** `read_file`, `list_dir`, `glob`, `grep`, `editFile`,
   `write_file`, `bash`, `todo`, `ask`, `subagent`, `readSkill`.
 - **Held back:** `webSearch`, `webFetch`, `bashJob`, `askMany`, `memory`,
