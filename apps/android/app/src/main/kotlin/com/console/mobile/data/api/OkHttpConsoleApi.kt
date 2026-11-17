@@ -85,6 +85,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
+import okio.ByteString.Companion.toByteString
 
 class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     // Moshi JSON layer for Wire types (shared protobuf schema). kotlinx stays
@@ -184,7 +185,25 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     }
 
     override suspend fun getSessionBootstrap(id: String): SessionBootstrapResponse {
-        val raw = http.get("/api/sessions/${enc(id)}/bootstrap")
+        val (contentType, bytes) = http.getRaw("/api/sessions/${enc(id)}/bootstrap", "application/x-protobuf")
+        if (contentType.startsWith("application/x-protobuf")) {
+            val wire = console.v1.SessionBootstrapResponse.ADAPTER.decode(bytes.toByteString())
+            return SessionBootstrapResponse(
+                detail = SessionDetailResponse(
+                    header = wire.header_ ?: throw ApiException("Session bootstrap is missing its header"),
+                    messages = wire.messages.mapNotNull { it.toUi() },
+                    hasMore = wire.has_more,
+                    nextCursor = wire.next_cursor,
+                ),
+                changes = wire.changes,
+                todos = wire.todos,
+                suggestions = wire.suggestions,
+                queuedPrompts = wire.queued_prompts,
+                backgroundWork = wire.background_work.map { it.toUi() },
+                draft = wire.draft,
+            )
+        }
+        val raw = bytes.toString(Charsets.UTF_8)
         val obj = http.unwrap(raw, JsonObject.serializer(), "load session bootstrap")
         fun <T : Any> list(key: String, decode: (JsonElement) -> T?): List<T> =
             (obj[key] as? JsonArray)?.mapNotNull { decode(it) } ?: emptyList()

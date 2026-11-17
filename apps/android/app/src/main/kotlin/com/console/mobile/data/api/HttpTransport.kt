@@ -79,6 +79,19 @@ class HttpTransport(
     suspend fun get(path: String, params: Map<String, String?> = emptyMap()): String =
         execute(requestBuilder(url(path, params)).get().build())
 
+    /** GET with an explicit Accept header, returning (content type, raw body). */
+    suspend fun getRaw(path: String, accept: String): Pair<String, ByteArray> = withContext(Dispatchers.IO) {
+        val request = requestBuilder(url(path)).get().header("Accept", accept).build()
+        callClient.newCall(request).execute().use { res ->
+            val bytes = res.body?.bytes() ?: ByteArray(0)
+            if (!res.isSuccessful) {
+                val raw = bytes.toString(Charsets.UTF_8)
+                throw ApiException(extractError(raw) ?: "Request failed with status ${res.code}", code = res.code.toString())
+            }
+            (res.header("Content-Type") ?: "") to bytes
+        }
+    }
+
     suspend fun post(path: String, bodyJson: String? = null): String {
         val body = (bodyJson ?: "").toRequestBody(jsonMedia)
         return execute(requestBuilder(url(path)).post(body).build())

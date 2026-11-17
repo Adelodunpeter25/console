@@ -42,6 +42,22 @@ data class BackgroundWork(
     val metadata: Map<String, String> = emptyMap(),
 )
 
+/** Binary bootstrap rows are protobuf now; the JSON path decodes the same shape. */
+fun console.v1.BackgroundWork.toUi(): BackgroundWork = BackgroundWork(
+    id = id,
+    sessionId = session_id,
+    parentRunId = parent_run_id,
+    parentCallId = parent_call_id,
+    kind = kind,
+    status = status,
+    createdAt = created_at,
+    startedAt = started_at,
+    finishedAt = finished_at,
+    summary = summary,
+    error = error,
+    metadata = metadata,
+)
+
 /** One read of a detached shell's buffered output (see the background-work output route). */
 @Serializable
 data class BackgroundWorkOutput(
