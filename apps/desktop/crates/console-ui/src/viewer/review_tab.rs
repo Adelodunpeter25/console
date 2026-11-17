@@ -356,59 +356,69 @@ fn render_review_entry(
                                 .text_color(status_color)
                                 .child(status_label),
                         )
-                .child(
-                    div()
-                        .id(gpui::ElementId::Name(
-                            format!("review-mark-{}-{}", entry.path, entry.turn_index).into(),
-                        ))
-                        .flex()
-                        .items_center()
-                        .gap(px(6.0))
-                        .px(px(8.0))
-                        .h(px(24.0))
-                        .rounded(px(6.0))
-                        .cursor_pointer()
-                        .when(reviewed, |el| el.bg(theme.overlay_strong))
-                        .when(!reviewed, |el| {
-                            el.border_1().border_color(theme.border_strong)
-                        })
-                        .hover(|s| s.bg(theme.overlay))
-                        .on_click(move |event, window, cx| {
-                            cx.stop_propagation();
-                            let _ = event;
-                            (on_toggle_reviewed)(path_for_reviewed.clone(), turn_index, window, cx);
-                        })
-                        .child(app_icon(
-                            IconName::Check,
-                            10.0,
-                            if reviewed {
-                                theme.success
-                            } else {
-                                theme.text_tertiary
-                            },
-                        ))
                         .child(
                             div()
-                                .text_size(px(10.5))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(if reviewed {
-                                    theme.success
-                                } else {
-                                    theme.text_tertiary
+                                .id(gpui::ElementId::Name(
+                                    format!("review-mark-{}-{}", entry.path, entry.turn_index)
+                                        .into(),
+                                ))
+                                .flex()
+                                .items_center()
+                                .gap(px(6.0))
+                                .px(px(8.0))
+                                .h(px(24.0))
+                                .rounded(px(6.0))
+                                .cursor_pointer()
+                                .when(reviewed, |el| el.bg(theme.overlay_strong))
+                                .when(!reviewed, |el| {
+                                    el.border_1().border_color(theme.border_strong)
                                 })
-                                .child(if reviewed {
-                                    "Reviewed"
-                                } else {
-                                    "Mark as reviewed"
-                                }),
+                                .hover(|s| s.bg(theme.overlay))
+                                .on_click(move |event, window, cx| {
+                                    cx.stop_propagation();
+                                    let _ = event;
+                                    (on_toggle_reviewed)(
+                                        path_for_reviewed.clone(),
+                                        turn_index,
+                                        window,
+                                        cx,
+                                    );
+                                })
+                                .child(app_icon(
+                                    IconName::Check,
+                                    10.0,
+                                    if reviewed {
+                                        theme.success
+                                    } else {
+                                        theme.text_tertiary
+                                    },
+                                ))
+                                .child(
+                                    div()
+                                        .text_size(px(10.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(if reviewed {
+                                            theme.success
+                                        } else {
+                                            theme.text_tertiary
+                                        })
+                                        .child(if reviewed {
+                                            "Reviewed"
+                                        } else {
+                                            "Mark as reviewed"
+                                        }),
+                                ),
                         ),
-                ),
                 ),
         )
         .when_some(editor_diff, |el, diff| {
             let height = (diff.line_count as f32 * REVIEW_LINE_HEIGHT).min(REVIEW_DIFF_MAX_HEIGHT);
             el.child(
-                div().w_full().h(px(height)).overflow_hidden().child(DiffViewer::new(diff.view)),
+                div()
+                    .w_full()
+                    .h(px(height))
+                    .overflow_hidden()
+                    .child(DiffViewer::new(diff.view)),
             )
         })
         .into_any_element()

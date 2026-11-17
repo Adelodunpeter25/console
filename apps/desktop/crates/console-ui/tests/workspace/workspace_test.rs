@@ -532,7 +532,8 @@ fn test_a_new_desk_starts_on_its_own_pane() {
 
     assert_eq!(desk_b.leaves().len(), 1);
     assert_ne!(
-        desk_a.leaves()[0].id, desk_b.leaves()[0].id,
+        desk_a.leaves()[0].id,
+        desk_b.leaves()[0].id,
         "two desks must not share a pane id"
     );
     assert!(desk_b.leaves()[0].tabs.is_empty());

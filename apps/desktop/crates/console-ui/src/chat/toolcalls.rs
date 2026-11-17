@@ -631,13 +631,11 @@ impl ToolCalls {
             );
 
         if open {
-            row = row.child(
-                div()
-                    .pl(px(10.0))
-                    .children(group.entries.into_iter().enumerate().map(|(index, entry)| {
-                        self.call_row(entry, theme, index == 0, on_action.clone(), window, cx)
-                    })),
-            );
+            row = row.child(div().pl(px(10.0)).children(
+                group.entries.into_iter().enumerate().map(|(index, entry)| {
+                    self.call_row(entry, theme, index == 0, on_action.clone(), window, cx)
+                }),
+            ));
         }
         row.into_any_element()
     }

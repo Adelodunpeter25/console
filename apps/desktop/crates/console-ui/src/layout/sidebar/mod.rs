@@ -33,9 +33,9 @@ pub fn init_sidebar_search_keybindings(cx: &mut App) {
 
 use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
 use gpui::{
-    Animation, AnimationExt, App, Entity, FontWeight, InteractiveElement, IntoElement, ListState, MouseButton,
-    ParentElement, RenderOnce, SpringAnimation, SpringConfig, StatefulInteractiveElement, Styled,
-    Window, div, list, prelude::FluentBuilder, px,
+    Animation, AnimationExt, App, Entity, FontWeight, InteractiveElement, IntoElement, ListState,
+    MouseButton, ParentElement, RenderOnce, SpringAnimation, SpringConfig,
+    StatefulInteractiveElement, Styled, Window, div, list, prelude::FluentBuilder, px,
 };
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;

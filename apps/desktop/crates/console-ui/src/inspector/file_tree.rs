@@ -332,28 +332,27 @@ impl RenderOnce for FileTreeView {
             container = container.track_scroll(&scroll_handle);
         }
 
-        container
-            .child(if children.is_empty() {
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .py(px(24.0))
-                    .text_size(px(12.0))
-                    .text_color(theme.text_tertiary)
-                    .child(if self.search_query.is_empty() {
-                        "No files found"
-                    } else {
-                        "No matching files"
-                    })
-                    .into_any_element()
-            } else {
-                div()
-                    .flex()
-                    .flex_col()
-                    .children(children)
-                    .into_any_element()
-            })
+        container.child(if children.is_empty() {
+            div()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .py(px(24.0))
+                .text_size(px(12.0))
+                .text_color(theme.text_tertiary)
+                .child(if self.search_query.is_empty() {
+                    "No files found"
+                } else {
+                    "No matching files"
+                })
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_col()
+                .children(children)
+                .into_any_element()
+        })
     }
 }

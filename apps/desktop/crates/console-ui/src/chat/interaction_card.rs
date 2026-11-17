@@ -79,7 +79,8 @@ impl RenderOnce for QuestionInteractionCard {
                 .iter()
                 .any(|o| o.eq_ignore_ascii_case("deny") || o.eq_ignore_ascii_case("decline"));
         let (positive_opt, negative_opt) = if is_approve_deny {
-            if options[0].eq_ignore_ascii_case("approve") || options[0].eq_ignore_ascii_case("allow")
+            if options[0].eq_ignore_ascii_case("approve")
+                || options[0].eq_ignore_ascii_case("allow")
             {
                 (options[0].clone(), options[1].clone())
             } else {
@@ -240,11 +241,12 @@ impl RenderOnce for QuestionInteractionCard {
                                     theme.overlay_strong
                                 })
                                 .when(!self.submitting, |b| {
-                                    b.cursor_default()
-                                        .hover(|s| s.opacity(0.85))
-                                        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                                    b.cursor_default().hover(|s| s.opacity(0.85)).on_mouse_down(
+                                        MouseButton::Left,
+                                        move |_, window, cx| {
                                             (on_ans_pos)(pos_val.clone(), window, cx);
-                                        })
+                                        },
+                                    )
                                 })
                                 .flex()
                                 .items_center()
@@ -310,11 +312,12 @@ impl RenderOnce for QuestionInteractionCard {
                                     theme.overlay_strong
                                 })
                                 .when(has_answer && !self.submitting, |b| {
-                                    b.cursor_default()
-                                        .hover(|s| s.opacity(0.85))
-                                        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                                    b.cursor_default().hover(|s| s.opacity(0.85)).on_mouse_down(
+                                        MouseButton::Left,
+                                        move |_, window, cx| {
                                             (on_ans)(answer_val.clone(), window, cx);
-                                        })
+                                        },
+                                    )
                                 })
                                 .flex()
                                 .items_center()

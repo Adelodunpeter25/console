@@ -19,8 +19,8 @@ fn test_server_icon_keys_map_to_glyphs() {
 #[test]
 fn test_every_entry_of_console_tool_icon_table() {
     for key in [
-        "sparkle", "terminal", "code", "pencil", "file", "folder", "search", "globe", "chart", "list",
-        "memory", "package",
+        "sparkle", "terminal", "code", "pencil", "file", "folder", "search", "globe", "chart",
+        "list", "memory", "package",
     ] {
         // Every mapped key must produce something other than the wrench.
         assert_ne!(activity_icon(key), IconName::Wrench.path(), "{key}");

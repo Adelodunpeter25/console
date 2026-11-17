@@ -97,7 +97,7 @@ impl WorkspacePane {
     pub fn with_new_tab_menu(
         mut self,
         provider: impl Fn(&str) -> Option<(ContextMenuHandle, Rc<dyn Fn(&mut App) -> Vec<MenuItem>>)>
-            + 'static,
+        + 'static,
     ) -> Self {
         self.new_tab_menu = Some(Rc::new(provider));
         self

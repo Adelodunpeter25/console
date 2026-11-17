@@ -247,12 +247,7 @@ impl TranscriptView {
                             .flex()
                             .items_center()
                             .when_some(popup_element, |el, popup| el.child(popup))
-                            .child(
-                                div()
-                                    .absolute()
-                                    .right_0()
-                                    .child(pill),
-                            ),
+                            .child(div().absolute().right_0().child(pill)),
                     ),
             )
             .into_any_element()
