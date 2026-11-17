@@ -131,7 +131,7 @@ jobs:
           CUA_VERSION: "0.38.0"
         run: |
           curl -fL --retry 5 --retry-all-errors --retry-delay 5 \
-            "https://github.com/dmtrKovalenko/fff/releases/latest/download/${{ matrix.fff-asset }}" \
+            "https://github.com/dmtrKovalenko/fff/releases/download/0.11.1-nightly.ab3002a/${{ matrix.fff-asset }}" \
             -o "${{ matrix.lib-asset }}"
           cua_tmp="$(mktemp -d)"
           curl -fL --retry 5 --retry-all-errors --retry-delay 5 \
