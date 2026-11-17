@@ -36,7 +36,11 @@ pub(crate) fn wire_open_change_for_pane(
     transcript.set_on_open_change(move |path, turn_index, diff_text, _window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {
-                this.open_diff_tab_with_text(&pane_id, path, Some(turn_index), diff_text, cx);
+                // The diff belongs beside the chat, like every other open, not
+                // in the chat's own pane. The chat's session is still resolved
+                // from `pane_id`.
+                let target = this.target_subtab_pane_id();
+                this.open_diff_tab_with_text(&target, path, Some(turn_index), diff_text, cx);
             });
         }
     });

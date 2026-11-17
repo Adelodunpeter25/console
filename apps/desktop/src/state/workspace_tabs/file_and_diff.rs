@@ -398,6 +398,12 @@ impl ConsoleDesktopApp {
         diff_override: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        // The diff opens in `pane_id`, but its checkout and session come from
+        // the chat's pane: a split beside the chat has neither.
+        let lookup_pane = self
+            .workspace_chat()
+            .map(|(pane, _)| pane.to_owned())
+            .unwrap_or_else(|| pane_id.to_owned());
         let title = format!(
             "Diff: {}",
             std::path::Path::new(&path)
@@ -441,14 +447,18 @@ impl ConsoleDesktopApp {
         self.trim_file_caches(cx);
         self.persist_workspaces();
 
-        self.fetch_diff_into_cache(pane_id, path, turn_index, diff_override, cx);
+        self.fetch_diff_into_cache(&lookup_pane, path, turn_index, diff_override, cx);
         cx.notify();
     }
 
     /// Load the diff for a tab restored from disk: the working-tree diff, as
     /// the turn it came from is not saved with the tab.
     pub(crate) fn load_diff_for_tab(&mut self, pane_id: &str, path: String, cx: &mut Context<Self>) {
-        self.fetch_diff_into_cache(pane_id, path, None, None, cx);
+        let lookup_pane = self
+            .workspace_chat()
+            .map(|(pane, _)| pane.to_owned())
+            .unwrap_or_else(|| pane_id.to_owned());
+        self.fetch_diff_into_cache(&lookup_pane, path, None, None, cx);
     }
 
     fn fetch_diff_into_cache(
