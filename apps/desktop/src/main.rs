@@ -157,6 +157,9 @@ fn main() {
         console_ui::terminal::init_terminal_keybindings(cx);
         console_ui::init_browser_keybindings(cx);
         console_ui::primitives::menu::init(cx);
+        // After menu::init so the picker's deeper bindings win the
+        // ConsoleMenu > ComposerInput ties inside its own popover.
+        console_ui::init_model_picker_keybindings(cx);
 
         // Only the main window is persisted and restored. Extra windows
         // opened in-session (New Window) are session-only by design.

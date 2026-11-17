@@ -84,9 +84,7 @@ impl ConsoleDesktopApp {
         self.restore_floating_stash(cx);
 
         // Mirror the docked picker's popover-open handler: fetch the live
-        // model list rather than opening on the static catalog. The docked
-        // picker only ever shows a provider tab (bootstrap resolves Favorites
-        // away at startup); this card keeps Favorites as its default, which
+        // model list rather than opening on the static catalog. Favorites
         // names no provider of its own, so fall back to the selected model's.
         let provider = match &self.floating_composer.picker_tab {
             PickerTab::Provider(name) => Some(name.clone()),
@@ -439,6 +437,7 @@ impl ConsoleDesktopApp {
             data.models_by_provider.clone(),
             card.model_search.clone(),
             data.model_search_query.clone(),
+            card.model_menu.clone(),
             {
                 let entity = entity.clone();
                 move |provider, model_id, window, cx| {

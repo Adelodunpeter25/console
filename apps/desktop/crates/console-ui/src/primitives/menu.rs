@@ -275,6 +275,28 @@ impl ContextMenuHandle {
         &self.focus
     }
 
+    /// Keyboard cursor over a popover's own row list (the model picker).
+    /// Shares the slot `MenuCard` uses for its entries; a popover never
+    /// renders a `MenuCard`, so the two never contend. Reset on open/close
+    /// with the rest of `MenuState`.
+    pub fn highlighted(&self) -> Option<usize> {
+        self.state.borrow().highlighted
+    }
+
+    pub fn set_highlighted(&self, highlighted: Option<usize>) {
+        self.state.borrow_mut().highlighted = highlighted;
+    }
+
+    /// The scroll handle the row list tracks, so keyboard navigation can keep
+    /// the highlighted row in view — the same handle `MenuCard` uses.
+    pub fn scroll_handle(&self) -> ScrollHandle {
+        self.scroll.clone()
+    }
+
+    pub fn scroll_to_item(&self, index: usize) {
+        self.scroll.scroll_to_item(index);
+    }
+
     /// Stable focus identity for a keyboard-operable menu trigger.
     pub fn trigger_focus_handle(&self) -> &FocusHandle {
         &self.trigger_focus

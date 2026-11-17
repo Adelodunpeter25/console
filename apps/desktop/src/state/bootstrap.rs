@@ -204,7 +204,7 @@ impl ConsoleDesktopApp {
                                     if let Some(first) = this.providers.first() {
                                         let first_name = first.name.clone();
                                         let needs_init = match &this.active_picker_tab {
-                                            PickerTab::Favorites => true,
+                                            PickerTab::Favorites => false,
                                             PickerTab::Provider(name) => {
                                                 !this.providers.iter().any(|p| &p.name == name)
                                             }

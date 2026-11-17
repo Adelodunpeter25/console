@@ -56,7 +56,8 @@ pub use global_search_panel::GlobalSearchPanel;
 pub use image_viewer::ImageViewerModal;
 pub use input::*;
 pub use model_picker::{
-    ModelDropdownMenu, ModelRolePicker, PickerTab, format_model_name, provider_svg_path,
+    ModelDropdownMenu, ModelRolePicker, PickerTab, format_model_name, init_model_picker_keybindings,
+    provider_svg_path,
 };
 pub use notice_banner::notice_banner;
 pub use palette::{CommandPalette, CommandPaletteModal, PaletteEntry, init_palette_keybindings};

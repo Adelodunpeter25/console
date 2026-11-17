@@ -1436,6 +1436,7 @@ impl ConsoleDesktopApp {
             models_by_provider,
             pane_model_search.clone(),
             pane_model_search_query,
+            pane_model_menu.clone(),
             {
                 let entity = entity.clone();
                 let model_handle = pane_model_menu.clone();
