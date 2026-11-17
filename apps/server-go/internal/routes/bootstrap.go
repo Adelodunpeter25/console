@@ -16,10 +16,10 @@ import (
 
 const protoContentType = "application/x-protobuf"
 
-// wantsBinaryBootstrap reports whether the client accepts protobuf. Binary is
-// the default; JSON is only for callers that explicitly ask for it (curl,
-// debugging, a legacy client). Messages carry raw bytes instead of base64.
-func wantsBinaryBootstrap(c *fiber.Ctx) bool {
+// wantsBinary reports whether the client accepts protobuf. Binary is the
+// default on the proto-backed GET routes; JSON is only for callers that
+// explicitly ask for it (curl, debugging, a legacy client).
+func wantsBinary(c *fiber.Ctx) bool {
 	for _, part := range strings.Split(c.Get("Accept"), ",") {
 		if strings.TrimSpace(strings.SplitN(part, ";", 2)[0]) == "application/json" {
 			return false
@@ -106,17 +106,7 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
 
-		if wantsBinaryBootstrap(c) {
-			binaryMessages := make([]*consolev1.AgentMessage, 0, len(messages))
-			for _, raw := range messages {
-				var msg consolev1.AgentMessage
-				// A row that no longer parses is skipped, matching the
-				// desktop's lenient message decoder.
-				if err := protoUnmarshal.Unmarshal(raw, &msg); err != nil {
-					continue
-				}
-				binaryMessages = append(binaryMessages, &msg)
-			}
+		if wantsBinary(c) {
 			queued := make([]*consolev1.QueuedPrompt, 0, len(queue))
 			for i := range queue {
 				queued = append(queued, run.QueuedPromptToProto(&queue[i]))
@@ -126,7 +116,7 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 				rows = append(rows, backgroundWorkToProto(w))
 			}
 			body := &consolev1.SessionBootstrapResponse{
-				Header: header, Messages: binaryMessages, HasMore: result.HasMore,
+				Header: header, Messages: messagesToProto(messages), HasMore: result.HasMore,
 				NextCursor: result.NextCursor, Changes: changeRows, Todos: todoItems,
 				Suggestions: suggestions, QueuedPrompts: queued, BackgroundWork: rows,
 				Draft: stored,

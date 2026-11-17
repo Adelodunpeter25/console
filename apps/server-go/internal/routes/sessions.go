@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
@@ -257,10 +258,24 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 				result.Header.Unread = session.IsUnread(result.Header)
 			}
 		}
-		// Mixed envelope until messages migrate: proto header plus the raw
-		// message page, hasMore flag, and numeric-or-null cursor, assembled
-		// by hand in the old key order. Messages pass through byte-identical.
-		headerRaw, err := protoMarshal.Marshal(sessionHeaderToProto(result.Header))
+		page := &consolev1.SessionMessagesPage{
+			Header:     sessionHeaderToProto(result.Header),
+			Messages:   messagesToProto(visibleMessages(result.Messages)),
+			HasMore:    result.HasMore,
+			NextCursor: result.NextCursor,
+		}
+		if wantsBinary(c) {
+			raw, err := proto.Marshal(page)
+			if err != nil {
+				return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+			}
+			c.Set("Content-Type", protoContentType)
+			return c.Send(raw)
+		}
+
+		// JSON keeps the old mixed envelope: proto header plus the raw
+		// message page, hasMore flag, and numeric-or-null cursor.
+		headerRaw, err := protoMarshal.Marshal(page.Header)
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
 		}

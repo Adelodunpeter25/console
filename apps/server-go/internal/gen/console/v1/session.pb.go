@@ -1340,6 +1340,78 @@ func (x *SubagentEndEvent) GetTotalTurns() int32 {
 	return 0
 }
 
+// Binary counterpart of GET /api/sessions/:id — one page of history plus the
+// refreshed header. Served by default; `Accept: application/json` keeps the
+// old mixed envelope. Messages are real proto messages, so tool arguments and
+// results cross as raw bytes instead of base64.
+type SessionMessagesPage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Header        *SessionHeader         `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
+	Messages      []*AgentMessage        `protobuf:"bytes,2,rep,name=messages,proto3" json:"messages,omitempty"`
+	HasMore       bool                   `protobuf:"varint,3,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
+	NextCursor    *int64                 `protobuf:"varint,4,opt,name=next_cursor,json=nextCursor,proto3,oneof" json:"next_cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionMessagesPage) Reset() {
+	*x = SessionMessagesPage{}
+	mi := &file_console_v1_session_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionMessagesPage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionMessagesPage) ProtoMessage() {}
+
+func (x *SessionMessagesPage) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionMessagesPage.ProtoReflect.Descriptor instead.
+func (*SessionMessagesPage) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *SessionMessagesPage) GetHeader() *SessionHeader {
+	if x != nil {
+		return x.Header
+	}
+	return nil
+}
+
+func (x *SessionMessagesPage) GetMessages() []*AgentMessage {
+	if x != nil {
+		return x.Messages
+	}
+	return nil
+}
+
+func (x *SessionMessagesPage) GetHasMore() bool {
+	if x != nil {
+		return x.HasMore
+	}
+	return false
+}
+
+func (x *SessionMessagesPage) GetNextCursor() int64 {
+	if x != nil && x.NextCursor != nil {
+		return *x.NextCursor
+	}
+	return 0
+}
+
 // Detached work listed on a reopened chat. Same rows the JSON bootstrap
 // returns, but proto-encoded so a binary session open carries no JSON.
 type BackgroundWork struct {
@@ -1362,7 +1434,7 @@ type BackgroundWork struct {
 
 func (x *BackgroundWork) Reset() {
 	*x = BackgroundWork{}
-	mi := &file_console_v1_session_proto_msgTypes[15]
+	mi := &file_console_v1_session_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1374,7 +1446,7 @@ func (x *BackgroundWork) String() string {
 func (*BackgroundWork) ProtoMessage() {}
 
 func (x *BackgroundWork) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[15]
+	mi := &file_console_v1_session_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1387,7 +1459,7 @@ func (x *BackgroundWork) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackgroundWork.ProtoReflect.Descriptor instead.
 func (*BackgroundWork) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{15}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *BackgroundWork) GetId() string {
@@ -1498,7 +1570,7 @@ type SessionBootstrapResponse struct {
 
 func (x *SessionBootstrapResponse) Reset() {
 	*x = SessionBootstrapResponse{}
-	mi := &file_console_v1_session_proto_msgTypes[16]
+	mi := &file_console_v1_session_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1510,7 +1582,7 @@ func (x *SessionBootstrapResponse) String() string {
 func (*SessionBootstrapResponse) ProtoMessage() {}
 
 func (x *SessionBootstrapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[16]
+	mi := &file_console_v1_session_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1523,7 +1595,7 @@ func (x *SessionBootstrapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionBootstrapResponse.ProtoReflect.Descriptor instead.
 func (*SessionBootstrapResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{16}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SessionBootstrapResponse) GetHeader() *SessionHeader {
@@ -1762,7 +1834,14 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"totalTurnsB\n" +
 	"\n" +
 	"\b_summaryB\b\n" +
-	"\x06_error\"\xbf\x04\n" +
+	"\x06_error\"\xcf\x01\n" +
+	"\x13SessionMessagesPage\x121\n" +
+	"\x06header\x18\x01 \x01(\v2\x19.console.v1.SessionHeaderR\x06header\x124\n" +
+	"\bmessages\x18\x02 \x03(\v2\x18.console.v1.AgentMessageR\bmessages\x12\x19\n" +
+	"\bhas_more\x18\x03 \x01(\bR\ahasMore\x12$\n" +
+	"\vnext_cursor\x18\x04 \x01(\x03H\x00R\n" +
+	"nextCursor\x88\x01\x01B\x0e\n" +
+	"\f_next_cursor\"\xbf\x04\n" +
 	"\x0eBackgroundWork\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -1819,7 +1898,7 @@ func file_console_v1_session_proto_rawDescGZIP() []byte {
 	return file_console_v1_session_proto_rawDescData
 }
 
-var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_console_v1_session_proto_goTypes = []any{
 	(*TodoItem)(nil),                       // 0: console.v1.TodoItem
 	(*SessionWorktree)(nil),                // 1: console.v1.SessionWorktree
@@ -1836,32 +1915,35 @@ var file_console_v1_session_proto_goTypes = []any{
 	(*SubagentStartEvent)(nil),             // 12: console.v1.SubagentStartEvent
 	(*SubagentActivityEvent)(nil),          // 13: console.v1.SubagentActivityEvent
 	(*SubagentEndEvent)(nil),               // 14: console.v1.SubagentEndEvent
-	(*BackgroundWork)(nil),                 // 15: console.v1.BackgroundWork
-	(*SessionBootstrapResponse)(nil),       // 16: console.v1.SessionBootstrapResponse
-	nil,                                    // 17: console.v1.BackgroundWork.MetadataEntry
-	(*ImageAttachment)(nil),                // 18: console.v1.ImageAttachment
-	(*BrowserAnnotation)(nil),              // 19: console.v1.BrowserAnnotation
-	(*AgentMessage)(nil),                   // 20: console.v1.AgentMessage
-	(*ChatDraft)(nil),                      // 21: console.v1.ChatDraft
+	(*SessionMessagesPage)(nil),            // 15: console.v1.SessionMessagesPage
+	(*BackgroundWork)(nil),                 // 16: console.v1.BackgroundWork
+	(*SessionBootstrapResponse)(nil),       // 17: console.v1.SessionBootstrapResponse
+	nil,                                    // 18: console.v1.BackgroundWork.MetadataEntry
+	(*ImageAttachment)(nil),                // 19: console.v1.ImageAttachment
+	(*BrowserAnnotation)(nil),              // 20: console.v1.BrowserAnnotation
+	(*AgentMessage)(nil),                   // 21: console.v1.AgentMessage
+	(*ChatDraft)(nil),                      // 22: console.v1.ChatDraft
 }
 var file_console_v1_session_proto_depIdxs = []int32{
 	1,  // 0: console.v1.SessionHeader.worktree:type_name -> console.v1.SessionWorktree
 	9,  // 1: console.v1.SubagentInfo.activities:type_name -> console.v1.SubagentActivityItem
-	18, // 2: console.v1.QueuedPrompt.attachments:type_name -> console.v1.ImageAttachment
-	19, // 3: console.v1.QueuedPrompt.annotations:type_name -> console.v1.BrowserAnnotation
-	17, // 4: console.v1.BackgroundWork.metadata:type_name -> console.v1.BackgroundWork.MetadataEntry
-	2,  // 5: console.v1.SessionBootstrapResponse.header:type_name -> console.v1.SessionHeader
-	20, // 6: console.v1.SessionBootstrapResponse.messages:type_name -> console.v1.AgentMessage
-	7,  // 7: console.v1.SessionBootstrapResponse.changes:type_name -> console.v1.SessionFileChange
-	0,  // 8: console.v1.SessionBootstrapResponse.todos:type_name -> console.v1.TodoItem
-	11, // 9: console.v1.SessionBootstrapResponse.queued_prompts:type_name -> console.v1.QueuedPrompt
-	15, // 10: console.v1.SessionBootstrapResponse.background_work:type_name -> console.v1.BackgroundWork
-	21, // 11: console.v1.SessionBootstrapResponse.draft:type_name -> console.v1.ChatDraft
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	19, // 2: console.v1.QueuedPrompt.attachments:type_name -> console.v1.ImageAttachment
+	20, // 3: console.v1.QueuedPrompt.annotations:type_name -> console.v1.BrowserAnnotation
+	2,  // 4: console.v1.SessionMessagesPage.header:type_name -> console.v1.SessionHeader
+	21, // 5: console.v1.SessionMessagesPage.messages:type_name -> console.v1.AgentMessage
+	18, // 6: console.v1.BackgroundWork.metadata:type_name -> console.v1.BackgroundWork.MetadataEntry
+	2,  // 7: console.v1.SessionBootstrapResponse.header:type_name -> console.v1.SessionHeader
+	21, // 8: console.v1.SessionBootstrapResponse.messages:type_name -> console.v1.AgentMessage
+	7,  // 9: console.v1.SessionBootstrapResponse.changes:type_name -> console.v1.SessionFileChange
+	0,  // 10: console.v1.SessionBootstrapResponse.todos:type_name -> console.v1.TodoItem
+	11, // 11: console.v1.SessionBootstrapResponse.queued_prompts:type_name -> console.v1.QueuedPrompt
+	16, // 12: console.v1.SessionBootstrapResponse.background_work:type_name -> console.v1.BackgroundWork
+	22, // 13: console.v1.SessionBootstrapResponse.draft:type_name -> console.v1.ChatDraft
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_session_proto_init() }
@@ -1881,13 +1963,14 @@ func file_console_v1_session_proto_init() {
 	file_console_v1_session_proto_msgTypes[14].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[15].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[16].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[17].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_session_proto_rawDesc), len(file_console_v1_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

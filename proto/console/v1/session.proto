@@ -198,6 +198,17 @@ message SubagentEndEvent {
   int32 total_turns = 5;
 }
 
+// Binary counterpart of GET /api/sessions/:id — one page of history plus the
+// refreshed header. Served by default; `Accept: application/json` keeps the
+// old mixed envelope. Messages are real proto messages, so tool arguments and
+// results cross as raw bytes instead of base64.
+message SessionMessagesPage {
+  SessionHeader header = 1;
+  repeated AgentMessage messages = 2;
+  bool has_more = 3;
+  optional int64 next_cursor = 4;
+}
+
 // Detached work listed on a reopened chat. Same rows the JSON bootstrap
 // returns, but proto-encoded so a binary session open carries no JSON.
 message BackgroundWork {
