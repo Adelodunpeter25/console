@@ -277,8 +277,17 @@ func Load() error {
 		for _, n := range names {
 			candidates = append(candidates,
 				filepath.Join("third_party", "fff", n),
+				filepath.Join("apps", "server-go", "third_party", "fff", n),
 				filepath.Join("/usr/local/lib", n),
 			)
+		}
+		// Dev runs (go run from repo root, go test from any package) keep the
+		// sidecar next to this source file, not next to the temp build binary.
+		if _, src, _, ok := runtime.Caller(0); ok {
+			moduleDir := filepath.Join(filepath.Dir(src), "..", "..")
+			for _, n := range names {
+				candidates = append(candidates, filepath.Join(moduleDir, "third_party", "fff", n))
+			}
 		}
 		var handle unsafe.Pointer
 		for _, path := range candidates {

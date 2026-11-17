@@ -35,7 +35,7 @@ case "$os" in
 esac
 dest="$(cd "$(dirname "$0")/.." && pwd)/third_party/fff"
 mkdir -p "$dest"
-curl -fL "https://github.com/dmtrKovalenko/fff/releases/latest/download/${asset}" \
+curl -fL "https://github.com/dmtrKovalenko/fff/releases/download/0.11.1-nightly.ab3002a/${asset}" \
   -o "$dest/$out"
 if [ "$os" = "Darwin" ]; then
   codesign --force --sign - "$dest/$out" >/dev/null 2>&1 || true
