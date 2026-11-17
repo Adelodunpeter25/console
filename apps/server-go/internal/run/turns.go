@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/codemode"
@@ -352,6 +353,33 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	for _, a := range dto.Attachments {
 		user.Attachments = append(user.Attachments, loop.ImageAttachment{Data: a.Data, MimeType: a.MimeType})
 	}
+
+	// Image attachments on a model without image support fall back to the
+	// configured vision role model — the whole turn runs on it. The swap is
+	// all-or-nothing: when the vision provider has no usable credential the
+	// run stays on the original model and loop.Agent.StripImages omits the
+	// image parts from provider-bound history (persisted history keeps them).
+	visionSwapped := false
+	if len(dto.Attachments) > 0 && !model.SupportsImages {
+		if vision, ok := s.resolveVision(model); ok {
+			if switched, err := s.Lookup(vision.Provider); err == nil {
+				model = vision
+				modelID, providerID = vision.ID, vision.Provider
+				provider = switched
+				*current, *currentID = switched, providerID
+				visionSwapped = true
+			}
+		}
+	}
+	stripImages := !model.SupportsImages
+
+	// Thinking levels are model-specific: after a vision takeover the
+	// session's level may not exist on the vision model, so clamp to its
+	// vocabulary (model default when unset) before validating. Without a
+	// swap an unsupported level is still a hard error.
+	if visionSwapped && effectiveThinking != "" && !slices.Contains(model.ThinkingLevels, effectiveThinking) {
+		effectiveThinking = model.DefaultThinking
+	}
 	if err := roles.ValidateLevel(model, effectiveThinking); err != nil {
 		// Persist the user message even though validation fails, so the
 		// failed turn is visible in history.
@@ -359,22 +387,6 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
 		return err
 	}
-
-	// Image attachments on a model without image support fall back to the
-	// configured vision role model. With no vision model the turn still runs
-	// on the text-only model; loop.Agent.StripImages then omits the image
-	// parts from provider-bound history (persisted history keeps them).
-	if len(dto.Attachments) > 0 && !model.SupportsImages {
-		if vision, ok := s.resolveVision(model); ok {
-			model = vision
-			modelID, providerID = vision.ID, vision.Provider
-			if switched, err := s.Lookup(providerID); err == nil {
-				provider = switched
-				*current, *currentID = switched, providerID
-			}
-		}
-	}
-	stripImages := !model.SupportsImages
 
 	history, err := s.LoadHistory(sessionID)
 	if err != nil {
