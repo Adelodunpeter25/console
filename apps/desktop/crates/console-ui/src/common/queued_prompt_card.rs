@@ -10,34 +10,42 @@ use gpui::{
     Window, div, img, prelude::FluentBuilder, px,
 };
 
-use crate::common::{attachment_image, centered_stripe};
+use crate::chat::message_bubble::message_text_with_mentions;
+use crate::common::{InlineFileMention, InlineFileMentionText, attachment_image, centered_stripe};
 use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
-/// Formats prompt text for compact preview: if it contains multiple lines,
-/// takes the first line and appends `...`. Long single lines are also truncated.
-fn format_prompt_preview(raw: &str) -> String {
-    let trimmed = raw.trim();
-    let mut lines = trimmed.lines().map(str::trim).filter(|l| !l.is_empty());
-    let Some(first_line) = lines.next() else {
-        return String::new();
-    };
-    let has_more_lines = lines.next().is_some();
-
-    if has_more_lines {
-        if first_line.chars().count() > 70 {
-            let truncated: String = first_line.chars().take(70).collect();
-            format!("{}...", truncated.trim_end())
-        } else {
-            format!("{first_line}...")
+/// Mention-aware preview: cuts at the first line break or char limit and
+/// drops mentions that no longer fit.
+fn preview_with_mentions(
+    text: &str,
+    mut mentions: Vec<InlineFileMention>,
+) -> (String, Vec<InlineFileMention>) {
+    let trimmed = text.trim_start();
+    let offset = text.len() - trimmed.len();
+    let first_line_end = trimmed.find('\n').unwrap_or(trimmed.len());
+    let has_more_lines = !trimmed[first_line_end..].trim().is_empty();
+    let limit = if has_more_lines { 70 } else { 90 };
+    let cut = trimmed[..first_line_end]
+        .char_indices()
+        .nth(limit)
+        .map_or(first_line_end, |(i, _)| i);
+    let truncated = cut < first_line_end;
+    let end = offset + cut;
+    mentions.retain_mut(|m| {
+        if m.range.start < offset || m.range.end > end {
+            return false;
         }
-    } else if first_line.chars().count() > 90 {
-        let truncated: String = first_line.chars().take(90).collect();
-        format!("{}...", truncated.trim_end())
-    } else {
-        first_line.to_string()
+        m.range = (m.range.start - offset)..(m.range.end - offset);
+        true
+    });
+    let mut preview = trimmed[..cut].trim_end().to_string();
+    mentions.retain(|m| m.range.end <= preview.len());
+    if truncated || has_more_lines {
+        preview.push_str("...");
     }
+    (preview, mentions)
 }
 
 pub fn queued_prompt_row(
@@ -57,7 +65,9 @@ pub fn queued_prompt_row(
     let show_attachment_icon = !prompt.attachments.is_empty() && first_image.is_none();
     let first_annotation = prompt.annotations.first();
 
-    let display_text = format_prompt_preview(&prompt.prompt);
+    let (message_text, mentions) =
+        message_text_with_mentions(&prompt.prompt, &prompt.context_files);
+    let (display_text, mentions) = preview_with_mentions(&message_text, mentions);
     let edit_id = format!("queued-edit-{}", prompt.id);
     let delete_id = format!("queued-delete-{}", prompt.id);
     let steer_id = format!("queued-steer-{}", prompt.id);
@@ -140,9 +150,10 @@ pub fn queued_prompt_row(
                         .min_w(px(0.0))
                         .text_size(px(13.0))
                         .line_height(px(18.0))
+                        .h(px(18.0))
+                        .overflow_hidden()
                         .text_color(theme.text)
-                        .truncate()
-                        .child(display_text),
+                        .child(InlineFileMentionText::new(display_text, mentions)),
                 )
                 .when(show_attachment_icon, |el| {
                     el.child(div().flex_shrink_0().child(app_icon(
