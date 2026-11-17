@@ -30,7 +30,10 @@ type SubagentContext struct {
 	ToolSource func() []tools.Tool
 	// NestedTools, when set, receives the subagent's own registry and may
 	// add tools bound to it (e.g. a loadTools that loads into the subagent).
-	NestedTools  func(registry *tools.Registry)
+	NestedTools func(registry *tools.Registry)
+	// ToolDefs, when set, overrides the provider tool list exposed to the
+	// subagent (used by codemode to expose only the REPL tools).
+	ToolDefs     func() []tools.Definition
 	SystemPrompt string
 	// Setup is the parent's per-session setup, sent as a leading message.
 	Setup string
@@ -245,7 +248,10 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 		defer func() { c.Usage.AddSubagent(agent.Usage.Snapshot()) }()
 	}
 	agent.ToolDefs = registry.Definitions
-	events, err := agent.Run(ctx, randomSubSession(), prompt, registry.Definitions())
+	if c.ToolDefs != nil {
+		agent.ToolDefs = c.ToolDefs
+	}
+	events, err := agent.Run(ctx, randomSubSession(), prompt, agent.ToolDefs())
 	if err != nil {
 		emit(EventSubagentEnd, SubagentEndInfo{SubagentID: subagentID, Status: "error", Error: err.Error()})
 		return nil, err

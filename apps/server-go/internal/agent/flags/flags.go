@@ -1,6 +1,7 @@
-// Package flags centralizes the harness feature toggles (the Phase 4 A/B
-// switches). Each flag ships with today's behavior as its default; a default
-// only flips after a bench A/B shows no drop in task success at lower cost.
+// Package flags centralizes the harness feature toggles that remain after
+// codemode became the default agent path. Each flag ships with today's
+// behavior as its default; a default only flips after a bench A/B shows no
+// drop in task success at lower cost.
 //
 // Flags reach the tools through their constructors or, until then, by reading
 // the environment at call sites via FromEnv — one place to rename when the
@@ -18,14 +19,6 @@ type Flags struct {
 	// and the last line (~11% smaller reads). Default off: the A/B halved
 	// read output but doubled editFile failures, for flat cost.
 	SparseLineNumbers bool
-	// LazyTools holds six rarely used built-in tools (webSearch, webFetch,
-	// bashJob, askMany, memory, batchWrite) back from the request and loads
-	// them on demand through loadTools. Default off until a bench A/B shows
-	// no drop in success at lower cost.
-	LazyTools bool
-	// CodeMode replaces standard tool declarations with a single JavaScript
-	// orchestration tool. Standard tools become callable JS primitives.
-	CodeMode bool
 }
 
 // FromEnv builds Flags from CONSOLE_HARNESS_* environment variables. getenv
@@ -33,7 +26,5 @@ type Flags struct {
 func FromEnv(getenv func(string) string) Flags {
 	return Flags{
 		SparseLineNumbers: getenv(HarnessEnvPrefix+"SPARSE_LINE_NUMBERS") == "1",
-		LazyTools:         getenv(HarnessEnvPrefix+"LAZY_TOOLS") == "1",
-		CodeMode:          getenv(HarnessEnvPrefix+"CODEMODE") == "1",
 	}
 }

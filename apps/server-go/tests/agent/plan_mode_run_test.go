@@ -49,7 +49,9 @@ func toolNamesSent(t *testing.T, mode string) map[string]bool {
 
 func TestPlanModeRunOffersWritePlanAndNotTheOrdinaryWrites(t *testing.T) {
 	got := toolNamesSent(t, "plan-mode")
-	for _, want := range []string{"writePlan", "bash", "read_file", "grep", "memory", "browser"} {
+	// Under codemode the provider sees only the REPL tools; plan-mode tools
+	// (writePlan, bash, readFile, ...) remain callable inside the JS runtime.
+	for _, want := range []string{"code", "codeReset"} {
 		if !got[want] {
 			t.Errorf("a plan-mode run must be offered %q; got %v", want, keys(got))
 		}

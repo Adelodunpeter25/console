@@ -160,8 +160,10 @@ drained:
 		t.Fatalf("agent turns = %d, want at least 2", len(reqs))
 	}
 	first := reqs[0]
-	if !hasTool(first, "visualize") {
-		t.Fatalf("visualize tool missing after /visualize: %v", toolList(first))
+	// Under codemode the provider only sees the REPL tools; visualize stays
+	// available inside the JS runtime.
+	if !hasTool(first, "code") {
+		t.Fatalf("code tool missing after /visualize: %v", toolList(first))
 	}
 	if !strings.Contains(first.Setup, "Visualize") {
 		t.Fatalf("setup should carry the /visualize skill:\n%s", first.Setup)
@@ -220,8 +222,8 @@ func TestVisualizeToolStaysLoadedForLaterMessages(t *testing.T) {
 	}
 
 	for i, req := range provider.requests() {
-		if !hasTool(req, "visualize") {
-			t.Fatalf("turn %d lost the visualize tool: %v", i, toolList(req))
+		if !hasTool(req, "code") {
+			t.Fatalf("turn %d lost the code tool: %v", i, toolList(req))
 		}
 	}
 }

@@ -9,10 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 
-	agentflags "github.com/Adelodunpeter25/console/apps/server-go/internal/agent/flags"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/codemode"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
@@ -456,36 +454,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			return nil
 		}))
 	}
-	// Lazy built-in tools (CONSOLE_HARNESS_LAZY_TOOLS): the deferred six are
-	// held back; the loadTools loader itself is added once the registry
-	// exists (it needs to know whether MCP groups are in play). Under Code Mode,
-	// all tools remain directly registered because model-facing declarations
-	// are already collapsed to REPL tools without per-turn schema bloat.
-	codeMode := agentflags.FromEnv(os.Getenv).CodeMode
-	lazy := agentflags.FromEnv(os.Getenv).LazyTools && !codeMode
-	var lazyLoaderInst *lazyLoader
-	var held []tools.Tool
-	if lazy {
-		toolList, held = holdBackDeferredTools(toolList)
-		for i, t := range toolList {
-			if t.Name() == "bash" {
-				toolList[i] = &bashJobAutoLoader{Tool: t, ensure: func() { lazyLoaderInst.ensure("bashJob") }}
-				break
-			}
-		}
-	}
 	usage := &loop.UsageTracker{}
-	setup := prompt.Setup
-	if codeMode {
-		setup = strings.TrimSpace(setup + "\n\n" + codemode.SetupHint)
-	}
+	setup := strings.TrimSpace(prompt.Setup + "\n\n" + codemode.SetupHint)
 	mcpManager := s.mcpManager()
-	if mcpManager != nil && len(mcp.EnabledServers(mcpManager)) > 0 {
-		setup = strings.TrimSpace(setup + "\n\n" + mcpSetupHint)
-	}
-	if lazy && len(held) > 0 {
-		setup = strings.TrimSpace(setup + "\n\n" + lazyToolsSetupHint(held))
-	}
 	// Capability references ride setup rather than the user message: setup is
 	// sent every turn but never persisted, so the chat history keeps exactly
 	// what the user typed.
@@ -513,23 +484,21 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		// summary, so a visual made there would have no card to render into.
 		ToolSource: func() []tools.Tool { return withoutTool(registry.Tools(), "visualize") },
 		NestedTools: func(nested *tools.Registry) {
-			if !lazy {
-				if mcpManager != nil {
-					if lt := mcp.NewLoadToolsTool(mcpManager, nested); lt != nil {
-						nested.Add(lt)
-					}
-				}
-				return
-			}
-			// Lazy runs give subagents their own combined loader over the
-			// same held built-ins, so they can load what they need.
-			var mcpTool tools.Tool
 			if mcpManager != nil {
-				mcpTool = mcp.NewLoadToolsTool(mcpManager, nested)
+				if lt := mcp.NewLoadToolsTool(mcpManager, nested); lt != nil {
+					nested.Add(lt)
+				}
 			}
-			if lt, _ := newLazyToolsLoader(nested, held, mcpTool, nil); lt != nil {
-				nested.Add(lt)
+		},
+		ToolDefs: func() []tools.Definition {
+			var defs []tools.Definition
+			for _, def := range registry.Definitions() {
+				switch def.Name {
+				case "code", "codeReset", "code_reset":
+					defs = append(defs, def)
+				}
 			}
+			return defs
 		},
 		SystemPrompt:   prompt.StableSystem,
 		Setup:          setup,
@@ -548,33 +517,14 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		Usage:        usage,
 	}))
 	registry = tools.NewRegistry(toolList...)
-	// MCP servers load lazily: only a small loadTools entry is in the list
-	// until the model asks for a group, which then appends that server's
-	// tools (visible from the next turn via agent.ToolDefs). Under the lazy
-	// flag the combined loader wraps it, so built-in names and MCP groups
-	// share the one loadTools tool.
-	var mcpLoadTool tools.Tool
+	// MCP servers load on demand through loadTools (kept for subagents and
+	// compatibility); the REPL's native mcp.* namespace is preferred.
 	if mcpManager != nil {
-		mcpLoadTool = mcp.NewLoadToolsTool(mcpManager, registry, mcp.LoadToolsOptions{
+		if mcpLoadTool := mcp.NewLoadToolsTool(mcpManager, registry, mcp.LoadToolsOptions{
 			OnLoad: func(group string) { s.groups.add(sessionID, group) },
-		})
-	}
-	if lazy {
-		var loaderTool tools.Tool
-		loaderTool, lazyLoaderInst = newLazyToolsLoader(registry, held, mcpLoadTool,
-			func(names []string) {
-				for _, name := range names {
-					s.lazyLoaded.add(sessionID, name)
-				}
-			})
-		registry.Add(loaderTool)
-		// Tools loaded in earlier runs of this session are restored right
-		// after the loader, in load order — mirroring the MCP group restore.
-		for _, name := range s.lazyLoaded.list(sessionID) {
-			lazyLoaderInst.ensure(name)
+		}); mcpLoadTool != nil {
+			registry.Add(mcpLoadTool)
 		}
-	} else if mcpLoadTool != nil {
-		registry.Add(mcpLoadTool)
 	}
 	// Capabilities that are on restore here, appended after everything else so
 	// the provider's cached tool prefix stays stable. A failed load is
@@ -604,35 +554,29 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	executor.OnBeforeExecute = func(call tools.ToolCall, _ tools.Tool) {
 		s.snapshots.SnapshotWritePaths(sessionID, writePaths(call))
 	}
-	if codeMode {
-		cmManager := s.CodemodeManager()
-		if cmManager == nil {
-			cmManager = codemode.NewManager()
-		}
-		rt, err := cmManager.Get(sessionID, executor)
-		if err == nil {
-			registry.Add(codemode.NewCodeTool(rt), codemode.NewCodeResetTool(rt))
-		} else {
-			slog.Error("failed to initialize codemode runtime", "session", sessionID, "error", err)
-		}
+	cmManager := s.CodemodeManager()
+	if cmManager == nil {
+		cmManager = codemode.NewManager(mcpManager, executor.Mode)
+	}
+	rt, err := cmManager.Get(sessionID, executor)
+	if err == nil {
+		registry.Add(codemode.NewCodeTool(rt), codemode.NewCodeResetTool(rt))
+	} else {
+		slog.Error("failed to initialize codemode runtime", "session", sessionID, "error", err)
 	}
 	agent := loop.New(provider, executor, s.sessions)
 	agent.Usage = usage
 	agent.UserMessageID = turn.UserMessageID
 	agent.TodoReminders = mode != permissions.PlanMode
-	if codeMode {
-		agent.ToolDefs = func() []tools.Definition {
-			var defs []tools.Definition
-			for _, def := range registry.Definitions() {
-				switch def.Name {
-				case "code", "codeReset", "code_reset":
-					defs = append(defs, def)
-				}
+	agent.ToolDefs = func() []tools.Definition {
+		var defs []tools.Definition
+		for _, def := range registry.Definitions() {
+			switch def.Name {
+			case "code", "codeReset", "code_reset":
+				defs = append(defs, def)
 			}
-			return defs
 		}
-	} else {
-		agent.ToolDefs = registry.Definitions
+		return defs
 	}
 	agent.SystemPrompt = prompt.StableSystem
 	agent.Setup = setup

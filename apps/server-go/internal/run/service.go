@@ -80,7 +80,6 @@ type Service struct {
 	mcp        *mcp.Manager
 	prompts    promptCache
 	groups     toolGroups
-	lazyLoaded toolGroups
 	// cuaManager owns the computer-use driver runtime (nil-safe when the
 	// library is absent: runs simply never activate computer use).
 	cuaManager *cua.Manager
@@ -111,7 +110,7 @@ type Service struct {
 }
 
 func NewService(sessions *services.SessionService) *Service {
-	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager(), consoleManager: console.NewManager(), browseruseManager: browseruse.NewManager(), codemodeManager: codemode.NewManager(), background: background.NewManager()}
+	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager(), consoleManager: console.NewManager(), browseruseManager: browseruse.NewManager(), codemodeManager: codemode.NewManager(nil, nil), background: background.NewManager()}
 	s.background.SetListener(s.backgroundWorkListener)
 	s.decisions.Notify = func(ctx context.Context, sessionID string, event loop.Event) {
 		s.notifyEvent(ctx, sessionID, event)
