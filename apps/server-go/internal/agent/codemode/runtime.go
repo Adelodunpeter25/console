@@ -11,8 +11,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 )
 
 // Caller executes tool calls and exposes the tool registry.
@@ -35,18 +37,31 @@ type Runtime struct {
 	mu     sync.Mutex
 	kernel *jskernel.Runtime
 	caller Caller
+	opts   Options
 	store  map[string]any
 	traces []CallTrace
 }
 
+// Options configures optional capabilities installed in the REPL.
+type Options struct {
+	// MCP exposes mcp.servers/tools/call when a manager is configured.
+	MCP *mcp.Manager
+	// Mode supplies the run's current approval mode for MCP tier checks.
+	Mode func() permissions.Mode
+}
+
 // NewRuntime builds and initializes a persistent codemode interpreter.
-func NewRuntime(caller Caller) (*Runtime, error) {
+func NewRuntime(caller Caller, opts Options) (*Runtime, error) {
 	r := &Runtime{
 		caller: caller,
+		opts:   opts,
 		store:  make(map[string]any),
 	}
 
 	methods := []jskernel.Method{
+		{Name: "mcp.servers", Call: (&mcpBridge{manager: opts.MCP, mode: opts.Mode}).servers},
+		{Name: "mcp.tools", Call: (&mcpBridge{manager: opts.MCP, mode: opts.Mode}).tools},
+		{Name: "mcp.call", Call: (&mcpBridge{manager: opts.MCP, mode: opts.Mode}).call},
 		{
 			Name: "call",
 			Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
@@ -86,13 +101,13 @@ func NewRuntime(caller Caller) (*Runtime, error) {
 		},
 	}
 
-	opts := jskernel.Options{
+	kernelOpts := jskernel.Options{
 		Root:         "__harness",
 		PlainResults: true,
 		Timeout:      10 * time.Minute,
 	}
 
-	kernel, err := jskernel.New(opts, methods)
+	kernel, err := jskernel.New(kernelOpts, methods)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +134,7 @@ func (r *Runtime) Reset() error {
 	r.store = make(map[string]any)
 	r.traces = nil
 
-	fresh, err := NewRuntime(r.caller)
+	fresh, err := NewRuntime(r.caller, r.opts)
 	if err != nil {
 		return err
 	}

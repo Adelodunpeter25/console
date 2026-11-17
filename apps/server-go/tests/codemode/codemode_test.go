@@ -28,7 +28,7 @@ func TestCodemodeBasicEvalAndPersistence(t *testing.T) {
 	tmpDir := t.TempDir()
 	exec := newTestExecutor(t, tmpDir)
 
-	rt, err := codemode.NewRuntime(exec)
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestCodemodeFilePrimitives(t *testing.T) {
 	tmpDir := t.TempDir()
 	exec := newTestExecutor(t, tmpDir)
 
-	rt, err := codemode.NewRuntime(exec)
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestCodemodeShellCommand(t *testing.T) {
 	tmpDir := t.TempDir()
 	exec := newTestExecutor(t, tmpDir)
 
-	rt, err := codemode.NewRuntime(exec)
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestCodemodeToolDiscoveryAndGenericCall(t *testing.T) {
 	tmpDir := t.TempDir()
 	exec := newTestExecutor(t, tmpDir)
 
-	rt, err := codemode.NewRuntime(exec)
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestCodemodeReset(t *testing.T) {
 	tmpDir := t.TempDir()
 	exec := newTestExecutor(t, tmpDir)
 
-	rt, err := codemode.NewRuntime(exec)
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestCodemodeReset(t *testing.T) {
 func TestCodemodeToolReplacementDefinitions(t *testing.T) {
 	// Build registry with standard tools plus codemode tools
 	reg := tools.NewRegistry(tools.DefaultTools()...)
-	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess))
+	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess), codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -317,7 +317,7 @@ func TestCodemodeTodoPrimitive(t *testing.T) {
 	tmpDir := t.TempDir()
 	exec := newTestExecutor(t, tmpDir)
 
-	rt, err := codemode.NewRuntime(exec)
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -362,7 +362,7 @@ func TestCodemodeWebPrimitivesWiring(t *testing.T) {
 	tmpDir := t.TempDir()
 	exec := newTestExecutor(t, tmpDir)
 
-	rt, err := codemode.NewRuntime(exec)
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -424,7 +424,7 @@ func TestCodemodeDescribeCapabilityTools(t *testing.T) {
 	}
 
 	reg := tools.NewRegistry(mockBrowser, mockConsole)
-	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess))
+	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess), codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -467,7 +467,7 @@ func TestCodemodeJSONUnwrapping(t *testing.T) {
 	})
 
 	reg := tools.NewRegistry(jsonTool)
-	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess))
+	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess), codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -504,7 +504,7 @@ func TestCodemodePlanMode(t *testing.T) {
 	exec := loop.NewExecutor(reg, permissions.PlanMode)
 	exec.Guard = permissions.NewGuard(tmpDir)
 
-	rt, err := codemode.NewRuntime(exec)
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -561,7 +561,7 @@ func TestCodemodeAskAndChatRead(t *testing.T) {
 	})
 
 	reg := tools.NewRegistry(mockReadChat, mockAsk)
-	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess))
+	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess), codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}
@@ -596,7 +596,7 @@ func TestCodemodeRequestFullAccess(t *testing.T) {
 		return "Approved: Full Access granted", nil
 	})
 	reg := tools.NewRegistry(mockReq)
-	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.PlanMode))
+	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.PlanMode), codemode.Options{})
 	if err != nil {
 		t.Fatalf("NewRuntime: %v", err)
 	}

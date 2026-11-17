@@ -18,7 +18,7 @@ type codeResetInput struct{}
 func NewCodeTool(rt *Runtime) tools.Tool {
 	return tools.NewTool(
 		"code",
-		"Execute JavaScript in the session REPL to orchestrate file operations, shell commands, searches, and tools. Built-ins: $`cmd`, file(path), write(path, content), edit(path, old, new), glob(pat), grep(pat, opts), list(path), fetch(url), webSearch(query), todo(op, arg), ask(q, opts), writePlan(name, content), requestFullAccess(reason), visualize(spec), tools.X(args), searchTools(query), describeTool(name), log(...args), spawnContext(args).",
+		"Execute JavaScript in the session REPL to orchestrate file operations, shell commands, searches, and tools. Built-ins: $`cmd`, file(path), write(path, content), edit(path, old, new), glob(pat), grep(pat, opts), list(path), fetch(url), webSearch(query), mcp.servers(), mcp.tools({id}), mcp.call({id,tool,args}), todo(op, arg), ask(q, opts), writePlan(name, content), requestFullAccess(reason), visualize(spec), tools.X(args), searchTools(query), describeTool(name), log(...args), spawnContext(args).",
 		tools.TierRead,
 		func(ctx context.Context, in codeInput) (any, error) {
 			timeout := time.Duration(in.TimeoutMs) * time.Millisecond
@@ -64,6 +64,8 @@ Direct tools are replaced by asynchronous JavaScript functions inside the script
 - list(path) lists directory entries.
 - fetch(url, [options]) fetches web page markdown or text.
 - webSearch(query, [options]) searches the web (DuckDuckGo/Brave).
+- External systems (Jira etc.): call await mcp.servers() to see configured MCP servers, await mcp.tools({id:"jira"}) to discover their tools, then await mcp.call({id:"jira", tool:"searchIssues", args:{...}}). Do NOT use fetch/webSearch for configured MCP services.
+- tools.loadTools({group:"mcp:<id>"}) remains available as a legacy way to add MCP tools to tools.X; mcp.* is preferred.
 - todo(op, [arg]) manages the session task list (e.g. todo('view'), todo('start', 1), todo('done', 1)).
 - ask(question, [options], [isMultiSelect]) asks the user a clarifying question (returns user answer).
 - askMany(questions) asks the user multiple questions in sequence.

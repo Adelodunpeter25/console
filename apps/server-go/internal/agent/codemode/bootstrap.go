@@ -221,6 +221,9 @@ const bootstrapScript = `
         });
     }
 
+    // MCP namespace: method bridge installed under __harness.mcp.
+    globalThis.mcp = bridge.mcp;
+
     // Tool discovery
     globalThis.searchTools = async function(query) {
         return await bridge.searchTools({ query: String(query || "") });
