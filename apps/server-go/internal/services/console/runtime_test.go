@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -94,5 +95,55 @@ func TestOptionalIntRejectsWrongTypes(t *testing.T) {
 		if _, _, err := optionalInt(map[string]any{"limit": bad}, "limit"); err == nil {
 			t.Errorf("%T %v must be rejected, not ignored", bad, bad)
 		}
+	}
+}
+
+func TestHelpAndDescribe(t *testing.T) {
+	runtime, err := NewRuntime(nil, nil, nil, nil, nil, nil, nil, nil, nil, QueueControl{}, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := evalJSON(t, runtime, `console.help()`).(map[string]any)
+	matches, ok := all["matches"].([]any)
+	if !ok || len(matches) == 0 {
+		t.Fatalf("help() matches = %#v", all["matches"])
+	}
+	found := false
+	for _, m := range matches {
+		if m.(map[string]any)["name"] == "console.sessions.create" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("help() did not list console.sessions.create")
+	}
+	searched := evalJSON(t, runtime, `console.help({query: "forward port"})`).(map[string]any)
+	sm := searched["matches"].([]any)
+	if len(sm) == 0 || sm[0].(map[string]any)["name"] != "console.ports.forward" {
+		t.Fatalf("help({query}) matches = %#v", sm)
+	}
+	ns := evalJSON(t, runtime, `console.help({namespace: "mcp"})`).(map[string]any)
+	for _, m := range ns["matches"].([]any) {
+		name := m.(map[string]any)["name"].(string)
+		if !strings.HasPrefix(name, "console.mcp.") {
+			t.Fatalf("namespace filter leaked %s", name)
+		}
+	}
+	desc := evalJSON(t, runtime, `console.describe({name: "sessions.wait"})`).(map[string]any)
+	if desc["name"] != "console.sessions.wait" {
+		t.Fatalf("describe name = %#v", desc["name"])
+	}
+	if _, ok := desc["example"].(string); !ok {
+		t.Fatal("describe missing example")
+	}
+	args, ok := desc["args"].([]any)
+	if !ok || len(args) == 0 {
+		t.Fatalf("describe args = %#v", desc["args"])
+	}
+	if err := evalErr(runtime, `console.describe({name: "bogus"})`); err == nil {
+		t.Fatal("describe of unknown method must fail")
+	}
+	if err := evalErr(runtime, `console.help({bogus: 1})`); err == nil {
+		t.Fatal("help must reject unknown args")
 	}
 }

@@ -72,7 +72,7 @@ PLAN MODE: if the user asks for changes, call await requestFullAccess("short rea
 - askMany(questions) asks the user multiple questions in sequence.
 - readSkill([name]) reads full instructions for a built-in skill (e.g. readSkill("browser-use")).
 - browser: browser.open({url}), browser.snapshot(), browser.tabs(), browser.close({tabId}), or browser(code).
-- console: console.ports.*, console.sessions.*, console.scripts.*, console.models() (while console.log remains).
+- console: console.ports.*, console.sessions.*, console.scripts.*, console.projects.*, console.mcp.*, console.models() (while console.log remains). Discover methods with console.help({query}) and console.describe({name}).
 - listTools() lists all registered harness and MCP tools with summaries.
 - searchTools(query) and describeTool(name) find and inspect available tool schemas.
 - tools.<name>(input) invokes any registered tool directly (results with JSON text are auto-parsed).

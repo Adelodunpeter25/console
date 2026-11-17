@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -394,7 +393,7 @@ func TestUnknownAndWrongTypedArgumentsAreRefused(t *testing.T) {
 		}
 	}
 	err := evalErr(runtime, `console.sessions.list({projectId: "p"})`)
-	if err == nil || !strings.Contains(err.Error(), "project_id, cwd") {
+	if err == nil || !strings.Contains(err.Error(), "project_id") || !strings.Contains(err.Error(), "cwd") {
 		t.Fatalf("err = %v, want the accepted argument names listed", err)
 	}
 	// Valid calls are unaffected (an empty list renders as "(no output)", so
@@ -406,50 +405,44 @@ func TestUnknownAndWrongTypedArgumentsAreRefused(t *testing.T) {
 	}
 }
 
-// Every installed method has an argument allow-list, and every allow-list entry
-// is an installed method. A method added without one would accept any argument,
-// silently ignoring typos, which is the bug the allow-list exists to prevent.
-func TestEveryInstalledMethodIsInTheArgumentTable(t *testing.T) {
-	runtime, _ := newConsoleSessionRuntime(t, nil)
-	_ = runtime
-	src, err := os.ReadFile("runtime.go")
-	if err != nil {
-		t.Fatal(err)
+// The catalog is the single source of truth: every entry becomes an
+// installed kernel method, and MethodSignatures is generated from the same
+// list, so the capability listing cannot drift from what is served.
+func TestCatalogMatchesInstalledMethods(t *testing.T) {
+	catalog := consoleCatalog()
+	if len(catalog) < 20 {
+		t.Fatalf("catalog has only %d methods; the pattern is out of date", len(catalog))
 	}
-	re := regexp.MustCompile(`\{Name: "([a-z_.A-Z]+)", Call:`)
-	installed := map[string]bool{}
-	for _, m := range re.FindAllStringSubmatch(string(src), -1) {
-		installed[m[1]] = true
-	}
-	if len(installed) < 20 {
-		t.Fatalf("found only %d installed methods; the pattern is out of date", len(installed))
-	}
-	for name := range installed {
-		if _, ok := methodArgs[name]; !ok {
-			t.Errorf("%s is installed but has no entry in methodArgs", name)
+	seen := map[string]bool{}
+	for _, def := range catalog {
+		if def.name == "" || def.handler == nil {
+			t.Errorf("catalog entry %q is missing a name or handler", def.name)
 		}
+		if seen[def.name] {
+			t.Errorf("duplicate catalog entry %s", def.name)
+		}
+		seen[def.name] = true
 	}
-	for name := range methodArgs {
-		if !installed[name] {
-			t.Errorf("methodArgs lists %s, which is not an installed method", name)
+	signatures := MethodSignatures()
+	if len(signatures) != len(catalog) {
+		t.Fatalf("MethodSignatures returned %d entries for %d catalog methods", len(signatures), len(catalog))
+	}
+	for i, def := range catalog {
+		want := "console." + def.name + def.signatureArgs()
+		if signatures[i] != want {
+			t.Errorf("signature[%d] = %q, want %q", i, signatures[i], want)
 		}
 	}
 }
 
-func TestMethodArgsCoverEveryInstalledMethod(t *testing.T) {
+// Every catalog method rejects arguments it does not take, so a typo fails
+// with the accepted names instead of being silently ignored.
+func TestCatalogMethodsRejectUnknownArgs(t *testing.T) {
 	runtime, _ := newConsoleSessionRuntime(t, nil)
-	_ = runtime
-	// Every method must be listed so none escapes argument checking by omission.
-	for _, name := range []string{
-		"ports.list", "ports.forward", "ports.unforward", "scripts.list", "scripts.run",
-		"scripts.status", "scripts.output", "scripts.stop", "models", "approvalModes",
-		"projects.list", "projects.add", "sessions.list", "sessions.read", "sessions.create",
-		"sessions.delete", "sessions.abort", "sessions.set_model", "sessions.set_approval",
-		"sessions.prompt", "sessions.queue", "sessions.clear_queue", "sessions.fork",
-		"sessions.wait", "sessions.search",
-	} {
-		if _, ok := methodArgs[name]; !ok {
-			t.Errorf("%s is not in methodArgs", name)
+	for _, def := range consoleCatalog() {
+		code := "console." + def.name + "({bogus_arg: 1})"
+		if err := evalErr(runtime, code); err == nil {
+			t.Errorf("%s accepted an unknown argument", def.name)
 		}
 	}
 }
