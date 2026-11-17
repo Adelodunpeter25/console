@@ -442,22 +442,27 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	toolList = append(toolList, tools.NewReadChatTool(sessionID, s.sessions))
 	// writePlan is offered in plan mode only: it is the sole file write a
 	// read-only run may make, and in every other mode write_file does the job.
+	// requestFullAccess is registered in every mode so a stray call outside
+	// plan mode gets a clear "nothing to upgrade" answer instead of an
+	// unknown-tool error.
 	if mode == permissions.PlanMode {
 		toolList = append(toolList, tools.NewWritePlanTool(header.Cwd))
-		toolList = append(toolList, tools.NewRequestFullAccessTool(askHandler, func() error {
-			if err := s.sessions.UpdateApprovalMode(sessionID, string(permissions.FullAccess)); err != nil {
-				return err
-			}
-			// Bash is sandboxed read-only in plan mode; swap in the real one.
-			registry.Replace(tools.NewBashTool(s.bashJobManager(), sessionID, runID))
-			executor.SetMode(permissions.FullAccess)
-			hub.Broadcast(loop.Event{
-				Kind:         loop.EventSessionApprovalModeUpdated,
-				ApprovalMode: string(permissions.FullAccess),
-			})
-			return nil
-		}))
 	}
+	toolList = append(toolList, tools.NewRequestFullAccessTool(askHandler, func() error {
+		if err := s.sessions.UpdateApprovalMode(sessionID, string(permissions.FullAccess)); err != nil {
+			return err
+		}
+		// Bash is sandboxed read-only in plan mode; swap in the real one.
+		registry.Replace(tools.NewBashTool(s.bashJobManager(), sessionID, runID))
+		executor.SetMode(permissions.FullAccess)
+		hub.Broadcast(loop.Event{
+			Kind:         loop.EventSessionApprovalModeUpdated,
+			ApprovalMode: string(permissions.FullAccess),
+		})
+		return nil
+	}, func() bool {
+		return executor != nil && executor.IsPlanMode()
+	}))
 	usage := &loop.UsageTracker{}
 	setup := strings.TrimSpace(prompt.Setup + "\n\n" + codemode.SetupHint)
 	mcpManager := s.mcpManager()

@@ -27,7 +27,7 @@ func registered(t *testing.T) map[string]bool {
 		tools.NewReadChatTool("", nil),
 		tools.NewWritePlanTool(t.TempDir()),
 		tools.NewPlanModeBashTool(nil, ""),
-		tools.NewRequestFullAccessTool(nil, nil),
+		tools.NewRequestFullAccessTool(nil, nil, nil),
 	} {
 		names[tool.Name()] = true
 	}

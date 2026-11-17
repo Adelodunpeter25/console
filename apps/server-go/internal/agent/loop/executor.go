@@ -51,6 +51,13 @@ func (e *Executor) SetMode(mode permissions.Mode) {
 	e.mode = mode
 }
 
+// IsPlanMode reports whether the executor is currently in plan mode; tools
+// that are only meaningful there (requestFullAccess) use it to answer
+// sensibly when called in another mode.
+func (e *Executor) IsPlanMode() bool {
+	return e.Mode() == permissions.PlanMode
+}
+
 // Registry exposes the executor's tool registry.
 func (e *Executor) Registry() *tools.Registry {
 	return e.registry

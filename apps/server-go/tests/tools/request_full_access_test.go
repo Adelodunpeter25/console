@@ -12,8 +12,12 @@ import (
 )
 
 func runRequestFullAccess(t *testing.T, handler tools.AskHandler, switched *bool) string {
+	return runRequestFullAccessMode(t, handler, switched, true)
+}
+
+func runRequestFullAccessMode(t *testing.T, handler tools.AskHandler, switched *bool, planMode bool) string {
 	t.Helper()
-	tool := tools.NewRequestFullAccessTool(handler, func() error { *switched = true; return nil })
+	tool := tools.NewRequestFullAccessTool(handler, func() error { *switched = true; return nil }, func() bool { return planMode })
 	args, _ := json.Marshal(map[string]any{"reason": "implement the plan"})
 	out, err := tool.Execute(context.Background(), args)
 	if err != nil {
@@ -54,6 +58,21 @@ func TestRequestFullAccessHeadlessNeverSwitches(t *testing.T) {
 	runRequestFullAccess(t, nil, &switched)
 	if switched {
 		t.Fatal("headless run must not upgrade")
+	}
+}
+
+func TestRequestFullAccessOutsidePlanModeAnswersDirectly(t *testing.T) {
+	var switched bool
+	var asked bool
+	text := runRequestFullAccessMode(t, func(context.Context, tools.AskQuestionRequest) (tools.AskAnswer, error) {
+		asked = true
+		return tools.AskAnswer{Text: tools.FullAccessApprove}, nil
+	}, &switched, false)
+	if switched || asked {
+		t.Fatalf("non-plan call must not ask or switch: switched=%v asked=%v", switched, asked)
+	}
+	if !strings.Contains(text, "Full Access") {
+		t.Fatalf("text = %q", text)
 	}
 }
 
