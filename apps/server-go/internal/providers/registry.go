@@ -9,6 +9,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/devin"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/opencode"
 )
 
@@ -23,6 +24,8 @@ func Lookup(id string) (loop.Provider, error) {
 		return &antigravity.Provider{}, nil
 	case "opencode":
 		return &opencode.Provider{}, nil
+	case "devin":
+		return &devin.Provider{}, nil
 	default:
 		return nil, fmt.Errorf("Unknown provider '%s'.", id)
 	}

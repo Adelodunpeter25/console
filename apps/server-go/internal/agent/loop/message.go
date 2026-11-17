@@ -39,6 +39,9 @@ type TextPart struct {
 type ThinkingPart struct {
 	Type string `json:"type"` // "thinking"
 	Text string `json:"text"`
+	// Signature is the provider's reasoning-continuity token (Devin's
+	// thinking signature), echoed back verbatim on replay.
+	Signature string `json:"signature,omitempty"`
 }
 
 // CacheRetention mirrors @console/types CacheRetention: prompt-cache tier.

@@ -40,7 +40,8 @@ impl ConsoleDesktopApp {
         let oauth_id = match provider_name.as_str() {
             "antigravity" => OAuthProviderId::Antigravity,
             "codex" | "openai" => OAuthProviderId::Codex,
-            "claude" | "anthropic" => OAuthProviderId::Claude,
+			"claude" | "anthropic" => OAuthProviderId::Claude,
+			"devin" => OAuthProviderId::Devin,
             _ => {
                 self.auth_logging_in.remove(&provider_name);
                 cx.notify();

@@ -67,6 +67,9 @@ message TextPart {
 
 message ThinkingPart {
   string text = 1;
+  // Provider reasoning-continuity token (e.g. Devin's thinking signature),
+  // echoed back verbatim on replay. Absent in old stored sessions.
+  optional string signature = 2;
 }
 
 message ToolCall {

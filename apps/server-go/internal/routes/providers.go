@@ -15,6 +15,7 @@ import (
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/apikeys"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/devin"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -93,6 +94,8 @@ func registerProviderRoutes(app *fiber.App, favorites *services.FavoriteService)
 			return encodeModelsResponse(c, id, withFavorites(providers.ClaudeModels(c.Context()), favorites))
 		case "antigravity":
 			return encodeModelsResponse(c, id, withFavorites(providers.AntigravityModels(c.Context()), favorites))
+		case "devin":
+			return encodeModelsResponse(c, id, withFavorites(devin.CachedModels(c.Context()), favorites))
 		case "opencode":
 			// Go has no offline fallback, so the error is real information:
 			// most often it is ErrNoAPIKey, which tells the user exactly what

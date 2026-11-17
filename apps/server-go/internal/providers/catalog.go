@@ -11,6 +11,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/devin"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/opencode"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -32,6 +33,10 @@ func ListProvidersWithContext(ctx context.Context) []types.ProviderEntry {
 		case "claude":
 			if claude.CredentialExists() {
 				entries[i].Models = claude.CachedModels(ctx)
+			}
+		case "devin":
+			if devin.CredentialExists() {
+				entries[i].Models = devin.CachedModels(ctx)
 			}
 		}
 	}
@@ -55,6 +60,11 @@ func ListProviders() []types.ProviderEntry {
 			Name: "claude", DisplayName: "Claude",
 			Description: "Anthropic subscription models through the Messages API",
 			Models:      claude.Snapshot(), AuthMethod: "oauth",
+		},
+		{
+			Name: "devin", DisplayName: "Devin",
+			Description: "Cognition Devin subscription models through the Cascade Connect-RPC API",
+			Models:      devin.Snapshot(), AuthMethod: "oauth",
 		},
 		{
 			Name: "opencode", DisplayName: "OpenCode Go",
@@ -171,6 +181,8 @@ func ResolveLiveModel(ctx context.Context, providerID, modelID string) (types.Mo
 		return claude.ResolveModel(ctx, modelID)
 	case "codex":
 		return codex.ResolveModel(ctx, modelID)
+	case "devin":
+		return devin.ResolveModel(ctx, modelID)
 	case "opencode":
 		// Without this, any Go model not in the (now empty) static catalog
 		// would fall through to the 128k synthetic entry in
@@ -186,7 +198,7 @@ func ResolveLiveModel(ctx context.Context, providerID, modelID string) (types.Mo
 // (implemented or not).
 func IsCatalogProvider(id string) bool {
 	switch id {
-	case "antigravity", "codex", "claude", "opencode":
+	case "antigravity", "codex", "claude", "devin", "opencode":
 		return true
 	default:
 		return false

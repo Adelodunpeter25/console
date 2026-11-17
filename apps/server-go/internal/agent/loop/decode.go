@@ -60,7 +60,8 @@ type rawAssistantContent struct {
 		ThoughtSignature string `json:"thoughtSignature"`
 	} `json:"text"`
 	Thinking *struct {
-		Text string `json:"text"`
+		Text      string `json:"text"`
+		Signature string `json:"signature"`
 	} `json:"thinking"`
 	ToolCall *struct {
 		ID               string          `json:"id"`
@@ -126,7 +127,8 @@ func MessageFromSplit(skeleton []byte, parts []msgparts.Part) (any, error) {
 				})
 			} else if c.Thinking != nil {
 				assistant.Content = append(assistant.Content, ThinkingPart{
-					Text: c.Thinking.Text,
+					Text:      c.Thinking.Text,
+					Signature: c.Thinking.Signature,
 				})
 			} else if c.ToolCall != nil {
 				var args json.RawMessage

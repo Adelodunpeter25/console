@@ -64,13 +64,13 @@ func (s *Service) resolveModel(ctx context.Context, providerID, modelID string) 
 }
 
 // DeliversToolResultImages reports whether a provider renders inline images
-// carried by a tool result. Claude sends them natively; Codex and Antigravity
-// forward them in their own wire shapes. Other adapters (e.g. OpenCode) redact
-// them to a placeholder before the request is built, regardless of the model's
-// declared capability.
+// carried by a tool result. Claude sends them natively; Codex, Antigravity,
+// and Devin forward them in their own wire shapes. Other adapters (e.g.
+// OpenCode) redact them to a placeholder before the request is built,
+// regardless of the model's declared capability.
 func DeliversToolResultImages(providerID string) bool {
 	switch providerID {
-	case "claude", "codex", "antigravity":
+	case "claude", "codex", "antigravity", "devin":
 		return true
 	}
 	return false

@@ -135,7 +135,7 @@ type Event struct {
 	// just started running", as opposed to it being cleared.
 	Drained bool `json:"drained,omitempty"`
 	// QueuedAll is the whole queue (next-to-run first) on EventQueueUpdated.
-	QueuedAll []types.QueuedPrompt `json:"queuedPrompts,omitempty"`
+	QueuedAll    []types.QueuedPrompt `json:"queuedPrompts,omitempty"`
 	Title        string               `json:"title,omitempty"`
 	ApprovalMode string               `json:"approvalMode,omitempty"`
 	Subagent     any                  `json:"subagent,omitempty"`
@@ -426,6 +426,7 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 	var textBuilder strings.Builder
 	var thinkingBuilder strings.Builder
 	var lastThoughtSig string
+	var lastThinkingSig string
 	hasText := false
 	hasThinking := false
 	var toolCalls []ToolCallPart
@@ -454,6 +455,9 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 			}
 			hasThinking = true
 			thinkingBuilder.WriteString(event.Text)
+			if event.ThoughtSignature != "" {
+				lastThinkingSig = event.ThoughtSignature
+			}
 		case EventToolCall:
 			if event.Call != nil {
 				toolCalls = append(toolCalls, ToolCallPart{Type: "toolCall", Call: *event.Call})
@@ -472,8 +476,9 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 	var content []any
 	if hasThinking {
 		content = append(content, ThinkingPart{
-			Type: "thinking",
-			Text: thinkingBuilder.String(),
+			Type:      "thinking",
+			Text:      thinkingBuilder.String(),
+			Signature: lastThinkingSig,
 		})
 	}
 	if hasText {

@@ -175,10 +175,12 @@ func AssistantToProto(m AssistantMessage) *consolev1.AgentAssistantMessage {
 				Part: &consolev1.AssistantContentPart_Text{Text: tp},
 			})
 		case ThinkingPart:
+			tp := &consolev1.ThinkingPart{Text: p.Text}
+			if p.Signature != "" {
+				tp.Signature = &p.Signature
+			}
 			out.Content = append(out.Content, &consolev1.AssistantContentPart{
-				Part: &consolev1.AssistantContentPart_Thinking{
-					Thinking: &consolev1.ThinkingPart{Text: p.Text},
-				},
+				Part: &consolev1.AssistantContentPart_Thinking{Thinking: tp},
 			})
 		case ToolCallPart:
 			call := &consolev1.ToolCall{Id: p.Call.ID, Name: p.Call.Name}
@@ -301,7 +303,7 @@ func protoToAssistant(m *consolev1.AgentAssistantMessage) (AssistantMessage, err
 				Text: p.Text.GetText(), ThoughtSignature: p.Text.GetThoughtSignature(),
 			})
 		case *consolev1.AssistantContentPart_Thinking:
-			out.Content = append(out.Content, ThinkingPart{Text: p.Thinking.GetText()})
+			out.Content = append(out.Content, ThinkingPart{Text: p.Thinking.GetText(), Signature: p.Thinking.GetSignature()})
 		case *consolev1.AssistantContentPart_ToolCall:
 			var args json.RawMessage
 			if len(p.ToolCall.GetArguments()) > 0 {
