@@ -672,6 +672,7 @@ impl ConsoleDesktopApp {
             ports_menu_handle: console_ui::ContextMenuHandle::new(cx),
             menubar_file_menu: console_ui::ContextMenuHandle::new(cx),
             menubar_edit_menu: console_ui::ContextMenuHandle::new(cx),
+            new_split_pane: None,
             new_tab_menus: std::collections::HashMap::new(),
             file_tree_nodes: Rc::new(Vec::new()),
             working_changes: Rc::new(Vec::new()),

@@ -815,6 +815,9 @@ impl Render for ConsoleDesktopApp {
                             .child({
                                 let entity_for_split = entity.clone();
                                 self.ensure_new_tab_menus(cx);
+                                // Handed over once: a later render of the same
+                                // split must not animate it again.
+                                let new_split_pane = self.new_split_pane.take();
                                 let new_tab_menus = self.new_tab_menus.clone();
                                 let tab_follows: std::collections::HashMap<
                                     String,
@@ -840,6 +843,7 @@ impl Render for ConsoleDesktopApp {
                                 )
                                 .with_tab_follow(move |pane_id| tab_follows.get(pane_id).cloned())
                                 .with_dirty_paths(dirty_file_paths.clone())
+                                .with_new_pane(new_split_pane)
                                 .with_new_tab_menu({
                                     let entity = entity.clone();
                                     let menus = new_tab_menus.clone();

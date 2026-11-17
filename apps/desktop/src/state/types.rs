@@ -253,6 +253,9 @@ pub struct ConsoleDesktopApp {
     /// In-window menu bar dropdowns (Windows/Linux; macOS uses the native menu).
     pub menubar_file_menu: console_ui::ContextMenuHandle,
     pub menubar_edit_menu: console_ui::ContextMenuHandle,
+    /// The pane created by opening a tab in a new split, until its grow-in
+    /// animation has been handed to the next render.
+    pub(crate) new_split_pane: Option<String>,
     /// The `+` dropdown's open state, one per workspace pane.
     pub(crate) new_tab_menus: std::collections::HashMap<String, console_ui::ContextMenuHandle>,
     pub file_tree_nodes: Rc<Vec<console_ui::FileTreeNode>>,

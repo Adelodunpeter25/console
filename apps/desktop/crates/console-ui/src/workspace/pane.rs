@@ -31,12 +31,6 @@ pub type ContentRenderer = Rc<
 /// Provider for each leaf pane's retained tab scroll follow state.
 pub type TabFollowProvider = Rc<dyn Fn(&str) -> Option<TabStripFollow> + 'static>;
 
-/// Pane ids painted last frame, used to tell a new split from a workspace switch.
-#[derive(Default)]
-struct RenderedPanes(std::collections::HashSet<String>);
-
-impl gpui::Global for RenderedPanes {}
-
 /// The whole workspace: tree + which pane currently holds focus.
 #[derive(IntoElement)]
 pub struct WorkspacePane {
@@ -52,6 +46,9 @@ pub struct WorkspacePane {
     new_tab_menu: Option<NewTabMenuProvider>,
     tab_follow: Option<TabFollowProvider>,
     dirty_paths: std::collections::HashSet<String>,
+    /// The pane just created by opening a tab in a new split; only the split
+    /// that holds it plays the grow-in animation.
+    new_pane: Option<String>,
     on_resize_split: Option<
         Rc<
             dyn Fn(
@@ -90,8 +87,15 @@ impl WorkspacePane {
             new_tab_menu: None,
             tab_follow: None,
             dirty_paths: std::collections::HashSet::new(),
+            new_pane: None,
             on_resize_split: None,
         }
+    }
+
+    /// Animate the split that holds `pane_id`, which was created this frame.
+    pub fn with_new_pane(mut self, pane_id: Option<String>) -> Self {
+        self.new_pane = pane_id;
+        self
     }
 
     pub fn with_new_tab_menu(
@@ -346,7 +350,7 @@ fn render_node(
         >,
     >,
     can_close_pane: bool,
-    animate_new_splits: bool,
+    new_pane: Option<&str>,
     window: &mut Window,
     cx: &mut App,
 ) -> gpui::AnyElement {
@@ -375,6 +379,9 @@ fn render_node(
             let on_resize = on_resize_split.clone();
             let split_id = split.id.clone();
             let direction = split.direction;
+            let animate = new_pane.is_some_and(|id| {
+                split.children[1].leaves().iter().any(|leaf| leaf.id == id)
+            });
 
             div()
                 .id(ElementId::Name(
@@ -409,7 +416,7 @@ fn render_node(
                             dirty_paths,
                             on_resize_split,
                             can_close_pane,
-                            animate_new_splits,
+                            new_pane,
                             window,
                             cx,
                         )),
@@ -467,7 +474,7 @@ fn render_node(
                                     SpringAnimation::new(SpringConfig::new(1800.0, 85.0, 1.0))
                                         .to(size_1)
                                         .with_epsilon(0.5);
-                                if animate_new_splits {
+                                if animate {
                                     spring.from(0.0)
                                 } else {
                                     spring
@@ -495,7 +502,7 @@ fn render_node(
                             dirty_paths,
                             on_resize_split,
                             can_close_pane,
-                            animate_new_splits,
+                            new_pane,
                             window,
                             cx,
                         )),
@@ -507,19 +514,7 @@ fn render_node(
 
 impl RenderOnce for WorkspacePane {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let leaves = self.root.leaves();
-        let can_close_pane = leaves.len() > 1;
-        let current: std::collections::HashSet<String> =
-            leaves.iter().map(|leaf| leaf.id.clone()).collect();
-        // Each workspace owns its own pane ids, so a render sharing no pane
-        // with the previous one is a workspace switch (or first paint), not a
-        // new split: those must appear in place rather than slide in.
-        let animate_new_splits = {
-            let rendered = cx.default_global::<RenderedPanes>();
-            let same_workspace = !rendered.0.is_empty() && !rendered.0.is_disjoint(&current);
-            rendered.0 = current;
-            same_workspace
-        };
+        let can_close_pane = self.root.leaves().len() > 1;
         render_node(
             &self.root,
             self.active_pane_id.as_deref(),
@@ -534,7 +529,7 @@ impl RenderOnce for WorkspacePane {
             &self.dirty_paths,
             &self.on_resize_split,
             can_close_pane,
-            animate_new_splits,
+            self.new_pane.as_deref(),
             window,
             cx,
         )

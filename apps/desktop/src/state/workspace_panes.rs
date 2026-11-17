@@ -1076,6 +1076,9 @@ impl ConsoleDesktopApp {
                 &chat_pane_id,
                 console_core::SplitDirection::Horizontal,
             ) {
+                // Only a split made by opening a tab animates in; switching
+                // workspaces, returning from settings and dragging do not.
+                self.new_split_pane = Some(new_id.clone());
                 new_id
             } else {
                 chat_pane_id
