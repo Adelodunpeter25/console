@@ -642,6 +642,9 @@ pub struct AssistantMessageBubble {
     thinking_expanded: Option<Rc<RefCell<HashSet<String>>>>,
     on_thinking_toggle: Option<Rc<dyn Fn(String, bool, &mut Window, &mut App) + 'static>>,
     link_handler: Option<LinkHandler>,
+    /// Session working directory, for resolving workspace-relative image
+    /// paths in markdown and `image` visual blocks.
+    cwd: Option<String>,
     file_changes: Option<Rc<TurnChanges>>,
     on_open_change: Option<OpenChangeHandler>,
     load_diff: Option<LoadDiffHandler>,
@@ -666,6 +669,7 @@ impl AssistantMessageBubble {
             thinking_expanded: None,
             on_thinking_toggle: None,
             link_handler: None,
+            cwd: None,
             file_changes: None,
             on_open_change: None,
             load_diff: None,
@@ -766,6 +770,11 @@ impl AssistantMessageBubble {
         self.link_handler = handler;
         self
     }
+
+    pub fn cwd(mut self, cwd: Option<String>) -> Self {
+        self.cwd = cwd.filter(|c| !c.is_empty());
+        self
+    }
 }
 
 impl RenderOnce for AssistantMessageBubble {
@@ -797,6 +806,7 @@ impl RenderOnce for AssistantMessageBubble {
         let thinking_expanded = self.thinking_expanded.clone();
         let on_thinking_toggle = self.on_thinking_toggle.clone();
         let link_handler = self.link_handler.clone();
+        let cwd = self.cwd.clone();
         let file_changes = self.file_changes;
         let on_open_change = self.on_open_change;
         let load_diff = self.load_diff;
@@ -894,6 +904,7 @@ impl RenderOnce for AssistantMessageBubble {
                                 .selection(selection.clone())
                                 .streaming(is_streaming)
                                 .link_handler(link_handler.clone())
+                                .cwd(cwd.clone())
                                 .on_toggle(move |expanded, window, cx| {
                                     if let Some(on_toggle) = &on_toggle {
                                         on_toggle(action_id.clone(), expanded, window, cx);
@@ -907,6 +918,7 @@ impl RenderOnce for AssistantMessageBubble {
                                 &palette,
                                 selection.clone(),
                                 link_handler.clone(),
+                                cwd.clone(),
                             );
                             render_selectable_markdown(
                                 text,

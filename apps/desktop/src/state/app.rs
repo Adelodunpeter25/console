@@ -58,6 +58,7 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) -> Self {
         let client = ConsoleClient::new(None);
+        console_ui::chat::set_workspace_image_client(&client);
         let ws_doc = startup.workspaces.clone();
         let mut project_workspace_roots = std::collections::HashMap::new();
         let mut project_active_panes = std::collections::HashMap::new();
@@ -693,6 +694,8 @@ impl ConsoleDesktopApp {
             open_file_contents: std::collections::HashMap::new(),
             open_file_errors: std::collections::HashMap::new(),
             open_image_contents: std::collections::HashMap::new(),
+            open_media_contents: std::collections::HashMap::new(),
+            file_media_views: std::collections::HashMap::new(),
             svg_preview_mode: std::collections::HashMap::new(),
             open_diff_contents: std::collections::HashMap::new(),
             viewer_list_states: std::collections::HashMap::new(),

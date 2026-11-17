@@ -15,6 +15,7 @@ import (
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -301,6 +302,63 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		return c.Send(data)
 	})
 
+	// GET /api/fs/file/media — video/audio/PDF bytes with Range support so
+	// players can scrub. Images stay on /file/raw.
+	h.Get("/file/media", func(c *fiber.Ctx) error {
+		filePath := c.Query("path")
+		if filePath == "" {
+			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'path' is required."))
+		}
+		filePath = fssvc.ResolvePath(filePath)
+		meta, err := fs.GetMediaMeta(filePath)
+		if err != nil {
+			return fail(c, previewStatus(err), err)
+		}
+		etag := fssvc.BuildFileETag(meta.SizeBytes, meta.MtimeMs)
+		if c.Get("If-None-Match") == etag {
+			return c.Status(fiber.StatusNotModified).Send(nil)
+		}
+
+		// Parse the Range header up front so an unsatisfiable request never
+		// opens the file.
+		start, end := int64(0), meta.SizeBytes-1
+		ranged := false
+		if rangeHeader := c.Get("Range"); rangeHeader != "" {
+			s, e, ok := parseMediaRange(rangeHeader, meta.SizeBytes)
+			if !ok {
+				c.Set("Content-Range", fmt.Sprintf("bytes */%d", meta.SizeBytes))
+				return c.Status(fiber.StatusRequestedRangeNotSatisfiable).Send(nil)
+			}
+			start, end, ranged = s, e, true
+		}
+
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return fail(c, fiber.StatusBadRequest, err)
+		}
+		payload := data
+		status := fiber.StatusOK
+		if ranged {
+			// The file could have shrunk between Stat and ReadFile.
+			if start >= int64(len(data)) {
+				c.Set("Content-Range", fmt.Sprintf("bytes */%d", meta.SizeBytes))
+				return c.Status(fiber.StatusRequestedRangeNotSatisfiable).Send(nil)
+			}
+			if end >= int64(len(data)) {
+				end = int64(len(data)) - 1
+			}
+			payload = data[start : end+1]
+			status = fiber.StatusPartialContent
+			c.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, meta.SizeBytes))
+		}
+		c.Set("Content-Type", meta.MimeType)
+		c.Set("Content-Length", strconv.Itoa(len(payload)))
+		c.Set("Accept-Ranges", "bytes")
+		c.Set("Cache-Control", "private, max-age=30")
+		c.Set("ETag", etag)
+		return c.Status(status).Send(payload)
+	})
+
 	// GET /api/fs/file
 	h.Get("/file", func(c *fiber.Ctx) error {
 		filePath := c.Query("path")
@@ -424,6 +482,57 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 			}
 		})
 	})
+}
+
+// parseMediaRange parses a single `bytes=start-end` Range header against
+// total size. Returns (start, end, ok); ok=false means the header was
+// malformed or unsatisfiable and the caller should answer 416.
+func parseMediaRange(header string, total int64) (int64, int64, bool) {
+	if !strings.HasPrefix(header, "bytes=") {
+		return 0, 0, false
+	}
+	spec := strings.TrimPrefix(header, "bytes=")
+	if strings.Contains(spec, ",") {
+		return 0, 0, false // multi-range unsupported
+	}
+	startStr, endStr, found := strings.Cut(spec, "-")
+	if !found {
+		return 0, 0, false
+	}
+	if total <= 0 {
+		return 0, 0, false
+	}
+	var start, end int64
+	if startStr == "" {
+		// Suffix range: last N bytes.
+		n, err := strconv.ParseInt(endStr, 10, 64)
+		if err != nil || n <= 0 {
+			return 0, 0, false
+		}
+		start = total - n
+		if start < 0 {
+			start = 0
+		}
+		end = total - 1
+	} else {
+		var err error
+		start, err = strconv.ParseInt(startStr, 10, 64)
+		if err != nil || start < 0 || start >= total {
+			return 0, 0, false
+		}
+		if endStr == "" {
+			end = total - 1
+		} else {
+			end, err = strconv.ParseInt(endStr, 10, 64)
+			if err != nil || end < start {
+				return 0, 0, false
+			}
+			if end >= total {
+				end = total - 1
+			}
+		}
+	}
+	return start, end, true
 }
 
 func clampInt(v, min, max int) int {

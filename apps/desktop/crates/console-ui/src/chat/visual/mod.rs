@@ -142,6 +142,9 @@ fn card_body(spec: &VisualSpec, theme: Theme, sel: &Selectable) -> AnyElement {
                     rows,
                 } => table::table(caption, columns, rows, theme, sel),
                 VisualBlock::Chart(chart) => chart::chart_block(chart, theme, sel),
+                VisualBlock::Image { path, alt } => div()
+                    .child(crate::chat::image::ChatImage::new(path.clone(), None).alt(alt.clone()))
+                    .into_any_element(),
                 VisualBlock::Metric { .. } => div().into_any_element(),
             });
             i += 1;

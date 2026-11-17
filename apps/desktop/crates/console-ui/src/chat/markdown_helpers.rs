@@ -42,9 +42,10 @@ pub fn assistant_ctx<'a>(
     palette: &'a Palette,
     selection: TranscriptSelection,
     link_handler: Option<LinkHandler>,
+    cwd: Option<String>,
 ) -> MarkdownCtx<'a> {
     with_optional_link(
-        MarkdownCtx::new(row, palette, Metrics::BODY, selection),
+        MarkdownCtx::new(row, palette, Metrics::BODY, selection).with_cwd(cwd),
         link_handler,
     )
 }
@@ -55,9 +56,10 @@ pub fn compact_ctx<'a>(
     palette: &'a Palette,
     selection: TranscriptSelection,
     link_handler: Option<LinkHandler>,
+    cwd: Option<String>,
 ) -> MarkdownCtx<'a> {
     with_optional_link(
-        MarkdownCtx::new(row, palette, Metrics::COMPACT, selection),
+        MarkdownCtx::new(row, palette, Metrics::COMPACT, selection).with_cwd(cwd),
         link_handler,
     )
 }

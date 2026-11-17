@@ -7,7 +7,8 @@ use console_ui::{
     composer_pills, error_banner, notice_banner, queued_prompts_stack,
 };
 use gpui::{
-    App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
+    App, AppContext, Context, InteractiveElement, IntoElement, ParentElement,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use std::rc::Rc;
 
@@ -336,6 +337,154 @@ impl ConsoleDesktopApp {
                     .child(div().flex_1().min_h_0().size_full().child(viewer))
                     .into_any_element()
             }
+            console_core::FileKind::Video
+            | console_core::FileKind::Audio
+            | console_core::FileKind::Pdf
+            | console_core::FileKind::Details => {
+                let Some(details) = self.ensure_media_file_state(&path, cx) else {
+                    if self.open_file_errors.contains_key(&path) {
+                        let message = self.open_file_errors.get(&path).cloned().unwrap_or_default();
+                        let retry_path = path.clone();
+                        let entity = cx.entity().downgrade();
+                        return console_ui::BlockedFilePanel::new(
+                            "Couldn't open file",
+                            message,
+                        )
+                        .icon(console_ui::IconName::TriangleAlert)
+                        .on_retry(move |_w, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.open_file_errors.remove(&retry_path);
+                                    this.fetch_file_tab_content(retry_path.clone(), cx);
+                                    cx.notify();
+                                });
+                            }
+                        })
+                        .into_any_element();
+                    }
+                    return Self::file_loading_panel("Loading file…", &theme);
+                };
+
+                let file_name = std::path::Path::new(&path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(&path)
+                    .to_string();
+
+                // Details files get a metadata card — no webview needed.
+                let Some(player_kind) = details.player_kind() else {
+                    let size_label = details
+                        .size_bytes
+                        .map(console_ui::format_bytes)
+                        .unwrap_or_else(|| "Unknown".to_string());
+                    let open_path = path.clone();
+                    let reveal_path = path.clone();
+                    let entity = cx.entity().downgrade();
+                    return div()
+                        .size_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .bg(theme.canvas)
+                        .child(
+                            div()
+                                .w(px(360.0))
+                                .p(px(24.0))
+                                .rounded(px(10.0))
+                                .bg(theme.surface)
+                                .border_1()
+                                .border_color(theme.border)
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .gap(px(10.0))
+                                .child(console_ui::file_type_icon(&path, 40.0))
+                                .child(
+                                    div()
+                                        .text_size(px(14.0))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(theme.text)
+                                        .child(file_name.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .gap(px(16.0))
+                                        .text_size(px(12.0))
+                                        .text_color(theme.text_secondary)
+                                        .child(details.mime_label.clone())
+                                        .child(size_label),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .gap(px(8.0))
+                                        .mt(px(6.0))
+                                        .child(
+                                            div()
+                                                .id("details-open-external")
+                                                .px(px(14.0))
+                                                .py(px(6.0))
+                                                .rounded(px(6.0))
+                                                .bg(theme.inverse)
+                                                .text_color(theme.on_inverse)
+                                                .text_size(px(12.0))
+                                                .font_weight(gpui::FontWeight::MEDIUM)
+                                                .cursor_pointer()
+                                                .hover(|s| s.opacity(0.9))
+                                                .on_click({
+                                                    let open_path = open_path.clone();
+                                                    let entity = entity.clone();
+                                                    move |_, _window, cx| {
+                                                        if let Some(app) = entity.upgrade() {
+                                                            app.update(cx, |this, cx| {
+                                                                this.open_file_externally(
+                                                                    &open_path,
+                                                                    cx,
+                                                                );
+                                                            });
+                                                        }
+                                                    }
+                                                })
+                                                .child("Open externally"),
+                                        )
+                                        .child(
+                                            div()
+                                                .id("details-reveal")
+                                                .px(px(14.0))
+                                                .py(px(6.0))
+                                                .rounded(px(6.0))
+                                                .border_1()
+                                                .border_color(theme.border)
+                                                .text_color(theme.text)
+                                                .text_size(px(12.0))
+                                                .cursor_pointer()
+                                                .hover(|s| s.bg(theme.overlay))
+                                                .on_click(move |_event, _window, cx| {
+                                                    cx.reveal_path(
+                                                        std::path::Path::new(&reveal_path),
+                                                    );
+                                                })
+                                                .child("Reveal in Finder"),
+                                        ),
+                                ),
+                        )
+                        .into_any_element();
+                };
+
+                // Video/audio/PDF: reuse or create the webview surface. The
+                // view builds its page from the media URL, which needs the
+                // auth token — fetched async, so the entity is created by a
+                // task and this render shows the loading panel until it lands.
+                if !self.file_media_views.contains_key(&path) {
+                    self.spawn_media_view(&path, file_name, player_kind, window, cx);
+                    return Self::file_loading_panel("Loading media…", &theme);
+                }
+                let view = self.file_media_views.get(&path).cloned().unwrap();
+                let occluded = self.any_palette_open(cx);
+                view.update(cx, |v, cx| v.sync_native_state(true, occluded, cx));
+                div().size_full().child(view).into_any_element()
+            }
             console_core::FileKind::Text => {
                 let Some(content) = self.ensure_text_file_state(&path, cx) else {
                     return Self::file_loading_content_panel(&theme);
@@ -352,6 +501,63 @@ impl ConsoleDesktopApp {
             }
         }
     }
+    /// Create the `FileMediaView` for a video/audio/PDF file tab. The media
+    /// URL embeds the device auth token (webviews cannot send the bearer
+    /// header on subresource requests), so it is resolved asynchronously and
+    /// the entity is inserted once it lands; renders show a loading panel
+    /// until then.
+    fn spawn_media_view(
+        &mut self,
+        path: &str,
+        title: String,
+        kind: console_ui::MediaFileKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let client = self.client.clone();
+        let file_path = path.to_owned();
+        let window_handle = window.window_handle();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            let token = client.transport().auth_token().await;
+            let url = client.fs.media_url(&file_path, token.as_deref()).await;
+            let _ = cx.update(|cx| {
+                let _ = window_handle.update(cx, |_, window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            // A tab closed while the URL resolved must not
+                            // resurrect its surface.
+                            if !this.file_media_views.contains_key(&file_path)
+                                && this.file_path_is_open(&file_path)
+                            {
+                                let view = cx.new(|cx| {
+                                    console_ui::FileMediaView::new(
+                                        file_path.clone(),
+                                        title.clone(),
+                                        kind,
+                                        url.clone(),
+                                        window,
+                                        cx,
+                                    )
+                                });
+                                this.file_media_views.insert(file_path.clone(), view);
+                                cx.notify();
+                            }
+                        });
+                    }
+                });
+            });
+        })
+        .detach();
+    }
+
+    /// Open a file with the OS default handler (details card's
+    /// "Open externally").
+    pub(crate) fn open_file_externally(&mut self, path: &str, cx: &mut Context<Self>) {
+        cx.open_with_system(std::path::Path::new(path));
+    }
+
+
 
     /// Fetch-on-demand the decoded image for `path`, answering the current
     /// state (Loading until the fetch lands).
@@ -363,6 +569,21 @@ impl ConsoleDesktopApp {
             .get(path)
             .cloned()
             .unwrap_or(ImageFileState::Loading)
+    }
+
+    /// Fetch-on-demand the probed media metadata for `path`; None while the
+    /// fetch is in flight (or failed outside the read-error path).
+    fn ensure_media_file_state(
+        &mut self,
+        path: &str,
+        cx: &mut Context<Self>,
+    ) -> Option<crate::state::FileMediaDetails> {
+        if !self.open_media_contents.contains_key(path)
+            && !self.open_file_errors.contains_key(path)
+        {
+            self.fetch_file_tab_content(path.to_owned(), cx);
+        }
+        self.open_media_contents.get(path).cloned()
     }
 
     /// Fetch-on-demand the decoded text for `path`; None while the fetch is

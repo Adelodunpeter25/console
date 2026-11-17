@@ -34,6 +34,17 @@ class HttpTransport(
         return builder.build().toString()
     }
 
+    /**
+     * Absolute URL for `GET /api/fs/file/media` with the session token in the
+     * query string — players (VideoView/ExoPlayer) cannot attach the
+     * Authorization header, so the token rides the URL the server accepts.
+     * Never log the result.
+     */
+    fun mediaUrl(path: String): String {
+        val token = authToken()?.takeIf { it.isNotBlank() }
+        return url("/api/fs/file/media", mapOf("path" to path, "token" to token))
+    }
+
     fun <T> encodeBody(serializer: KSerializer<T>, value: T): String =
         json.encodeToString(serializer, value)
 

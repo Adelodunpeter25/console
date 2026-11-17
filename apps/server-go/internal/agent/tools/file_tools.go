@@ -80,7 +80,13 @@ func readFileExecute(ctx context.Context, in readFileInput, opts ReadFileOptions
 	if in.Path == "" {
 		return nil, NewToolError("path is required")
 	}
-	info, err := os.Stat(in.Path)
+	// Resolve once up front so stat/open and the image Visual all see the
+	// same absolute path (relative paths are session-cwd relative).
+	readPath := resolveImagePath(in.Path, opts.Cwd)
+	if readPath == "" {
+		readPath = in.Path
+	}
+	info, err := os.Stat(readPath)
 	if err != nil {
 		return nil, NewToolError("Cannot read %s: %v", in.Path, err)
 	}
@@ -89,7 +95,7 @@ func readFileExecute(ctx context.Context, in readFileInput, opts ReadFileOptions
 	}
 	sizeBytes := info.Size()
 
-	f, err := os.Open(in.Path)
+	f, err := os.Open(readPath)
 	if err != nil {
 		return nil, NewToolError("Cannot read %s: %v", in.Path, err)
 	}
@@ -119,18 +125,24 @@ func readFileExecute(ctx context.Context, in readFileInput, opts ReadFileOptions
 		if err != nil {
 			return nil, NewToolError("Cannot read %s: %v (limit %d bytes).", in.Path, err, imageutil.MaxBase64)
 		}
+		// The VisualArtifact carries the workspace path so the transcript can
+		// show the image after StripImagePayloads removes the inline bytes.
+		visual := imageVisual(in.Path, opts.Cwd, imageTextLine(in.Path, payload))
 		if opts.CanSeeImages {
-			return []map[string]any{
-				imagePart(payload.Mime, payload.Data),
-				{"type": "text", "text": imageTextLine(in.Path, payload)},
+			return Envelope{
+				Content: []map[string]any{
+					imagePart(payload.Mime, payload.Data),
+					{"type": "text", "text": imageTextLine(in.Path, payload)},
+				},
+				Visual: visual,
 			}, nil
 		}
 		if opts.Describer != nil {
 			if desc, ok := opts.Describer.Describe(ctx, payload.Mime, payload.Data, in.Path); ok && strings.TrimSpace(desc) != "" {
-				return textResult(describeImageText(in.Path, payload, opts.VisionModel, desc)), nil
+				return Envelope{Content: textResult(describeImageText(in.Path, payload, opts.VisionModel, desc)), Visual: visual}, nil
 			}
 		}
-		return textResult(placeholderImageText(in.Path, payload, opts.RunModel)), nil
+		return Envelope{Content: textResult(placeholderImageText(in.Path, payload, opts.RunModel)), Visual: visual}, nil
 	}
 
 	// Binary detection runs before the line splitter so a binary file is never

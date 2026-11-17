@@ -243,6 +243,13 @@ private fun AnnotatedString.Builder.appendIcon(kind: String, value: String) {
 
 @Composable
 private fun MarkdownImage(url: String, alt: String) {
+    // Workspace paths (no scheme) resolve against the session cwd and load
+    // through the authenticated fs endpoint; remote/data URLs use Coil.
+    val path = com.console.mobile.core.util.chatImagePath(url)
+    if (path != null) {
+        com.console.mobile.feature.chat.visual.WorkspaceImage(path = path, alt = alt.ifBlank { null })
+        return
+    }
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         AsyncImage(
             model = url,

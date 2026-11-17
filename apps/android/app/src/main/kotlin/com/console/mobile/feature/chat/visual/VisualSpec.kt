@@ -47,6 +47,12 @@ sealed interface VisualBlock {
         val yLabel: String? = null,
         val series: List<VisualSeries>,
     ) : VisualBlock
+
+    @Serializable @SerialName("image")
+    data class Image(
+        val path: String,
+        val alt: String? = null,
+    ) : VisualBlock
 }
 
 @Serializable

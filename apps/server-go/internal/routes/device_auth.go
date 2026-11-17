@@ -42,6 +42,13 @@ func deviceStreamPath(path string) bool {
 	return strings.HasPrefix(path, "/api/devices/") && strings.HasSuffix(path, "/stream")
 }
 
+// mediaFilePath reports whether path is the media endpoint, the one ordinary
+// HTTP route where a query-string token is accepted (media players and
+// embedded webviews cannot always send an Authorization header).
+func mediaFilePath(c *fiber.Ctx) bool {
+	return c.Method() == fiber.MethodGet && c.Path() == "/api/fs/file/media"
+}
+
 // isWebSocketUpgrade mirrors the handshake test the upgrader performs. Browser
 // scripting cannot set an Authorization header on a WebSocket handshake.
 func isWebSocketUpgrade(c *fiber.Ctx) bool {
@@ -59,9 +66,12 @@ func RequireDeviceToken(manager authManager) fiber.Handler {
 		credential := bearer(c)
 		// A player page opening the stream websocket cannot send the header
 		// either, so the device stream accepts its credential in the query
-		// string.
+		// string. The media endpoint serves video/audio/PDF bytes to players
+		// that likewise cannot set headers on some platforms, so it gets the
+		// same GET-only fallback.
 		// Ordinary HTTP stays header-only, keeping tokens out of access logs.
-		if credential == "" && isWebSocketUpgrade(c) && deviceStreamPath(c.Path()) {
+		if credential == "" &&
+			(isWebSocketUpgrade(c) && deviceStreamPath(c.Path()) || mediaFilePath(c)) {
 			credential = strings.TrimSpace(c.Query("token"))
 		}
 		claims, err := manager.Authenticate(credential)

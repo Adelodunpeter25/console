@@ -35,7 +35,11 @@ class FileKindsFixtureTest {
     }
 
     @Test
-    fun blockedExtensionsMatchFixture() {
-        kinds.getValue("blocked_extensions").forEach { assertTrue(it, isBinaryFileName("x$it")) }
+    fun mediaAndOpaqueExtensionsMatchFixture() {
+        // isBinaryFileName is the union of video/audio/pdf/opaque — every
+        // non-previewable extension must still classify as binary.
+        listOf("video_extensions", "audio_extensions", "pdf_extensions", "opaque_extensions")
+            .flatMap { kinds.getValue(it) }
+            .forEach { assertTrue(it, isBinaryFileName("x$it")) }
     }
 }

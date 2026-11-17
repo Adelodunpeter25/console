@@ -7,7 +7,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -44,6 +47,60 @@ type ReadFileOptions struct {
 	// role ("provider/model"), both used only to label the handoff text.
 	RunModel    string
 	VisionModel string
+	// Cwd is the session working directory used to resolve the image path
+	// in the VisualArtifact so clients can fetch it via the fs endpoints.
+	// Empty resolves relative paths against the process working directory.
+	Cwd string
+}
+
+// resolveImagePath turns a read_file path into the absolute path an
+// image block carries: file:// URLs are unwrapped, ~ expands to the home
+// directory, relative paths join against the session cwd, and the result
+// is cleaned to an absolute path.
+func resolveImagePath(path, cwd string) string {
+	if strings.HasPrefix(path, "file://") {
+		if u, err := url.Parse(path); err == nil && u.Path != "" {
+			path = u.Path
+		} else {
+			path = strings.TrimPrefix(path, "file://")
+		}
+	}
+	if path == "~" || strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
+		if home, err := os.UserHomeDir(); err == nil {
+			path = filepath.Join(home, path[1:])
+		}
+	}
+	if !filepath.IsAbs(path) && cwd != "" {
+		path = filepath.Join(cwd, path)
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	return abs
+}
+
+// imageVisual builds the VisualArtifact a sniffed image gets so clients can
+// render it from the workspace path after the transcript strips the inline
+// payload. It is nil when the path cannot be resolved to an absolute path.
+func imageVisual(path, cwd, alt string) *VisualArtifact {
+	abs := resolveImagePath(path, cwd)
+	if abs == "" {
+		return nil
+	}
+	spec := map[string]any{
+		"version": 1,
+		"blocks": []map[string]any{{
+			"type": "image",
+			"path": abs,
+			"alt":  alt,
+		}},
+	}
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		return nil
+	}
+	return &VisualArtifact{Version: 1, Spec: raw}
 }
 
 // imagePart renders raw image bytes as the inline content part every provider

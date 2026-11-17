@@ -26,6 +26,9 @@ func Summary(spec *Spec) string {
 	if n := counts["text"]; n > 0 {
 		parts = append(parts, plural(n, "note"))
 	}
+	if n := counts["image"]; n > 0 {
+		parts = append(parts, plural(n, "image"))
+	}
 	body := strings.Join(parts, ", ")
 	if spec.Title != "" {
 		return fmt.Sprintf("Rendered visual %q (%s).", spec.Title, body)

@@ -52,9 +52,25 @@ class VisualFixtureTest {
                     is VisualBlock.Chart -> "chart"
                     is VisualBlock.Table -> "table"
                     is VisualBlock.Text -> "text"
+                    is VisualBlock.Image -> "image"
                 }
             },
         )
+    }
+
+    @Test
+    fun parsesImageBlock() {
+        val spec = (parseVisual(artifact("image.json")) as VisualParse.Ok).spec
+        val image = spec.blocks[0] as VisualBlock.Image
+        assertEquals("/workspace/assets/chart.png", image.path)
+        assertEquals("Quarterly revenue chart", image.alt)
+
+        // Alt is optional.
+        val bare = parseVisual(
+            VisualArtifact(1, Json.parseToJsonElement("""{"version":1,"blocks":[{"type":"image","path":"/a.png"}]}""")),
+        ) as VisualParse.Ok
+        val bareImage = bare.spec.blocks.single() as VisualBlock.Image
+        assertEquals(null, bareImage.alt)
     }
 
     @Test

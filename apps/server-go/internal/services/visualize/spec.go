@@ -27,6 +27,7 @@ type Block struct {
 	Metric *MetricBlock
 	Table  *TableBlock
 	Chart  *ChartBlock
+	Image  *ImageBlock
 }
 
 // TextBlock is a short plain-text note.
@@ -61,6 +62,14 @@ type ChartBlock struct {
 	XLabel string   `json:"xLabel,omitempty"`
 	YLabel string   `json:"yLabel,omitempty"`
 	Series []Series `json:"series"`
+}
+
+// ImageBlock renders a workspace image file; clients resolve Path through
+// the authenticated file endpoint. Alt is optional caption text.
+type ImageBlock struct {
+	Type string `json:"type"`
+	Path string `json:"path"`
+	Alt  string `json:"alt,omitempty"`
 }
 
 // Series is one named line, bar, area, or scatter series.
@@ -113,6 +122,12 @@ func (b *Block) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		b.Chart = &v
+	case "image":
+		var v ImageBlock
+		if err := decodeStrict(data, &v); err != nil {
+			return err
+		}
+		b.Image = &v
 	default:
 		return fmt.Errorf("unknown block type %q", probe.Type)
 	}
@@ -143,6 +158,11 @@ func (b Block) MarshalJSON() ([]byte, error) {
 			return nil, fmt.Errorf("chart block payload is missing")
 		}
 		return json.Marshal(b.Chart)
+	case "image":
+		if b.Image == nil {
+			return nil, fmt.Errorf("image block payload is missing")
+		}
+		return json.Marshal(b.Image)
 	default:
 		return nil, fmt.Errorf("unknown block type %q", b.Kind)
 	}

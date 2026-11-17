@@ -203,6 +203,12 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.0")
     implementation("io.coil-kt.coil3:coil-svg:3.0.0")
 
+    // Video/audio file previews: ExoPlayer streams /api/fs/file/media with
+    // HTTP range support so large files stay seekable.
+    implementation("androidx.media3:media3-exoplayer:1.6.1")
+    implementation("androidx.media3:media3-ui:1.6.1")
+    implementation("androidx.media3:media3-common:1.6.1")
+
     // Markdown parser (AST only, CommonMark + GFM) used by CustomMarkdown.
     implementation("org.jetbrains:markdown:0.7.9")
 

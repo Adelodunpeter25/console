@@ -153,6 +153,36 @@ impl ConsoleDesktopApp {
                 v.sync_native_state(is_active, occluded, cx);
             });
         }
+
+        // Media file tabs: the surface is visible only while its file tab is
+        // the active tab of a visible pane.
+        let active_media_paths: std::collections::HashSet<String> = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .filter_map(|leaf| {
+                let active_id = leaf.active_tab_id.as_deref()?;
+                leaf.tabs.iter().find(|t| t.id() == active_id)
+            })
+            .filter_map(|tab| match tab {
+                WorkspaceTabConfig::File { path, .. } => Some(path.clone()),
+                _ => None,
+            })
+            .filter(|path| {
+                matches!(
+                    console_core::file_kind_for_path(path),
+                    console_core::FileKind::Video
+                        | console_core::FileKind::Audio
+                        | console_core::FileKind::Pdf
+                )
+            })
+            .collect();
+        for (path, view) in &self.file_media_views {
+            let is_active = active_media_paths.contains(path);
+            view.update(cx, |v, cx| {
+                v.sync_native_state(is_active, palettes_open, cx);
+            });
+        }
         self.sync_device_webview(cx);
     }
 

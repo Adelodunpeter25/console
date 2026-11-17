@@ -680,6 +680,7 @@ impl ToolCalls {
             &palette,
             self.selection.clone(),
             self.link_handler.clone(),
+            self.cwd.clone(),
         );
         div()
             .py(px(6.0))
@@ -888,6 +889,7 @@ impl ToolCalls {
             &palette,
             self.selection.clone(),
             None,
+            self.cwd.clone(),
         );
         let (line_numbers, code_body) = shared_parse_read_file_output(&raw);
 
@@ -953,6 +955,7 @@ impl ToolCalls {
             &palette,
             self.selection.clone(),
             self.link_handler.clone(),
+            self.cwd.clone(),
         );
 
         // Reuse or create the MarkdownView for this call so streaming repaints
@@ -1013,7 +1016,7 @@ impl ToolCalls {
         let row = format!("tool-{call_id}-{label}");
         let palette = Palette::from_theme(&theme);
         let ctx =
-            crate::chat::markdown_helpers::compact_ctx(row, &palette, self.selection.clone(), None);
+            crate::chat::markdown_helpers::compact_ctx(row, &palette, self.selection.clone(), None, self.cwd.clone());
         div()
             .flex()
             .flex_col()

@@ -56,6 +56,7 @@ fn parses_dashboard_blocks() {
             VisualBlock::Chart(_) => "chart",
             VisualBlock::Table { .. } => "table",
             VisualBlock::Text { .. } => "text",
+            VisualBlock::Image { .. } => "image",
         })
         .collect();
     assert_eq!(kinds, ["metric", "metric", "chart", "table", "text"]);
@@ -123,4 +124,29 @@ fn formats_and_describes() {
         "{d}"
     );
     assert!(d.contains("Last 164"), "{d}");
+}
+
+#[test]
+fn parses_image_block() {
+    let VisualParse::Ok(spec) = parse_visual(&artifact("image.json")) else {
+        panic!("image spec should parse")
+    };
+    let VisualBlock::Image { path, alt } = &spec.blocks[0] else {
+        panic!("expected image block")
+    };
+    assert_eq!(path, "/workspace/assets/chart.png");
+    assert_eq!(alt.as_deref(), Some("Quarterly revenue chart"));
+
+    // Alt is optional: a block without it still parses.
+    let bare = VisualArtifact {
+        version: 1,
+        spec: serde_json::json!({"version": 1, "blocks": [{"type": "image", "path": "/a.png"}]}),
+    };
+    let VisualParse::Ok(spec) = parse_visual(&bare) else {
+        panic!("bare image should parse")
+    };
+    let VisualBlock::Image { alt, .. } = &spec.blocks[0] else {
+        panic!("expected image block")
+    };
+    assert_eq!(alt, &None);
 }

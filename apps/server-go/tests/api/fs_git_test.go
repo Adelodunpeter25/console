@@ -250,7 +250,10 @@ func TestFilePreviewGatesMatchSharedFixture(t *testing.T) {
 		LockBasenames []string `json:"lock_basenames"`
 		LockSuffixes  []string `json:"lock_suffixes"`
 		Raster        []string `json:"raster_image_extensions"`
-		Blocked       []string `json:"blocked_extensions"`
+		Video         []string `json:"video_extensions"`
+		Audio         []string `json:"audio_extensions"`
+		PDF           []string `json:"pdf_extensions"`
+		Opaque        []string `json:"opaque_extensions"`
 	}
 	if err := json.Unmarshal(raw, &kinds); err != nil {
 		t.Fatal(err)
@@ -273,8 +276,27 @@ func TestFilePreviewGatesMatchSharedFixture(t *testing.T) {
 	for _, s := range kinds.LockSuffixes {
 		check("x"+s, "LOCKFILE_BLOCKED")
 	}
-	for _, e := range append(kinds.Raster, kinds.Blocked...) {
+	// Only opaque binaries are gated now; video/audio/pdf preview inline.
+	for _, e := range kinds.Opaque {
 		check("x"+e, "BINARY_FILE")
+	}
+	for _, e := range append(append(append([]string{}, kinds.Video...), kinds.Audio...), kinds.PDF...) {
+		path := filepath.Join(root, "x"+e)
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fs.ReadFileContentWithMeta(path, 0, 0); err != nil {
+			t.Errorf("%s: media file should not be preview-gated, got %v", e, err)
+		}
+	}
+	for _, e := range kinds.Raster {
+		path := filepath.Join(root, "x"+e)
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fs.ReadFileContentWithMeta(path, 0, 0); err != nil {
+			t.Errorf("%s: raster image should not be preview-gated, got %v", e, err)
+		}
 	}
 }
 

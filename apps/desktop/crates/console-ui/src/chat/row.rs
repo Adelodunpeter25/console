@@ -240,6 +240,7 @@ pub fn transcript_row(
             let on_fork = view_ref.on_fork.clone();
             let toggle_entity = entity.clone();
             AssistantMessageBubble::new(presentation.content_parts)
+                .cwd(view_ref.session_cwd.clone())
                 .file_changes(turn_changes)
                 .changes_expanded(changes_expanded)
                 .on_toggle_changes(move |_window, cx| {

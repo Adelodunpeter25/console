@@ -55,7 +55,7 @@ mod workspace_tabs;
 mod app;
 pub mod types;
 
-pub use types::{ConsoleDesktopApp, ImageFileState};
+pub use types::{ConsoleDesktopApp, FileMediaDetails, ImageFileState};
 pub(crate) use workspace_snapshot::PaneChatSnapshot;
 pub(crate) use workspace_tabs::new_tab_menu::new_tab_menu_items;
 // Shared by the sibling handler modules (`layout`, `sessions`, `run`).

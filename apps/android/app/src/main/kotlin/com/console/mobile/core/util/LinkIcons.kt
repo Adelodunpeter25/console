@@ -153,3 +153,22 @@ fun cleanFileUrlPath(url: String): String? {
     if (path.isEmpty()) return null
     return runCatching { java.net.URLDecoder.decode(path.replace("+", "%2B"), "UTF-8") }.getOrDefault(path)
 }
+
+/**
+ * The session's working directory for resolving agent-written relative
+ * paths (the chat the user is looking at), or null when unknown.
+ */
+fun chatWorkspaceCwd(): String? {
+    val sessionId = com.console.mobile.AppContainer.appStateHolder.state.value.selectedSessionId ?: return null
+    return com.console.mobile.AppContainer.sessionStateHolder.views.value[sessionId]?.sessionCwd?.takeIf { it.isNotBlank() }
+}
+
+/** Absolute path for a chat image target, or null for remote/data URLs. */
+fun chatImagePath(url: String, cwd: String? = null): String? {
+    val trimmed = url.trim()
+    if (trimmed.isEmpty() || trimmed.startsWith("data:", ignoreCase = true)) return null
+    if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) return null
+    if (trimmed.contains("://", ignoreCase = true) && !trimmed.startsWith("file://", ignoreCase = true)) return null
+    val root = cwd ?: chatWorkspaceCwd()
+    return resolveFilePath(trimmed, root)
+}

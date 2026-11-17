@@ -411,6 +411,14 @@ impl ConsoleDesktopApp {
                         this.open_file_contents.clear();
                         this.open_file_errors.clear();
                         this.open_image_contents.clear();
+                        this.open_media_contents.clear();
+                        // Media views embed the old server's token in their
+                        // media URL; drop the surfaces so reopened tabs get a
+                        // fresh URL.
+                        let media_views: Vec<_> = this.file_media_views.drain().collect();
+                        for (_, view) in media_views {
+                            view.update(cx, |v, cx| v.close(cx));
+                        }
                         this.open_diff_contents.clear();
                         this.changes_review_data.clear();
                         this.changes_review_collapsed.clear();

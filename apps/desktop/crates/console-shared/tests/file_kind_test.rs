@@ -1,8 +1,8 @@
 //! Unit tests for FileKind classification and parity with TypeScript definitions.
 
 use console_shared::file_kind::{
-    BLOCKED_FILE_EXTENSIONS, FileKind, MARKDOWN_EXTENSIONS, RASTER_IMAGE_EXTENSIONS,
-    file_kind_for_path, is_lock_file,
+    AUDIO_EXTENSIONS, BLOCKED_FILE_EXTENSIONS, DETAILS_EXTENSIONS, FileKind, MARKDOWN_EXTENSIONS,
+    PDF_EXTENSIONS, RASTER_IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, file_kind_for_path, is_lock_file,
 };
 
 #[test]
@@ -45,16 +45,42 @@ fn test_markdown_classification() {
 }
 
 #[test]
-fn test_blocked_binary_classification() {
-    for ext in BLOCKED_FILE_EXTENSIONS {
+fn test_video_classification() {
+    for ext in VIDEO_EXTENSIONS {
+        let path = format!("media/clip{}", ext);
+        assert_eq!(file_kind_for_path(&path), FileKind::Video, "failed for {}", path);
+    }
+}
+
+#[test]
+fn test_audio_classification() {
+    for ext in AUDIO_EXTENSIONS {
+        let path = format!("media/track{}", ext);
+        assert_eq!(file_kind_for_path(&path), FileKind::Audio, "failed for {}", path);
+    }
+}
+
+#[test]
+fn test_pdf_classification() {
+    for ext in PDF_EXTENSIONS {
+        let path = format!("docs/doc{}", ext);
+        assert_eq!(file_kind_for_path(&path), FileKind::Pdf, "failed for {}", path);
+    }
+}
+
+#[test]
+fn test_details_binary_classification() {
+    for ext in DETAILS_EXTENSIONS {
         let path = format!("data/archive{}", ext);
         assert_eq!(
             file_kind_for_path(&path),
-            FileKind::Blocked,
+            FileKind::Details,
             "failed for {}",
             path
         );
     }
+    // The compat alias covers exactly the same set.
+    assert_eq!(BLOCKED_FILE_EXTENSIONS, DETAILS_EXTENSIONS);
 }
 
 #[test]
@@ -120,8 +146,10 @@ fn test_case_insensitivity() {
     assert_eq!(file_kind_for_path("PHOTO.JPEG"), FileKind::RasterImage);
     assert_eq!(file_kind_for_path("VECTOR.SVG"), FileKind::Svg);
     assert_eq!(file_kind_for_path("README.MD"), FileKind::Markdown);
-    assert_eq!(file_kind_for_path("ARCHIVE.ZIP"), FileKind::Blocked);
-    assert_eq!(file_kind_for_path("DOCUMENT.PDF"), FileKind::Blocked);
+    assert_eq!(file_kind_for_path("CLIP.MP4"), FileKind::Video);
+    assert_eq!(file_kind_for_path("TRACK.MP3"), FileKind::Audio);
+    assert_eq!(file_kind_for_path("DOCUMENT.PDF"), FileKind::Pdf);
+    assert_eq!(file_kind_for_path("ARCHIVE.ZIP"), FileKind::Details);
     assert_eq!(file_kind_for_path("CARGO.LOCK"), FileKind::Blocked);
     assert_eq!(file_kind_for_path("PACKAGE-LOCK.JSON"), FileKind::Blocked);
 }
@@ -153,11 +181,38 @@ fn test_lists_match_shared_fixture() {
         sorted(RASTER_IMAGE_EXTENSIONS),
         list("raster_image_extensions")
     );
-    assert_eq!(sorted(BLOCKED_FILE_EXTENSIONS), list("blocked_extensions"));
+    assert_eq!(sorted(DETAILS_EXTENSIONS), list("opaque_extensions"));
+    assert_eq!(sorted(VIDEO_EXTENSIONS), list("video_extensions"));
+    assert_eq!(sorted(AUDIO_EXTENSIONS), list("audio_extensions"));
+    assert_eq!(sorted(PDF_EXTENSIONS), list("pdf_extensions"));
     for name in list("lock_basenames") {
         assert!(is_lock_file(&name), "{name}");
     }
     for suffix in list("lock_suffixes") {
         assert!(is_lock_file(&format!("x{suffix}")), "{suffix}");
     }
+}
+
+/// The three extension lists must stay identical across Go, Rust, and Kotlin.
+/// These literals mirror `preview.go` and `FsModels.kt`; update all three
+/// together when adding a format.
+#[test]
+fn test_extension_lists_match_server() {
+    let video = [".mp4", ".mov", ".avi", ".mkv", ".webm"];
+    let audio = [".mp3", ".wav", ".flac", ".ogg", ".m4a"];
+    let pdf = [".pdf"];
+    let details = [
+        ".icns", ".tiff", ".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar", ".jar",
+        ".war", ".exe", ".dll", ".so", ".dylib", ".a", ".o", ".obj", ".bin", ".iso", ".dmg",
+        ".pkg", ".deb", ".rpm", ".apk", ".ipa", ".node", ".ttf", ".otf", ".woff", ".woff2",
+        ".eot", ".wasm", ".psd", ".sketch", ".class", ".pyc", ".db", ".sqlite", ".sqlite3",
+    ];
+    assert_eq!(VIDEO_EXTENSIONS, video);
+    assert_eq!(AUDIO_EXTENSIONS, audio);
+    assert_eq!(PDF_EXTENSIONS, pdf);
+    let mut expected = details.to_vec();
+    expected.sort_unstable();
+    let mut actual = DETAILS_EXTENSIONS.to_vec();
+    actual.sort_unstable();
+    assert_eq!(actual, expected);
 }

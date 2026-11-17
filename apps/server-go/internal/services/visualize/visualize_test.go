@@ -129,6 +129,42 @@ func TestCompileRejectsTooManyPoints(t *testing.T) {
 	}
 }
 
+
+func TestCompileImageBlock(t *testing.T) {
+	canonical, spec, err := Compile(object(t, `{"version":1,"title":"Shot","blocks":[{"type":"image","path":"/tmp/a b.png","alt":"  a chart  "},{"type":"text","text":"note"}]}`))
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	img := spec.Blocks[0].Image
+	if img == nil || img.Path != "/tmp/a b.png" || img.Alt != "a chart" {
+		t.Fatalf("image block not normalized: %#v", img)
+	}
+	if spec.Blocks[0].Kind != "image" || spec.Blocks[0].Image.Type != "image" {
+		t.Fatalf("kind/type = %q/%q", spec.Blocks[0].Kind, spec.Blocks[0].Image.Type)
+	}
+	if !strings.Contains(string(canonical), `"type":"image"`) {
+		t.Fatalf("canonical spec missing image block: %s", canonical)
+	}
+
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"missing path", `{"version":1,"blocks":[{"type":"image","alt":"x"}]}`, "path"},
+		{"empty path", `{"version":1,"blocks":[{"type":"image","path":"  "}]}`, "path"},
+		{"long alt", `{"version":1,"blocks":[{"type":"image","path":"/a.png","alt":"` + strings.Repeat("x", MaxImageAltRunes+1) + `"}]}`, "characters or fewer"},
+		{"unknown field", `{"version":1,"blocks":[{"type":"image","path":"/a.png","src":"/b.png"}]}`, "unknown field"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := Compile(object(t, tc.raw))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Compile error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
 func TestToolReturnsVisualEnvelope(t *testing.T) {
 	args, err := json.Marshal(map[string]any{"spec": object(t, validChartJSON())})
 	if err != nil {

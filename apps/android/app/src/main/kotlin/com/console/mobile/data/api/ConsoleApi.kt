@@ -102,6 +102,8 @@ interface ConsoleApi {
     suspend fun searchFiles(root: String, query: String, limit: Int = 20, includeDirs: Boolean = true): List<FileSearchResult>
     suspend fun readFile(path: String): FsFileContent
     suspend fun readFileRaw(path: String): ByteArray
+    /** Authenticated `/api/fs/file/media` URL for video/audio playback (token in query). */
+    fun fsMediaUrl(path: String): String
     suspend fun deleteFile(path: String)
     suspend fun createDir(path: String)
     suspend fun deleteDir(path: String)

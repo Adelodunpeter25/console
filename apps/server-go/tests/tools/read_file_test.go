@@ -98,7 +98,14 @@ var imageReadTool = tools.NewReadFileTool(tools.ReadFileOptions{CanSeeImages: tr
 func execReadTool(t *testing.T, tool tools.Tool, args map[string]any) (any, error) {
 	t.Helper()
 	raw, _ := json.Marshal(args)
-	return tool.Execute(context.Background(), raw)
+	out, err := tool.Execute(context.Background(), raw)
+	if err != nil {
+		return nil, err
+	}
+	if env, ok := out.(tools.Envelope); ok {
+		return env.Content, nil
+	}
+	return out, nil
 }
 
 func TestReadFileImages(t *testing.T) {
@@ -253,8 +260,16 @@ func TestReadFileVisionHandoff(t *testing.T) {
 	if stub.calls != 0 {
 		t.Fatalf("describer must not run when the model can see images: %d calls", stub.calls)
 	}
-	if parts := out.([]map[string]any); parts[0]["type"] != "image" {
+	env, ok := out.(tools.Envelope)
+	if !ok {
+		t.Fatalf("image read must return an envelope: %T", out)
+	}
+	parts, _ := env.Content.([]map[string]any)
+	if parts[0]["type"] != "image" {
 		t.Fatalf("want image part: %#v", parts)
+	}
+	if env.Visual == nil {
+		t.Fatal("image read must attach a VisualArtifact")
 	}
 
 	// Handoff: text only, naming the vision model and embedding its prose.
@@ -264,9 +279,13 @@ func TestReadFileVisionHandoff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	parts := out.([]map[string]any)
+	env = out.(tools.Envelope)
+	parts = env.Content.([]map[string]any)
 	if len(parts) != 1 || parts[0]["type"] != "text" {
 		t.Fatalf("handoff must be text only: %#v", parts)
+	}
+	if env.Visual == nil {
+		t.Fatal("described image must still attach a VisualArtifact")
 	}
 	text := parts[0]["text"].(string)
 	if !strings.Contains(text, "claude/sonnet") || !strings.Contains(text, "A blue square.") {
@@ -283,7 +302,11 @@ func TestReadFileVisionHandoff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text = out.([]map[string]any)[0]["text"].(string)
+	env = out.(tools.Envelope)
+	if env.Visual == nil {
+		t.Fatal("placeholder image must still attach a VisualArtifact")
+	}
+	text = env.Content.([]map[string]any)[0]["text"].(string)
 	for _, want := range []string{p, "image/png", "8x8", "Settings → Models → Vision"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("placeholder missing %q: %q", want, text)
@@ -296,7 +319,91 @@ func TestReadFileVisionHandoff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if text = out.([]map[string]any)[0]["text"].(string); !strings.Contains(text, "Cannot view") {
+	env = out.(tools.Envelope)
+	text = env.Content.([]map[string]any)[0]["text"].(string)
+	if !strings.Contains(text, "Cannot view") {
 		t.Fatalf("failed describer must placehold: %q", text)
+	}
+}
+
+func TestReadFileImageVisualSpec(t *testing.T) {
+	dir := t.TempDir()
+	img := filepath.Join(dir, "shot.png")
+	if err := os.WriteFile(img, solidPNG(t, 8, 8), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(map[string]any{"path": img})
+
+	out, err := tools.NewReadFileTool(tools.ReadFileOptions{Cwd: dir}).Execute(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, ok := out.(tools.Envelope)
+	if !ok || env.Visual == nil {
+		t.Fatalf("image read must carry a visual artifact: %#v", out)
+	}
+	if env.Visual.Version != 1 {
+		t.Fatalf("visual version = %d", env.Visual.Version)
+	}
+	var spec struct {
+		Version int `json:"version"`
+		Blocks  []struct {
+			Type string `json:"type"`
+			Path string `json:"path"`
+			Alt  string `json:"alt"`
+		} `json:"blocks"`
+	}
+	if err := json.Unmarshal(env.Visual.Spec, &spec); err != nil {
+		t.Fatalf("visual spec: %v", err)
+	}
+	if spec.Version != 1 || len(spec.Blocks) != 1 || spec.Blocks[0].Type != "image" {
+		t.Fatalf("spec = %s", env.Visual.Spec)
+	}
+	want, _ := filepath.Abs(img)
+	if spec.Blocks[0].Path != want {
+		t.Fatalf("block path = %q, want %q", spec.Blocks[0].Path, want)
+	}
+
+	// A relative path resolves against the session cwd.
+	raw, _ = json.Marshal(map[string]any{"path": "shot.png"})
+	out, err = tools.NewReadFileTool(tools.ReadFileOptions{Cwd: dir}).Execute(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env = out.(tools.Envelope)
+	if err := json.Unmarshal(env.Visual.Spec, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if spec.Blocks[0].Path != want {
+		t.Fatalf("relative block path = %q, want %q", spec.Blocks[0].Path, want)
+	}
+
+	// A file:// URL unwraps to the same absolute path.
+	fileURL := "file://" + img
+	raw, _ = json.Marshal(map[string]any{"path": fileURL})
+	out, err = tools.NewReadFileTool(tools.ReadFileOptions{Cwd: dir}).Execute(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env = out.(tools.Envelope)
+	if err := json.Unmarshal(env.Visual.Spec, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if spec.Blocks[0].Path != want {
+		t.Fatalf("file:// block path = %q, want %q", spec.Blocks[0].Path, want)
+	}
+
+	// Text reads carry no visual.
+	txt := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(txt, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = json.Marshal(map[string]any{"path": txt})
+	out, err = tools.NewReadFileTool(tools.ReadFileOptions{Cwd: dir}).Execute(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env, ok := out.(tools.Envelope); ok && env.Visual != nil {
+		t.Fatal("text read must not attach a visual artifact")
 	}
 }

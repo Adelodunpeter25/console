@@ -22,6 +22,14 @@ pub struct FsFileWithEtag {
     pub etag: Option<String>,
 }
 
+/// Metadata probed from `GET /api/fs/file/media` headers for a media/preview
+/// file: byte size and content type, fetched without downloading the body.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MediaFileMeta {
+    pub size_bytes: Option<u64>,
+    pub content_type: String,
+}
+
 /// Failure of `FsService::save_file`, split so the caller can tell a stale
 /// buffer apart from a transport or server error without string matching.
 #[derive(Clone, Debug, PartialEq, Eq)]

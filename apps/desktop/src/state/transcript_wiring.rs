@@ -13,6 +13,16 @@ pub(crate) fn wire_preview_image(
     transcript: &mut TranscriptView,
     entity: WeakEntity<ConsoleDesktopApp>,
 ) {
+    let preview_entity = entity.clone();
+    let handler = move |image: std::sync::Arc<gpui::Image>, _window: &mut gpui::Window, cx: &mut gpui::App| {
+        if let Some(app) = preview_entity.upgrade() {
+            app.update(cx, |this, cx| {
+                this.preview_image_data(image, cx);
+            });
+        }
+    };
+    // Workspace images in markdown/visual cards zoom through the same modal.
+    console_ui::chat::set_workspace_image_preview(Some(std::sync::Arc::new(handler)));
     transcript.set_on_preview_image(move |image, _window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {

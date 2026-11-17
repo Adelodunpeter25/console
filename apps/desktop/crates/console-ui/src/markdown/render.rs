@@ -767,6 +767,9 @@ pub struct Ctx<'a> {
     starts_block: Cell<bool>,
     animate_streaming: bool,
     now: Instant,
+    /// Session working directory for resolving workspace-relative image
+    /// paths in `![alt](path)`.
+    cwd: Option<String>,
 }
 
 impl<'a> Ctx<'a> {
@@ -787,6 +790,7 @@ impl<'a> Ctx<'a> {
             starts_block: Cell::new(true),
             animate_streaming: true,
             now: Instant::now(),
+            cwd: None,
         }
     }
 
@@ -804,6 +808,14 @@ impl<'a> Ctx<'a> {
         self
     }
 
+    /// The session working directory workspace-relative image paths resolve
+    /// against.
+    pub fn with_cwd(mut self, cwd: Option<String>) -> Self {
+        self.cwd = cwd.filter(|c| !c.is_empty());
+        self
+    }
+
+
     fn with_cache(&self, view: &'a MarkdownView) -> Self {
         Self {
             row: self.row.clone(),
@@ -816,6 +828,7 @@ impl<'a> Ctx<'a> {
             starts_block: Cell::new(self.starts_block.get()),
             animate_streaming: self.animate_streaming,
             now: Instant::now(),
+            cwd: self.cwd.clone(),
         }
     }
 
@@ -1788,7 +1801,14 @@ fn checkbox(checked: bool, ctx: &Ctx) -> AnyElement {
 /// An inline image. Data URLs decode in place; anything else is handed to GPUI
 /// to load. The alt text renders beneath as a caption when there is one, so a
 /// failed or slow load still says what it was.
+/// Workspace-local image targets (`![alt](path)` without a scheme) go through
+/// the authenticated fs endpoint; everything else keeps GPUI's own loaders.
 fn render_image(url: &str, alt: &str, ctx: &Ctx) -> AnyElement {
+    if let Some(image) =
+        crate::chat::image::workspace_chat_image(url, alt, ctx.cwd.as_deref(), None)
+    {
+        return image;
+    }
     const MAX_HEIGHT: f32 = 320.0;
 
     let key = ctx.next_key();
@@ -2021,6 +2041,7 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
                 ctx.metrics,
                 ctx.selection.clone(),
             );
+            let inner = inner.with_cwd(ctx.cwd.clone());
             let inner = match &ctx.link_handler {
                 Some(handler) => inner.with_link_handler(handler.clone()),
                 None => inner,

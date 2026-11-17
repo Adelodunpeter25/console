@@ -316,6 +316,129 @@ impl FsService {
             }
         }
     }
+
+    /// URL for `GET /api/fs/file/media?path=...`, used by embedded players and
+    /// webviews that cannot attach the bearer header (WKWebView, HTML media
+    /// tags). The token travels in the query string — the server accepts it
+    /// for this GET only — so it is URL-encoded here.
+    pub async fn media_url(&self, path: &str, auth_token: Option<&str>) -> String {
+        let mut url = format!(
+            "{}/api/fs/file/media?path={}",
+            self.transport.url("").await,
+            urlencoding::encode(path)
+        );
+        if let Some(token) = auth_token.filter(|t| !t.is_empty()) {
+            url.push_str("&token=");
+            url.push_str(&urlencoding::encode(token));
+        }
+        url
+    }
+
+    /// Probe media file metadata via `GET /api/fs/file/media` with a
+    /// `Range: bytes=0-0` request, so headers (size via `Content-Range`,
+    /// content type) come back without downloading the body. `None` means the
+    /// file is missing, not a media file, or otherwise not servable.
+    pub async fn media_file_meta(&self, path: &str) -> Result<Option<MediaFileMeta>> {
+        let url = format!(
+            "{}/api/fs/file/media?path={}",
+            self.transport.url("").await,
+            urlencoding::encode(path)
+        );
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .header(reqwest::header::RANGE, "bytes=0-0")
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to probe media file")?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::BAD_REQUEST
+            {
+                return Ok(None);
+            }
+            return Err(anyhow!("Failed to probe media file (status {})", status));
+        }
+
+        let content_type = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("application/octet-stream")
+            .to_string();
+
+        let headers = resp.headers().clone();
+        // A ranged 206 carries the total in `Content-Range: bytes 0-0/<size>`;
+        // an unranged 200 only knows the payload length.
+        let size_bytes = headers
+            .get(reqwest::header::CONTENT_RANGE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.rsplit('/').next())
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .or_else(|| {
+                headers
+                    .get(reqwest::header::CONTENT_LENGTH)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.parse::<u64>().ok())
+            });
+
+        Ok(Some(MediaFileMeta {
+            size_bytes,
+            content_type,
+        }))
+    }
+
+    /// Size of a single file, looked up in its parent directory's entry list
+    /// (`GET /api/fs/entries?depth=1`). Used for the details card on file
+    /// kinds the media endpoint does not serve. `None` when the listing does
+    /// not contain the file — the card then omits the size row.
+    pub async fn file_size(&self, path: &str) -> Result<Option<u64>> {
+        let Some(parent) = std::path::Path::new(path).parent() else {
+            return Ok(None);
+        };
+        let parent = parent.to_string_lossy().to_string();
+        if parent.is_empty() {
+            return Ok(None);
+        }
+        let file_name = std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(path)
+            .to_string();
+        let mut url = self.transport.url("/api/fs/entries").await;
+        url.push_str(&format!(
+            "?path={}&depth=1&maxEntries=5000",
+            urlencoding::encode(&parent)
+        ));
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to list directory for file size")?;
+        let body: ApiResponse<Vec<FsTreeEntry>> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse fs entries response")?;
+        let entries = if body.success {
+            body.data.unwrap_or_default()
+        } else {
+            return Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to list directory".into())
+            ));
+        };
+        Ok(entries
+            .iter()
+            .find(|e| e.name == file_name || e.path == path)
+            .and_then(|e| e.size))
+    }
     /// Content search across a workspace root for the global search panel
     /// (⌘⇧F). Requires the server's fff index; returns an error (surfaced as
     /// an empty/unavailable state by the caller) when the backend responds

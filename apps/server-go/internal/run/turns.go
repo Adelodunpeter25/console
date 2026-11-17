@@ -426,7 +426,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		case "bashJob":
 			toolList = append(toolList, tools.NewBashJobTool(s.bashJobManager(), sessionID))
 		case "readFile", "read_file":
-			toolList = append(toolList, tools.NewReadFileTool(s.ReadFileToolOptions(model, providerID, modelID, pins)))
+			toolList = append(toolList, tools.NewReadFileTool(s.ReadFileToolOptions(model, providerID, modelID, header.Cwd, pins)))
 		default:
 			toolList = append(toolList, t)
 		}

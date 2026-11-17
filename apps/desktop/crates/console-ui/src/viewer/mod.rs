@@ -6,6 +6,7 @@ pub mod file_viewer;
 pub mod image_preview;
 pub mod logs_viewer;
 pub mod markdown_viewer;
+pub mod media_view;
 pub mod review_tab;
 pub mod svg;
 
@@ -28,6 +29,7 @@ pub use image_preview::{
 };
 pub use logs_viewer::{ESTIMATED_LOG_ROW_HEIGHT, LogsViewer};
 pub use markdown_viewer::MarkdownViewer;
+pub use media_view::{FileMediaView, MediaFileKind, media_page_html};
 pub use review_tab::ReviewTab;
 pub use svg::rasterize_svg;
 pub use syntax::{

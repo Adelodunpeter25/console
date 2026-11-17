@@ -50,6 +50,49 @@ pub enum ImageFileState {
     },
 }
 
+/// What the file tab needs to render a video/audio/PDF/details file: the
+/// probed media metadata plus the media URL's kind. `media_url` is filled in
+/// when the view entity is created (needs the auth token, which is async).
+#[derive(Clone, Debug)]
+pub struct FileMediaDetails {
+    /// `None` for `Details` files: they get the metadata card, not a player.
+    pub kind: Option<console_ui::MediaFileKind>,
+    /// Server mime label from the media probe, or a coarse label for details
+    /// files ("Archive", "Executable", ...).
+    pub mime_label: String,
+    pub size_bytes: Option<u64>,
+}
+
+impl FileMediaDetails {
+    /// Whether this file gets a player (`Video`/`Audio`/`Pdf`) or the details
+    /// card (`Details`).
+    pub fn player_kind(&self) -> Option<console_ui::MediaFileKind> {
+        self.kind
+    }
+
+    /// Coarse label for a `Details` file kind, derived from its extension.
+    pub fn details_label(path: &str) -> String {
+        let ext = std::path::Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match ext.as_str() {
+            "zip" | "tar" | "gz" | "tgz" | "bz2" | "xz" | "7z" | "rar" | "jar" | "war" => {
+                "Archive".to_string()
+            }
+            "exe" | "dll" | "so" | "dylib" | "a" | "o" | "obj" | "bin" | "iso" | "dmg" | "pkg"
+            | "deb" | "rpm" | "apk" | "ipa" | "node" => "Executable".to_string(),
+            "ttf" | "otf" | "woff" | "woff2" | "eot" => "Font".to_string(),
+            "wasm" => "WebAssembly".to_string(),
+            "psd" => "Photoshop".to_string(),
+            "db" | "sqlite" | "sqlite3" => "Database".to_string(),
+            "class" | "pyc" => "Compiled".to_string(),
+            _ => ext.to_uppercase(),
+        }
+    }
+}
+
 /// A line range picked from an editor's comment gutter. Paths are absolute
 /// when they arrive and become project-relative in the chat prompt.
 #[derive(Clone, Debug)]
@@ -303,6 +346,11 @@ pub struct ConsoleDesktopApp {
     /// instead of re-requesting every frame.
     pub open_file_errors: std::collections::HashMap<String, String>,
     pub open_image_contents: std::collections::HashMap<String, ImageFileState>,
+    /// Media metadata for video/audio/PDF/details file tabs, probed via the
+    /// media endpoint (or the parent listing for details). Keyed by path.
+    pub open_media_contents: std::collections::HashMap<String, FileMediaDetails>,
+    /// Live webview surfaces for media file tabs, keyed by path.
+    pub file_media_views: std::collections::HashMap<String, gpui::Entity<console_ui::FileMediaView>>,
     pub svg_preview_mode: std::collections::HashMap<String, console_ui::SvgViewMode>,
     pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
     pub viewer_list_states: std::collections::HashMap<String, ListState>,

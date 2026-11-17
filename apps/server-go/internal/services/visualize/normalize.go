@@ -78,6 +78,12 @@ func normalizeStrings(spec *Spec) {
 					}
 				}
 			}
+		case "image":
+			if block.Image != nil {
+				block.Image.Type = block.Kind
+				block.Image.Path = strings.TrimSpace(block.Image.Path)
+				block.Image.Alt = trimOptional(block.Image.Alt)
+			}
 		}
 	}
 }

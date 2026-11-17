@@ -29,6 +29,8 @@ const (
 	MaxAxisLabelRunes     = 80
 	MaxSeriesNameRunes    = 80
 	MaxPointLabelRunes    = 40
+	MaxImagePathRunes     = 4096
+	MaxImageAltRunes      = 240
 )
 
 // Validate checks the parts that cannot be normalized away. The caller trims
@@ -89,6 +91,16 @@ func Validate(spec *Spec) error {
 				return err
 			}
 			totalPoints += n
+		case "image":
+			if block.Image == nil {
+				return tools.NewToolError("%s.image: payload is missing", path)
+			}
+			if err := checkText(path+".path", block.Image.Path, MaxImagePathRunes, true); err != nil {
+				return err
+			}
+			if err := checkText(path+".alt", block.Image.Alt, MaxImageAltRunes, false); err != nil {
+				return err
+			}
 		default:
 			return tools.NewToolError("%s.type: unknown block type %q", path, block.Kind)
 		}

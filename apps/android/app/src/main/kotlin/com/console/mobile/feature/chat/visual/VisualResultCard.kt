@@ -81,6 +81,7 @@ private fun VisualCardBody(spec: VisualSpec, modifier: Modifier) {
                     is VisualBlock.Table -> VisualTable(b)
                     is VisualBlock.Chart -> VisualChart(b)
                     is VisualBlock.Metric -> Unit
+                    is VisualBlock.Image -> WorkspaceImage(path = b.path, alt = b.alt)
                 }
                 i++
             }

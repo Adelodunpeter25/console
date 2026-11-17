@@ -310,6 +310,45 @@ func (s *FsService) GetImageMeta(path string) (ImageMeta, error) {
 	return ImageMeta{MimeType: mimeType, SizeBytes: info.Size(), MtimeMs: info.ModTime().UnixMilli()}, nil
 }
 
+// GetMediaMeta validates and describes a video/audio/PDF file for the
+// /api/fs/file/media endpoint. Width/Height are populated for raster images
+// when decode-config succeeds; DurationMs comes from a best-effort ffprobe
+// call and stays nil when ffprobe is unavailable.
+func (s *FsService) GetMediaMeta(path string) (MediaMeta, error) {
+	path = ResolvePath(path)
+	kind := PreviewKindForPath(path)
+	if kind != PreviewKindVideo && kind != PreviewKindAudio && kind != PreviewKindPdf {
+		return MediaMeta{}, &PreviewBlocked{Code: "BINARY_FILE", Status: 403,
+			Msg: fmt.Sprintf("%q is not a media file (video, audio, or PDF).", filepath.Base(path))}
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return MediaMeta{}, err
+	}
+	if info.IsDir() {
+		return MediaMeta{}, fmt.Errorf("%q is a directory", filepath.Base(path))
+	}
+	if info.Size() > mediaMaxBytes {
+		return MediaMeta{}, &PreviewBlocked{Code: "FILE_TOO_LARGE", Status: 413,
+			Msg:    fmt.Sprintf("%q is %s — media previews are capped at %s.", filepath.Base(path), formatBytes(info.Size()), formatBytes(mediaMaxBytes)),
+			Detail: map[string]any{"sizeBytes": info.Size(), "maxBytes": mediaMaxBytes}}
+	}
+	meta := MediaMeta{
+		Kind:      kind,
+		MimeType:  mediaMimeType(strings.ToLower(filepath.Ext(path))),
+		SizeBytes: info.Size(),
+		MtimeMs:   info.ModTime().UnixMilli(),
+	}
+	switch kind {
+	case PreviewKindVideo, PreviewKindAudio:
+		meta.DurationMs = probeDurationMs(path)
+	}
+	if w, h, ok := imageDimensions(path); ok {
+		meta.Width, meta.Height = &w, &h
+	}
+	return meta, nil
+}
+
 func (s *FsService) DeleteFile(path string) (bool, error) {
 	if err := os.Remove(ResolvePath(path)); err != nil {
 		return false, err

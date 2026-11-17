@@ -3,6 +3,7 @@ use console_ui::workspace::ops as workspace_ops;
 use gpui::Context;
 
 use crate::state::app::{ConsoleDesktopApp, ImageFileState};
+use crate::state::FileMediaDetails;
 
 impl ConsoleDesktopApp {
     /// Resolve a clicked transcript file link against the session cwd with a
@@ -360,6 +361,82 @@ impl ConsoleDesktopApp {
                 })
                 .detach();
             }
+            console_core::FileKind::Video
+            | console_core::FileKind::Audio
+            | console_core::FileKind::Pdf
+            | console_core::FileKind::Details => {
+                self.open_media_contents
+                    .insert(path.clone(), FileMediaDetails {
+                        kind: media_kind_for(kind),
+                        mime_label: String::new(),
+                        size_bytes: None,
+                    });
+                cx.notify();
+
+                let client = self.client.clone();
+                let file_path = path;
+                let file_kind = kind;
+                cx.spawn(async move |entity, cx| {
+                    // Media kinds probe the media endpoint for size+mime;
+                    // details kinds have no endpoint, so size comes from the
+                    // parent directory listing instead.
+                    let result = match file_kind {
+                        console_core::FileKind::Video
+                        | console_core::FileKind::Audio
+                        | console_core::FileKind::Pdf => client
+                            .fs
+                            .media_file_meta(&file_path)
+                            .await
+                            .map(|meta| {
+                                meta.map(|m| FileMediaDetails {
+                                    kind: media_kind_for(file_kind),
+                                    mime_label: m.content_type,
+                                    size_bytes: m.size_bytes,
+                                })
+                            }),
+                        _ => client.fs.file_size(&file_path).await.map(|size| {
+                            Some(FileMediaDetails {
+                                kind: None,
+                                mime_label: FileMediaDetails::details_label(&file_path),
+                                size_bytes: size,
+                            })
+                        }),
+                    };
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                match result {
+                                    Ok(Some(details)) => {
+                                        // Details files have no player kind;
+                                        // their card renders from mime_label
+                                        // + size, and `kind` only picks the icon.
+                                        this.open_media_contents
+                                            .insert(file_path.clone(), details);
+                                    }
+                                    Ok(None) => {
+                                        this.open_media_contents.insert(
+                                            file_path.clone(),
+                                            FileMediaDetails {
+                                                kind: media_kind_for(file_kind),
+                                                mime_label: "File not found".to_string(),
+                                                size_bytes: None,
+                                            },
+                                        );
+                                    }
+                                    Err(err) => {
+                                        this.open_file_errors.insert(
+                                            file_path.clone(),
+                                            err.to_string(),
+                                        );
+                                    }
+                                }
+                                cx.notify();
+                            });
+                        }
+                    });
+                })
+                .detach();
+            }
             console_core::FileKind::Blocked => {
                 let file_name = std::path::Path::new(&path)
                     .file_name()
@@ -538,8 +615,24 @@ impl ConsoleDesktopApp {
     /// memory; evicted contents are re-fetched or re-rendered on reopen.
     pub(crate) fn trim_file_caches(&mut self, cx: &mut Context<Self>) {
         const MAX_CACHED_FILES: usize = 30;
+        let open = self.open_file_paths_everywhere();
+        // Media views hold native surfaces; close the ones whose tab is gone,
+        // even when no cache is over budget (a closed tab can leave its view
+        // behind without tripping the size check).
+        let orphaned: Vec<String> = self
+            .file_media_views
+            .keys()
+            .filter(|path| !open.contains(*path))
+            .cloned()
+            .collect();
+        for path in orphaned {
+            if let Some(view) = self.file_media_views.remove(&path) {
+                view.update(cx, |v, cx| v.close(cx));
+            }
+        }
         let over = self.open_file_contents.len() > MAX_CACHED_FILES
             || self.open_image_contents.len() > MAX_CACHED_FILES
+            || self.open_media_contents.len() > MAX_CACHED_FILES
             || self.open_diff_contents.len() > MAX_CACHED_FILES
             || self.viewer_editor_views.len() > MAX_CACHED_FILES
             || self.viewer_diff_views.len() > MAX_CACHED_FILES
@@ -547,11 +640,12 @@ impl ConsoleDesktopApp {
         if !over {
             return;
         }
-        let open = self.open_file_paths_everywhere();
         let live_run_ids = self.live_run_script_ids();
         self.open_file_contents
             .retain(|path, _| open.contains(path));
         self.open_image_contents
+            .retain(|path, _| open.contains(path));
+        self.open_media_contents
             .retain(|path, _| open.contains(path));
         self.svg_preview_mode.retain(|path, _| open.contains(path));
         self.open_diff_contents
@@ -596,6 +690,12 @@ impl ConsoleDesktopApp {
     fn run_key_is_live(key: &str, live: &std::collections::HashSet<String>) -> bool {
         key.strip_prefix("run:")
             .is_some_and(|script_id| live.contains(script_id))
+    }
+
+    /// Whether `path` has a file tab open in any workspace (current + cached).
+    /// Used to guard async view creation against a tab that closed meanwhile.
+    pub(crate) fn file_path_is_open(&self, path: &str) -> bool {
+        self.open_file_paths_everywhere().contains(path)
     }
 
     /// File paths with a tab open in any workspace (current + cached).
@@ -656,5 +756,22 @@ impl ConsoleDesktopApp {
             self.viewer_scrollbar_states.remove(&key);
             self.viewer_markdown_selections.remove(&key);
         }
+        self.open_media_contents.remove(path);
+        if let Some(view) = self.file_media_views.remove(path) {
+            view.update(cx, |v, cx| v.close(cx));
+        }
+    }
+}
+
+/// Map a classified file kind to the media player it needs; `Details` gets
+/// the metadata card (`None`).
+pub(crate) fn media_kind_for(
+    kind: console_core::FileKind,
+) -> Option<console_ui::MediaFileKind> {
+    match kind {
+        console_core::FileKind::Video => Some(console_ui::MediaFileKind::Video),
+        console_core::FileKind::Audio => Some(console_ui::MediaFileKind::Audio),
+        console_core::FileKind::Pdf => Some(console_ui::MediaFileKind::Pdf),
+        _ => None,
     }
 }

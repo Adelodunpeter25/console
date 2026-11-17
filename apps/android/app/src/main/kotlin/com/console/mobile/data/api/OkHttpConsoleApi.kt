@@ -522,6 +522,8 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     override suspend fun readFileRaw(path: String): ByteArray =
         withContext(Dispatchers.IO) { http.getBytes("/api/fs/file/raw", mapOf("path" to path)) }
 
+    override fun fsMediaUrl(path: String): String = http.mediaUrl(path)
+
     override suspend fun deleteFile(path: String) {
         val raw = http.delete("/api/fs/file", mapOf("path" to path))
         http.unwrapOrRaw(raw, JsonElement.serializer(), "delete file")

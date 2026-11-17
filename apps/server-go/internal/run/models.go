@@ -115,12 +115,13 @@ func (s *Service) visionLabel(model types.Model) string {
 // when the model and provider can carry them, otherwise a vision-role
 // describer, otherwise the placeholder. pins pins the describer's calls to
 // the run's account (decision 7); nil keeps the ordinary loader.
-func (s *Service) ReadFileToolOptions(model types.Model, providerID, modelID string, pins *accountPins) tools.ReadFileOptions {
+func (s *Service) ReadFileToolOptions(model types.Model, providerID, modelID, cwd string, pins *accountPins) tools.ReadFileOptions {
 	return tools.ReadFileOptions{
 		CanSeeImages: model.SupportsImages && DeliversToolResultImages(providerID),
 		Describer:    s.imageDescriber(model, providerID, pins),
 		RunModel:     modelID,
 		VisionModel:  s.visionLabel(model),
+		Cwd:          cwd,
 	}
 }
 

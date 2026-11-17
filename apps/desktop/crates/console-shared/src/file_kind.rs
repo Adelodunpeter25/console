@@ -1,14 +1,24 @@
 //! File classification helper for desktop preview.
 //!
-//! Classifies paths into `FileKind` (Markdown, Svg, RasterImage, Text, Blocked)
-//! to route to the appropriate viewer and network fetch path.
+//! Classifies paths into `FileKind` (Markdown, Svg, RasterImage, Video, Audio,
+//! Pdf, Details, Text, Blocked) to route to the appropriate viewer and
+//! network fetch path. Extension lists are mirrored exactly in
+//! `apps/server-go/internal/services/fs/preview.go` and
+//! `apps/android/.../data/model/FsModels.kt` — keep all three in sync.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FileKind {
     Markdown,
     Svg,
     RasterImage,
+    Video,
+    Audio,
+    Pdf,
+    /// Opaque binary (archives, fonts, executables, databases): renders a
+    /// metadata card instead of file contents.
+    Details,
     Text,
+    /// Lockfiles only — generated files that must never be previewed.
     Blocked,
 }
 
@@ -17,22 +27,36 @@ pub enum FileKind {
 pub const RASTER_IMAGE_EXTENSIONS: &[&str] =
     &[".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico"];
 
-/// Markdown extensions matching `workspace_content.rs`.
-pub const MARKDOWN_EXTENSIONS: &[&str] = &[".md", ".markdown", ".mdx"];
+/// Video extensions served by the media endpoint.
+pub const VIDEO_EXTENSIONS: &[&str] = &[".mp4", ".mov", ".avi", ".mkv", ".webm"];
 
-/// Non-image binary formats that cannot be rendered as text or images.
-pub const BLOCKED_FILE_EXTENSIONS: &[&str] = &[
-    // Video / audio
-    ".mp4", ".mov", ".avi", ".mkv", ".webm", ".mp3", ".wav", ".flac", ".ogg", ".m4a",
+/// Audio extensions served by the media endpoint.
+pub const AUDIO_EXTENSIONS: &[&str] = &[".mp3", ".wav", ".flac", ".ogg", ".m4a"];
+
+/// PDF documents served by the media endpoint.
+pub const PDF_EXTENSIONS: &[&str] = &[".pdf"];
+
+/// Non-image binary formats with no inline viewer: they get a details card.
+pub const DETAILS_EXTENSIONS: &[&str] = &[
+    ".icns", ".tiff",
     // Archives
     ".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar", ".jar", ".war",
-    // Executables / objects
+    // Executables / objects / disk images
     ".exe", ".dll", ".so", ".dylib", ".a", ".o", ".obj", ".bin", ".iso", ".dmg", ".pkg", ".deb",
-    ".rpm", ".apk", ".ipa", ".node", // Fonts
-    ".ttf", ".otf", ".woff", ".woff2", ".eot", // Documents / other opaque formats
-    ".pdf", ".wasm", ".psd", ".sketch", ".class", ".pyc", ".db", ".sqlite", ".sqlite3", ".icns",
-    ".tiff",
+    ".rpm", ".apk", ".ipa", ".node",
+    // Fonts
+    ".ttf", ".otf", ".woff", ".woff2", ".eot",
+    // Documents / other opaque formats
+    ".wasm", ".psd", ".sketch", ".class", ".pyc", ".db", ".sqlite", ".sqlite3",
 ];
+
+/// Backward-compatible name for [`DETAILS_EXTENSIONS`]: the former
+/// `BLOCKED_FILE_EXTENSIONS` now covers only opaque formats that get the
+/// details card; `Blocked` itself is reserved for lockfiles.
+pub const BLOCKED_FILE_EXTENSIONS: &[&str] = DETAILS_EXTENSIONS;
+
+/// Markdown extensions matching `workspace_content.rs`.
+pub const MARKDOWN_EXTENSIONS: &[&str] = &[".md", ".markdown", ".mdx"];
 
 const LOCK_FILE_BASENAMES: &[&str] = &[
     "package-lock.json",
@@ -82,11 +106,20 @@ pub fn file_kind_for_path(path: &str) -> FileKind {
         return FileKind::Markdown;
     }
 
-    if BLOCKED_FILE_EXTENSIONS
-        .iter()
-        .any(|&ext| lower.ends_with(ext))
-    {
-        return FileKind::Blocked;
+    if VIDEO_EXTENSIONS.iter().any(|&ext| lower.ends_with(ext)) {
+        return FileKind::Video;
+    }
+
+    if AUDIO_EXTENSIONS.iter().any(|&ext| lower.ends_with(ext)) {
+        return FileKind::Audio;
+    }
+
+    if PDF_EXTENSIONS.iter().any(|&ext| lower.ends_with(ext)) {
+        return FileKind::Pdf;
+    }
+
+    if DETAILS_EXTENSIONS.iter().any(|&ext| lower.ends_with(ext)) {
+        return FileKind::Details;
     }
 
     FileKind::Text

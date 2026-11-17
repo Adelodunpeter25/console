@@ -1,6 +1,7 @@
 pub mod change_chips;
 pub mod cite_overlay;
 pub mod diff_popover;
+pub mod image;
 pub mod interaction_card;
 pub mod markdown_helpers;
 pub mod message_bubble;
@@ -16,6 +17,10 @@ pub mod working_indicator;
 pub use change_chips::ChangesSummary;
 pub use console_core::{ActivityEvent, ToolCallEntry};
 pub use interaction_card::QuestionInteractionCard;
+pub use image::{
+    ChatImage, ImagePreviewHandler, set_workspace_image_client, set_workspace_image_preview,
+    workspace_chat_image,
+};
 pub use message_bubble::{AssistantMessageBubble, UserMessageBubble};
 pub use thinking_block::ThinkingBlock;
 pub use toolcalls::{ToolCalls, ToolCallsAction, ToolCallsState};

@@ -42,6 +42,13 @@ pub enum VisualBlock {
         rows: Vec<Vec<String>>,
     },
     Chart(VisualChart),
+    /// A workspace image file; clients fetch `path` through the authenticated
+    /// fs endpoint and paint `alt` as the caption.
+    Image {
+        path: String,
+        #[serde(default)]
+        alt: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize)]
