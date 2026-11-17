@@ -45,10 +45,10 @@ type modelStreamPartFrame struct {
 	Part json.RawMessage `json:"part"`
 }
 
-// queuedPromptToProto converts a staged prompt row to the canonical wire
+// QueuedPromptToProto converts a staged prompt row to the canonical wire
 // type. Attachments/annotations reuse the message schema; created_at stays
 // the RFC3339 string the server stores; empty optionals stay absent.
-func queuedPromptToProto(qp *types.QueuedPrompt) *consolev1.QueuedPrompt {
+func QueuedPromptToProto(qp *types.QueuedPrompt) *consolev1.QueuedPrompt {
 	if qp == nil {
 		return nil
 	}
@@ -82,7 +82,7 @@ func QueuedPromptData(qp *types.QueuedPrompt) (any, error) {
 	if qp == nil {
 		return nil, nil
 	}
-	raw, err := wireProtoMarshal.Marshal(queuedPromptToProto(qp))
+	raw, err := wireProtoMarshal.Marshal(QueuedPromptToProto(qp))
 	if err != nil {
 		return nil, err
 	}

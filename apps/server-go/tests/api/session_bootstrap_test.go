@@ -10,7 +10,9 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"google.golang.org/protobuf/proto"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
@@ -69,5 +71,43 @@ func TestSessionBootstrapRoute(t *testing.T) {
 	}
 	if string(envelope.Data["draft"]) != "null" {
 		t.Fatalf("draft = %s, want null", envelope.Data["draft"])
+	}
+}
+
+func TestSessionBootstrapBinary(t *testing.T) {
+	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(manager.Close)
+
+	sessions := services.NewSessionService(manager)
+	header := helpers.CreateRunSession(t, sessions)
+	runs := run.NewService(sessions)
+	app := fiber.New()
+	routes.RegisterBootstrapRoutes(app, sessions, runs, services.NewDraftService(manager))
+
+	req := httptest.NewRequest("GET", "/api/sessions/"+header.ID+"/bootstrap", nil)
+	req.Header.Set("Accept", "application/x-protobuf")
+	resp, err := app.Test(req, 10000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := resp.Header.Get("Content-Type"); got != "application/x-protobuf" {
+		t.Fatalf("content type = %q, want application/x-protobuf", got)
+	}
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body consolev1.SessionBootstrapResponse
+	if err := proto.Unmarshal(raw, &body); err != nil {
+		t.Fatalf("decode protobuf: %v", err)
+	}
+	if body.Header == nil || body.Header.Id != header.ID {
+		t.Fatalf("header = %v, want id %s", body.Header, header.ID)
+	}
+	if len(body.Messages) != 0 || len(body.Todos) != 0 || body.Draft != nil {
+		t.Fatalf("empty session returned unexpected payload: %v", &body)
 	}
 }

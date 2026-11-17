@@ -2,14 +2,47 @@ package routes
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"google.golang.org/protobuf/proto"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	sessionSvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 )
+
+const protoContentType = "application/x-protobuf"
+
+// wantsBinaryBootstrap reports whether the client asked for the protobuf
+// encoding. The JSON envelope stays the default so existing clients are
+// unaffected; the binary form removes base64 and field names from messages.
+func wantsBinaryBootstrap(c *fiber.Ctx) bool {
+	for _, part := range strings.Split(c.Get("Accept"), ",") {
+		if strings.TrimSpace(strings.SplitN(part, ";", 2)[0]) == protoContentType {
+			return true
+		}
+	}
+	return false
+}
+
+func backgroundWorkToProto(w background.Work) *consolev1.BackgroundWork {
+	return &consolev1.BackgroundWork{
+		Id: w.ID, SessionId: w.SessionID,
+		ParentRunId:  optionalNonEmpty(w.ParentRunID),
+		ParentCallId: optionalNonEmpty(w.ParentCallID),
+		Kind:         string(w.Kind),
+		Status:       string(w.Status),
+		CreatedAt:    w.CreatedAt,
+		StartedAt:    optionalNonEmpty(w.StartedAt),
+		FinishedAt:   optionalNonEmpty(w.FinishedAt),
+		Summary:      optionalNonEmpty(w.Summary),
+		Error:        optionalNonEmpty(w.Error),
+		Metadata:     w.Metadata,
+	}
+}
 
 // RegisterBootstrapRoutes serves the single request a client makes when it
 // opens a chat: header, first message page, and every side panel in one
@@ -33,22 +66,16 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 				result.Header.Unread = sessionSvc.IsUnread(result.Header)
 			}
 		}
-		headerRaw, err := protoMarshal.Marshal(sessionHeaderToProto(result.Header))
-		if err != nil {
-			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
-		}
+		header := sessionHeaderToProto(result.Header)
+		messages := visibleMessages(result.Messages)
 
 		changes, err := sessions.GetSessionFileChanges(id, -1)
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
-		rows := sessionFileChangesToProto(changes)
-		for _, row := range rows {
+		changeRows := sessionFileChangesToProto(changes)
+		for _, row := range changeRows {
 			row.DiffText = nil
-		}
-		changesData, err := marshalProtoList(rows)
-		if err != nil {
-			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
 		}
 
 		todos, err := sessions.GetSessionTodos(id)
@@ -61,10 +88,6 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 				Id: int32(item.ID), Content: item.Content, Status: item.Status,
 			})
 		}
-		todosData, err := marshalProtoList(todoItems)
-		if err != nil {
-			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
-		}
 
 		suggestions, err := sessions.GetSessionSuggestions(id)
 		if err != nil {
@@ -75,6 +98,61 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
+
+		work := runs.BackgroundWorkManager().List(id)
+
+		stored, err := drafts.Get(id)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+
+		if wantsBinaryBootstrap(c) {
+			binaryMessages := make([]*consolev1.AgentMessage, 0, len(messages))
+			for _, raw := range messages {
+				var msg consolev1.AgentMessage
+				// A row that no longer parses is skipped, matching the
+				// desktop's lenient message decoder.
+				if err := protoUnmarshal.Unmarshal(raw, &msg); err != nil {
+					continue
+				}
+				binaryMessages = append(binaryMessages, &msg)
+			}
+			queued := make([]*consolev1.QueuedPrompt, 0, len(queue))
+			for i := range queue {
+				queued = append(queued, run.QueuedPromptToProto(&queue[i]))
+			}
+			rows := make([]*consolev1.BackgroundWork, 0, len(work))
+			for _, w := range work {
+				rows = append(rows, backgroundWorkToProto(w))
+			}
+			body := &consolev1.SessionBootstrapResponse{
+				Header: header, Messages: binaryMessages, HasMore: result.HasMore,
+				NextCursor: result.NextCursor, Changes: changeRows, Todos: todoItems,
+				Suggestions: suggestions, QueuedPrompts: queued, BackgroundWork: rows,
+				Draft: stored,
+			}
+			raw, err := proto.Marshal(body)
+			if err != nil {
+				return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+			}
+			c.Set("Content-Type", protoContentType)
+			return c.Send(raw)
+		}
+
+		// JSON remains the default. Every key is present; an absent draft is
+		// a literal JSON null rather than an empty proto message.
+		headerRaw, err := protoMarshal.Marshal(header)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		changesData, err := marshalProtoList(changeRows)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		todosData, err := marshalProtoList(todoItems)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
 		queuedPrompts := make([]any, 0, len(queue))
 		for i := range queue {
 			item, err := run.QueuedPromptData(&queue[i])
@@ -83,16 +161,7 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 			}
 			queuedPrompts = append(queuedPrompts, item)
 		}
-
-		backgroundWork := runs.BackgroundWorkManager().List(id)
-
-		// A chat with no draft must serialize to a literal JSON null, not an
-		// empty proto message.
 		var draft json.RawMessage = json.RawMessage("null")
-		stored, err := drafts.Get(id)
-		if err != nil {
-			return sessionError(c, fiber.StatusInternalServerError, err.Error())
-		}
 		if stored != nil {
 			raw, err := protoMarshal.Marshal(stored)
 			if err != nil {
@@ -103,14 +172,14 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
 			"header":         json.RawMessage(headerRaw),
-			"messages":       visibleMessages(result.Messages),
+			"messages":       messages,
 			"hasMore":        result.HasMore,
 			"nextCursor":     result.NextCursor,
 			"changes":        changesData,
 			"todos":          todosData,
 			"suggestions":    suggestions,
 			"queuedPrompts":  queuedPrompts,
-			"backgroundWork": backgroundWork,
+			"backgroundWork": work,
 			"draft":          draft,
 		}})
 	})

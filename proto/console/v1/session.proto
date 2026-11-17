@@ -4,6 +4,7 @@ package console.v1;
 
 option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
 
+import "console/v1/draft.proto";
 import "console/v1/message.proto";
 
 // Sessions (Phase 3, first slice: todos). Session headers, messages, and
@@ -195,4 +196,40 @@ message SubagentEndEvent {
   optional string summary = 3;
   optional string error = 4;
   int32 total_turns = 5;
+}
+
+// Detached work listed on a reopened chat. Same rows the JSON bootstrap
+// returns, but proto-encoded so a binary session open carries no JSON.
+message BackgroundWork {
+  string id = 1;
+  string session_id = 2;
+  optional string parent_run_id = 3;
+  optional string parent_call_id = 4;
+  string kind = 5;
+  string status = 6;
+  string created_at = 7;
+  optional string started_at = 8;
+  optional string finished_at = 9;
+  optional string summary = 10;
+  optional string error = 11;
+  map<string, string> metadata = 12;
+}
+
+// Binary counterpart of GET /api/sessions/:id/bootstrap. The JSON shape is a
+// mixed envelope (raw message rows, raw background-work rows, a null draft);
+// this message is the same state as generated protobuf so the heavy fields —
+// messages, tool arguments and results — cross without base64 or field names.
+// Served when the client sends `Accept: application/x-protobuf`; the JSON
+// envelope remains the default for clients that do not opt in.
+message SessionBootstrapResponse {
+  SessionHeader header = 1;
+  repeated AgentMessage messages = 2;
+  bool has_more = 3;
+  optional int64 next_cursor = 4;
+  repeated SessionFileChange changes = 5;
+  repeated TodoItem todos = 6;
+  repeated string suggestions = 7;
+  repeated QueuedPrompt queued_prompts = 8;
+  repeated BackgroundWork background_work = 9;
+  optional ChatDraft draft = 10;
 }
