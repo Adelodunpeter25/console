@@ -202,6 +202,11 @@ type Agent struct {
 	CacheRetention CacheRetention
 	ConversationID string
 	ThinkingLevel  string
+	// StripImages omits image attachments from provider-bound history when
+	// the active model cannot see images (persisted history keeps them).
+	// oh-my-pi replaces image blocks with an omission note at the same
+	// boundary; providers reject raw image parts they cannot serve.
+	StripImages bool
 	// AccountID, when set, pins every turn to one account's credential
 	// (see TurnRequest.AccountID). Empty keeps provider defaults.
 	AccountID string
@@ -266,6 +271,9 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 
 	history = MaterializeHistory(history)
 	history = append(history, MaterializeUserMessage(user))
+	if a.StripImages {
+		history = stripUserImages(history)
+	}
 	roundsSinceTodo := 0
 	for {
 		if a.ToolDefs != nil {

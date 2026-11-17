@@ -172,6 +172,50 @@ func MaterializeUserMessage(user UserMessage) UserMessage {
 	return materializeUserMessage(user)
 }
 
+// imageOmissionNote replaces dropped image attachments in provider-bound
+// history, matching oh-my-pi's "[image omitted: the active model does not
+// support image input]" placeholder.
+const imageOmissionNote = "[image omitted: the active model does not support image input]"
+
+// stripUserImages returns a copy of history where every user message's image
+// attachments are replaced by a single omission note in the content. Only
+// the provider-facing copy is sanitized; persisted messages keep their
+// images for display and later vision-capable turns.
+func stripUserImages(history []any) []any {
+	out := make([]any, 0, len(history))
+	for _, message := range history {
+		switch user := message.(type) {
+		case UserMessage:
+			out = append(out, stripUserMessageImages(user))
+		case *UserMessage:
+			if user == nil {
+				out = append(out, message)
+				continue
+			}
+			copy := stripUserMessageImages(*user)
+			out = append(out, &copy)
+		default:
+			out = append(out, message)
+		}
+	}
+	return out
+}
+
+func stripUserMessageImages(user UserMessage) UserMessage {
+	if len(user.Attachments) == 0 {
+		return user
+	}
+	user.Attachments = nil
+	if !strings.Contains(user.Content, imageOmissionNote) {
+		if strings.TrimSpace(user.Content) == "" {
+			user.Content = imageOmissionNote
+		} else {
+			user.Content += "\n\n" + imageOmissionNote
+		}
+	}
+	return user
+}
+
 // ImageAttachment is base64 image data sent inline with a user message.
 type ImageAttachment struct {
 	Data     string `json:"data"`

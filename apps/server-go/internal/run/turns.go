@@ -361,7 +361,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	}
 
 	// Image attachments on a model without image support fall back to the
-	// configured vision role model.
+	// configured vision role model. With no vision model the turn still runs
+	// on the text-only model; loop.Agent.StripImages then omits the image
+	// parts from provider-bound history (persisted history keeps them).
 	if len(dto.Attachments) > 0 && !model.SupportsImages {
 		if vision, ok := s.resolveVision(model); ok {
 			model = vision
@@ -372,6 +374,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			}
 		}
 	}
+	stripImages := !model.SupportsImages
 
 	history, err := s.LoadHistory(sessionID)
 	if err != nil {
@@ -602,6 +605,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// compaction summaries, title generation) authenticates as it.
 	agent.AccountID = pins.forProvider(providerID)
 	agent.Compaction = s.compactionHooks(sessionID, model, prompt.SystemPrompt, agent.ToolDefs(), pins)
+	agent.StripImages = stripImages
 
 	if dto.Synthetic {
 		hub.Broadcast(loop.Event{Kind: loop.EventBackgroundContinue, Text: wakeMessage(dto.woken), Message: dto.woken})
