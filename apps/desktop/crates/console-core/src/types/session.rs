@@ -110,6 +110,36 @@ pub struct SessionBootstrapResponse {
     pub draft: Option<console_proto::ChatDraft>,
 }
 
+impl SessionBootstrapResponse {
+    /// Convert the binary envelope. Messages are the only field needing a
+    /// hand-written decoder; the rest are generated proto types already
+    /// used by the JSON path.
+    pub fn from_proto(p: console_proto::SessionBootstrapResponse) -> Self {
+        Self {
+            detail: SessionDetailResponse {
+                header: p.header.unwrap_or_default(),
+                messages: p
+                    .messages
+                    .into_iter()
+                    .filter_map(AgentMessage::from_proto)
+                    .collect(),
+                has_more: p.has_more,
+                next_cursor: p.next_cursor,
+            },
+            changes: p.changes,
+            todos: p.todos,
+            suggestions: p.suggestions,
+            queued_prompts: p.queued_prompts,
+            background_work: p
+                .background_work
+                .into_iter()
+                .map(BackgroundWork::from_proto)
+                .collect(),
+            draft: p.draft,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionDto {

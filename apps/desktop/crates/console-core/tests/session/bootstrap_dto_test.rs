@@ -1,4 +1,5 @@
 use console_core::types::SessionBootstrapResponse;
+use prost::Message;
 
 const HEADER: &str = r#"{"id":"s1","title":"Demo","cwd":"/tmp","projectId":"p1","modelId":"gpt-5","provider":"openai","approvalMode":"always-ask","thinkingLevel":"medium","createdAt":"1700000000000","updatedAt":"1700000000001","messageCount":3,"status":"done","worktree":{"path":"/tmp/wt","branch":"feat","repo":"/tmp"}}"#;
 
@@ -28,4 +29,42 @@ fn flatten_keeps_the_custom_message_decoder() {
     let value: SessionBootstrapResponse =
         serde_json::from_str(&payload(messages)).expect("bootstrap payload with a user message");
     assert_eq!(value.detail.messages.len(), 1);
+}
+
+#[test]
+fn decodes_binary_bootstrap_envelope() {
+    let wire = console_proto::SessionBootstrapResponse {
+        header: Some(console_proto::SessionHeader {
+            id: "s1".into(),
+            ..Default::default()
+        }),
+        messages: vec![console_proto::AgentMessage {
+            message: Some(console_proto::agent_message::Message::User(
+                console_proto::AgentUserMessage {
+                    content: "Hello".into(),
+                    ..Default::default()
+                },
+            )),
+            ..Default::default()
+        }],
+        todos: vec![console_proto::TodoItem {
+            id: 1,
+            content: "task".into(),
+            status: "pending".into(),
+        }],
+        background_work: vec![console_proto::BackgroundWork {
+            id: "w1".into(),
+            kind: "shell".into(),
+            status: "running".into(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let decoded = console_proto::SessionBootstrapResponse::decode(wire.encode_to_vec().as_slice())
+        .expect("encode/decode round trip");
+    let value = SessionBootstrapResponse::from_proto(decoded);
+    assert_eq!(value.detail.header.id, "s1");
+    assert_eq!(value.detail.messages.len(), 1);
+    assert_eq!(value.todos[0].content, "task");
+    assert_eq!(value.background_work[0].id, "w1");
 }

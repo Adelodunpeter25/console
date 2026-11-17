@@ -1,7 +1,10 @@
 use crate::types::*;
 use crate::utils::HttpTransport;
 use anyhow::{Context, Result, anyhow};
+use prost::Message;
 use std::time::Duration;
+
+const PROTO_CONTENT_TYPE: &str = "application/x-protobuf";
 
 #[derive(Clone)]
 pub struct SessionService {
@@ -124,9 +127,25 @@ impl SessionService {
             .client()
             .get(&url)
             .headers(self.transport.build_headers().await)
+            .header(reqwest::header::ACCEPT, PROTO_CONTENT_TYPE)
             .send()
             .await
             .context("Failed to get session bootstrap")?;
+
+        let binary = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.starts_with(PROTO_CONTENT_TYPE));
+        if binary {
+            let bytes = resp
+                .bytes()
+                .await
+                .context("Failed to read session bootstrap")?;
+            let proto = console_proto::SessionBootstrapResponse::decode(&bytes[..])
+                .context("Failed to decode session bootstrap protobuf")?;
+            return Ok(SessionBootstrapResponse::from_proto(proto));
+        }
 
         let body: ApiResponse<SessionBootstrapResponse> = self
             .transport

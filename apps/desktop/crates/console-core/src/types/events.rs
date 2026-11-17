@@ -73,6 +73,24 @@ pub struct BackgroundWork {
 }
 
 impl BackgroundWork {
+    /// Decode the proto row served by the binary session bootstrap.
+    pub fn from_proto(p: console_proto::BackgroundWork) -> Self {
+        Self {
+            id: p.id,
+            session_id: p.session_id,
+            parent_run_id: p.parent_run_id,
+            parent_call_id: p.parent_call_id,
+            kind: p.kind,
+            status: p.status,
+            created_at: p.created_at,
+            started_at: p.started_at,
+            finished_at: p.finished_at,
+            summary: p.summary,
+            error: p.error,
+            metadata: p.metadata,
+        }
+    }
+
     /// A detached shell that is still running: what the chat banner and the
     /// Shells tab list.
     pub fn is_running_shell(&self) -> bool {
