@@ -40,8 +40,8 @@ impl ConsoleDesktopApp {
         let oauth_id = match provider_name.as_str() {
             "antigravity" => OAuthProviderId::Antigravity,
             "codex" | "openai" => OAuthProviderId::Codex,
-			"claude" | "anthropic" => OAuthProviderId::Claude,
-			"devin" => OAuthProviderId::Devin,
+            "claude" | "anthropic" => OAuthProviderId::Claude,
+            "devin" => OAuthProviderId::Devin,
             _ => {
                 self.auth_logging_in.remove(&provider_name);
                 cx.notify();
@@ -214,6 +214,7 @@ impl ConsoleDesktopApp {
                         // auth_login_url deliberately stays with the error, so
                         // the provider card still offers a copyable link.
                         this.refresh_auth_status(cx);
+                        this.invalidate_provider_models(&provider_name);
                         cx.notify();
                     });
                 }
@@ -254,6 +255,7 @@ impl ConsoleDesktopApp {
                                     mutated.status.unwrap_or_default(),
                                 );
                             }
+                            this.invalidate_provider_models(&provider);
                             this.account_busy = None;
                         }
                         Err(err) => {
@@ -361,6 +363,7 @@ impl ConsoleDesktopApp {
                             {
                                 this.recent_login_account = None;
                             }
+                            this.invalidate_provider_models(&provider);
                             this.account_busy = None;
                         }
                         Err(err) => {

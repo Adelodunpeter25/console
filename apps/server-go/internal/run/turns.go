@@ -327,12 +327,12 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// thinking validation and the vision fallback below.
 	model := s.resolveModel(ctx, providerID, modelID)
 	effectiveThinking := dto.Thinking
-	// OpenCode models are cataloged without thinking levels unless their family
-	// has a known effort vocabulary. A session can carry a stale level after
-	// switching providers, so discard it instead of failing the run or sending
-	// reasoning controls to a model that does not declare support. Models that
-	// do declare levels fall through to normal validation below.
-	if model.Provider == "opencode" && len(model.ThinkingLevels) == 0 {
+	// A session can carry a stale level after switching providers, so
+	// providers without a thinking-level vocabulary discard it instead of
+	// failing the run. OpenCode models are cataloged without levels unless
+	// their family has a known effort vocabulary; Devin models never have
+	// any. Models that do declare levels fall through to normal validation.
+	if (model.Provider == "opencode" && len(model.ThinkingLevels) == 0) || model.Provider == "devin" {
 		effectiveThinking = ""
 	} else if effectiveThinking == "" {
 		effectiveThinking = model.DefaultThinking

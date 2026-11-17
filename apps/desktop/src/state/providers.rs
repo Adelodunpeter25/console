@@ -55,8 +55,16 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.loading_models.remove(&provider_id);
-                        if let Ok(models) = result {
-                            Rc::make_mut(&mut this.models_by_provider).insert(provider_id, models);
+                        match result {
+                            // An empty list means "not logged in yet" or a
+                            // failed discovery, not a real catalog — caching
+                            // it would hide the models a login moments later
+                            // makes available.
+                            Ok(models) if !models.is_empty() => {
+                                Rc::make_mut(&mut this.models_by_provider)
+                                    .insert(provider_id, models);
+                            }
+                            _ => {}
                         }
                         // On error the static fallback stays in place; no
                         // error banner — the picker is still usable.
@@ -66,6 +74,15 @@ impl ConsoleDesktopApp {
             });
         })
         .detach();
+    }
+
+    /// Drops one provider's cached live model list so the next picker open
+    /// refetches it. Called after credential changes (OAuth login, account
+    /// switch, account removal): the server's discovery cache revalidates,
+    /// and a stale client copy would keep serving the old account's lineup.
+    pub(crate) fn invalidate_provider_models(&mut self, provider_id: &str) {
+        Rc::make_mut(&mut self.models_by_provider).remove(provider_id);
+        self.loading_models.remove(provider_id);
     }
 
     pub fn toggle_model_favorite(
