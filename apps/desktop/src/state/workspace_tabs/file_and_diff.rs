@@ -447,6 +447,12 @@ impl ConsoleDesktopApp {
         self.trim_file_caches(cx);
         self.persist_workspaces();
 
+        // Marked as loading before the tab first renders: a render that finds
+        // nothing cached takes the tab for one restored from disk and starts a
+        // second, working-tree fetch whose empty result would replace this one.
+        self.open_diff_contents
+            .entry(path.clone())
+            .or_insert_with(|| (console_core::DiffResult::default(), String::new()));
         self.fetch_diff_into_cache(&lookup_pane, path, turn_index, diff_override, cx);
         cx.notify();
     }
