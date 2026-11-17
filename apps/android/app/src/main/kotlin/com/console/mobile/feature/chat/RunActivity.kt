@@ -1,6 +1,7 @@
 package com.console.mobile.feature.chat
 import com.console.mobile.feature.chat.markdown.CustomMarkdown
 
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,9 +41,9 @@ import com.console.mobile.core.chat.ActivityEvent
 import com.console.mobile.core.chat.RunActivityState
 import com.console.mobile.core.chat.RunStatus
 import com.console.mobile.core.util.formatDurationMs
-import com.console.mobile.core.util.getToolIcon
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
+import com.console.mobile.ui.components.ToolIcon
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.delay
 
@@ -170,12 +170,7 @@ fun ToolGroupRow(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                getToolIcon(calls.first()),
-                contentDescription = null,
-                tint = NewTheme.TextSecondary,
-                modifier = Modifier.size(16.dp),
-            )
+            ToolIcon(calls.first(), sizeDp = 16)
             Spacer(Modifier.width(8.dp))
             Text(
                 // The group's parameter is already the resolved display label.

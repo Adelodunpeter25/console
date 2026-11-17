@@ -1,5 +1,6 @@
 package com.console.mobile.feature.chat
 
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.SharedNative
 import com.console.mobile.core.util.argumentPath
-import com.console.mobile.core.util.getToolIcon
 import com.console.mobile.core.util.resultText
 import com.console.mobile.core.util.toolCallSummary
 import com.console.mobile.data.model.ToolCall
@@ -41,6 +40,7 @@ import com.console.mobile.feature.chat.markdown.CustomMarkdown
 import com.console.mobile.ui.code.CodeViewer
 import com.console.mobile.ui.code.languageForPath
 import com.console.mobile.ui.components.FileIcon
+import com.console.mobile.ui.components.ToolIcon
 import com.console.mobile.ui.theme.ConsoleDimens
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import com.console.mobile.ui.theme.NewTheme
@@ -78,7 +78,7 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
                 FileIcon(filename = filePath, sizeDp = 16)
                 Spacer(Modifier.width(8.dp))
             } else {
-                Icon(getToolIcon(call), contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(16.dp))
+                ToolIcon(call, sizeDp = 16)
                 Spacer(Modifier.width(8.dp))
             }
             Text(call.displayLabel, color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
