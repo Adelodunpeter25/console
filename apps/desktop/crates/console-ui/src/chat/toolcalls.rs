@@ -393,7 +393,8 @@ impl ToolCalls {
                     )
                     .child(
                         div()
-                            .flex_none()
+                            .min_w_0()
+                            .truncate()
                             .text_size(px(12.0))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme.text_secondary)
@@ -594,7 +595,8 @@ impl ToolCalls {
                     ))
                     .child(
                         div()
-                            .flex_none()
+                            .min_w_0()
+                            .truncate()
                             .text_size(px(12.0))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme.text_secondary)
