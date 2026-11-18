@@ -216,8 +216,106 @@ impl ConsoleDesktopApp {
             .into_iter()
             .map(|leaf| leaf.id.clone())
             .find(|id| self.active_session_for_pane(id).as_deref() == Some(session_id));
-        if let Some(pane_id) = pane {
-            self.attach_session_run_for_pane(pane_id, session_id.to_string(), wake_at, cx);
+        let Some(pane_id) = pane else { return };
+
+        // The backgroundWorkContinue frame is broadcast once at wake time; a
+        // client that missed it (app asleep, stream down) never sees it again
+        // because attach passes no `since`. Push the transcript boundary here
+        // unless the live handler already did, or wake-turn activity merges
+        // into the previous run's block until the next history reload.
+        let last_record = self
+            .wake_records
+            .get(session_id)
+            .and_then(|records| records.last())
+            .cloned();
+        let boundary = last_record
+            .filter(|record| {
+                record.at
+                    > self
+                        .wake_boundary_pushed_at
+                        .get(session_id)
+                        .copied()
+                        .unwrap_or(i64::MIN)
+            })
+            .map(|record| (record.message, record.at));
+        if boundary.is_none()
+            && !self
+                .wake_records
+                .get(session_id)
+                .is_some_and(|records| !records.is_empty())
+        {
+            // The wake frame never arrived at all: recover the wake time from
+            // history the same way bootstrap does, so later resumes dedupe.
+            let client = self.client.clone();
+            let session = session_id.to_string();
+            let had_record = boundary.is_some();
+            cx.spawn(async move |this, cx| {
+                let Ok(bootstrap) = client.sessions.get_bootstrap(&session).await else {
+                    return;
+                };
+                let Some(at) = super::sessions::infer_wake_at(&bootstrap.detail.messages)
+                else {
+                    return;
+                };
+                let _ = cx.update(|cx| {
+                    if let Some(app) = this.upgrade() {
+                        app.update(cx, |app, cx| {
+                            // A live backgroundWorkContinue may have landed
+                            // while the fetch was in flight; it wins — both
+                            // its record and its boundary push.
+                            if app
+                                .wake_records
+                                .get(&session)
+                                .is_some_and(|records| !records.is_empty())
+                                || had_record
+                            {
+                                return;
+                            }
+                            app.wake_records.insert(
+                                session.clone(),
+                                vec![console_core::WakeRecord {
+                                    message:
+                                        "Background work completed, continuing agent"
+                                            .to_string(),
+                                    at,
+                                }],
+                            );
+                            if app
+                                .wake_boundary_pushed_at
+                                .get(&session)
+                                .is_none_or(|pushed| at > *pushed)
+                                && let Some(pane_id) = app
+                                    .workspace_root
+                                    .leaves()
+                                    .into_iter()
+                                    .map(|leaf| leaf.id.clone())
+                                    .find(|id| {
+                                        app.active_session_for_pane(id).as_deref()
+                                            == Some(session.as_str())
+                                    })
+                            {
+                                app.wake_boundary_pushed_at.insert(session.clone(), at);
+                                app.transcript_for_pane(&pane_id).update(cx, |t, cx| {
+                                    t.push_run_boundary(
+                                        "Background work completed, continuing agent"
+                                            .to_string(),
+                                        at,
+                                        cx,
+                                    );
+                                });
+                            }
+                        });
+                    }
+                });
+            })
+            .detach();
         }
+        if let Some((message, at)) = boundary {
+            self.wake_boundary_pushed_at.insert(session_id.to_string(), at);
+            self.transcript_for_pane(&pane_id).update(cx, |t, cx| {
+                t.push_run_boundary(message, at, cx);
+            });
+        }
+        self.attach_session_run_for_pane(pane_id, session_id.to_string(), wake_at, cx);
     }
 }

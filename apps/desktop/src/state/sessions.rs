@@ -1828,7 +1828,7 @@ impl ConsoleDesktopApp {
 /// `working` session means a server wake turn. Used to seed wake records when
 /// a session is opened mid-wake and the live `backgroundWorkContinue` frame
 /// was missed.
-fn infer_wake_at(messages: &[console_core::AgentMessage]) -> Option<i64> {
+pub(crate) fn infer_wake_at(messages: &[console_core::AgentMessage]) -> Option<i64> {
     let last_user = messages
         .iter()
         .rposition(|m| matches!(m, console_core::AgentMessage::User { .. }))?;

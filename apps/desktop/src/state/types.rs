@@ -266,6 +266,11 @@ pub struct ConsoleDesktopApp {
     /// run-boundary reconstruction after history reloads and the wake-time
     /// timer seed on `resumed` re-attach. FIFO-capped per session.
     pub wake_records: std::collections::HashMap<String, Vec<console_core::WakeRecord>>,
+    /// Last transcript boundary push per session, keyed like `wake_records`.
+    /// `backgroundWorkContinue` may be missed by a re-attaching client (the hub
+    /// only replays with `?since=`), so resume-attach pushes the boundary
+    /// itself; this timestamp dedupes against the live push.
+    pub wake_boundary_pushed_at: std::collections::HashMap<String, i64>,
     /// Monotonic token per session incremented on each prompt submission.
     /// Ensures out-of-order or late settling calls cannot overwrite newer runs.
     pub session_run_tokens: std::collections::HashMap<String, u64>,

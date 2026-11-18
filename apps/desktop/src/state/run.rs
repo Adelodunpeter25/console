@@ -1201,6 +1201,8 @@ impl ConsoleDesktopApp {
                 }
                 if pane_shows_run {
                     let at = chrono::Utc::now().timestamp();
+                    self.wake_boundary_pushed_at
+                        .insert(run_session_id.to_string(), at);
                     self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
                         t.push_run_boundary(message.clone(), at, cx);
                     });

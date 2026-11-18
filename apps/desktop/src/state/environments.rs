@@ -363,6 +363,7 @@ impl ConsoleDesktopApp {
                         this.queued_prompts.clear();
                         this.running_sessions.clear();
                         this.wake_records.clear();
+                        this.wake_boundary_pushed_at.clear();
                         this.stream_render_pending.clear();
                         this.transcript_view
                             .update(cx, |t, cx| t.set_messages(Vec::new(), cx));

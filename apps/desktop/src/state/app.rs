@@ -656,6 +656,7 @@ impl ConsoleDesktopApp {
             zoomed_image: None,
             running_sessions: std::collections::HashMap::new(),
             wake_records: std::collections::HashMap::new(),
+            wake_boundary_pushed_at: std::collections::HashMap::new(),
             session_run_tokens: std::collections::HashMap::new(),
             stream_render_pending: std::collections::HashMap::new(),
             sidebar_visible,
