@@ -524,6 +524,18 @@ impl Render for ConsoleDesktopApp {
                             },
                             {
                                 let entity = entity.clone();
+                                move |key: String, window: &mut Window, cx: &mut App| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.open_floating_composer_for_project(
+                                                &key, window, cx,
+                                            )
+                                        });
+                                    }
+                                }
+                            },
+                            {
+                                let entity = entity.clone();
                                 move |window: &mut Window, cx: &mut App| {
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {

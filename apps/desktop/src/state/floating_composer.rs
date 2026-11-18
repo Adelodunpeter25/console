@@ -101,6 +101,24 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    /// A sidebar project's `+`: open the launcher with that project chosen.
+    /// `key` is a project id, or the sidebar's no-project key. The choice is
+    /// applied after the stashed prompt is restored so it wins over a stashed
+    /// project, while the stashed text stays.
+    pub fn open_floating_composer_for_project(
+        &mut self,
+        key: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_floating_composer(window, cx);
+        if key == console_ui::layout::NO_PROJECT_KEY {
+            self.floating_no_project_chosen(cx);
+        } else if self.projects.iter().any(|p| p.id == key) {
+            self.floating_project_changed(key.to_owned(), cx);
+        }
+    }
+
     /// Close the card. Wired to the card's Escape binding.
     pub fn close_floating_composer(&mut self, cx: &mut Context<Self>) {
         self.stash_floating_prompt(cx);

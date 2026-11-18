@@ -164,6 +164,7 @@ pub struct SidebarView {
     on_select_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_open_in_new_window: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_chat: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_new_chat_in_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_search: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_toggle_pinned: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -212,6 +213,7 @@ impl SidebarView {
         on_select_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_open_in_new_window: impl Fn(String, &mut Window, &mut App) + 'static,
         on_new_chat: impl Fn(&mut Window, &mut App) + 'static,
+        on_new_chat_in_project: impl Fn(String, &mut Window, &mut App) + 'static,
         on_search: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_project: impl Fn(String, &mut Window, &mut App) + 'static,
         on_toggle_pinned: impl Fn(&mut Window, &mut App) + 'static,
@@ -247,6 +249,7 @@ impl SidebarView {
             on_select_session: Rc::new(on_select_session),
             on_open_in_new_window: Rc::new(on_open_in_new_window),
             on_new_chat: Rc::new(on_new_chat),
+            on_new_chat_in_project: Rc::new(on_new_chat_in_project),
             on_search: Rc::new(on_search),
             on_toggle_project: Rc::new(on_toggle_project),
             on_toggle_pinned: Rc::new(on_toggle_pinned),
@@ -311,10 +314,7 @@ impl RenderOnce for SidebarView {
             .collect();
         let on_new = self.on_new_chat;
         let on_search = self.on_search;
-        let on_new_chat_in_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let on_new = on_new.clone();
-            Rc::new(move |_, window, cx| (on_new)(window, cx))
-        };
+        let on_new_chat_in_project = self.on_new_chat_in_project;
         let on_toggle_project = self.on_toggle_project;
         let on_sel = self.on_select_session;
         let on_open_in_new_window = self.on_open_in_new_window;
