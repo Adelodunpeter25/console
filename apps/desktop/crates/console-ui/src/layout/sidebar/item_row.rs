@@ -75,5 +75,5 @@ pub fn draft_badge(id: ElementId, theme: Theme) -> Stateful<Div> {
         .items_center()
         .justify_center()
         .tooltip(Tooltip::text("Unsent draft"))
-        .child(app_icon(IconName::Pencil, 13.0, theme.text_tertiary))
+        .child(app_icon(IconName::Pencil, 12.0, theme.text_tertiary))
 }
