@@ -79,6 +79,10 @@ name = "partition_settled_test"
 path = "tests/sidebar/partition_settled_test.rs"
 
 [[test]]
+name = "scroll_persistence_test"
+path = "tests/sidebar/scroll_persistence_test.rs"
+
+[[test]]
 name = "row_status_test"
 path = "tests/sidebar/row_status_test.rs"
 

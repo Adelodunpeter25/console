@@ -40,8 +40,8 @@ pub fn init_sidebar_search_keybindings(cx: &mut App) {
 
 use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
 use gpui::{
-    Animation, AnimationExt, App, Entity, FontWeight, InteractiveElement, IntoElement, ListState,
-    MouseButton, ParentElement, RenderOnce, SpringAnimation, SpringConfig,
+    Animation, AnimationExt, App, Entity, FontWeight, InteractiveElement, IntoElement, ListOffset,
+    ListState, MouseButton, ParentElement, RenderOnce, SpringAnimation, SpringConfig,
     StatefulInteractiveElement, Styled, Window, div, list, prelude::FluentBuilder, px,
 };
 use std::collections::{HashMap, HashSet};
@@ -128,6 +128,74 @@ enum SidebarRow {
         key: String,
         collapsed: bool,
     },
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum SidebarRowKey {
+    PinnedHeader,
+    ProjectHeader(String),
+    SettledHeader,
+    EmptySearch,
+    Session(String),
+}
+
+impl SidebarRow {
+    fn key(&self, sessions: &[SessionHeader]) -> SidebarRowKey {
+        match self {
+            SidebarRow::Session(idx) => SidebarRowKey::Session(sessions[*idx].id.clone()),
+            SidebarRow::ProjectHeader { key, .. } => SidebarRowKey::ProjectHeader(key.clone()),
+            SidebarRow::SettledHeader => SidebarRowKey::SettledHeader,
+            SidebarRow::EmptySearch => SidebarRowKey::EmptySearch,
+            SidebarRow::PinnedHeader => SidebarRowKey::PinnedHeader,
+        }
+    }
+}
+
+#[derive(Default)]
+struct SidebarScrollTracker {
+    row_keys: Vec<SidebarRowKey>,
+}
+
+impl gpui::Global for SidebarScrollTracker {}
+
+/// Determine the target scroll offset after the sidebar row structure has changed
+/// (such as expanding or collapsing project sections). Anchors to the previous top-visible
+/// row, or its nearest still-existing ancestor/predecessor if the item was collapsed.
+pub fn resolve_scroll_offset_after_row_change(
+    old_offset: ListOffset,
+    previous_keys: &[SidebarRowKey],
+    current_keys: &[SidebarRowKey],
+) -> ListOffset {
+    if previous_keys.is_empty() || current_keys.is_empty() {
+        return ListOffset {
+            item_ix: old_offset.item_ix.min(current_keys.len().saturating_sub(1)),
+            offset_in_item: if current_keys.is_empty() {
+                px(0.)
+            } else {
+                old_offset.offset_in_item
+            },
+        };
+    }
+
+    let anchor_ix = old_offset.item_ix.min(previous_keys.len().saturating_sub(1));
+    for prev_ix in (0..=anchor_ix).rev() {
+        let prev_key = &previous_keys[prev_ix];
+        if let Some(new_ix) = current_keys.iter().position(|k| k == prev_key) {
+            return ListOffset {
+                item_ix: new_ix,
+                offset_in_item: if prev_ix == old_offset.item_ix {
+                    old_offset.offset_in_item
+                } else {
+                    px(0.)
+                },
+            };
+        }
+    }
+
+    ListOffset {
+        item_ix: old_offset.item_ix.min(current_keys.len().saturating_sub(1)),
+        offset_in_item: px(0.),
+    }
 }
 
 #[derive(IntoElement)]
@@ -458,9 +526,23 @@ impl RenderOnce for SidebarView {
             }
         }
         let list_rows = Rc::new(list_rows);
+        let current_row_keys: Vec<SidebarRowKey> = list_rows
+            .iter()
+            .map(|row| row.key(&sessions))
+            .collect();
+        let tracker = cx.default_global::<SidebarScrollTracker>();
+        let previous_row_keys = std::mem::replace(&mut tracker.row_keys, current_row_keys.clone());
+
         let sidebar_list_state = self.sidebar_list_state;
         if sidebar_list_state.item_count() != list_rows.len() {
+            let old_offset = sidebar_list_state.logical_scroll_top();
+            let new_offset = resolve_scroll_offset_after_row_change(
+                old_offset,
+                &previous_row_keys,
+                &current_row_keys,
+            );
             sidebar_list_state.reset_with_uniform_height(list_rows.len(), px(55.0));
+            sidebar_list_state.scroll_to(new_offset);
         }
 
         let list_fresh = fading_rows(
