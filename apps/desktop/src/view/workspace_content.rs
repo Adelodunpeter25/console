@@ -343,24 +343,25 @@ impl ConsoleDesktopApp {
             | console_core::FileKind::Details => {
                 let Some(details) = self.ensure_media_file_state(&path, cx) else {
                     if self.open_file_errors.contains_key(&path) {
-                        let message = self.open_file_errors.get(&path).cloned().unwrap_or_default();
+                        let message = self
+                            .open_file_errors
+                            .get(&path)
+                            .cloned()
+                            .unwrap_or_default();
                         let retry_path = path.clone();
                         let entity = cx.entity().downgrade();
-                        return console_ui::BlockedFilePanel::new(
-                            "Couldn't open file",
-                            message,
-                        )
-                        .icon(console_ui::IconName::TriangleAlert)
-                        .on_retry(move |_w, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.open_file_errors.remove(&retry_path);
-                                    this.fetch_file_tab_content(retry_path.clone(), cx);
-                                    cx.notify();
-                                });
-                            }
-                        })
-                        .into_any_element();
+                        return console_ui::BlockedFilePanel::new("Couldn't open file", message)
+                            .icon(console_ui::IconName::TriangleAlert)
+                            .on_retry(move |_w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.open_file_errors.remove(&retry_path);
+                                        this.fetch_file_tab_content(retry_path.clone(), cx);
+                                        cx.notify();
+                                    });
+                                }
+                            })
+                            .into_any_element();
                     }
                     return Self::file_loading_panel("Loading file…", &theme);
                 };
@@ -439,8 +440,7 @@ impl ConsoleDesktopApp {
                                                         if let Some(app) = entity.upgrade() {
                                                             app.update(cx, |this, cx| {
                                                                 this.open_file_externally(
-                                                                    &open_path,
-                                                                    cx,
+                                                                    &open_path, cx,
                                                                 );
                                                             });
                                                         }
@@ -461,9 +461,9 @@ impl ConsoleDesktopApp {
                                                 .cursor_pointer()
                                                 .hover(|s| s.bg(theme.overlay))
                                                 .on_click(move |_event, _window, cx| {
-                                                    cx.reveal_path(
-                                                        std::path::Path::new(&reveal_path),
-                                                    );
+                                                    cx.reveal_path(std::path::Path::new(
+                                                        &reveal_path,
+                                                    ));
                                                 })
                                                 .child("Reveal in Finder"),
                                         ),
@@ -557,8 +557,6 @@ impl ConsoleDesktopApp {
         cx.open_with_system(std::path::Path::new(path));
     }
 
-
-
     /// Fetch-on-demand the decoded image for `path`, answering the current
     /// state (Loading until the fetch lands).
     fn ensure_image_file_state(&mut self, path: &str, cx: &mut Context<Self>) -> ImageFileState {
@@ -578,8 +576,7 @@ impl ConsoleDesktopApp {
         path: &str,
         cx: &mut Context<Self>,
     ) -> Option<crate::state::FileMediaDetails> {
-        if !self.open_media_contents.contains_key(path)
-            && !self.open_file_errors.contains_key(path)
+        if !self.open_media_contents.contains_key(path) && !self.open_file_errors.contains_key(path)
         {
             self.fetch_file_tab_content(path.to_owned(), cx);
         }
