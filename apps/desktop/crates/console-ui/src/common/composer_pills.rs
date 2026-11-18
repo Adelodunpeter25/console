@@ -280,6 +280,10 @@ fn changes_pill(
         .rounded_full()
         .bg(theme.raised)
         .cursor_pointer()
+        // Same hover tint as the suggestion chips: overlay is a ~5% tint
+        // meant to sit on a surface, so blend it onto raised.
+        .hover(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
+        .active(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
         .when_some(on_click, |element, handler| {
             element.on_click(move |_, window, cx| (handler)(window, cx))
         })
@@ -334,6 +338,10 @@ fn pill(
         .rounded_full()
         .bg(theme.raised)
         .cursor_pointer()
+        // Same hover tint as the suggestion chips: overlay is a ~5% tint
+        // meant to sit on a surface, so blend it onto raised.
+        .hover(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
+        .active(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
         .when_some(on_click, |element, handler| {
             element.on_click(move |_, window, cx| (handler)(window, cx))
         })
