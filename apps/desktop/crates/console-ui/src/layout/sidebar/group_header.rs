@@ -17,7 +17,7 @@ fn header_card(theme: Theme, id: SharedString) -> gpui::Stateful<gpui::Div> {
     div()
         .id(ElementId::Name(id))
         .w_full()
-        .h(px(36.0))
+        .h(px(30.0))
         .mt(px(4.0))
         .px(px(8.0))
         .rounded(px(8.0))
