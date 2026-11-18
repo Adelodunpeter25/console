@@ -152,6 +152,7 @@ impl TranscriptView {
         self.markdown_cache
             .borrow_mut()
             .retain(|key, _| valid_keys.contains(key));
+        self.presentation_cache.borrow_mut().clear();
         let anchor = self.scroll_anchor();
         self.messages = messages;
         self.content_revisions = vec![0; self.messages.len()];

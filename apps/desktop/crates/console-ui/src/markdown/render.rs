@@ -637,6 +637,8 @@ impl MarkdownView {
             *self.veil.borrow_mut() = RowVeil::seeded();
         }
         let changed = self.parser.text() != text;
+        let is_append =
+            changed && !self.parser.text().is_empty() && text.starts_with(self.parser.text());
         if changed {
             self.parser.set_text(text);
         }
@@ -651,7 +653,12 @@ impl MarkdownView {
             } else {
                 Vec::new()
             };
-            if changed || tail != self.tail {
+            if changed && !is_append {
+                self.tail = tail;
+                self.flats.borrow_mut().clear();
+                self.nested_markdown.borrow_mut().clear();
+                self.volatile_from.set(0);
+            } else if changed || tail != self.tail {
                 self.tail = tail;
                 // Markdown block structure only ever extends the final block,
                 // so every element before it is still valid. A streamed delta
