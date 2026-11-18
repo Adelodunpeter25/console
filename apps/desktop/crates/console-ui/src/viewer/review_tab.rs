@@ -15,7 +15,9 @@ use crate::primitives::icons::{IconName, app_icon};
 use crate::primitives::{base_name, file_type_icon};
 use crate::theme::Theme;
 use crate::utils::short_parent_dir;
-use crate::viewer::diff_viewer::{DiffViewer, EditorDiff, build_editor_diff_capped_sized};
+use crate::viewer::diff_viewer::{
+    DiffViewer, EditorDiff, build_editor_diff_capped_sized, build_editor_diff_sized,
+};
 
 /// Code size and row height of a file's diff in this view.
 const REVIEW_FONT_SIZE: f32 = 11.0;
@@ -28,9 +30,10 @@ const REVIEW_ROW_HEIGHT: f32 = 34.0;
 /// so an unbounded height would render a huge diff's rows all at once.
 const REVIEW_DIFF_MAX_HEIGHT: f32 = 800.0;
 
-/// Maximum diff lines to load for a preview block. Capping keeps tree-sitter
-/// syntax highlighting and widest-line scans bounded for huge files.
-const REVIEW_DIFF_MAX_LINES: usize = 1000;
+/// Initial diff lines to load before offering a clickable "Show N more lines"
+/// toggle. Keeps tree-sitter highlighting and widest-line scans bounded on
+/// initial open for huge files without permanently truncating them.
+const REVIEW_DIFF_PREVIEW_LINES: usize = 1000;
 
 #[derive(IntoElement)]
 pub struct ReviewTab {
@@ -145,6 +148,7 @@ impl RenderOnce for ReviewTab {
                 let on_toggle_collapsed = on_toggle_collapsed.clone();
                 let on_toggle_reviewed = on_toggle_reviewed.clone();
 
+                let list_state_for_rows = list_state.clone();
                 div()
                     .id("changes-review-scroll")
                     .flex_1()
@@ -155,8 +159,10 @@ impl RenderOnce for ReviewTab {
                             let entry = &scoped[ix];
                             let is_collapsed = collapsed.contains(&entry.path);
                             render_review_entry(
+                                ix,
                                 entry,
                                 is_collapsed,
+                                Some(&list_state_for_rows),
                                 &on_toggle_collapsed,
                                 &on_toggle_reviewed,
                                 window,
@@ -172,25 +178,34 @@ impl RenderOnce for ReviewTab {
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
-                    .child(div().flex().flex_col().children(scoped.iter().map(|entry| {
-                        let is_collapsed = self.collapsed.contains(&entry.path);
-                        render_review_entry(
-                            entry,
-                            is_collapsed,
-                            &on_toggle_collapsed,
-                            &on_toggle_reviewed,
-                            window,
-                            cx,
-                        )
-                    })))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .children(scoped.iter().enumerate().map(|(ix, entry)| {
+                                let is_collapsed = self.collapsed.contains(&entry.path);
+                                render_review_entry(
+                                    ix,
+                                    entry,
+                                    is_collapsed,
+                                    None,
+                                    &on_toggle_collapsed,
+                                    &on_toggle_reviewed,
+                                    window,
+                                    cx,
+                                )
+                            })),
+                    )
                     .into_any_element()
             })
     }
 }
 
 fn render_review_entry(
+    ix: usize,
     entry: &SessionFileChange,
     is_collapsed: bool,
+    list_state: Option<&ListState>,
     on_toggle_collapsed: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_toggle_reviewed: &Rc<dyn Fn(String, u32, &mut Window, &mut App) + 'static>,
     window: &mut Window,
@@ -214,10 +229,19 @@ fn render_review_entry(
     let additions = entry.additions;
     let deletions = entry.deletions;
 
-    // One cached editor diff view per file and turn.
-    // The key carries the row's update time and diff
-    // length, so a changed diff builds a fresh view.
-    let editor_diff: Option<EditorDiff> = if is_collapsed {
+    let expanded_state = window.use_keyed_state(
+        gpui::ElementId::Name(
+            format!("review-diff-expanded-{}-{}", entry.path, entry.turn_index).into(),
+        ),
+        cx,
+        |_, _| false,
+    );
+    let is_expanded = *expanded_state.read(cx);
+
+    // One cached editor diff view per file, turn, and expansion state.
+    // The key carries the row's update time and diff length, so a changed
+    // diff builds a fresh view.
+    let diff_info: Option<(EditorDiff, usize)> = if is_collapsed {
         None
     } else {
         entry
@@ -226,24 +250,37 @@ fn render_review_entry(
             .filter(|text| !text.trim().is_empty())
             .map(|text| {
                 let key = format!(
-                    "review-diff-{}-{}-{}-{}",
+                    "review-diff-{}-{}-{}-{}-{}",
                     entry.path,
                     entry.turn_index,
                     entry.updated_at,
-                    text.len()
+                    text.len(),
+                    is_expanded
                 );
                 let state =
                     window.use_keyed_state(gpui::ElementId::Name(key.into()), cx, |_, cx| {
-                        build_editor_diff_capped_sized(
-                            text,
-                            &entry.path,
-                            &theme,
-                            REVIEW_DIFF_MAX_LINES,
-                            REVIEW_FONT_SIZE,
-                            REVIEW_LINE_HEIGHT,
-                            cx,
-                        )
-                        .0
+                        if is_expanded {
+                            let diff = build_editor_diff_sized(
+                                text,
+                                &entry.path,
+                                &theme,
+                                REVIEW_FONT_SIZE,
+                                REVIEW_LINE_HEIGHT,
+                                cx,
+                            );
+                            let total = diff.line_count;
+                            (diff, total)
+                        } else {
+                            build_editor_diff_capped_sized(
+                                text,
+                                &entry.path,
+                                &theme,
+                                REVIEW_DIFF_PREVIEW_LINES,
+                                REVIEW_FONT_SIZE,
+                                REVIEW_LINE_HEIGHT,
+                                cx,
+                            )
+                        }
                     });
                 state.read(cx).clone()
             })
@@ -411,15 +448,69 @@ fn render_review_entry(
                         ),
                 ),
         )
-        .when_some(editor_diff, |el, diff| {
-            let height = (diff.line_count as f32 * REVIEW_LINE_HEIGHT).min(REVIEW_DIFF_MAX_HEIGHT);
-            el.child(
-                div()
-                    .w_full()
-                    .h(px(height))
-                    .overflow_hidden()
-                    .child(DiffViewer::new(diff.view)),
-            )
+        .when_some(diff_info, |el, (diff, total_lines)| {
+            let raw_height = diff.line_count as f32 * REVIEW_LINE_HEIGHT + 8.0;
+            let is_vertically_scrollable = raw_height > REVIEW_DIFF_MAX_HEIGHT;
+            let height = raw_height.min(REVIEW_DIFF_MAX_HEIGHT);
+            let remaining = total_lines.saturating_sub(REVIEW_DIFF_PREVIEW_LINES);
+            let show_toggle = total_lines > REVIEW_DIFF_PREVIEW_LINES;
+            let diff_box = div()
+                .id(gpui::ElementId::Name(
+                    format!("review-diff-box-{}-{}", entry.path, entry.turn_index).into(),
+                ))
+                .w_full()
+                .h(px(height))
+                .overflow_hidden()
+                .when(is_vertically_scrollable, |box_el| {
+                    box_el.on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                })
+                .child(DiffViewer::new(diff.view));
+            el.child(diff_box).when(show_toggle, |el| {
+                let expanded_state = expanded_state.clone();
+                let list_state = list_state.cloned();
+                el.child(
+                    div()
+                        .id(gpui::ElementId::Name(
+                            format!("review-diff-more-{}-{}", entry.path, entry.turn_index).into(),
+                        ))
+                        .w_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .gap(px(4.0))
+                        .py(px(8.0))
+                        .cursor_pointer()
+                        .hover(|s| s.bg(theme.overlay))
+                        .on_click(move |_, _, cx| {
+                            expanded_state.update(cx, |expanded, cx| {
+                                *expanded = !*expanded;
+                                cx.notify();
+                            });
+                            if let Some(list_state) = &list_state {
+                                list_state.splice(ix..ix + 1, 1);
+                            }
+                        })
+                        .child(app_icon(
+                            if is_expanded {
+                                IconName::ChevronUp
+                            } else {
+                                IconName::ChevronDown
+                            },
+                            12.0,
+                            theme.text_secondary,
+                        ))
+                        .child(
+                            div()
+                                .text_size(px(12.0))
+                                .text_color(theme.text_secondary)
+                                .child(if is_expanded {
+                                    "Show less".to_string()
+                                } else {
+                                    format!("Show {remaining} more lines")
+                                }),
+                        ),
+                )
+            })
         })
         .into_any_element()
 }

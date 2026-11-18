@@ -147,6 +147,26 @@ pub fn build_editor_diff_capped_sized(
     )
 }
 
+/// [`build_editor_diff`] with its own text size and row height, without
+/// truncating lines.
+pub fn build_editor_diff_sized(
+    raw: &str,
+    path: &str,
+    theme: &Theme,
+    font_size: f32,
+    line_height: f32,
+    cx: &mut App,
+) -> EditorDiff {
+    build_from_result_sized(
+        editor_diff_result(raw),
+        path,
+        theme,
+        font_size,
+        line_height,
+        cx,
+    )
+}
+
 /// [`build_editor_diff`] for a diff that is already parsed.
 pub fn build_editor_diff_from_parsed(
     parsed: &console_core::DiffResult,
