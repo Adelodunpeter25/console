@@ -81,8 +81,7 @@ func TestDeliverWebhookWakesSessionWithPayload(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	gotSub, _ := store.Get(sub.ID)
-	if gotSub.Status != webhooks.StatusDone || gotSub.FireCount != 1 {
-		t.Fatalf("subscription after delivery = %+v", gotSub)
+	if gotSub, _ := store.Get(sub.ID); gotSub != nil {
+		t.Fatalf("once subscription should be deleted after delivery, got %+v", gotSub)
 	}
 }

@@ -91,10 +91,9 @@ session may hold multiple webhook subscriptions.
     so the UI updates immediately without reloading.
   - Show a sidebar indicator on threads with active schedules/subscriptions and
     a thread/composer status card (next run, waiting checks, pause/resume/delete).
-- **Completed row cleanup (TODO):**
-  - Currently, completed one-shot automations and `once: true` webhooks flip to
-    `status = 'done'` and remain in SQLite. Decide whether to delete them
-    immediately on completion or purge terminal (`done` / `expired`) rows on a
-    retention sweep (e.g. 7 days).
+- **Completed row cleanup:**
+  - Completed one-shot automations and `once: true` webhooks are deleted from
+    SQLite immediately after emitting their `"fired"` SSE event.
+  - Remaining TODO: purge `expired` webhook rows on a periodic retention sweep.
 - **Future schedule kinds (TODO):**
   - Add `at` schedule kind (e.g. weekdays at 8:30) if needed.

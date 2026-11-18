@@ -176,7 +176,7 @@ func consoleCatalog() []methodDef {
 			"topic":              str(true, "event topic slug, e.g. github, ci, deploy, custom"),
 			"prompt":             str(true, "prompt to run when a matching webhook arrives"),
 			"filter":             object(false, `optional JSON dot-path matchers, e.g. {"action":"completed","conclusion":["failure","timed_out"]}`),
-			"once":               boolean(false, "fire once and mark done (default true), or false to keep listening"),
+			"once":               boolean(false, "fire once and delete (default true), or false to keep listening"),
 			"expires_in_seconds": integer(false, "optional TTL in seconds before the subscription expires"),
 			"secret":             str(false, "optional shared secret / HMAC key; generated automatically when omitted"),
 		}, handler: (*Runtime).webhooksSubscribe},

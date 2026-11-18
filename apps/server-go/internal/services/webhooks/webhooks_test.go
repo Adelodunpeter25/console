@@ -63,19 +63,17 @@ func TestCreateMatchAndOnceLifecycle(t *testing.T) {
 		t.Fatalf("expected match, got %v, err=%v", matched, err)
 	}
 
-	// AfterFire marks once=true subscription done.
+	// AfterFire deletes once=true subscription.
 	if err := store.AfterFire(sub.ID, nil, now); err != nil {
 		t.Fatal(err)
 	}
-	got, err := store.Get(sub.ID)
-	if err != nil || got.Status != StatusDone || got.FireCount != 1 {
-		t.Fatalf("after fire = %+v, err=%v", got, err)
+	if got, err := store.Get(sub.ID); err != nil || got != nil {
+		t.Fatalf("after fire = %+v, err=%v, want nil", got, err)
 	}
 
-	// Done subscription no longer matches.
-	matched, err = store.Match("github", sub.ID, map[string]string{"X-Hub-Signature-256": sig}, "", body, now)
-	if err != nil || len(matched) != 0 {
-		t.Fatalf("done sub should not match, got %v, err=%v", matched, err)
+	// Deleted subscription returns ErrNotFound.
+	if _, err := store.Match("github", sub.ID, map[string]string{"X-Hub-Signature-256": sig}, "", body, now); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted sub should return ErrNotFound, got %v", err)
 	}
 }
 

@@ -178,8 +178,8 @@ func (s *Service) DeleteForSession(sessionID string) error {
 	return err
 }
 
-// AfterFire records a delivery attempt. A one-shot subscription flips to done
-// on success; a fire error marks the row error so broken sessions do not keep
+// AfterFire records a delivery attempt. A one-shot subscription is deleted on
+// success; a fire error marks the row error so broken sessions do not keep
 // failing silently.
 func (s *Service) AfterFire(id string, fireErr error, now time.Time) error {
 	if fireErr != nil {
@@ -194,10 +194,25 @@ func (s *Service) AfterFire(id string, fireErr error, now time.Time) error {
 		}
 		return err
 	}
-	_, err := s.db.Exec(
+	cur, err := s.Get(id)
+	if err != nil || cur == nil {
+		return err
+	}
+	if cur.Once {
+		if _, err := s.db.Exec(`DELETE FROM webhook_subscriptions WHERE id = ?`, id); err != nil {
+			return err
+		}
+		done := *cur
+		done.Status = StatusDone
+		done.LastFiredAt = now.Unix()
+		done.FireCount++
+		done.LastError = ""
+		s.emit(Event{Type: "fired", Subscription: &done, ID: done.ID, SessionID: done.SessionID})
+		return nil
+	}
+	_, err = s.db.Exec(
 		`UPDATE webhook_subscriptions
-		 SET status = CASE once WHEN 1 THEN 'done' ELSE status END,
-		     last_fired_at = ?,
+		 SET last_fired_at = ?,
 		     fire_count = fire_count + 1,
 		     last_error = NULL
 		 WHERE id = ?`,

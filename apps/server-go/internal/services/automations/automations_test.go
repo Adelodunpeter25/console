@@ -95,9 +95,8 @@ func TestDueAndAfterFire(t *testing.T) {
 	if err := store.AfterFire(onceID, nil, now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	done, _ := store.Get(onceID)
-	if done.Status != StatusDone {
-		t.Fatalf("one-shot should be done after firing, got %s", done.Status)
+	if done, _ := store.Get(onceID); done != nil {
+		t.Fatalf("one-shot should be deleted after firing, got %+v", done)
 	}
 	next := now.Add(time.Minute)
 	if err := store.AfterFire(intervalID, nil, next); err != nil {

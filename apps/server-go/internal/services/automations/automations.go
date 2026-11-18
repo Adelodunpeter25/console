@@ -359,9 +359,9 @@ func (s *Service) Due(now time.Time) ([]Automation, error) {
 	return scanRows(rows)
 }
 
-// AfterFire advances an interval automation to its next occurrence, or marks a
-// one-shot done. A fire error marks the row error so a broken session cannot
-// burn the scanner every tick; the agent can see and clear it.
+// AfterFire advances an interval automation to its next occurrence, or deletes
+// a completed one-shot. A fire error marks the row error so a broken session
+// cannot burn the scanner every tick; the agent can see and clear it.
 func (s *Service) AfterFire(id string, fireErr error, now time.Time) error {
 	if fireErr != nil {
 		_, err := s.db.Exec(
@@ -378,6 +378,17 @@ func (s *Service) AfterFire(id string, fireErr error, now time.Time) error {
 	if err != nil || cur == nil {
 		return err
 	}
+	if cur.Kind == KindOnce {
+		if _, err := s.db.Exec(`DELETE FROM automations WHERE id = ?`, id); err != nil {
+			return err
+		}
+		done := *cur
+		done.Status = StatusDone
+		done.LastFiredAt = now.Unix()
+		done.LastError = ""
+		s.emit(Event{Type: "fired", Automation: &done, ID: done.ID, SessionID: done.SessionID})
+		return nil
+	}
 	next := cur.NextRunAt
 	if cur.Kind == KindInterval && cur.IntervalSeconds > 0 {
 		if now.Unix() < cur.NextRunAt {
@@ -390,11 +401,7 @@ func (s *Service) AfterFire(id string, fireErr error, now time.Time) error {
 		}
 	}
 	_, err = s.db.Exec(
-		`UPDATE automations SET status = CASE kind WHEN 'once' THEN 'done' ELSE status END,
-		 	last_fired_at = ?,
-			next_run_at = CASE kind WHEN 'interval' THEN ? ELSE next_run_at END,
-			last_error = NULL
-		 WHERE id = ?`,
+		`UPDATE automations SET last_fired_at = ?, next_run_at = ?, last_error = NULL WHERE id = ?`,
 		now.Unix(), next, id)
 	if err == nil {
 		if updated, gerr := s.Get(id); gerr == nil && updated != nil {
