@@ -926,6 +926,7 @@ impl ConsoleDesktopApp {
         {
             self.sync_comment_selections(pane_id, path, cx);
         }
+        let target_session = self.comment_target_session_key(pane_id);
         let entity = cx.entity().downgrade();
         let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
             return Vec::new();
@@ -945,7 +946,6 @@ impl ConsoleDesktopApp {
             let id = comment.id;
             let start_line = comment.start_line;
             let end_line = comment.end_line;
-            let target_session = self.comment_target_session_key(pane_id);
             let staged = comment.is_staged_for(&target_session);
             let card_state = match comment.state {
                 FileCommentState::Draft => FileCommentCardState::Draft,
@@ -1031,6 +1031,7 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         self.ensure_file_comments_loaded(pane_id, cx);
+        let target_session = self.comment_target_session_key(pane_id);
         let entity = cx.entity().downgrade();
         let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
             return;
@@ -1061,7 +1062,6 @@ impl ConsoleDesktopApp {
 
             let id = comment.id;
             let state = comment.state;
-            let target_session = self.comment_target_session_key(pane_id);
             let staged = comment.is_staged_for(&target_session);
             let text = comment.text.clone();
             let input = comment.input.clone();
