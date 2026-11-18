@@ -36,6 +36,18 @@ fn strips_lines() {
 }
 
 #[test]
+fn strips_line_suffix_at_char_boundary() {
+    // `end` is a byte offset; when the char before `:line` is multi-byte the
+    // naive slice lands inside it (regression: launch crash on unicode links).
+    assert_eq!(strip_line_suffix("a…:12"), "a…");
+    assert_eq!(strip_line_suffix("…/x.ts:4:2"), "…/x.ts");
+    assert_eq!(parse_line_suffix("a…:12"), Some(12));
+    // Trailing non-digit text is not a line suffix at all.
+    assert_eq!(strip_line_suffix("a/b.ts:12…"), "a/b.ts:12…");
+    assert_eq!(parse_line_suffix("a/b.ts:12…"), None);
+}
+
+#[test]
 fn parses_line_suffixes() {
     assert_eq!(parse_line_suffix("a/b.ts:12:3"), Some(12));
     assert_eq!(parse_line_suffix("a/b.ts:42"), Some(42));

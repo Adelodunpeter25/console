@@ -87,6 +87,11 @@ pub fn strip_line_suffix(link: &str) -> &str {
         if j < end && j > 0 && bytes[j - 1] == b':' && j != end {
             end = j - 1;
         }
+        // `end` is a byte offset into possibly non-ASCII text (a truncated
+        // URL can end `…:12…`); snap back to a char boundary before slicing.
+        while !link.is_char_boundary(end) {
+            end -= 1;
+        }
         link[..end].trim_end()
     } else {
         link.trim_end()
