@@ -804,6 +804,16 @@ impl ConsoleDesktopApp {
                 }
             })
         };
+        let entity_browser = entity.clone();
+        let on_open_browser: Rc<dyn Fn(String, &mut Window, &mut App)> =
+            Rc::new(move |path, _w, cx| {
+                if let Some(app) = entity_browser.upgrade() {
+                    app.update(cx, |this, cx| {
+                        let target_pane = this.target_subtab_pane_id();
+                        this.open_html_in_browser_tab(&target_pane, path, cx);
+                    });
+                }
+            });
         let on_select_file: Rc<dyn Fn(String, &mut Window, &mut App)> =
             Rc::new(move |path, _w, cx| {
                 if let Some(app) = entity.upgrade() {
@@ -824,6 +834,7 @@ impl ConsoleDesktopApp {
                     self.git_badges.clone(),
                     on_select_file,
                 )
+                .on_open_browser(Some(on_open_browser))
                 .track_scroll(scroll_handle),
             )
             .into_any_element()

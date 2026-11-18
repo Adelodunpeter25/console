@@ -65,6 +65,7 @@ pub struct FileTreeView {
     on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     git_badges: Rc<HashMap<String, GitBadge>>,
     on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_open_browser: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     scroll_handle: Option<ScrollHandle>,
 }
 
@@ -86,8 +87,17 @@ impl FileTreeView {
             on_toggle_folder,
             git_badges,
             on_select_file,
+            on_open_browser: None,
             scroll_handle: None,
         }
+    }
+
+    pub fn on_open_browser(
+        mut self,
+        handler: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    ) -> Self {
+        self.on_open_browser = handler;
+        self
     }
 
     pub fn track_scroll(mut self, scroll_handle: ScrollHandle) -> Self {
@@ -102,9 +112,12 @@ impl FileTreeView {
         selected_path: &Option<String>,
         on_toggle_folder: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_select_file: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+        on_open_browser: &Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
         theme: &Theme,
         search_query: &str,
         git_badges: &HashMap<String, GitBadge>,
+        window: &mut Window,
+        cx: &mut App,
     ) -> Vec<gpui::AnyElement> {
         let mut elements = Vec::new();
         let query_lower = search_query.to_lowercase();
@@ -122,7 +135,9 @@ impl FileTreeView {
             let on_select = on_select_file.clone();
             let node_path = path.clone();
             let is_dir = node.is_dir;
+            let click_path = path.clone();
 
+            let on_select_click = on_select.clone();
             let row =
                 div()
                     .id(format!("file-tree-item-{}", path))
@@ -138,9 +153,9 @@ impl FileTreeView {
                     .when(is_selected, |s| s.bg(theme.overlay_strong))
                     .on_click(move |_, window, cx| {
                         if is_dir {
-                            (on_toggle)(node_path.clone(), window, cx);
+                            (on_toggle)(click_path.clone(), window, cx);
                         } else {
-                            (on_select)(node_path.clone(), window, cx);
+                            (on_select_click)(click_path.clone(), window, cx);
                         }
                     })
                     .child(
@@ -203,7 +218,39 @@ impl FileTreeView {
                         )
                     });
 
-            elements.push(row.into_any_element());
+            let is_html = !is_dir
+                && std::path::Path::new(&node_path)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|ext| {
+                        ext.eq_ignore_ascii_case("html") || ext.eq_ignore_ascii_case("htm")
+                    });
+            let element: gpui::AnyElement = if is_html {
+                let p_browser = node_path.clone();
+                let p_editor = node_path.clone();
+                let on_browser = on_open_browser.clone();
+                let on_editor_for_browser = on_select.clone();
+                let on_editor_direct = on_select.clone();
+                crate::primitives::html_file_context_menu(
+                    row,
+                    format!("html-tree-item-{}", path),
+                    window,
+                    cx,
+                    move |w, cx| {
+                        if let Some(h) = &on_browser {
+                            h(p_browser.clone(), w, cx);
+                        } else {
+                            on_editor_for_browser(p_browser.clone(), w, cx);
+                        }
+                    },
+                    move |w, cx| {
+                        on_editor_direct(p_editor.clone(), w, cx);
+                    },
+                )
+            } else {
+                row.into_any_element()
+            };
+            elements.push(element);
         }
 
         if node.is_dir && (is_expanded || !search_query.is_empty()) {
@@ -215,9 +262,12 @@ impl FileTreeView {
                     selected_path,
                     on_toggle_folder,
                     on_select_file,
+                    on_open_browser,
                     theme,
                     search_query,
                     git_badges,
+                    window,
+                    cx,
                 );
                 elements.append(&mut child_els);
             }
@@ -312,9 +362,12 @@ impl RenderOnce for FileTreeView {
                 &self.selected_path,
                 &self.on_toggle_folder,
                 &self.on_select_file,
+                &self.on_open_browser,
                 &theme,
                 &self.search_query,
                 &self.git_badges,
+                _window,
+                cx,
             );
             children.append(&mut els);
         }

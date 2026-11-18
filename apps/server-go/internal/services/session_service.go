@@ -25,6 +25,13 @@ func NewSessionService(manager *db.DB) *SessionService {
 	return &SessionService{inner: session.New(manager), wt: gitsvc.NewWorktreeService()}
 }
 
+func (s *SessionService) StorageDir() string {
+	if s != nil && s.inner != nil {
+		return s.inner.StorageDir()
+	}
+	return utils.ConsoleStorageDir()
+}
+
 // ErrWorktreeScratchpad rejects a worktree spec on a scratchpad session:
 // scratchpads own a sandboxed dir, not a repo checkout.
 var ErrWorktreeScratchpad = errors.New("worktree requires a project directory, not a scratchpad session")

@@ -710,7 +710,7 @@ impl ConsoleDesktopApp {
             file_saves_pending: std::collections::HashSet::new(),
             file_closes_awaiting_save: std::collections::HashMap::new(),
             pending_file_line: std::collections::HashMap::new(),
-            pending_html_open: None,
+
             file_comment_tx,
             viewer_diff_views: std::collections::HashMap::new(),
             viewer_cached_markdown_views: std::collections::HashMap::new(),

@@ -142,7 +142,7 @@ func resolveWorkspacePath(cwd, p string) string {
 func writeScratchPage(opts Options, html string) (string, error) {
 	dir := opts.ScratchDir
 	if dir == "" {
-		dir = filepath.Join(opts.Cwd, ".console", "renders")
+		dir = filepath.Join(os.TempDir(), "console-renders")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err

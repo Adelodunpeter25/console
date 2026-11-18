@@ -33,7 +33,9 @@ impl ConsoleDesktopApp {
         let direct_exists = std::path::Path::new(&resolved).is_file();
         if !links::is_bare_file_name(&link) || direct_exists {
             let target_pane = self.target_subtab_pane_id();
-            if let Some(line) = line {
+            if is_html_path(&resolved) {
+                self.open_html_in_browser_tab(&target_pane, resolved, cx);
+            } else if let Some(line) = line {
                 self.open_file_tab_at_line(&target_pane, resolved, line, None, cx);
             } else {
                 self.open_file_tab_in_pane(&target_pane, resolved, cx);
@@ -69,7 +71,9 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         let target_pane = this.target_subtab_pane_id();
-                        if let Some(line) = line {
+                        if is_html_path(&chosen) {
+                            this.open_html_in_browser_tab(&target_pane, chosen, cx);
+                        } else if let Some(line) = line {
                             this.open_file_tab_at_line(&target_pane, chosen, line, None, cx);
                         } else {
                             this.open_file_tab_in_pane(&target_pane, chosen, cx);
@@ -110,11 +114,6 @@ impl ConsoleDesktopApp {
     }
 
     pub fn open_file_tab_in_pane(&mut self, pane_id: &str, path: String, cx: &mut Context<Self>) {
-        if is_html_path(&path) {
-            self.pending_html_open = Some((pane_id.to_string(), path));
-            cx.notify();
-            return;
-        }
         self.open_file_tab_in_pane_force_editor(pane_id, path, cx);
     }
 

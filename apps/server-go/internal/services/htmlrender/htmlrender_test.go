@@ -47,7 +47,7 @@ func TestInjectBootstrapSkipsScriptLiterals(t *testing.T) {
 
 func TestRenderToolInlineAndPath(t *testing.T) {
 	dir := t.TempDir()
-	tool := NewRenderTool(Options{Cwd: dir})
+	tool := NewRenderTool(Options{Cwd: dir, ScratchDir: filepath.Join(dir, "scratch")})
 
 	// Inline HTML writes scratch file and returns HtmlArtifact.
 	args, _ := json.Marshal(map[string]any{

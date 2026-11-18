@@ -236,7 +236,6 @@ impl RenderOnce for HtmlCard {
         let on_open_editor = self.on_open_editor.clone();
         let on_open_browser = self.on_open_browser.clone();
         let url_for_tab = url.clone();
-        let url_for_ext = url.clone();
 
         let header = div()
             .w_full()
@@ -338,23 +337,6 @@ impl RenderOnce for HtmlCard {
                                 .child("Browser tab")
                                 .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                                     handler(u.clone(), window, cx);
-                                }),
-                        )
-                    })
-                    .when_some(url_for_ext, |el, u| {
-                        el.child(
-                            div()
-                                .id(ElementId::Name(format!("html-ext-{}", self.row).into()))
-                                .px(px(8.0))
-                                .py(px(4.0))
-                                .rounded(px(6.0))
-                                .hover(|s| s.bg(theme.overlay))
-                                .cursor_pointer()
-                                .text_size(px(11.5))
-                                .text_color(theme.text_secondary)
-                                .child("External")
-                                .on_mouse_down(MouseButton::Left, move |_, _window, cx| {
-                                    cx.open_url(&u);
                                 }),
                         )
                     }),

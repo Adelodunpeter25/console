@@ -173,6 +173,16 @@ func SessionImagesDir(storageDir, projectID, sessionID string) string {
 	return filepath.Join(storageDir, "projects", "scratch", "sessions", sessionID+".images")
 }
 
+// SessionRendersDir is the folder holding one session's rendered HTML pages,
+// beside its database, keeping user workspaces clean while sharing the
+// session's lifecycle.
+func SessionRendersDir(storageDir, projectID, sessionID string) string {
+	if projectID != "" {
+		return filepath.Join(ProjectSessionsDir(storageDir, projectID), sessionID+".renders")
+	}
+	return filepath.Join(storageDir, "projects", "scratch", "sessions", sessionID+".renders")
+}
+
 func ScratchSessionDBPath(storageDir, sessionID string) string {
 	return filepath.Join(storageDir, "projects", "scratch", "sessions", sessionID+".db")
 }

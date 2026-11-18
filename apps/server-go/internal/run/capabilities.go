@@ -16,6 +16,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/htmlrender"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 // Capability is one built-in capability.
@@ -92,8 +93,13 @@ var Capabilities = []Capability{
 		AlwaysLoaded:   true,
 		Tier:           tools.TierRead,
 		GatedTools:     []string{"render", "preview"},
-		Load: func(_ *Service, c *loadContext, registry *tools.Registry) error {
-			_, err := htmlrender.NewLoader(htmlrender.Options{Cwd: c.cwd}, c.browserHandler).Load(registry)
+		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
+			storageDir := ""
+			if s != nil && s.sessions != nil {
+				storageDir = s.sessions.StorageDir()
+			}
+			scratchDir := utils.SessionRendersDir(storageDir, c.projectID, c.sessionID)
+			_, err := htmlrender.NewLoader(htmlrender.Options{Cwd: c.cwd, ScratchDir: scratchDir}, c.browserHandler).Load(registry)
 			return err
 		},
 	},

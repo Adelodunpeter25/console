@@ -16,6 +16,20 @@ pub fn is_http_url(link: &str) -> bool {
     starts("http://") || starts("https://")
 }
 
+/// True when `link` targets an HTML file (`.html` or `.htm`).
+pub fn is_html_link(link: &str) -> bool {
+    let path = strip_line_suffix(link.trim());
+    let file = path.rsplit('/').next().unwrap_or(path);
+    let file = file.rsplit('\\').next().unwrap_or(file);
+    match file.rfind('.') {
+        Some(dot) if dot + 1 < file.len() => {
+            let ext = &file[dot + 1..];
+            ext.eq_ignore_ascii_case("html") || ext.eq_ignore_ascii_case("htm")
+        }
+        _ => false,
+    }
+}
+
 /// Extensionless file names common enough to treat as files when they stand
 /// alone in backticks (`Makefile`, `LICENSE`).
 const KNOWN_BARE_NAMES: &[&str] = &[

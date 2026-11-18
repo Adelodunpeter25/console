@@ -103,13 +103,16 @@ func (s *Service) PermanentDelete(sessionID string) (bool, error) {
 		if project != "" {
 			removeDbFile(utils.SessionDBPath(storageDir, project, sessionID))
 			_ = os.RemoveAll(utils.SessionImagesDir(storageDir, project, sessionID))
+			_ = os.RemoveAll(utils.SessionRendersDir(storageDir, project, sessionID))
 		} else if found := findSessionDbFile(storageDir, sessionID); found != "" {
 			removeDbFile(found)
-			// The images folder sits beside whichever database was found, which
-			// may belong to a different project than the index says.
-			_ = os.RemoveAll(strings.TrimSuffix(found, ".db") + ".images")
+			// The images and renders folders sit beside whichever database was found.
+			prefix := strings.TrimSuffix(found, ".db")
+			_ = os.RemoveAll(prefix + ".images")
+			_ = os.RemoveAll(prefix + ".renders")
 		} else {
 			_ = os.RemoveAll(utils.SessionImagesDir(storageDir, "", sessionID))
+			_ = os.RemoveAll(utils.SessionRendersDir(storageDir, "", sessionID))
 		}
 		// Cleanup scratch working directory for scratchpad sessions.
 		// Safety: only delete under the scratch root.
@@ -343,6 +346,9 @@ func (s *Service) UpdateCwd(sessionID, cwd string, newProjectID *string, project
 			relocateImagesDir(
 				utils.SessionImagesDir(storageDir, oldProjectID, sessionID),
 				utils.SessionImagesDir(storageDir, target, sessionID))
+			relocateImagesDir(
+				utils.SessionRendersDir(storageDir, oldProjectID, sessionID),
+				utils.SessionRendersDir(storageDir, target, sessionID))
 		}
 	}
 	return nil

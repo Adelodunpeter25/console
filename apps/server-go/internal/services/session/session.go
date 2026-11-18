@@ -47,6 +47,14 @@ func New(manager *db.DB) *Service {
 	return &Service{manager: manager}
 }
 
+// StorageDir returns the root storage directory for this session service.
+func (s *Service) StorageDir() string {
+	if s.manager != nil {
+		return s.manager.StorageDir()
+	}
+	return utils.ConsoleStorageDir()
+}
+
 // SetBusyCheck wires the run-in-flight probe used by Settle. Called once at
 // startup, after the run service exists; nil (tests) means never busy.
 func (s *Service) SetBusyCheck(fn func(id string) bool) {
