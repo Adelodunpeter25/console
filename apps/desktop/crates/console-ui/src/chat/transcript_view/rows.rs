@@ -33,6 +33,35 @@ impl TranscriptView {
         }
     }
 
+    /// Remeasure the row that owns the active run block (the latest wake
+    /// boundary if one follows the latest user message, otherwise the user row).
+    pub(super) fn remeasure_active_run_owner(&self) {
+        let Some(user_index) = self
+            .messages
+            .iter()
+            .rposition(|message| matches!(message, AgentMessage::User { .. }))
+        else {
+            return;
+        };
+        let latest_run_boundary = self
+            .messages
+            .iter()
+            .rposition(|message| matches!(message, AgentMessage::RunBoundary { .. }))
+            .filter(|&idx| idx > user_index);
+        let latest_wake_boundary = self
+            .wake_boundaries
+            .iter()
+            .map(|(idx, _, _)| *idx)
+            .filter(|&idx| idx > user_index)
+            .max();
+        let owner = latest_run_boundary
+            .into_iter()
+            .chain(latest_wake_boundary)
+            .max()
+            .unwrap_or(user_index);
+        self.remeasure_message(owner);
+    }
+
     pub(super) fn invalidate_activity_cache(&self) {
         self.tool_activity_cache_version
             .set(self.tool_activity_cache_version.get().wrapping_add(1));
@@ -58,22 +87,38 @@ impl TranscriptView {
     /// "Working…" indicator — a row like in Waku, so it sits directly below
     /// whatever has streamed in instead of floating at the bottom edge.
     pub(super) fn row_count(&self) -> usize {
-        // Cheap check: does the last user run contain any tool call?
-        // Avoid building full ActivityEvent vector just to test existence.
+        // Cheap check: does the active segment (after the latest user message
+        // or wake boundary) contain any tool call?
         let has_active_tool_activity = self
             .messages
             .iter()
             .rposition(|message| matches!(message, AgentMessage::User { .. }))
             .is_some_and(|user_index| {
+                let latest_run_boundary = self
+                    .messages
+                    .iter()
+                    .rposition(|message| matches!(message, AgentMessage::RunBoundary { .. }))
+                    .filter(|&idx| idx > user_index)
+                    .map(|idx| idx + 1);
+                let latest_wake_boundary = self
+                    .wake_boundaries
+                    .iter()
+                    .map(|(idx, _, _)| *idx)
+                    .filter(|&idx| idx > user_index)
+                    .max();
+                let segment_start = (user_index + 1)
+                    .max(latest_run_boundary.unwrap_or(0))
+                    .max(latest_wake_boundary.unwrap_or(0));
                 self.messages
                     .iter()
-                    .skip(user_index + 1)
+                    .skip(segment_start)
                     .any(|message| match message {
                         AgentMessage::Assistant { content, .. } => content
                             .iter()
                             .any(|part| matches!(part, AssistantContentPart::ToolCall { .. })),
-                        AgentMessage::User { .. } | AgentMessage::RunBoundary { .. } => false,
-                        AgentMessage::ToolResult { .. } => false,
+                        AgentMessage::User { .. }
+                        | AgentMessage::RunBoundary { .. }
+                        | AgentMessage::ToolResult { .. } => false,
                     })
             });
         self.messages.len() + usize::from(self.is_streaming && !has_active_tool_activity)

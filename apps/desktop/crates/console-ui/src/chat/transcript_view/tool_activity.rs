@@ -12,6 +12,9 @@ pub struct RunActivityBlock {
     pub working: bool,
     /// Divider label shown before this block; `None` for the first segment.
     pub divider_label: Option<String>,
+    /// Message index of the wake boundary that opened this block, or `None`
+    /// for the initial user segment.
+    pub boundary_index: Option<usize>,
     /// Stable id for `ToolCallsState` disclosure (`run-{user}-wake-{n}`).
     pub run_id: String,
 }
@@ -35,6 +38,25 @@ pub fn compute_run_blocks(
     is_streaming: bool,
     streaming_started_at: Option<i64>,
 ) -> Option<Vec<RunActivityBlock>> {
+    compute_run_blocks_with_boundaries(
+        messages,
+        user_index,
+        is_streaming,
+        streaming_started_at,
+        &[],
+    )
+}
+
+/// Like [`compute_run_blocks`], also splitting at reconstructed
+/// `wake_boundaries` (used after history reloads where `RunBoundary`
+/// markers are not present in `messages`).
+pub fn compute_run_blocks_with_boundaries(
+    messages: &[AgentMessage],
+    user_index: usize,
+    is_streaming: bool,
+    streaming_started_at: Option<i64>,
+    wake_boundaries: &[(usize, String, Option<i64>)],
+) -> Option<Vec<RunActivityBlock>> {
     let mut segments: Vec<Segment> = vec![Segment {
         events: Vec::new(),
         results: HashMap::new(),
@@ -54,6 +76,17 @@ pub fn compute_run_blocks(
                 boundary: Some((index, label.clone(), *at)),
             });
             continue;
+        }
+        if let Some((_, label, at)) = wake_boundaries
+            .iter()
+            .find(|(boundary_index, _, _)| *boundary_index == index)
+        {
+            segments.push(Segment {
+                events: Vec::new(),
+                results: HashMap::new(),
+                ended_at: None,
+                boundary: Some((index, label.clone(), *at)),
+            });
         }
         let segment = segments.last_mut().expect("segments never empty");
         match message {
@@ -78,10 +111,7 @@ pub fn compute_run_blocks(
                     match part {
                         AssistantContentPart::Thinking { text } if !text.trim().is_empty() => {
                             segment.events.push(ActivityEvent::Thinking {
-                                id: format!(
-                                    "run-thinking-{user_index}-{}",
-                                    segment.events.len()
-                                ),
+                                id: format!("run-thinking-{user_index}-{}", segment.events.len()),
                                 text: text.clone(),
                             });
                         }
@@ -92,12 +122,12 @@ pub fn compute_run_blocks(
                             });
                         }
                         AssistantContentPart::ToolCall { call } => {
-                            segment.events.push(ActivityEvent::ToolCall(Box::new(
-                                ToolCallEntry {
+                            segment
+                                .events
+                                .push(ActivityEvent::ToolCall(Box::new(ToolCallEntry {
                                     call: call.clone(),
                                     result: None,
-                                },
-                            )));
+                                })));
                         }
                         _ => {}
                     }
@@ -111,7 +141,9 @@ pub fn compute_run_blocks(
                     .ended_at
                     .max(created_at.and_then(crate::utils::time::normalize_unix_timestamp));
                 for result in message_results {
-                    segment.results.insert(result.tool_call_id.clone(), result.clone());
+                    segment
+                        .results
+                        .insert(result.tool_call_id.clone(), result.clone());
                 }
             }
             AgentMessage::User { .. } | AgentMessage::RunBoundary { .. } => {}
@@ -130,10 +162,7 @@ pub fn compute_run_blocks(
     // A trailing RunBoundary means the wake turn has produced no output yet;
     // nothing inside a block may claim "working" — the transcript's trailing
     // WorkingIndicator row covers that state.
-    let last_is_boundary = matches!(
-        messages.last(),
-        Some(AgentMessage::RunBoundary { .. })
-    );
+    let last_is_boundary = matches!(messages.last(), Some(AgentMessage::RunBoundary { .. }));
     let any_working = is_streaming && latest_user == Some(user_index) && !last_is_boundary;
 
     // Only segments containing tool calls emit a block; `working` belongs to
@@ -147,7 +176,7 @@ pub fn compute_run_blocks(
                 .any(|event| matches!(event, ActivityEvent::ToolCall(_)))
         })
         .collect();
-    let last_emit = emit.iter().rposition(|&e| e);
+    let segment_count = segments.len();
 
     let mut blocks = Vec::new();
     for (segment_index, mut segment) in segments.into_iter().enumerate() {
@@ -166,20 +195,22 @@ pub fn compute_run_blocks(
             })
             .collect();
 
-        let (divider_label, boundary_at) = match &segment.boundary {
-            Some((_, label, at)) => (Some(label.clone()), *at),
-            None => (None, None),
+        let (divider_label, boundary_index, boundary_at) = match &segment.boundary {
+            Some((idx, label, at)) => (Some(label.clone()), Some(*idx), *at),
+            None => (None, None, None),
         };
+        let working = any_working && segment_index + 1 == segment_count;
         let started_at = if segment_index == 0 {
-            if any_working {
+            if working {
                 streaming_started_at.or(user_started_at)
             } else {
                 user_started_at
             }
+        } else if working {
+            boundary_at.or(streaming_started_at).or(user_started_at)
         } else {
             boundary_at.or(user_started_at)
         };
-        let working = any_working && last_emit == Some(segment_index);
         let elapsed = crate::chat::toolcalls::elapsed_seconds(started_at, segment.ended_at);
         blocks.push(RunActivityBlock {
             events: segment.events,
@@ -187,6 +218,7 @@ pub fn compute_run_blocks(
             elapsed,
             working,
             divider_label,
+            boundary_index,
             run_id: if segment_index == 0 {
                 format!("run-{user_index}")
             } else {
@@ -207,21 +239,19 @@ impl TranscriptView {
     /// block within the same user message. Thinking/text between tool calls
     /// stay in the timeline, and segments without tool calls produce no
     /// block.
-    pub fn tool_activity_for_user(
-        &self,
-        user_index: usize,
-    ) -> Option<Vec<RunActivityBlock>> {
+    pub fn tool_activity_for_user(&self, user_index: usize) -> Option<Vec<RunActivityBlock>> {
         let version = self.tool_activity_cache_version.get();
         if let Some((cached_version, cached)) = self.tool_activity_cache.borrow().get(&user_index)
             && *cached_version == version
         {
             return cached.clone();
         }
-        let computed = compute_run_blocks(
+        let computed = compute_run_blocks_with_boundaries(
             &self.messages,
             user_index,
             self.is_streaming,
             self.streaming_started_at,
+            &self.wake_boundaries,
         );
         self.tool_activity_cache
             .borrow_mut()

@@ -26,6 +26,7 @@ impl TranscriptView {
         self.streaming_started_at = None;
         self.invalidate_latest_activity_cache();
         self.refresh_list();
+        self.remeasure_active_run_owner();
         cx.notify();
     }
 
@@ -180,6 +181,7 @@ impl TranscriptView {
         if let Some(message_index) = self.messages.len().checked_sub(1) {
             self.remeasure_message(message_index);
         }
+        self.remeasure_active_run_owner();
         cx.notify();
     }
 
@@ -220,6 +222,7 @@ impl TranscriptView {
         if let Some(message_index) = self.messages.len().checked_sub(1) {
             self.remeasure_message(message_index);
         }
+        self.remeasure_active_run_owner();
         cx.notify();
     }
 
@@ -248,6 +251,7 @@ impl TranscriptView {
         self.content_revisions.push(0);
         self.invalidate_latest_activity_cache();
         self.refresh_list();
+        self.remeasure_active_run_owner();
         cx.notify();
     }
 }

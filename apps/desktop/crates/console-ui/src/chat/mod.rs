@@ -16,16 +16,16 @@ pub mod working_indicator;
 
 pub use change_chips::ChangesSummary;
 pub use console_core::{ActivityEvent, ToolCallEntry};
-pub use interaction_card::QuestionInteractionCard;
 pub use image::{
     ChatImage, ImagePreviewHandler, set_workspace_image_client, set_workspace_image_preview,
     workspace_chat_image,
 };
+pub use interaction_card::QuestionInteractionCard;
 pub use message_bubble::{AssistantMessageBubble, UserMessageBubble};
 pub use thinking_block::ThinkingBlock;
 pub use toolcalls::{ToolCalls, ToolCallsAction, ToolCallsState};
 pub use transcript_view::{
     RunActivityBlock, TranscriptScrollAnchor, TranscriptView, anchor_row, compute_run_blocks,
-    message_id_at, resolve_anchor_row, row_for_message_id,
+    compute_run_blocks_with_boundaries, message_id_at, resolve_anchor_row, row_for_message_id,
 };
 pub use working_indicator::WorkingIndicator;

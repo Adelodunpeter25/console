@@ -32,7 +32,7 @@ mod scroll;
 mod selection;
 mod streaming;
 mod tool_activity;
-pub use tool_activity::{RunActivityBlock, compute_run_blocks};
+pub use tool_activity::{RunActivityBlock, compute_run_blocks, compute_run_blocks_with_boundaries};
 mod wake;
 
 type MarkdownViewCache = Rc<RefCell<HashMap<(usize, usize), Rc<RefCell<MarkdownView>>>>>;
@@ -168,7 +168,7 @@ pub struct TranscriptView {
     /// Cache for run activity derived from messages. Keyed by user_index,
     /// invalidated when messages or streaming state changes.
     tool_activity_cache:
-        RefCell<HashMap<usize, (u64, Option<Vec<tool_activity::RunActivityBlock>>) >>,
+        RefCell<HashMap<usize, (u64, Option<Vec<tool_activity::RunActivityBlock>>)>>,
     tool_activity_cache_version: std::cell::Cell<u64>,
     /// Recorded wake turns for this session (`backgroundWorkContinue`
     /// frames). Used to rebuild `wake_boundaries` after history reloads.

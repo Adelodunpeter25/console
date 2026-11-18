@@ -1,6 +1,6 @@
 use super::*;
-use console_core::WakeRecord;
 use crate::utils::time::normalize_unix_timestamp;
+use console_core::WakeRecord;
 
 /// Slack subtracted from a wake record's receipt time when matching the
 /// first persisted wake-turn message. The frame arrives before the turn's
@@ -13,11 +13,7 @@ impl TranscriptView {
     /// Store this session's recorded wake turns. Call before `set_messages`
     /// so history loads can rebuild run boundaries; live wakes append via
     /// `push_run_boundary` instead.
-    pub fn set_wake_records(
-        &mut self,
-        records: Vec<WakeRecord>,
-        _cx: &mut Context<Self>,
-    ) {
+    pub fn set_wake_records(&mut self, records: Vec<WakeRecord>, _cx: &mut Context<Self>) {
         self.wake_records = records;
     }
 
@@ -68,14 +64,21 @@ impl TranscriptView {
                 }
             }
             if let Some(index) = matched {
-                let at = message_created_at(&self.messages[index])
-                    .and_then(normalize_unix_timestamp);
+                let at =
+                    message_created_at(&self.messages[index]).and_then(normalize_unix_timestamp);
                 self.wake_boundaries
                     .push((index, record.message.clone(), at));
-                search_from = index;
+                search_from = index + 1;
             }
         }
         self.wake_boundaries.sort_by_key(|b| b.0);
+    }
+
+    pub(crate) fn wake_boundary_at(&self, index: usize) -> Option<&str> {
+        self.wake_boundaries
+            .iter()
+            .find(|(boundary_index, _, _)| *boundary_index == index)
+            .map(|(_, label, _)| label.as_str())
     }
 }
 

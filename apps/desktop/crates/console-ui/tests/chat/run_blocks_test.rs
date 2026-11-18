@@ -3,9 +3,12 @@
 //! under the same user message, with its own timer and divider label, instead
 //! of merging into the previous turn's activity.
 
+use console_core::types::SessionFileChange;
 use console_core::types::agent::{AgentMessage, AssistantContentPart, ToolCall};
 use console_core::{ActivityEvent, ToolResult};
-use console_ui::chat::compute_run_blocks;
+use console_ui::chat::row::is_hidden_tool_transport;
+use console_ui::chat::turn_changes::{group_turn_changes, turn_changes_for_assistant};
+use console_ui::chat::{compute_run_blocks, compute_run_blocks_with_boundaries};
 
 fn user(created_at: Option<i64>) -> AgentMessage {
     AgentMessage::User {
@@ -73,12 +76,14 @@ fn wake_turn_produces_second_block() {
     assert_eq!(blocks.len(), 2);
     assert_eq!(blocks[0].run_id, "run-0");
     assert_eq!(blocks[0].divider_label, None);
+    assert_eq!(blocks[0].boundary_index, None);
     assert_eq!(blocks[0].started_at, Some(100));
     assert_eq!(blocks[1].run_id, "run-0-wake-1");
     assert_eq!(
         blocks[1].divider_label.as_deref(),
         Some("Bash tool completed, continuing agent")
     );
+    assert_eq!(blocks[1].boundary_index, Some(3));
     // The wake segment's timer seeds from the boundary, not the prompt.
     assert_eq!(blocks[1].started_at, Some(200));
 }
@@ -185,4 +190,93 @@ fn tool_results_stay_in_their_own_segment() {
     // result map and cannot attach to the first segment's call.
     assert!(!result_of(&blocks[0], "c1"));
     assert!(result_of(&blocks[1], "c2"));
+}
+
+fn assistant_text(created_at: i64, text: &str) -> AgentMessage {
+    AgentMessage::Assistant {
+        id: None,
+        content: vec![AssistantContentPart::Text {
+            text: text.to_string(),
+            thought_signature: None,
+        }],
+        stop_reason: None,
+        created_at: Some(created_at),
+        tok_per_sec: None,
+    }
+}
+
+#[test]
+fn reconstructed_wake_boundaries_split_reloaded_history() {
+    let messages = vec![
+        user(Some(100)),
+        assistant_with_tool(110, "c1"),
+        tool_result("c1", 120),
+        assistant_text(130, "Waiting for background check."),
+        assistant_with_tool(210, "c2"),
+        tool_result("c2", 220),
+        assistant_text(230, "All done."),
+    ];
+    let boundaries = vec![(
+        4,
+        "Background work completed, continuing agent".to_string(),
+        Some(210),
+    )];
+    let blocks =
+        compute_run_blocks_with_boundaries(&messages, 0, false, None, &boundaries).expect("blocks");
+    assert_eq!(blocks.len(), 2);
+    assert_eq!(blocks[0].boundary_index, None);
+    assert_eq!(blocks[0].divider_label, None);
+    assert_eq!(blocks[1].boundary_index, Some(4));
+    assert_eq!(
+        blocks[1].divider_label.as_deref(),
+        Some("Background work completed, continuing agent")
+    );
+    assert_eq!(blocks[1].started_at, Some(210));
+}
+
+#[test]
+fn streaming_wake_text_does_not_reopen_previous_block() {
+    let messages = vec![
+        user(Some(100)),
+        assistant_with_tool(110, "c1"),
+        tool_result("c1", 120),
+        assistant_text(130, "Waiting for background check."),
+        boundary("Background work completed, continuing agent", 200),
+        assistant_text(210, "Checking results..."),
+    ];
+    let blocks = compute_run_blocks(&messages, 0, true, Some(200)).expect("blocks");
+    assert_eq!(blocks.len(), 1);
+    assert!(!blocks[0].working);
+}
+
+#[test]
+fn turn_changes_attach_only_to_final_assistant_across_wake_boundary() {
+    let messages = vec![
+        user(Some(100)),
+        assistant_with_tool(110, "c1"),
+        tool_result("c1", 120),
+        assistant_text(130, "Applied fixes, waiting for background check."),
+        boundary("Background work completed, continuing agent", 200),
+        assistant_with_tool(210, "c2"),
+        tool_result("c2", 220),
+        assistant_text(230, "Checks passed."),
+    ];
+    let changes = vec![SessionFileChange {
+        path: "src/lib.rs".to_string(),
+        turn_index: 0,
+        status: "modified".to_string(),
+        additions: 3,
+        deletions: 1,
+        diff_text: None,
+        reviewed: false,
+        updated_at: 125,
+        user_message_id: "u1".to_string(),
+    }];
+    let grouped = group_turn_changes(&changes);
+
+    assert!(turn_changes_for_assistant(&messages, &grouped, 3, is_hidden_tool_transport).is_none());
+    let final_turn = turn_changes_for_assistant(&messages, &grouped, 7, is_hidden_tool_transport)
+        .expect("final assistant message should carry turn changes");
+    assert_eq!(final_turn.files.len(), 1);
+    assert_eq!(final_turn.files[0].path, "src/lib.rs");
 }
