@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"os"
+	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
@@ -98,5 +100,96 @@ func TestWebhookBaseURLReadsOpenTunnelAlongsideIroh(t *testing.T) {
 	}
 	if got := webhookBaseURLFromDir(dir); got != "https://hooks.example.test" {
 		t.Fatalf("webhookBaseURLFromDir = %q, want https://hooks.example.test", got)
+	}
+}
+
+func TestWebhookManagementRoutesAndSSE(t *testing.T) {
+	_, token, do, baseURL := newAuthedTestApp(t)
+
+	sseReq, _ := http.NewRequest(http.MethodGet, baseURL+"/api/webhooks/stream", nil)
+	sseReq.Header.Set("Authorization", "Bearer "+token)
+	sseResp, err := http.DefaultClient.Do(sseReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sseResp.Body.Close()
+	if sseResp.StatusCode != http.StatusOK {
+		t.Fatalf("sse status = %d", sseResp.StatusCode)
+	}
+
+	reader := bufio.NewReader(sseResp.Body)
+	readEvent := func() (string, string) {
+		var ev, data string
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				t.Fatalf("sse read error: %v", err)
+			}
+			line = strings.TrimRight(line, "\r\n")
+			if line == "" {
+				if ev != "" || data != "" {
+					return ev, data
+				}
+				continue
+			}
+			if strings.HasPrefix(line, "event: ") {
+				ev = strings.TrimPrefix(line, "event: ")
+			} else if strings.HasPrefix(line, "data: ") {
+				data = strings.TrimPrefix(line, "data: ")
+			}
+		}
+	}
+
+	ev, data := readEvent()
+	if ev != "webhooks" || data != "[]" {
+		t.Fatalf("initial sse = (%q, %q), want (webhooks, [])", ev, data)
+	}
+
+	createBody := []byte(`{"sessionId":"s1","topic":"ci","prompt":"fix build","once":true}`)
+	req, _ := http.NewRequest(http.MethodPost, baseURL+"/api/webhooks", bytes.NewReader(createBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := do(req)
+	if err != nil || resp.StatusCode != http.StatusCreated {
+		t.Fatalf("POST /api/webhooks = %v, %v", resp, err)
+	}
+	var created struct {
+		Success bool        `json:"success"`
+		Data    webhookView `json:"data"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&created)
+	resp.Body.Close()
+	if created.Data.ID == "" || created.Data.Topic != "ci" {
+		t.Fatalf("created = %+v", created)
+	}
+
+	ev, data = readEvent()
+	if ev != "webhook" || !strings.Contains(data, `"type":"created"`) {
+		t.Fatalf("create sse = (%q, %q)", ev, data)
+	}
+
+	req, _ = http.NewRequest(http.MethodGet, baseURL+"/api/webhooks?sessionId=s1", nil)
+	resp, err = do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/webhooks = %v, %v", resp, err)
+	}
+	resp.Body.Close()
+
+	req, _ = http.NewRequest(http.MethodGet, baseURL+"/api/webhooks/"+created.Data.ID, nil)
+	resp, err = do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/webhooks/:id = %v, %v", resp, err)
+	}
+	resp.Body.Close()
+
+	req, _ = http.NewRequest(http.MethodDelete, baseURL+"/api/webhooks/"+created.Data.ID, nil)
+	resp, err = do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("DELETE /api/webhooks/:id = %v, %v", resp, err)
+	}
+	resp.Body.Close()
+
+	ev, data = readEvent()
+	if ev != "webhook" || !strings.Contains(data, `"type":"deleted"`) {
+		t.Fatalf("delete sse = (%q, %q)", ev, data)
 	}
 }

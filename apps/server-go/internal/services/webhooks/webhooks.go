@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
@@ -51,12 +52,54 @@ type Subscription struct {
 	CreatedAt   int64          `json:"createdAt"`
 }
 
+// Event is emitted whenever a webhook subscription changes state.
+type Event struct {
+	Type         string        `json:"type"`
+	Subscription *Subscription `json:"subscription,omitempty"`
+	ID           string        `json:"id,omitempty"`
+	SessionID    string        `json:"sessionId,omitempty"`
+}
+
 type Service struct {
-	db *sql.DB
+	db   *sql.DB
+	mu   sync.Mutex
+	subs map[chan Event]bool
 }
 
 func New(db *sql.DB) *Service {
-	return &Service{db: db}
+	return &Service{db: db, subs: make(map[chan Event]bool)}
+}
+
+func (s *Service) Subscribe() chan Event {
+	ch := make(chan Event, 64)
+	s.mu.Lock()
+	if s.subs == nil {
+		s.subs = make(map[chan Event]bool)
+	}
+	s.subs[ch] = true
+	s.mu.Unlock()
+	return ch
+}
+
+func (s *Service) Unsubscribe(ch chan Event) {
+	s.mu.Lock()
+	delete(s.subs, ch)
+	s.mu.Unlock()
+}
+
+func (s *Service) emit(ev Event) {
+	s.mu.Lock()
+	subs := make([]chan Event, 0, len(s.subs))
+	for ch := range s.subs {
+		subs = append(subs, ch)
+	}
+	s.mu.Unlock()
+	for _, ch := range subs {
+		select {
+		case ch <- ev:
+		default:
+		}
+	}
 }
 
 const columns = `id, session_id, topic, secret, filter_json, prompt, once, status, expires_at, last_fired_at, fire_count, last_error, created_at`
@@ -151,6 +194,7 @@ func (s *Service) Create(sessionID, topic, prompt, secret string, filter map[str
 	); err != nil {
 		return nil, err
 	}
+	s.emit(Event{Type: "created", Subscription: sub, ID: sub.ID, SessionID: sub.SessionID})
 	return sub, nil
 }
 
@@ -161,6 +205,15 @@ func (s *Service) Get(id string) (*Subscription, error) {
 		return nil, nil
 	}
 	return sub, err
+}
+
+func (s *Service) ListAll() ([]Subscription, error) {
+	rows, err := s.db.Query(`SELECT ` + columns + ` FROM webhook_subscriptions ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanRows(rows)
 }
 
 func (s *Service) ListForSession(sessionID string) ([]Subscription, error) {
@@ -186,15 +239,28 @@ func (s *Service) SetStatus(id, status string) (bool, error) {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
+	if n > 0 {
+		if updated, gerr := s.Get(id); gerr == nil && updated != nil {
+			s.emit(Event{Type: status, Subscription: updated, ID: updated.ID, SessionID: updated.SessionID})
+		}
+	}
 	return n > 0, nil
 }
 
 func (s *Service) Delete(id string) (bool, error) {
+	existing, _ := s.Get(id)
 	res, err := s.db.Exec(`DELETE FROM webhook_subscriptions WHERE id = ?`, id)
 	if err != nil {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
+	if n > 0 {
+		sessionID := ""
+		if existing != nil {
+			sessionID = existing.SessionID
+		}
+		s.emit(Event{Type: "deleted", ID: id, SessionID: sessionID})
+	}
 	return n > 0, nil
 }
 
@@ -282,6 +348,11 @@ func (s *Service) AfterFire(id string, fireErr error, now time.Time) error {
 			`UPDATE webhook_subscriptions SET status = 'error', last_fired_at = ?, fire_count = fire_count + 1, last_error = ? WHERE id = ?`,
 			now.Unix(), fireErr.Error(), id,
 		)
+		if err == nil {
+			if updated, gerr := s.Get(id); gerr == nil && updated != nil {
+				s.emit(Event{Type: "error", Subscription: updated, ID: updated.ID, SessionID: updated.SessionID})
+			}
+		}
 		return err
 	}
 	_, err := s.db.Exec(
@@ -293,6 +364,11 @@ func (s *Service) AfterFire(id string, fireErr error, now time.Time) error {
 		 WHERE id = ?`,
 		now.Unix(), id,
 	)
+	if err == nil {
+		if updated, gerr := s.Get(id); gerr == nil && updated != nil {
+			s.emit(Event{Type: "fired", Subscription: updated, ID: updated.ID, SessionID: updated.SessionID})
+		}
+	}
 	return err
 }
 

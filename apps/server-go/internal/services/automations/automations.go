@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
@@ -43,12 +44,54 @@ type Automation struct {
 	CreatedAt   int64  `json:"createdAt"`
 }
 
+// Event is emitted whenever an automation changes state.
+type Event struct {
+	Type       string      `json:"type"`
+	Automation *Automation `json:"automation,omitempty"`
+	ID         string      `json:"id,omitempty"`
+	SessionID  string      `json:"sessionId,omitempty"`
+}
+
 type Service struct {
-	db *sql.DB
+	db   *sql.DB
+	mu   sync.Mutex
+	subs map[chan Event]bool
 }
 
 func New(db *sql.DB) *Service {
-	return &Service{db: db}
+	return &Service{db: db, subs: make(map[chan Event]bool)}
+}
+
+func (s *Service) Subscribe() chan Event {
+	ch := make(chan Event, 64)
+	s.mu.Lock()
+	if s.subs == nil {
+		s.subs = make(map[chan Event]bool)
+	}
+	s.subs[ch] = true
+	s.mu.Unlock()
+	return ch
+}
+
+func (s *Service) Unsubscribe(ch chan Event) {
+	s.mu.Lock()
+	delete(s.subs, ch)
+	s.mu.Unlock()
+}
+
+func (s *Service) emit(ev Event) {
+	s.mu.Lock()
+	subs := make([]chan Event, 0, len(s.subs))
+	for ch := range s.subs {
+		subs = append(subs, ch)
+	}
+	s.mu.Unlock()
+	for _, ch := range subs {
+		select {
+		case ch <- ev:
+		default:
+		}
+	}
 }
 
 const columns = `id, session_id, prompt, kind, interval_seconds, run_at, next_run_at, status, last_fired_at, last_error, created_at`
@@ -106,6 +149,7 @@ func (s *Service) Create(sessionID, prompt, kind string, intervalSeconds, runAt 
 		}
 		return nil, err
 	}
+	s.emit(Event{Type: "created", Automation: a, ID: a.ID, SessionID: a.SessionID})
 	return a, nil
 }
 
@@ -134,6 +178,15 @@ func (s *Service) ActiveForSession(sessionID string) (*Automation, error) {
 		return nil, nil
 	}
 	return a, err
+}
+
+func (s *Service) ListAll() ([]Automation, error) {
+	rows, err := s.db.Query(`SELECT ` + columns + ` FROM automations ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanRows(rows)
 }
 
 func (s *Service) ListForSession(sessionID string) ([]Automation, error) {
@@ -200,7 +253,11 @@ func (s *Service) Update(id, prompt, kind string, intervalSeconds, runAt int64, 
 	if n, _ := res.RowsAffected(); n == 0 {
 		return nil, nil
 	}
-	return s.Get(id)
+	updated, err := s.Get(id)
+	if err == nil && updated != nil {
+		s.emit(Event{Type: "updated", Automation: updated, ID: updated.ID, SessionID: updated.SessionID})
+	}
+	return updated, err
 }
 
 // Pause pauses an active automation.
@@ -212,7 +269,11 @@ func (s *Service) Pause(id string) (*Automation, error) {
 	if n, _ := res.RowsAffected(); n == 0 {
 		return nil, nil
 	}
-	return s.Get(id)
+	paused, err := s.Get(id)
+	if err == nil && paused != nil {
+		s.emit(Event{Type: "paused", Automation: paused, ID: paused.ID, SessionID: paused.SessionID})
+	}
+	return paused, err
 }
 
 // Resume activates a paused or errored automation, clearing any prior error and
@@ -242,7 +303,11 @@ func (s *Service) Resume(id string, now time.Time) (*Automation, error) {
 	if n, _ := res.RowsAffected(); n == 0 {
 		return nil, nil
 	}
-	return s.Get(id)
+	resumed, err := s.Get(id)
+	if err == nil && resumed != nil {
+		s.emit(Event{Type: "resumed", Automation: resumed, ID: resumed.ID, SessionID: resumed.SessionID})
+	}
+	return resumed, err
 }
 
 // SetStatus flips active/paused; done and error are terminal states the
@@ -260,11 +325,19 @@ func (s *Service) SetStatus(id, status string) (bool, error) {
 }
 
 func (s *Service) Delete(id string) (bool, error) {
+	existing, _ := s.Get(id)
 	res, err := s.db.Exec(`DELETE FROM automations WHERE id = ?`, id)
 	if err != nil {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
+	if n > 0 {
+		sessionID := ""
+		if existing != nil {
+			sessionID = existing.SessionID
+		}
+		s.emit(Event{Type: "deleted", ID: id, SessionID: sessionID})
+	}
 	return n > 0, nil
 }
 
@@ -294,6 +367,11 @@ func (s *Service) AfterFire(id string, fireErr error, now time.Time) error {
 		_, err := s.db.Exec(
 			`UPDATE automations SET status = 'error', last_fired_at = ?, last_error = ? WHERE id = ?`,
 			now.Unix(), fireErr.Error(), id)
+		if err == nil {
+			if updated, gerr := s.Get(id); gerr == nil && updated != nil {
+				s.emit(Event{Type: "error", Automation: updated, ID: updated.ID, SessionID: updated.SessionID})
+			}
+		}
 		return err
 	}
 	cur, err := s.Get(id)
@@ -318,6 +396,11 @@ func (s *Service) AfterFire(id string, fireErr error, now time.Time) error {
 			last_error = NULL
 		 WHERE id = ?`,
 		now.Unix(), next, id)
+	if err == nil {
+		if updated, gerr := s.Get(id); gerr == nil && updated != nil {
+			s.emit(Event{Type: "fired", Automation: updated, ID: updated.ID, SessionID: updated.SessionID})
+		}
+	}
 	return err
 }
 
