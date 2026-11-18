@@ -211,22 +211,22 @@ private fun QuestionPanel(
                         }
                     }
                 }
-                if (!isApproveDeny) {
-                    InlineTextInput(
-                        value = custom,
-                        onValueChange = { custom = it },
-                        placeholder = if (hasOptions) "Or type your own answer…" else "Type your answer…",
-                        modifier = Modifier.padding(top = 12.dp)
-                            .bringIntoViewRequester(fieldRequester)
-                            .onFocusChanged { fieldFocused = it.isFocused },
-                    )
-                }
+                InlineTextInput(
+                    value = custom,
+                    onValueChange = { custom = it },
+                    placeholder = if (isApproveDeny) "Optional: reason or feedback…" else if (hasOptions) "Or type your own answer…" else "Type your answer…",
+                    modifier = Modifier.padding(top = 12.dp)
+                        .bringIntoViewRequester(fieldRequester)
+                        .onFocusChanged { fieldFocused = it.isFocused },
+                )
             }
             Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (isApproveDeny) {
+                    val denyText = if (custom.trim().isNotEmpty()) "$negativeOpt: ${custom.trim()}" else negativeOpt
+                    val denyLabel = if (custom.trim().isNotEmpty()) "$negativeOpt with feedback" else negativeOpt
                     ActionButton(
-                        text = negativeOpt,
-                        onClick = { onAnswerText(negativeOpt) },
+                        text = denyLabel,
+                        onClick = { onAnswerText(denyText) },
                         surface = NewTheme.Raised,
                         enabled = !submitting,
                         modifier = Modifier.weight(1f),

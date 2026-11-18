@@ -1279,16 +1279,26 @@ impl ConsoleDesktopApp {
     /// The agent's pending question card, wired to the session that owns it
     /// (not whichever pane holds focus when an option is clicked).
     fn build_question_card(
-        &self,
+        &mut self,
         pane_id: &str,
         question: console_core::types::agent::AskQuestionRequest,
         session_id: Option<String>,
-        cx: &Context<Self>,
+        cx: &mut Context<Self>,
     ) -> QuestionInteractionCard {
         let entity = cx.entity().downgrade();
         let question_input = self.question_input_for_pane(pane_id);
         let selected = self.question_selected_for_pane(pane_id);
         let is_multi = question.is_multi_select.unwrap_or(false);
+        let is_approve_deny = !is_multi
+            && question.options.as_ref().map(|o| o.len()).unwrap_or(0) == 2
+            && question.options.as_ref().unwrap().iter().any(|o| o.eq_ignore_ascii_case("approve") || o.eq_ignore_ascii_case("allow"))
+            && question.options.as_ref().unwrap().iter().any(|o| o.eq_ignore_ascii_case("deny") || o.eq_ignore_ascii_case("decline"));
+        let placeholder = if is_approve_deny {
+            "Optional: reason or feedback to stay in plan mode..."
+        } else {
+            "Type your answer..."
+        };
+        question_input.update(cx, |input, cx| input.set_placeholder(placeholder, cx));
         let skippable = question.skippable != Some(false);
         let answer_sid = session_id.clone();
         let skip_sid = session_id.clone();

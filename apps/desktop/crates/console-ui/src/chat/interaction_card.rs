@@ -91,11 +91,7 @@ impl RenderOnce for QuestionInteractionCard {
         };
 
         let on_select = self.on_select.clone();
-        let custom_input = if is_approve_deny {
-            None
-        } else {
-            self.custom_input.clone()
-        };
+        let custom_input = self.custom_input.clone();
         let custom_answer = custom_input
             .as_ref()
             .map(|input| input.read(cx).content().trim().to_owned())
@@ -228,7 +224,16 @@ impl RenderOnce for QuestionInteractionCard {
                         let on_ans_pos = self.on_answer.clone();
                         let on_ans_neg = self.on_answer.clone();
                         let pos_val = serde_json::Value::String(positive_opt.clone());
-                        let neg_val = serde_json::Value::String(negative_opt.clone());
+                        let neg_val = if custom_answer.is_empty() {
+                            serde_json::Value::String(negative_opt.clone())
+                        } else {
+                            serde_json::Value::String(format!("{}: {}", negative_opt, custom_answer))
+                        };
+                        let neg_label = if custom_answer.is_empty() {
+                            negative_opt.clone()
+                        } else {
+                            format!("{} with feedback", negative_opt)
+                        };
                         el.child(
                             div()
                                 .id("question-approve")
@@ -283,7 +288,7 @@ impl RenderOnce for QuestionInteractionCard {
                                         .text_size(px(12.0))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(theme.text_secondary)
-                                        .child(negative_opt),
+                                        .child(neg_label),
                                 ),
                         )
                     })
