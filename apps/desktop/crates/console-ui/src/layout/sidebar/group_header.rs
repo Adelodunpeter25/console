@@ -67,6 +67,7 @@ pub fn workspaces_label(theme: Theme, collapsed: bool, on_toggle: ToggleFn) -> i
     let toggle_on_key = on_toggle.clone();
     div()
         .id("sidebar-workspaces-toggle")
+        .group("sidebar-workspaces-header")
         .tab_index(0)
         .h(px(30.0))
         .flex()
@@ -88,9 +89,12 @@ pub fn workspaces_label(theme: Theme, collapsed: bool, on_toggle: ToggleFn) -> i
                 .child("My workspaces"),
         )
         .child(
-            app_icon(IconName::ChevronDown, 13.0, theme.text_tertiary).when(collapsed, |icon| {
-                icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
-            }),
+            app_icon(IconName::ChevronDown, 13.0, theme.text_tertiary)
+                .when(collapsed, |icon| {
+                    icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
+                })
+                .invisible()
+                .group_hover("sidebar-workspaces-header", |icon| icon.visible()),
         )
 }
 
