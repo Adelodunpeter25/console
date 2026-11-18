@@ -221,6 +221,54 @@ private fun finalizeRun(run: RunActivityState, messages: List<AgentMessage>, las
  * wake in progress. Returns the earliest such output's timestamp (epoch ms)
  * as the boundary `at`, or null when nothing follows the last user message.
  */
+/**
+ * Maps each visible message index in [displayMessages] to the indices in [runs]
+ * that should render immediately after it. Initial runs attach to their
+ * [UserMessage]; wake runs ([RunActivityState.dividerLabel] != null) attach
+ * after the last visible message of the preceding turn so the wake divider
+ * appears at the top of the wake turn rather than above the first turn's reply.
+ */
+fun buildUserRunMap(
+    displayMessages: List<AgentMessage>,
+    runs: List<RunActivityState>,
+): Map<Int, List<Int>> {
+    val map = mutableMapOf<Int, MutableList<Int>>()
+    val userMessageIndices = displayMessages.mapIndexedNotNull { i, m ->
+        if (m is UserMessage) i else null
+    }
+    var lastUserOrdinal = -1
+    runs.forEachIndexed { runIdx, run ->
+        if (run.dividerLabel == null) {
+            lastUserOrdinal++
+        } else if (lastUserOrdinal < 0 && userMessageIndices.isNotEmpty()) {
+            lastUserOrdinal = userMessageIndices.size - 1
+        }
+        val userMsgIdx = userMessageIndices.getOrNull(lastUserOrdinal) ?: return@forEachIndexed
+        val anchorIdx = if (run.dividerLabel == null) {
+            userMsgIdx
+        } else {
+            val nextUserIdx = userMessageIndices.getOrNull(lastUserOrdinal + 1) ?: displayMessages.size
+            val wakeAt = run.startedAt
+            if (wakeAt == null) {
+                userMsgIdx
+            } else {
+                var anchor = userMsgIdx
+                for (i in (userMsgIdx + 1) until nextUserIdx) {
+                    val msgAt = displayMessages[i].createdAt ?: continue
+                    if (msgAt < wakeAt) {
+                        anchor = i
+                    } else {
+                        break
+                    }
+                }
+                anchor
+            }
+        }
+        map.getOrPut(anchorIdx) { mutableListOf() }.add(runIdx)
+    }
+    return map
+}
+
 fun inferWakeAt(messages: List<AgentMessage>): Long? {
     val lastUser = messages.indexOfLast { it is UserMessage }
     if (lastUser < 0) return null

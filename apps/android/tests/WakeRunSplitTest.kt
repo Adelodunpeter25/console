@@ -5,6 +5,7 @@ import com.console.mobile.core.chat.RunActivityState
 import com.console.mobile.core.chat.RunStatus
 import com.console.mobile.core.chat.WakeRecord
 import com.console.mobile.core.chat.applyChatEvent
+import com.console.mobile.core.chat.buildUserRunMap
 import com.console.mobile.core.chat.createChatSessionState
 import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.data.api.ConsoleJson
@@ -130,5 +131,27 @@ class WakeRunSplitTest {
         val runs = reconstructRuns(messages)
         assertEquals(1, runs.size)
         assertTrue(runs[0].events.none { it is ActivityEvent.ToolCallEvent })
+    }
+
+    @Test
+    fun wakeRunAnchorsAfterFirstTurnReply() {
+        val displayMessages = listOf(
+            UserMessage(id = "u1", createdAt = 1_000, content = "fix it"),
+            AssistantMessage(id = "a1", createdAt = 5_000, content = listOf(TextPart("waiting for check"))),
+            AssistantMessage(id = "a2", createdAt = 15_000, content = listOf(TextPart("all done"))),
+        )
+        val runs = listOf(
+            RunActivityState(runId = "r1", startedAt = 1_000, status = RunStatus.Completed),
+            RunActivityState(
+                runId = "r2",
+                startedAt = 10_000,
+                status = RunStatus.Completed,
+                dividerLabel = "Background work completed, continuing agent",
+            ),
+        )
+        val map = buildUserRunMap(displayMessages, runs)
+        assertEquals(listOf(0), map[0])
+        assertEquals(listOf(1), map[1])
+        assertNull(map[2])
     }
 }

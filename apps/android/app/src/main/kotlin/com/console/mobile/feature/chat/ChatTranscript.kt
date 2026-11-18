@@ -64,7 +64,7 @@ internal fun ChatTranscript(
                             modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp),
                         )
                     }
-                    RunActivity(activity = run, running = running && index == latestUserIndex, cwd = cwd)
+                    RunActivity(activity = run, running = running && index >= latestUserIndex, cwd = cwd)
                     RunVisuals(run)
                 }
             }

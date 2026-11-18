@@ -203,32 +203,8 @@ fun ChatScreen(
     val runs = remember(messages, chat.runs, chat.wakeRecords) {
         if (chat.runs.isNotEmpty()) chat.runs else reconstructRuns(messages, chat.wakeRecords)
     }
-    // Runs pair with user messages by order, but a wake turn (dividerLabel
-    // set) belongs to the SAME user message as the run before it — the
-    // synthetic user message is stripped server-side. Group runs per user
-    // message so a wake run renders under its originating prompt.
     val userRunMap = remember(displayMessages, runs) {
-        val map = mutableMapOf<Int, MutableList<Int>>()
-        var lastUserMessageIndex = -1
-        // Message index of the n-th user message, for ordinal → index mapping.
-        val userMessageIndices = displayMessages
-            .mapIndexedNotNull { i, m ->
-                if (m is com.console.mobile.data.model.UserMessage) i else null
-            }
-        runs.forEachIndexed { runIdx, run ->
-            if (run.dividerLabel == null) {
-                lastUserMessageIndex++
-            } else if (lastUserMessageIndex < 0 && userMessageIndices.isNotEmpty()) {
-                // Wake run with no preceding run (session was idle): it
-                // continues the last user message's turn.
-                lastUserMessageIndex = userMessageIndices.size - 1
-            }
-            val messageIndex = userMessageIndices.getOrNull(lastUserMessageIndex)
-            if (messageIndex != null) {
-                map.getOrPut(messageIndex) { mutableListOf() }.add(runIdx)
-            }
-        }
-        map
+        com.console.mobile.core.chat.buildUserRunMap(displayMessages, runs)
     }
     val assistantTurnChanges = remember(displayMessages, sessionChanges) {
         buildAssistantTurnChangesMap(displayMessages, sessionChanges)
