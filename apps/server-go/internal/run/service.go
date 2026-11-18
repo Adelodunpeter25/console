@@ -397,9 +397,9 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 
 // Abort cancels the active run. The run goroutine owns hub/session
 // lifecycle, so the entry is removed when it settles — never here, or a
-// second run could start on a still-draining session. Stop means stop
-// everything: any background bash jobs the session started are killed too,
-// not just the in-flight turn.
+// second run could start on a still-draining session. Stop ends this run
+// and its background bash jobs, but queued prompts survive: each starts as
+// its own run once the slot frees.
 func (s *Service) Abort(sessionID string) bool {
 	if !s.cancelActive(sessionID, errRunAborted) {
 		return false

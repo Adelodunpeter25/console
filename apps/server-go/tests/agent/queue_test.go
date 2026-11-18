@@ -287,3 +287,49 @@ func TestQueueDrainsEveryPromptInOrder(t *testing.T) {
 		t.Fatalf("queue must drain: %+v", queue)
 	}
 }
+
+// Stop ends the run, not the queue: a prompt staged behind the aborted run
+// starts as its own run once the slot frees, oldest first.
+func TestAbortPreservesQueueAndRunsItNext(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	release := make(chan struct{})
+	entered := make(chan struct{})
+	var enteredOnce bool
+	svc.Lookup = func(string) (loop.Provider, error) {
+		return &blockingProvider{release: release, released: new(bool), entered: entered, enteredOnce: &enteredOnce}, nil
+	}
+	header := helpers.CreateRunSession(t, sessions)
+	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "slow", Provider: "mock", ModelID: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	if _, err := svc.QueuePrompt(header.ID, run.Prompt{Text: "after stop"}); err != nil {
+		t.Fatal(err)
+	}
+	if !svc.Abort(header.ID) {
+		t.Fatal("abort reported no active run")
+	}
+	helpers.WaitSettled(t, hub)
+	if hub.Outcome != run.OutcomeAborted {
+		t.Fatalf("outcome: %s", hub.Outcome)
+	}
+	// The queued prompt must start a fresh run on the freed slot.
+	deadline := time.Now().Add(5 * time.Second)
+	var next *run.Hub
+	for time.Now().Before(deadline) {
+		if next = svc.Hub(header.ID); next != nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if next == nil {
+		t.Fatal("queued prompt never started a run after abort")
+	}
+	close(release)
+	helpers.WaitSettled(t, next)
+	if qp, _ := svc.QueuedPrompt(header.ID); qp != nil {
+		t.Fatalf("queue must drain after abort: %+v", qp)
+	}
+}

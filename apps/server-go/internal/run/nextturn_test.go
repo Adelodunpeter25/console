@@ -1,8 +1,8 @@
 // nextTurn coverage: a canceled settle drains the staged prompt only for a
-// steer cancel. A Stop (or watchdog, or plain context.Canceled) must discard
-// whatever is queued — a prompt staged in the cancel→clear gap or sent while
-// the run drains would otherwise resurrect the run and hold the session's
-// active slot, producing "session already has an active run" on the next send.
+// steer cancel. A Stop (or watchdog, or plain context.Canceled) must leave
+// the queue untouched — the aborted run ends and each staged prompt starts
+// as its own run via startStagedIfIdle. Draining here would hold this run's
+// active slot and reject the user's next send with ErrActive.
 package run
 
 import (
@@ -33,7 +33,7 @@ func nextTurnSession(t *testing.T, sessions *services.SessionService) types.Sess
 	return header
 }
 
-func TestNextTurnDiscardsStagedPromptOnAbort(t *testing.T) {
+func TestNextTurnLeavesQueueOnAbort(t *testing.T) {
 	sessions := nextTurnSessions(t)
 	svc := NewService(sessions)
 	header := nextTurnSession(t, sessions)
@@ -53,8 +53,12 @@ func TestNextTurnDiscardsStagedPromptOnAbort(t *testing.T) {
 			if _, ok := svc.nextTurn(ctx, context.Canceled, header.ID, nil); ok {
 				t.Fatal("aborted run drained a staged prompt")
 			}
-			if qp, _ := svc.QueuedPrompt(header.ID); qp != nil {
-				t.Fatalf("staged prompt survived abort-cancel settle: %+v", qp)
+			if qp, _ := svc.QueuedPrompt(header.ID); qp == nil {
+				t.Fatal("abort-cancel settle dropped the staged prompt")
+			}
+			// Clean up for the next subtest.
+			if _, err := svc.ClearQueuedPrompt(header.ID); err != nil {
+				t.Fatalf("clear: %v", err)
 			}
 		})
 	}

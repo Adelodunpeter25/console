@@ -208,17 +208,12 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
-	// POST /api/sessions/:id/abort — cancel the active run and discard any
-	// staged prompt: Stop means stop everything.
+	// POST /api/sessions/:id/abort — cancel the active run. Queued prompts
+	// survive: each starts as its own run once this one settles.
 	app.Post("/api/sessions/:id/abort", func(c *fiber.Ctx) error {
 		sessionID := c.Params("id")
 		if !runs.Abort(sessionID) {
-			// A prompt staged just as the run ended would otherwise survive Stop.
-			_, _ = runs.ClearQueuedPrompt(sessionID)
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No active run found for session '" + sessionID + "'."})
-		}
-		if _, err := runs.ClearQueuedPrompt(sessionID); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
 		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"sessionId": sessionID, "aborted": true}})
 	})

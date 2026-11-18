@@ -124,6 +124,12 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 			hub.Broadcast(loop.Event{Kind: loop.EventSessionEnd})
 			if aborted {
 				hub.Close(OutcomeAborted)
+				// Stop ends this run, not the queue: each staged prompt starts
+				// as its own run, oldest first. Draining them here as turns of
+				// this run would hold the active slot and reject the next send.
+				if _, err := s.startStagedIfIdle(sessionID); err != nil {
+					slog.Warn("start prompt queued during settle", "session", sessionID, "error", err)
+				}
 			} else {
 				hub.Close(OutcomeDone)
 				if runErr == nil {
@@ -151,21 +157,16 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 }
 
 // nextTurn decides whether a staged prompt drains as the next turn. A clean
-// settle always drains; a canceled settle drains only when staged (steer:
-// halt now, staged prompt runs next). Other errors hold the staged prompt
-// so the user can steer, edit, or delete it.
+// settle always drains; a steer cancel drains the staged prompt (halt now,
+// it runs next on the same run). An abort-cancel settle must NOT drain:
+// the queue survives Stop and each prompt starts as its own run via
+// startStagedIfIdle, so draining here would keep this run's slot held and
+// reject the user's next send with ErrActive.
 func (s *Service) nextTurn(ctx context.Context, turnErr error, sessionID string, hub *Hub) (Prompt, bool) {
 	if turnErr != nil && !errors.Is(turnErr, context.Canceled) {
 		return Prompt{}, false
 	}
-	// Stop (or watchdog) cancels without a steer cause: whatever is queued —
-	// including a prompt staged in the cancel→clear gap or sent while the
-	// run drains — is discarded so the run actually ends. Only a steer
-	// cancel may drain the staged prompt as the next turn.
 	if ctx.Err() != nil && context.Cause(ctx) != errRunSteered {
-		if _, ok := s.takeStaged(sessionID); ok {
-			s.broadcastQueue(sessionID, false)
-		}
 		return Prompt{}, false
 	}
 	staged, ok := s.takeStaged(sessionID)
