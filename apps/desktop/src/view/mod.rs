@@ -534,19 +534,6 @@ impl Render for ConsoleDesktopApp {
                                 }
                             },
                             {
-                                // Sidebar "Add Project" opens the directory browser
-                                // palette (works against remote backends, where a
-                                // native dialog can't see the host filesystem).
-                                let entity = entity.clone();
-                                move |window, cx| {
-                                    if let Some(app) = entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            this.open_project_browse(window, cx);
-                                        });
-                                    }
-                                }
-                            },
-                            {
                                 let entity = entity.clone();
                                 move |key: String, _w, cx| {
                                     if let Some(app) = entity.upgrade() {

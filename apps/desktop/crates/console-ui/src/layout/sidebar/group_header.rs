@@ -61,36 +61,16 @@ fn section_header(
         )
 }
 
-/// Muted "My workspaces" label above the project rows. It hosts the
-/// add-project button.
-pub fn workspaces_label(theme: Theme, on_add: ToggleFn) -> impl IntoElement {
+/// Muted "My workspaces" label shown above the project rows.
+pub fn workspaces_label(theme: Theme) -> impl IntoElement {
     div()
         .h(px(30.0))
         .flex()
         .items_center()
-        .justify_between()
-        .child(
-            div()
-                .text_size(px(12.5))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme.text_tertiary)
-                .child("My workspaces"),
-        )
-        .child(
-            div()
-                .id("btn-add-project")
-                .size(px(22.0))
-                .rounded(px(6.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_default()
-                .hover(|s| s.bg(theme.overlay))
-                .active(|s| s.bg(theme.overlay_strong))
-                .tooltip(Tooltip::text("Add project"))
-                .on_click(move |_, window, cx| (on_add)(window, cx))
-                .child(app_icon(IconName::FolderNew, 14.0, theme.text_ghost)),
-        )
+        .text_size(px(12.5))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(theme.text_tertiary)
+        .child("My workspaces")
 }
 
 /// A project row: a placeholder avatar, the bold project name, and a plain `+`

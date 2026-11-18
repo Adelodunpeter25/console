@@ -118,6 +118,8 @@ enum SidebarRow {
     EmptySearch,
     /// Pinned section header, shown above the pinned rows.
     PinnedHeader,
+    /// "My workspaces" label above the first project row.
+    WorkspacesLabel,
     /// Project section header: display name plus the collapse key (project id
     /// or [`NO_PROJECT_KEY`]).
     ProjectHeader {
@@ -163,7 +165,6 @@ pub struct SidebarView {
     on_open_in_new_window: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_chat: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_search: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    on_add_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_toggle_drafts: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_pinned: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -215,7 +216,6 @@ impl SidebarView {
         on_open_in_new_window: impl Fn(String, &mut Window, &mut App) + 'static,
         on_new_chat: impl Fn(&mut Window, &mut App) + 'static,
         on_search: impl Fn(&mut Window, &mut App) + 'static,
-        on_add_project: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_project: impl Fn(String, &mut Window, &mut App) + 'static,
         on_toggle_drafts: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_pinned: impl Fn(&mut Window, &mut App) + 'static,
@@ -254,7 +254,6 @@ impl SidebarView {
             on_open_in_new_window: Rc::new(on_open_in_new_window),
             on_new_chat: Rc::new(on_new_chat),
             on_search: Rc::new(on_search),
-            on_add_project: Rc::new(on_add_project),
             on_toggle_project: Rc::new(on_toggle_project),
             on_toggle_drafts: Rc::new(on_toggle_drafts),
             on_toggle_pinned: Rc::new(on_toggle_pinned),
@@ -320,7 +319,6 @@ impl RenderOnce for SidebarView {
             .collect();
         let on_new = self.on_new_chat;
         let on_search = self.on_search;
-        let on_add = self.on_add_project;
         let on_new_chat_in_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
             let on_new = on_new.clone();
             Rc::new(move |_, window, cx| (on_new)(window, cx))
@@ -417,14 +415,10 @@ impl RenderOnce for SidebarView {
         let has_pinned = !pinned_positions.is_empty();
         let pinned_collapsed = self.pinned_collapsed;
 
-        // The sticky header row above the list. When active search query is
-        // non-empty, the single Search Results header replaces all section headers.
+        // While searching, a single Search Results header replaces all section headers.
         let is_searching = self.search_active && !self.search_query.trim().is_empty();
-        let pinned_header = if is_searching {
-            search_results_group_header(theme, "Search Results").into_any_element()
-        } else {
-            workspaces_label(theme, on_add.clone()).into_any_element()
-        };
+        let search_header = is_searching
+            .then(|| search_results_group_header(theme, "Search Results").into_any_element());
 
         // Scrollable rows: when search is active with a non-empty query, shows
         // matching sessions directly under the Search Results header, preserving
@@ -477,6 +471,9 @@ impl RenderOnce for SidebarView {
                         list_rows.push(SidebarRow::Draft(i));
                     }
                 }
+            }
+            if !project_sections.is_empty() {
+                list_rows.push(SidebarRow::WorkspacesLabel);
             }
             for (key, name, positions) in project_sections {
                 let key = collapse_key(&key);
@@ -613,6 +610,7 @@ impl RenderOnce for SidebarView {
                     list_on_toggle_settled.clone(),
                 )
                 .into_any_element(),
+                SidebarRow::WorkspacesLabel => workspaces_label(theme).into_any_element(),
                 SidebarRow::PinnedHeader => {
                     pinned_group_header(theme, list_pinned_collapsed, list_on_toggle_pinned.clone())
                         .into_any_element()
@@ -842,10 +840,7 @@ impl RenderOnce for SidebarView {
                             )
                     }),
             )
-            // Pinned header row: the first group's header (Today) with the
-            // add-project button, kept OUTSIDE the scroll container so it
-            // never moves when groups collapse or expand.
-            .child(pinned_header)
+            .children(search_header)
             // Session List Container: the remaining groups' headers and all
             // sessions live here and scroll; toggling a group only changes
             // this container's content, never the pinned row above. The
