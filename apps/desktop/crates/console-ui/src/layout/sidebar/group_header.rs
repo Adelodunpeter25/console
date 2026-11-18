@@ -61,18 +61,6 @@ fn section_header(
         )
 }
 
-/// Muted "My workspaces" label shown above the project rows.
-pub fn workspaces_label(theme: Theme) -> impl IntoElement {
-    div()
-        .h(px(30.0))
-        .flex()
-        .items_center()
-        .text_size(px(12.5))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(theme.text_tertiary)
-        .child("My workspaces")
-}
-
 /// A project row: a placeholder avatar, the bold project name, and a plain `+`
 /// on the right that starts a new chat in that project. Clicking the row
 /// collapses or expands it.
@@ -132,7 +120,7 @@ pub fn project_header(
                 .child(
                     div()
                         .truncate()
-                        .text_size(px(16.5))
+                        .text_size(px(15.0))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme.text)
                         .child(name),

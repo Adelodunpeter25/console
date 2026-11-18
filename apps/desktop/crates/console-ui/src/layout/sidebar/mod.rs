@@ -7,7 +7,7 @@ pub mod session_item;
 pub use draft_item::{DraftSummary, render_sidebar_draft_item};
 pub use group_header::{
     drafts_group_header, pinned_group_header, project_header, search_results_group_header,
-    settled_group_header, workspaces_label,
+    settled_group_header,
 };
 pub use session_card::{
     SidebarHoverManager, dismiss_card, on_card_hover, on_row_hover, render_session_card_content,
@@ -118,8 +118,6 @@ enum SidebarRow {
     EmptySearch,
     /// Pinned section header, shown above the pinned rows.
     PinnedHeader,
-    /// "My workspaces" label above the first project row.
-    WorkspacesLabel,
     /// Project section header: display name plus the collapse key (project id
     /// or [`NO_PROJECT_KEY`]).
     ProjectHeader {
@@ -472,9 +470,6 @@ impl RenderOnce for SidebarView {
                     }
                 }
             }
-            if !project_sections.is_empty() {
-                list_rows.push(SidebarRow::WorkspacesLabel);
-            }
             for (key, name, positions) in project_sections {
                 let key = collapse_key(&key);
                 let collapsed = collapsed_projects.contains(&key);
@@ -610,7 +605,6 @@ impl RenderOnce for SidebarView {
                     list_on_toggle_settled.clone(),
                 )
                 .into_any_element(),
-                SidebarRow::WorkspacesLabel => workspaces_label(theme).into_any_element(),
                 SidebarRow::PinnedHeader => {
                     pinned_group_header(theme, list_pinned_collapsed, list_on_toggle_pinned.clone())
                         .into_any_element()
