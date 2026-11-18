@@ -1015,8 +1015,13 @@ impl ToolCalls {
     ) -> impl IntoElement {
         let row = format!("tool-{call_id}-{label}");
         let palette = Palette::from_theme(&theme);
-        let ctx =
-            crate::chat::markdown_helpers::compact_ctx(row, &palette, self.selection.clone(), None, self.cwd.clone());
+        let ctx = crate::chat::markdown_helpers::compact_ctx(
+            row,
+            &palette,
+            self.selection.clone(),
+            None,
+            self.cwd.clone(),
+        );
         div()
             .flex()
             .flex_col()

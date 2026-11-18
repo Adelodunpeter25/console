@@ -13,8 +13,8 @@ use std::sync::{Arc, LazyLock, Mutex};
 
 use console_core::{ConsoleClient, FsService};
 use gpui::{
-    AnyElement, App, InteractiveElement, IntoElement, ParentElement, RenderOnce, StatefulInteractiveElement,
-    Styled, StyledImage, div, img, px,
+    AnyElement, App, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, StyledImage, div, img, px,
 };
 
 use crate::theme::Theme;

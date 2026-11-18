@@ -87,8 +87,13 @@ impl RenderOnce for ThinkingBlock {
         // assistant's answer text.
         let mut palette = Palette::from_theme(&theme);
         palette.text = theme.text_secondary;
-        let markdown_ctx =
-            assistant_ctx(self.id.clone(), &palette, self.selection, self.link_handler, self.cwd);
+        let markdown_ctx = assistant_ctx(
+            self.id.clone(),
+            &palette,
+            self.selection,
+            self.link_handler,
+            self.cwd,
+        );
         let collapsed = self.collapsed;
         let on_toggle = self.on_toggle;
         let id = self.id;
