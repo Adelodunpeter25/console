@@ -6,6 +6,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"strings"
 )
 
@@ -53,7 +54,17 @@ func NewRequestFullAccessTool(handler AskHandler, onApprove func() error, isPlan
 				return nil, err
 			}
 			if answer.Text != FullAccessApprove {
-				return textResult("The user declined Full Access. Stay in plan mode and do not make changes."), nil
+				feedback := strings.TrimSpace(answer.Text)
+				if strings.HasPrefix(strings.ToLower(feedback), strings.ToLower(FullAccessDeny)) {
+					feedback = strings.TrimSpace(feedback[len(FullAccessDeny):])
+					feedback = strings.TrimPrefix(feedback, ":")
+					feedback = strings.TrimPrefix(feedback, "-")
+					feedback = strings.TrimSpace(feedback)
+				}
+				if feedback != "" {
+					return textResult(fmt.Sprintf("The user declined Full Access with feedback: %q. Stay in plan mode, address this feedback, and continue planning.", feedback)), nil
+				}
+				return textResult("The user declined Full Access. Stay in plan mode, continue planning, and do not make changes."), nil
 			}
 			if err := onApprove(); err != nil {
 				return nil, NewToolError("could not switch to Full Access: %v", err)

@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -49,6 +50,33 @@ func TestRequestFullAccessDenyOrSkipStays(t *testing.T) {
 		}, &switched)
 		if switched || !strings.Contains(text, "declined") {
 			t.Fatalf("answer %q: switched=%v text=%q", answer, switched, text)
+		}
+	}
+}
+
+func TestRequestFullAccessDenyWithFeedback(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"Deny: write more unit tests first", "write more unit tests first"},
+		{"Deny - please outline the schema", "please outline the schema"},
+		{"stay in plan mode and check edge cases", "stay in plan mode and check edge cases"},
+	}
+	for _, tc := range cases {
+		var switched bool
+		text := runRequestFullAccess(t, func(context.Context, tools.AskQuestionRequest) (tools.AskAnswer, error) {
+			return tools.AskAnswer{Text: tc.input}, nil
+		}, &switched)
+		if switched {
+			t.Fatalf("must not switch on deny with feedback %q", tc.input)
+		}
+		expectedPhrase := fmt.Sprintf("with feedback: %q", tc.expected)
+		if !strings.Contains(text, expectedPhrase) {
+			t.Fatalf("text %q does not contain expected feedback %q", text, tc.expected)
+		}
+		if !strings.Contains(text, "address this feedback, and continue planning") {
+			t.Fatalf("text %q does not contain instructions to address feedback and continue planning", text)
 		}
 	}
 }
