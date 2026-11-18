@@ -1284,7 +1284,14 @@ impl ConsoleDesktopApp {
         }
 
         self.sidebar_draft_ids.remove(&id);
-        self.restore_draft_for_pane(&active_pane_id, Some(&id), cx);
+        // open_chat_tab may have redirected the active pane (chat already open
+        // in another split, or a workspace swap); restore into the pane that
+        // actually shows the chat or the draft saves under the wrong key.
+        let restore_pane = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| active_pane_id.clone());
+        self.restore_draft_for_pane(&restore_pane, Some(&id), cx);
         self.active_transcript_view().update(cx, |t, cx| {
             t.set_messages(Vec::new(), cx);
             t.clear_session_changes(cx);
