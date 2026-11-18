@@ -1,95 +1,100 @@
-# Automations — an agent that schedules its own future work
+# Automations & Webhooks — an agent that schedules and subscribes to future work
 
 The agent can promise future work and keep the promise. "Do this and that every
 5 minutes", "merge this change, then remind me in two days to remove the
-feature flag and roll it out to everyone" — the agent does the first half now
-and schedules the second half, on the same thread, with the thread's full
-context. Shape follows Amp's automations
-(https://ampcode.com/docs/orbs/automations); the machinery is Console's own.
+feature flag and roll it out to everyone", or "subscribe to CI results and fix
+any failure" — the agent does the first half now and schedules or subscribes to
+the second half, on the same thread, with the thread's full context.
 
-Tool surface: four namespaced tools the model calls like any other tool —
+Tool surface in the `console` JS kernel:
 
-- `console.automation.create(prompt, schedule, ...)` — one-shot or recurring
-- `console.automation.get(id)`
-- `console.automation.update(id, ...)`
-- `console.automation.delete(id)`
+- `console.automation.create({prompt, kind, interval_seconds? | run_at? | in_seconds?})`
+- `console.automation.get({id?})`
+- `console.automation.update({id, prompt?, kind?, interval_seconds?, run_at?, in_seconds?})`
+- `console.automation.pause({id})` / `console.automation.resume({id})`
+- `console.automation.delete({id})`
+- `console.webhooks.subscribe({topic, prompt, filter?, once?, expires_in_seconds?, secret?})`
+- `console.webhooks.list()` / `console.webhooks.get({id})` / `console.webhooks.unsubscribe({id})`
 
-One schedule per session. A second automation is a new thread's job, not a
-second row on this one.
+One active automation per session (enforced by a partial unique index). A
+session may hold multiple webhook subscriptions.
 
 ---
 
 ## 0. Decisions (settled)
 
-- **Namespaced tool calls, not a pile of tools.** `console.automation.*` is the
-  surface; internally it lands in one tool file with four verbs, the way
-  `internal/agent/tools` groups the bash tools.
-- **Natural language in, structured out.** The agent parses "every 5 minutes",
-  "in two days", "weekdays at 8:30" into a typed schedule (`interval` /
-  `at` / one-shot `run_at`). Cron is never exposed to the user or the model;
-  the stored record is machine-typed so the scanner can compute next_run.
+- **Console kernel methods, not standalone tools.** `console.automation.*` and
+  `console.webhooks.*` live in `internal/services/console/` and are registered
+  in `consoleCatalog()` (`registry.go`).
+- **Natural language in, structured out.** The agent translates timing into
+  `once` (`in_seconds` or `run_at`) or `interval` (`interval_seconds`). Cron is
+  never exposed; `at` (e.g. weekdays at 8:30) is deferred.
 - **Completion conditions are prompt-driven, not code.** "Stop checking when
   the backfill finishes" means the agent calls `console.automation.delete`
-  when it observes done. The harness does not try to understand the task.
-- **One-shot reminders stay in the same thread.** The whole point of "remind
-  me in two days to remove the feature flag" is that the reminder wakes up
-  knowing which flag, which PR, which rollout. A fresh thread would lose that.
-- **No minimum-interval floor in v1.** If the agent schedules something every
-  5 seconds, that is a prompt-quality bug, fixed in the prompt and skill text,
-  not with a harness-side clamp.
-- **The desktop app is just a client.** Schedules live on the server. A
-  schedule fires whenever the server is up, whether or not any desktop app is
-  connected; the run appears in the thread like any other and is there when
-  the user reopens the client. There is no "desktop must be running" mode and
-  no separate cloud stage — the server is the cloud.
+  when it observes done.
+- **One-shot reminders and webhooks stay in the same thread.** Waking in the
+  same session preserves full conversation context.
+- **Server-triggered turns carry a `source` tag.** Fired automations set
+  `source: "automation"` and fired webhooks set `source: "webhook"` on
+  `Prompt`, `session_queue`, and `loop.UserMessage`, keeping them out of user
+  prompt history and `$chat` references while preserving them in the
+  transcript.
+- **The desktop/mobile app is just a client.** Schedules and webhook
+  subscriptions live in the server's global SQLite DB and fire whether or not
+  any client is connected.
+- **Public webhook URLs via OpenTunnel alongside iroh.** `iroh` remains the
+  default P2P transport for paired clients, while OpenTunnel runs alongside it
+  (unless `CONSOLE_WEBHOOK_TUNNEL=off` or `CONSOLE_PUBLIC_URL` is set) to
+  provide a permanent public HTTPS URL for external webhook senders.
 
-## 1. Non-Goals (v1)
+## 1. Current Server Implementation
 
-- **No webhooks / event triggers.** Amp's webhook story is a plugin surface
-  waking an orb; ours would be a relay endpoint waking a session. Defer until
-  a real external source (GitHub CI, incident tool) asks for it.
-- **No UI to author schedules.** Users author by talking. A read-only
-  indicator on scheduled threads (title, schedule, next run, prompt) is the
-  only UI cost in v1.
-- **No cross-session schedules.** An automation belongs to the session that
-  created it and wakes that session.
-- **No cron expressions.** Typed schedule structs only; the model translates.
+- **Global DB tables** (`internal/db/schema.go`):
+  - `automations` with partial unique index `idx_automations_one_active` on
+    `(session_id) WHERE status = 'active'`.
+  - `webhook_subscriptions` with topic/status and session indexes.
+  - `session_queue.source` column so queued server-triggered turns survive
+    restarts with their source tag intact.
+- **Services**:
+  - `internal/services/automations/`: CRUD, pause/resume, slot-anchored
+    `AfterFire` (no interval drift), and in-process pub/sub (`Subscribe`).
+  - `internal/services/webhooks/`: split into `webhooks.go`, `store.go`,
+    `auth.go` (query token, Bearer, `X-Webhook-Secret`, HMAC-SHA256), and
+    `match.go` (JSON dot-path + array filters, expiry, pub/sub).
+  - Session `SoftDelete` and `PermanentDelete` clean up both tables for the
+    deleted session.
+- **Run integration** (`internal/run/automations.go`, `internal/run/webhooks.go`):
+  - `StartAutomationScanner()` runs an immediate sweep on boot, ticks every
+    15s, retries transient errors up to 3 times, and stops cleanly on shutdown.
+  - `DeliverWebhook` matches incoming payloads and wakes matching sessions.
+- **HTTP & SSE routes** (`internal/routes/automations.go`, `internal/routes/webhooks.go`):
+  - Public ingress (above `RequireDeviceToken`): `POST /api/webhooks/:topic`
+    and `POST /api/webhooks/:topic/:id`.
+  - Authenticated REST + SSE (below `RequireDeviceToken`):
+    - `GET /api/automations`, `GET /api/automations/stream`,
+      `GET /api/sessions/:id/automation`, `POST /api/automations/:id/pause`,
+      `POST /api/automations/:id/resume`, `DELETE /api/automations/:id`.
+    - `GET /api/webhooks`, `GET /api/webhooks/stream`, `POST /api/webhooks`,
+      `GET /api/webhooks/:id`, `DELETE /api/webhooks/:id`.
 
-## 2. Pieces
+## 2. Client UI & Remaining TODOs
 
-- **`session_schedules` table** (`internal/db/schema.go`), next to
-  `session_queue`: id, session_id, prompt, schedule (typed), next_run_at,
-  status (active/paused/done), created_at. Persisted, so schedules survive
-  server restarts.
-- **Schedule manager** (`internal/services/` or `internal/run/`): a scanner
-  that ticks, finds due `active` schedules, computes `next_run_at` for
-  recurring ones (or flips one-shots to `done`), and enqueues.
-- **Wake = enqueue.** A fire is `QueuePrompt` into the owning session with the
-  saved prompt, tagged so the transcript shows it as a scheduled run. The run
-  package's `startStagedIfIdle` already handles the idle/steering cases; if a
-  run is active, the fire waits its turn in the queue.
-- **Tools** (`internal/agent/tools/automation_tool.go`): the four verbs,
-  registered in the registry like any other tool, writing through the db.
-- **Prompt/skill text**: how the model translates natural-language timing into
-  the typed schedule, how a monitoring prompt is written (what to inspect,
-  what to report, when to stop), and that the agent should delete its own
-  schedule on completion.
-
-## 3. Sequence
-
-1. **Stage 1 — one-shot + recurring schedules, same session, server-resident.**
-   Create/get/update/delete, persisted, fired by the scanner into the prompt
-   queue. This alone covers every example above.
-2. **Stage 2 — scheduled-thread indicator** in the client: next run, schedule,
-   saved prompt, pause/resume.
-3. **Stage 3 — event triggers via relay**, when something external needs to
-   wake a session.
-
-## 4. Verification
-
-- Unit: schedule math (interval, at, one-shot completion), scanner firing into
-  the queue, restart persistence.
-- End to end: create a 1-minute recurring automation in a test session, watch
-  two fires land as queued prompts, delete it, confirm no third fire.
-- A one-shot created in a session fires once, marks done, and the run's
-  transcript shows the saved prompt with thread context intact.
+- **Proto & transcript badge for server-triggered turns (TODO):**
+  - Add `source` to `AgentUserMessage` in `proto/console/v1/message.proto` (and
+    wire it in `agent/loop/proto.go` + `routes/proto_json.go`).
+  - In Desktop (GPUI) and Android (Compose), render turns with
+    `source == "automation"` or `source == "webhook"` with a distinct badge /
+    event card (e.g. "Scheduled run" / "Webhook event") instead of a user-sent
+    chat bubble.
+- **Live SSE state in clients (TODO):**
+  - Subscribe to `GET /api/automations/stream` and `GET /api/webhooks/stream`
+    so the UI updates immediately without reloading.
+  - Show a sidebar indicator on threads with active schedules/subscriptions and
+    a thread/composer status card (next run, waiting checks, pause/resume/delete).
+- **Completed row cleanup (TODO):**
+  - Currently, completed one-shot automations and `once: true` webhooks flip to
+    `status = 'done'` and remain in SQLite. Decide whether to delete them
+    immediately on completion or purge terminal (`done` / `expired`) rows on a
+    retention sweep (e.g. 7 days).
+- **Future schedule kinds (TODO):**
+  - Add `at` schedule kind (e.g. weekdays at 8:30) if needed.
