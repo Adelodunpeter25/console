@@ -196,6 +196,22 @@ func TestDevinProviderStreamTrailerError(t *testing.T) {
 	}
 }
 
+// An early failure (here the credential load) must still close the stream, or
+// the consumer blocks forever and the run never releases its session slot.
+func TestDevinProviderEarlyErrorClosesStream(t *testing.T) {
+	p := &devin.Provider{CredentialLoader: func() (devin.ParsedCredential, error) {
+		return devin.ParsedCredential{}, io.ErrUnexpectedEOF
+	}}
+	events := stream.New[loop.Event]()
+	if err := p.RunTurn(context.Background(), loop.TurnRequest{Model: "swe-1-6"}, events); err == nil {
+		t.Fatal("expected error")
+	}
+	_, err, ok := events.Next()
+	if ok || err == nil {
+		t.Fatalf("stream not failed: ok=%v err=%v", ok, err)
+	}
+}
+
 // devinCatalogServer answers GetCliModelConfigs with the given configs.
 func devinCatalogServer(t *testing.T, configs []*exav1.ClientModelConfig) *httptest.Server {
 	t.Helper()

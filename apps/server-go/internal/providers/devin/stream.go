@@ -72,6 +72,18 @@ type streamedToolCall struct {
 
 // RunTurn implements loop.Provider: one streaming assistant turn.
 func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *stream.Stream[loop.Event]) error {
+	err := p.runTurn(ctx, req, events)
+	if err != nil {
+		// Early failures (credentials, auth, model assignment) return before
+		// the stream is closed; without this the consumer blocks forever and
+		// the run never releases its session slot. Fail is a no-op when the
+		// stream is already done.
+		events.Fail(err)
+	}
+	return err
+}
+
+func (p *Provider) runTurn(ctx context.Context, req loop.TurnRequest, events *stream.Stream[loop.Event]) error {
 	cred, err := p.loadCredential(req.AccountID)
 	if err != nil {
 		return err
@@ -191,7 +203,11 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 	})
 
 	// Emit finalized tool calls before usage/termination (Push after
-	// termination drops).
+	// termination drops). A cancelled stream leaves cumulative arguments
+	// cut off mid-JSON, so partial calls are dropped.
+	if ctx.Err() != nil {
+		toolOrder = nil
+	}
 	for _, id := range toolOrder {
 		block := toolCalls[id]
 		args := block.arguments
