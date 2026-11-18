@@ -32,6 +32,7 @@ func (r *Runtime) webhookPayload(sub *webhooks.Subscription) map[string]any {
 		"status":        sub.Status,
 		"fire_count":    sub.FireCount,
 		"created_at":    sub.CreatedAt,
+		"now":           time.Now().Unix(),
 		"webhook_path":  path,
 		"topic_path":    fmt.Sprintf("/api/webhooks/%s", sub.Topic),
 	}

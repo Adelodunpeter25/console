@@ -147,18 +147,26 @@ func consoleCatalog() []methodDef {
 			"prompt":           str(true, "prompt to run when the schedule fires"),
 			"kind":             str(true, "once or interval"),
 			"interval_seconds": integer(false, "repeat interval in seconds (required when kind is interval)"),
-			"run_at":           integer(false, "unix timestamp in seconds to fire (required when kind is once)"),
+			"run_at":           integer(false, "unix timestamp in seconds to fire (for kind once)"),
+			"in_seconds":       integer(false, "relative delay in seconds from now (alternative to run_at for kind once)"),
 		}, handler: (*Runtime).automationCreate},
 		{name: "automation.get", description: "Read one automation by id, or list this session's automations when id is omitted.", args: map[string]ArgSpec{
 			"id": str(false, "automation id"),
 		}, handler: (*Runtime).automationGet},
-		{name: "automation.update", description: "Update an active or paused automation and re-arm its next run from now.", args: map[string]ArgSpec{
+		{name: "automation.update", description: "Update an active, paused, or errored automation and re-arm its next run from now.", args: map[string]ArgSpec{
 			"id":               str(true, "automation id"),
 			"prompt":           str(false, "new prompt"),
 			"kind":             str(false, "once or interval"),
 			"interval_seconds": integer(false, "new interval in seconds"),
 			"run_at":           integer(false, "new unix timestamp in seconds"),
+			"in_seconds":       integer(false, "relative delay in seconds from now (alternative to run_at for kind once)"),
 		}, handler: (*Runtime).automationUpdate},
+		{name: "automation.pause", description: "Pause an active automation on this session.", args: map[string]ArgSpec{
+			"id": str(true, "automation id"),
+		}, handler: (*Runtime).automationPause},
+		{name: "automation.resume", description: "Resume a paused or errored automation on this session.", args: map[string]ArgSpec{
+			"id": str(true, "automation id"),
+		}, handler: (*Runtime).automationResume},
 		{name: "automation.delete", description: "Delete an automation (call when a monitoring task is complete).", args: map[string]ArgSpec{
 			"id": str(true, "automation id"),
 		}, handler: (*Runtime).automationDelete},

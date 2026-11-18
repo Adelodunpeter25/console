@@ -7,6 +7,7 @@ package automations
 import (
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
@@ -81,6 +82,11 @@ func (s *Service) Create(sessionID, prompt, kind string, intervalSeconds, runAt 
 	if kind == KindOnce && runAt <= 0 {
 		return nil, errors.New("once automations need a future runAt")
 	}
+	if kind == KindInterval {
+		runAt = 0
+	} else {
+		intervalSeconds = 0
+	}
 	next := runAt
 	if kind == KindInterval {
 		next = now.Unix() + intervalSeconds
@@ -90,28 +96,17 @@ func (s *Service) Create(sessionID, prompt, kind string, intervalSeconds, runAt 
 		Kind: kind, IntervalSeconds: intervalSeconds, RunAt: runAt,
 		NextRunAt: next, Status: StatusActive, CreatedAt: now.Unix(),
 	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	var activeCount int
-	if err := tx.QueryRow(
-		`SELECT COUNT(*) FROM automations WHERE session_id = ? AND status = 'active'`,
-		sessionID).Scan(&activeCount); err != nil {
-		return nil, err
-	}
-	if activeCount > 0 {
-		return nil, ErrActiveExists
-	}
-	if _, err := tx.Exec(
+	if _, err := s.db.Exec(
 		`INSERT INTO automations (`+columns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)`,
 		a.ID, a.SessionID, a.Prompt, a.Kind,
 		nullable(a.IntervalSeconds > 0, a.IntervalSeconds), nullable(a.RunAt > 0, a.RunAt),
 		a.NextRunAt, a.Status, a.CreatedAt); err != nil {
+		if isUniqueConstraintErr(err) {
+			return nil, ErrActiveExists
+		}
 		return nil, err
 	}
-	return a, tx.Commit()
+	return a, nil
 }
 
 func nullable(has bool, v int64) any {
@@ -163,9 +158,14 @@ func scanRows(rows *sql.Rows) ([]Automation, error) {
 	return out, rows.Err()
 }
 
-// Update rewrites the mutable fields of an active automation and recomputes
-// next_run_at from now. Returns (nil, nil) when the id is unknown.
+// Update rewrites the mutable fields of an active, paused, or errored
+// automation and recomputes next_run_at from now. Updating an errored
+// automation revives it to active. Returns (nil, nil) when the id is unknown or
+// already done.
 func (s *Service) Update(id, prompt, kind string, intervalSeconds, runAt int64, now time.Time) (*Automation, error) {
+	if prompt == "" {
+		return nil, errors.New("automation prompt is required")
+	}
 	if kind != KindOnce && kind != KindInterval {
 		return nil, errors.New("automation kind must be 'once' or 'interval'")
 	}
@@ -175,15 +175,68 @@ func (s *Service) Update(id, prompt, kind string, intervalSeconds, runAt int64, 
 	if kind == KindOnce && runAt <= 0 {
 		return nil, errors.New("once automations need a future runAt")
 	}
+	if kind == KindInterval {
+		runAt = 0
+	} else {
+		intervalSeconds = 0
+	}
 	next := runAt
 	if kind == KindInterval {
 		next = now.Unix() + intervalSeconds
 	}
 	res, err := s.db.Exec(
-		`UPDATE automations SET prompt = ?, kind = ?, interval_seconds = ?, run_at = ?, next_run_at = ?, last_error = NULL
-		 WHERE id = ? AND status IN ('active', 'paused')`,
+		`UPDATE automations
+		 SET prompt = ?, kind = ?, interval_seconds = ?, run_at = ?, next_run_at = ?,
+		     status = CASE status WHEN 'error' THEN 'active' ELSE status END,
+		     last_error = NULL
+		 WHERE id = ? AND status IN ('active', 'paused', 'error')`,
 		prompt, kind, nullable(intervalSeconds > 0, intervalSeconds), nullable(runAt > 0, runAt), next, id)
 	if err != nil {
+		if isUniqueConstraintErr(err) {
+			return nil, ErrActiveExists
+		}
+		return nil, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, nil
+	}
+	return s.Get(id)
+}
+
+// Pause pauses an active automation.
+func (s *Service) Pause(id string) (*Automation, error) {
+	res, err := s.db.Exec(`UPDATE automations SET status = 'paused' WHERE id = ? AND status = 'active'`, id)
+	if err != nil {
+		return nil, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, nil
+	}
+	return s.Get(id)
+}
+
+// Resume activates a paused or errored automation, clearing any prior error and
+// advancing stale interval schedules past now.
+func (s *Service) Resume(id string, now time.Time) (*Automation, error) {
+	cur, err := s.Get(id)
+	if err != nil || cur == nil {
+		return nil, err
+	}
+	if cur.Status != StatusPaused && cur.Status != StatusError {
+		return nil, nil
+	}
+	next := cur.NextRunAt
+	if cur.Kind == KindInterval && cur.IntervalSeconds > 0 && next <= now.Unix() {
+		next = now.Unix() + cur.IntervalSeconds
+	}
+	res, err := s.db.Exec(
+		`UPDATE automations SET status = 'active', next_run_at = ?, last_error = NULL
+		 WHERE id = ? AND status IN ('paused', 'error')`,
+		next, id)
+	if err != nil {
+		if isUniqueConstraintErr(err) {
+			return nil, ErrActiveExists
+		}
 		return nil, err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
@@ -243,19 +296,31 @@ func (s *Service) AfterFire(id string, fireErr error, now time.Time) error {
 			now.Unix(), fireErr.Error(), id)
 		return err
 	}
-	_, err := s.db.Exec(
+	cur, err := s.Get(id)
+	if err != nil || cur == nil {
+		return err
+	}
+	next := cur.NextRunAt
+	if cur.Kind == KindInterval && cur.IntervalSeconds > 0 {
+		if now.Unix() < cur.NextRunAt {
+			next = now.Unix() + cur.IntervalSeconds
+		} else {
+			// Anchor to the scheduled slot so scan lateness does not drift,
+			// skipping missed slots rather than burst-firing catch-ups.
+			steps := (now.Unix()-cur.NextRunAt)/cur.IntervalSeconds + 1
+			next = cur.NextRunAt + steps*cur.IntervalSeconds
+		}
+	}
+	_, err = s.db.Exec(
 		`UPDATE automations SET status = CASE kind WHEN 'once' THEN 'done' ELSE status END,
 		 	last_fired_at = ?,
-			next_run_at = CASE kind WHEN 'interval' THEN ? ELSE next_run_at END
+			next_run_at = CASE kind WHEN 'interval' THEN ? ELSE next_run_at END,
+			last_error = NULL
 		 WHERE id = ?`,
-		now.Unix(), now.Unix()+intervalOf(s.db, id), id)
+		now.Unix(), next, id)
 	return err
 }
 
-// intervalOf reads the interval back for the CASE branch; simpler than a
-// second query shape in AfterFire.
-func intervalOf(db *sql.DB, id string) int64 {
-	var interval sql.NullInt64
-	_ = db.QueryRow(`SELECT interval_seconds FROM automations WHERE id = ?`, id).Scan(&interval)
-	return interval.Int64
+func isUniqueConstraintErr(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
 }

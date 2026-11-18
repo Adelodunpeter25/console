@@ -63,6 +63,27 @@ func TestConsoleAutomationLifecycle(t *testing.T) {
 	if _, err := runtime.Eval(t.Context(), `console.automation.get({id:"`+id+`"})`, time.Second); err == nil {
 		t.Fatal("get after delete should fail")
 	}
+
+	// Relative scheduling with in_seconds + pause/resume + kind switch.
+	rel := evalJSON(t, runtime,
+		`console.automation.create({prompt:"ping later", kind:"once", in_seconds:18000})`).(map[string]any)
+	relID := rel["id"].(string)
+	if rel["now"] == nil || rel["run_at"].(float64) <= rel["now"].(float64) {
+		t.Fatalf("relative schedule = %#v", rel)
+	}
+	paused := evalJSON(t, runtime, `console.automation.pause({id:"`+relID+`"})`).(map[string]any)
+	if paused["status"] != "paused" {
+		t.Fatalf("pause = %#v", paused)
+	}
+	resumed := evalJSON(t, runtime, `console.automation.resume({id:"`+relID+`"})`).(map[string]any)
+	if resumed["status"] != "active" {
+		t.Fatalf("resume = %#v", resumed)
+	}
+	switched := evalJSON(t, runtime,
+		`console.automation.update({id:"`+relID+`", kind:"interval", interval_seconds:60})`).(map[string]any)
+	if switched["kind"] != "interval" || switched["run_at"].(float64) != 0 {
+		t.Fatalf("kind switch should clear run_at: %#v", switched)
+	}
 }
 
 func TestConsoleAutomationScopeRefusesOtherSession(t *testing.T) {

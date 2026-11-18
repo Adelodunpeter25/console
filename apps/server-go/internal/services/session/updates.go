@@ -129,6 +129,10 @@ func (s *Service) PermanentDelete(sessionID string) (bool, error) {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
+	if n > 0 {
+		_, _ = s.manager.Global().Exec(`DELETE FROM automations WHERE session_id = ?`, sessionID)
+		_, _ = s.manager.Global().Exec(`DELETE FROM webhook_subscriptions WHERE session_id = ?`, sessionID)
+	}
 	return n > 0, nil
 }
 

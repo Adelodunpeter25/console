@@ -1,11 +1,12 @@
 // Automation scanner: wakes sessions whose scheduled prompt is due. A fire is
-// an ordinary prompt on the owning session (start now when idle, queue when
-// busy), so it appears in the thread like any other turn.
+// a tagged prompt on the owning session (start now when idle, queue when
+// busy), so it appears in the thread with full context.
 package run
 
 import (
 	"errors"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
@@ -15,12 +16,18 @@ import (
 // most one tick late, which is fine for minute-scale schedules.
 const AutomationScanInterval = 15 * time.Second
 
+const maxTransientAutomationFailures = 3
+
 // SetAutomations attaches the automation store backing the console.automation
 // tools and the scanner (nil-safe: without it the tools report unavailable).
 func (s *Service) SetAutomations(store *automations.Service) {
 	s.mu.Lock()
 	s.automations = store
+	manager := s.consoleManager
 	s.mu.Unlock()
+	if manager != nil {
+		manager.SetAutomations(store)
+	}
 }
 
 func (s *Service) automationStore() *automations.Service {
@@ -29,22 +36,39 @@ func (s *Service) automationStore() *automations.Service {
 	return s.automations
 }
 
-// RunAutomationScanner sweeps due automations until ctx is canceled. One
-// goroutine per server; started after wiring in routes.go.
-func (s *Service) RunAutomationScanner(ctx interface{ Done() <-chan struct{} }) {
-	ticker := time.NewTicker(AutomationScanInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.fireDueAutomations(time.Now())
+// StartAutomationScanner runs an immediate sweep and then sweeps due
+// automations every AutomationScanInterval until the returned stop func is
+// called.
+func (s *Service) StartAutomationScanner() func() {
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	var once sync.Once
+	failures := map[string]int{}
+
+	go func() {
+		defer close(done)
+		s.fireDueAutomations(time.Now(), failures)
+		ticker := time.NewTicker(AutomationScanInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				s.fireDueAutomations(time.Now(), failures)
+			}
 		}
+	}()
+
+	return func() {
+		once.Do(func() {
+			close(stop)
+			<-done
+		})
 	}
 }
 
-func (s *Service) fireDueAutomations(now time.Time) {
+func (s *Service) fireDueAutomations(now time.Time, failures map[string]int) {
 	store := s.automationStore()
 	if store == nil {
 		return
@@ -62,16 +86,19 @@ func (s *Service) fireDueAutomations(now time.Time) {
 			continue
 		}
 		var fireErr error
-		if _, err := s.promptSession(current.SessionID, current.Prompt, "", "", "", ""); err != nil {
-			// An unknown session (deleted chat) is permanent; anything else
-			// is worth one retry next tick.
+		if _, err := s.promptSessionWithSource(current.SessionID, current.Prompt, "automation", "", "", "", ""); err != nil {
 			if errors.Is(err, ErrNoSession) {
 				fireErr = err
 			} else {
-				slog.Warn("automation fire failed", "automation", current.ID, "error", err)
-				continue
+				failures[current.ID]++
+				slog.Warn("automation fire failed", "automation", current.ID, "attempt", failures[current.ID], "error", err)
+				if failures[current.ID] < maxTransientAutomationFailures {
+					continue
+				}
+				fireErr = err
 			}
 		}
+		delete(failures, current.ID)
 		if err := store.AfterFire(current.ID, fireErr, now); err != nil {
 			slog.Warn("automation post-fire update failed", "automation", current.ID, "error", err)
 		} else if fireErr == nil {

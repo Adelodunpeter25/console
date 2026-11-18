@@ -58,6 +58,9 @@ type Prompt struct {
 	// Synthetic marks a server-initiated wake turn (finished background work
 	// continuing an idle session). Its text is built from the claimed work.
 	Synthetic bool
+	// Source tags server-initiated turns (e.g. "automation", "webhook") so
+	// transcripts distinguish them from user-typed prompts.
+	Source string
 	// woken lists the work that triggered a synthetic turn (wire event only).
 	woken []background.Work
 }

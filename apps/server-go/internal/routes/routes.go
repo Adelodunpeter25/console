@@ -2,7 +2,6 @@
 package routes
 
 import (
-	"context"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"log/slog"
 	"strings"
@@ -147,7 +146,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	runSvc.SetWebhooks(webhooks.New(cfg.DB.Global()))
 	runSvc.SetWebhookBaseURL(defaultWebhookBaseURL)
 	runSvc.SetConsoleServices(projects)
-	go runSvc.RunAutomationScanner(context.Background())
+	stopAutomationScanner := runSvc.StartAutomationScanner()
 	mcpManager := mcp.NewManager(mcp.NewConfigStore(""), mcp.NewCredentialStore(""), nil)
 	runSvc.SetMCP(mcpManager)
 	go mcpManager.AutoConnect()
@@ -188,6 +187,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	// scripts. Called once, after the HTTP listener drains, so "stop the
 	// server" really means stop everything — not just the API.
 	shutdown := func() {
+		stopAutomationScanner()
 		runSvc.AbortAll()
 		bashJobs.KillAll()
 		ptyManager.KillAll()

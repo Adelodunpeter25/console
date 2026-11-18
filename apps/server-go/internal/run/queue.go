@@ -36,7 +36,7 @@ func (s *Service) stage(sessionID string, dto Prompt, front bool) (*types.Queued
 		ID: utils.RandomID(), SessionID: sessionID, Prompt: dto.Text, ContextFiles: dto.ContextFiles,
 		Annotations: dto.Annotations,
 		ModelID:     dto.ModelID, Provider: dto.Provider, ApprovalMode: dto.ApprovalMode,
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		Source: dto.Source, CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 	for _, a := range dto.Attachments {
 		qp.Attachments = append(qp.Attachments, types.QueuedAttachment{Data: a.Data, MimeType: a.MimeType})
@@ -111,6 +111,7 @@ func (s *Service) EditQueuedPrompt(sessionID string, dto Prompt) (*types.QueuedP
 	existing.ModelID = dto.ModelID
 	existing.Provider = dto.Provider
 	existing.ApprovalMode = dto.ApprovalMode
+	existing.Source = dto.Source
 	existing.Attachments = nil
 	for _, a := range dto.Attachments {
 		existing.Attachments = append(existing.Attachments, types.QueuedAttachment{Data: a.Data, MimeType: a.MimeType})
@@ -216,7 +217,7 @@ func (s *Service) takeStaged(sessionID string) (Prompt, bool) {
 	out := Prompt{
 		Text: stored.Prompt, ContextFiles: stored.ContextFiles, Annotations: stored.Annotations,
 		ModelID: stored.ModelID, Provider: stored.Provider,
-		ApprovalMode: stored.ApprovalMode,
+		ApprovalMode: stored.ApprovalMode, Source: stored.Source,
 	}
 	for _, a := range stored.Attachments {
 		out.Attachments = append(out.Attachments, Attachment{Data: a.Data, MimeType: a.MimeType})

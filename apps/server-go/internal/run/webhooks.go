@@ -25,7 +25,11 @@ var ErrWebhooksUnavailable = errors.New("webhooks are unavailable")
 func (s *Service) SetWebhooks(store *webhooks.Service) {
 	s.mu.Lock()
 	s.webhooks = store
+	manager := s.consoleManager
 	s.mu.Unlock()
+	if manager != nil {
+		manager.SetWebhooks(store)
+	}
 }
 
 func (s *Service) webhookStore() *webhooks.Service {
@@ -61,7 +65,7 @@ func (s *Service) DeliverWebhook(topic, subID string, headers map[string]string,
 	for _, sub := range matched {
 		prompt := formatWebhookPrompt(sub, headers, body)
 		var fireErr error
-		if _, err := s.promptSession(sub.SessionID, prompt, "", "", "", ""); err != nil {
+		if _, err := s.promptSessionWithSource(sub.SessionID, prompt, "webhook", "", "", "", ""); err != nil {
 			if errors.Is(err, ErrNoSession) {
 				fireErr = err
 			} else {

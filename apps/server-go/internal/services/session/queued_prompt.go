@@ -10,7 +10,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
-const queuedColumns = `queue_id, prompt, context_files, attachments, annotations, model_id, provider, approval_mode, created_at`
+const queuedColumns = `queue_id, prompt, context_files, attachments, annotations, model_id, provider, approval_mode, source, created_at`
 
 // jsonColumn stores v as JSON text, or NULL when it is empty.
 func jsonColumn(empty bool, v any) (any, error) {
@@ -70,14 +70,14 @@ func (s *Service) saveQueuedPrompt(sessionID string, qp types.QueuedPrompt, fron
 	}
 	_, err = conn.Exec(
 		`INSERT INTO session_queue (seq, `+queuedColumns+`)
-		 VALUES (`+seq+`, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 VALUES (`+seq+`, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(queue_id) DO UPDATE SET prompt = excluded.prompt,
 		 context_files = excluded.context_files,
 		 attachments = excluded.attachments, annotations = excluded.annotations, model_id = excluded.model_id,
 		 provider = excluded.provider, approval_mode = excluded.approval_mode,
-		 created_at = excluded.created_at`,
+		 source = excluded.source, created_at = excluded.created_at`,
 		qp.ID, qp.Prompt, contextFiles, attachments, annotations, nullString(qp.ModelID), nullString(qp.Provider),
-		nullString(qp.ApprovalMode), createdAt.UnixMilli())
+		nullString(qp.ApprovalMode), nullString(qp.Source), createdAt.UnixMilli())
 	return err
 }
 
@@ -111,16 +111,17 @@ func (s *Service) ListQueuedPrompts(sessionID string) ([]types.QueuedPrompt, err
 			modelID      sql.NullString
 			provider     sql.NullString
 			approvalMode sql.NullString
+			source       sql.NullString
 			createdAt    int64
 		}
 		if err := rows.Scan(&row.queueID, &row.prompt, &row.contextFiles, &row.attachments, &row.annotations,
-			&row.modelID, &row.provider, &row.approvalMode, &row.createdAt); err != nil {
+			&row.modelID, &row.provider, &row.approvalMode, &row.source, &row.createdAt); err != nil {
 			return nil, err
 		}
 		qp := types.QueuedPrompt{
 			ID: row.queueID, SessionID: sessionID, Prompt: row.prompt,
 			ModelID: row.modelID.String, Provider: row.provider.String,
-			ApprovalMode: row.approvalMode.String,
+			ApprovalMode: row.approvalMode.String, Source: row.source.String,
 			CreatedAt:    time.UnixMilli(row.createdAt).UTC().Format(time.RFC3339),
 		}
 		if row.attachments.Valid && row.attachments.String != "" {

@@ -359,6 +359,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		ContextFiles: dto.ContextFiles,
 		Annotations:  dto.Annotations,
 		Synthetic:    dto.Synthetic,
+		Source:       dto.Source,
 		ApprovalMode: string(mode),
 	}
 	for _, a := range dto.Attachments {

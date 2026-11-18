@@ -142,3 +142,49 @@ func TestUpdatePausedAndDelete(t *testing.T) {
 		t.Fatal("deleted automation still exists")
 	}
 }
+
+func TestSlotAnchoredAfterFireAndKindSwitchAndRevive(t *testing.T) {
+	store := newTestStore(t)
+	base := time.Unix(1_700_000_000, 0)
+
+	a, err := store.Create("s1", "tick", KindInterval, 300, 0, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Fired 12s late: next_run_at stays anchored to base+600, not base+312+300.
+	if err := store.AfterFire(a.ID, nil, base.Add(312*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := store.Get(a.ID)
+	if got.NextRunAt != base.Unix()+600 {
+		t.Fatalf("anchored next_run_at = %d, want %d", got.NextRunAt, base.Unix()+600)
+	}
+
+	// Switching interval -> once clears interval_seconds; switching back clears run_at.
+	onceAt := base.Add(time.Hour).Unix()
+	switched, err := store.Update(a.ID, "once now", KindOnce, 0, onceAt, base)
+	if err != nil || switched.IntervalSeconds != 0 || switched.RunAt != onceAt {
+		t.Fatalf("switch to once = %+v, err=%v", switched, err)
+	}
+	back, err := store.Update(a.ID, "interval again", KindInterval, 120, 0, base)
+	if err != nil || back.RunAt != 0 || back.IntervalSeconds != 120 {
+		t.Fatalf("switch to interval = %+v, err=%v", back, err)
+	}
+
+	// Pause and resume.
+	paused, err := store.Pause(a.ID)
+	if err != nil || paused.Status != StatusPaused {
+		t.Fatalf("pause = %+v, err=%v", paused, err)
+	}
+	resumed, err := store.Resume(a.ID, base.Add(10*time.Minute))
+	if err != nil || resumed.Status != StatusActive || resumed.NextRunAt != base.Add(10*time.Minute).Unix()+120 {
+		t.Fatalf("resume = %+v, err=%v", resumed, err)
+	}
+
+	// Error state can be revived via Update or Resume.
+	_ = store.AfterFire(a.ID, errors.New("boom"), base)
+	revived, err := store.Resume(a.ID, base.Add(time.Minute))
+	if err != nil || revived.Status != StatusActive || revived.LastError != "" {
+		t.Fatalf("revive = %+v, err=%v", revived, err)
+	}
+}

@@ -79,6 +79,7 @@ func InitGlobalDB(db *sql.DB, path string) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_automations_due ON automations(status, next_run_at);
 		CREATE INDEX IF NOT EXISTS idx_automations_session ON automations(session_id);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_automations_one_active ON automations(session_id) WHERE status = 'active';
 
 		-- Webhook subscriptions: generic external event triggers an agent
 		-- creates for its own session (console.webhooks.*). Global so the
@@ -359,6 +360,7 @@ func InitSessionDB(db *sql.DB, path string) error {
 			model_id TEXT,
 			provider TEXT,
 			approval_mode TEXT,
+			source TEXT,
 			created_at INTEGER NOT NULL
 		);
 		INSERT OR IGNORE INTO session_queue
@@ -394,6 +396,19 @@ func InitSessionDB(db *sql.DB, path string) error {
 	}
 	if userMsgCount == 0 {
 		if _, err := db.Exec(`ALTER TABLE session_file_changes ADD COLUMN user_message_id TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+
+	// Additive migration: add source to pre-existing session_queue rows.
+	var queueSourceCount int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('session_queue') WHERE name = 'source'`,
+	).Scan(&queueSourceCount); err != nil {
+		return err
+	}
+	if queueSourceCount == 0 {
+		if _, err := db.Exec(`ALTER TABLE session_queue ADD COLUMN source TEXT`); err != nil {
 			return err
 		}
 	}

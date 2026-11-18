@@ -17,7 +17,11 @@ func (s *Service) PromptSession(sessionID, text, modelID, provider, approval, th
 //
 // A busy session queues the prompt behind any the user already staged.
 func (s *Service) promptSession(sessionID, text, modelID, provider, approval, thinking string) (queued bool, err error) {
-	dto := Prompt{Text: text, ModelID: modelID, Provider: provider, ApprovalMode: approval, Thinking: thinking}
+	return s.promptSessionWithSource(sessionID, text, "", modelID, provider, approval, thinking)
+}
+
+func (s *Service) promptSessionWithSource(sessionID, text, source, modelID, provider, approval, thinking string) (queued bool, err error) {
+	dto := Prompt{Text: text, Source: source, ModelID: modelID, Provider: provider, ApprovalMode: approval, Thinking: thinking}
 
 	if !s.IsActive(sessionID) {
 		_, err := s.StartRun(sessionID, dto)
