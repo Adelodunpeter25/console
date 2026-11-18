@@ -643,7 +643,9 @@ impl RenderOnce for SidebarView {
             .child(
                 div()
                     .pt(px(4.0))
-                    .pb(px(8.0))
+                    .pb(px(6.0))
+                    .border_b_1()
+                    .border_color(theme.sidebar_border)
                     .flex()
                     .flex_col()
                     .gap_y(px(4.0))
