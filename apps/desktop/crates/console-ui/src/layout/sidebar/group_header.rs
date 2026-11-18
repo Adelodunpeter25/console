@@ -61,7 +61,7 @@ fn section_header(
         )
 }
 
-/// A project row: a placeholder avatar, the bold project name, and a plain `+`
+/// A project row: the bold project name, and a plain `+`
 /// on the right that starts a new chat in that project. Clicking the row
 /// collapses or expands it.
 pub fn project_header(
@@ -73,11 +73,6 @@ pub fn project_header(
     on_toggle: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 ) -> impl IntoElement {
     let group_name: SharedString = format!("sidebar-project-header-{key}").into();
-    let initial = name
-        .chars()
-        .next()
-        .map(|c| c.to_uppercase().to_string())
-        .unwrap_or_default();
     let toggle_key = key.clone();
     let new_chat_key = key.clone();
     let chevron_rotation = if collapsed { 0.75 } else { 0.0 };
@@ -103,20 +98,6 @@ pub fn project_header(
                 .gap(px(10.0))
                 .cursor_default()
                 .on_click(move |_, window, cx| (on_toggle)(toggle_key.clone(), window, cx))
-                .child(
-                    div()
-                        .size(px(26.0))
-                        .flex_none()
-                        .rounded_full()
-                        .bg(theme.overlay_strong)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_size(px(11.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.text_secondary)
-                        .child(initial),
-                )
                 .child(
                     div()
                         .truncate()
