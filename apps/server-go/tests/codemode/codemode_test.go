@@ -675,3 +675,43 @@ func TestCodemodeHelpAndDescribe(t *testing.T) {
 		t.Fatalf("describe(bogus) should fail and point at help: %v", env.Content)
 	}
 }
+func TestCodeModePropagatesHtmlArtifact(t *testing.T) {
+	registry := tools.NewRegistry()
+	registry.Add(tools.NewTool("render", "Render HTML", tools.TierRead, func(_ context.Context, in struct{ HTML string `json:"html"` }) (any, error) {
+		return tools.Envelope{
+			Content: "Rendered page.",
+			Html: &tools.HtmlArtifact{
+				Path:   "/workspace/page.html",
+				Title:  "My Page",
+				Height: 400,
+			},
+		}, nil
+	}))
+	exec := loop.NewExecutor(registry, permissions.FullAccess)
+	exec.Guard = permissions.NewGuard(t.TempDir())
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	codeTool := codemode.NewCodeTool(rt)
+	raw, err := json.Marshal(map[string]any{
+		"code": `await render({ html: "<h1>Hi</h1>" });`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := codeTool.Execute(context.Background(), raw)
+	if err != nil {
+		t.Fatalf("execute code: %v", err)
+	}
+	env, ok := out.(tools.Envelope)
+	if !ok {
+		t.Fatalf("expected Envelope, got %T", out)
+	}
+	if env.Html == nil {
+		t.Fatal("expected Html artifact on Envelope, got nil")
+	}
+	if env.Html.Path != "/workspace/page.html" || env.Html.Title != "My Page" || env.Html.Height != 400 {
+		t.Fatalf("unexpected Html artifact: %+v", env.Html)
+	}
+}

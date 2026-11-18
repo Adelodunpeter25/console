@@ -40,6 +40,8 @@ type Runtime struct {
 	opts   Options
 	store  map[string]any
 	traces []CallTrace
+	visual *tools.VisualArtifact
+	html   *tools.HtmlArtifact
 }
 
 // Options configures optional capabilities installed in the REPL.
@@ -158,6 +160,8 @@ func (r *Runtime) Reset() error {
 func (r *Runtime) Eval(ctx context.Context, code string, timeout time.Duration) (any, error) {
 	r.mu.Lock()
 	r.traces = nil
+	r.visual = nil
+	r.html = nil
 	r.mu.Unlock()
 
 	res, evalErr := r.kernel.Eval(ctx, code, timeout)
@@ -165,6 +169,8 @@ func (r *Runtime) Eval(ctx context.Context, code string, timeout time.Duration) 
 	r.mu.Lock()
 	traces := make([]CallTrace, len(r.traces))
 	copy(traces, r.traces)
+	capturedVisual := r.visual
+	capturedHtml := r.html
 	r.mu.Unlock()
 
 	traceText := formatTraces(traces)
@@ -188,7 +194,7 @@ func (r *Runtime) Eval(ctx context.Context, code string, timeout time.Duration) 
 		}
 	}
 
-	return tools.Envelope{Content: outputText, IsError: false}, nil
+	return tools.Envelope{Content: outputText, IsError: false, Visual: capturedVisual, Html: capturedHtml}, nil
 }
 
 func (r *Runtime) recordTrace(trace CallTrace) {
@@ -258,6 +264,15 @@ func (r *Runtime) dispatchCall(ctx context.Context, args map[string]any) (*jsker
 		})
 		return nil, execErr
 	}
+
+	r.mu.Lock()
+	if res.Visual != nil {
+		r.visual = res.Visual
+	}
+	if res.Html != nil {
+		r.html = res.Html
+	}
+	r.mu.Unlock()
 
 	if res.IsError {
 		errMsg := formatContentString(res.Content)
