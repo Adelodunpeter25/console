@@ -22,6 +22,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -83,6 +84,8 @@ type Service struct {
 	// automations backs the console.automation.* tools and the fire scanner
 	// (nil-safe: tools report unavailable and the scanner does nothing).
 	automations *automations.Service
+	// webhooks backs the console.webhooks.* tools and public webhook ingress.
+	webhooks *webhooks.Service
 	ports       *terminalsvc.PortRegistry
 	scripts     *projectssvc.ProjectScriptsService
 	mcp         *mcp.Manager
@@ -257,6 +260,7 @@ func (s *Service) SetConsoleServices(projects *projectssvc.ProjectService) {
 		manager.SetSessions(sessions, projects, s.IsActive, s.abortAndClear, s.startConsoleSession, s.promptSession, console.QueueControl{Get: s.consoleQueued, Clear: s.ClearQueuedPrompt})
 		manager.SetBackgroundWork(s.BackgroundWorkManager)
 		manager.SetAutomations(s.automationStore())
+		manager.SetWebhooks(s.webhookStore())
 	}
 }
 

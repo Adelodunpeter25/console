@@ -14,6 +14,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
 )
 
 // Manager hands out per-session console kernels.
@@ -26,7 +27,9 @@ type Manager struct {
 	sessions    *services.SessionService
 	projects    *projectssvc.ProjectService
 	mcp         *mcp.Manager
-	automations *automations.Service
+	automations    *automations.Service
+	webhooks       *webhooks.Service
+	webhookBaseURL func() string
 	active      func(string) bool
 	start       func(string, string, string, string, string, string) error
 	abort       func(string) bool
@@ -90,6 +93,32 @@ func (m *Manager) automationStore() *automations.Service {
 	return m.automations
 }
 
+// SetWebhooks attaches the store behind console.webhooks.*.
+func (m *Manager) SetWebhooks(store *webhooks.Service) {
+	m.mu.Lock()
+	m.webhooks = store
+	m.mu.Unlock()
+}
+
+func (m *Manager) webhookStore() *webhooks.Service {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.webhooks
+}
+
+// SetWebhookBaseURL attaches a resolver for the server's public webhook base URL.
+func (m *Manager) SetWebhookBaseURL(fn func() string) {
+	m.mu.Lock()
+	m.webhookBaseURL = fn
+	m.mu.Unlock()
+}
+
+func (m *Manager) webhookBaseURLFn() func() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.webhookBaseURL
+}
+
 func (m *Manager) mcpManager() *mcp.Manager {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -139,6 +168,8 @@ func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, er
 		runtime.sessionID = sessionID
 		runtime.work = m.backgroundWork()
 		runtime.automations = m.automationStore()
+		runtime.webhooks = m.webhookStore()
+		runtime.webhookBaseURL = m.webhookBaseURLFn()
 		runtime.SetCancel(m.Stopped)
 		return runtime, nil
 	})

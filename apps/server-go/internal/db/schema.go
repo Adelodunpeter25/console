@@ -80,6 +80,28 @@ func InitGlobalDB(db *sql.DB, path string) error {
 		CREATE INDEX IF NOT EXISTS idx_automations_due ON automations(status, next_run_at);
 		CREATE INDEX IF NOT EXISTS idx_automations_session ON automations(session_id);
 
+		-- Webhook subscriptions: generic external event triggers an agent
+		-- creates for its own session (console.webhooks.*). Global so the
+		-- public ingress route can match incoming events across all sessions
+		-- and subscriptions survive server restarts.
+		CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+			id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			topic TEXT NOT NULL,
+			secret TEXT NOT NULL,
+			filter_json TEXT NOT NULL DEFAULT '{}',
+			prompt TEXT NOT NULL,
+			once INTEGER NOT NULL DEFAULT 1,
+			status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'done', 'expired', 'error')),
+			expires_at INTEGER,
+			last_fired_at INTEGER,
+			fire_count INTEGER NOT NULL DEFAULT 0,
+			last_error TEXT,
+			created_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_webhook_subs_topic ON webhook_subscriptions(topic, status);
+		CREATE INDEX IF NOT EXISTS idx_webhook_subs_session ON webhook_subscriptions(session_id);
+
 		CREATE TABLE IF NOT EXISTS model_favorites (
 			provider TEXT NOT NULL,
 			model_id TEXT NOT NULL,

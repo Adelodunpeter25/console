@@ -163,6 +163,23 @@ func consoleCatalog() []methodDef {
 			"id": str(true, "automation id"),
 		}, handler: (*Runtime).automationDelete},
 
+		// Webhooks
+		{name: "webhooks.subscribe", description: "Subscribe this session to incoming webhook events on a topic; wakes the session when a matching event arrives.", args: map[string]ArgSpec{
+			"topic":              str(true, "event topic slug, e.g. github, ci, deploy, custom"),
+			"prompt":             str(true, "prompt to run when a matching webhook arrives"),
+			"filter":             object(false, `optional JSON dot-path matchers, e.g. {"action":"completed","conclusion":["failure","timed_out"]}`),
+			"once":               boolean(false, "fire once and mark done (default true), or false to keep listening"),
+			"expires_in_seconds": integer(false, "optional TTL in seconds before the subscription expires"),
+			"secret":             str(false, "optional shared secret / HMAC key; generated automatically when omitted"),
+		}, handler: (*Runtime).webhooksSubscribe},
+		{name: "webhooks.list", description: "List all webhook subscriptions on this session.", handler: (*Runtime).webhooksList},
+		{name: "webhooks.get", description: "Read one webhook subscription on this session by id.", args: map[string]ArgSpec{
+			"id": str(true, "subscription id"),
+		}, handler: (*Runtime).webhooksGet},
+		{name: "webhooks.unsubscribe", description: "Delete a webhook subscription on this session.", args: map[string]ArgSpec{
+			"id": str(true, "subscription id"),
+		}, handler: (*Runtime).webhooksUnsubscribe},
+
 		// MCP servers
 		{name: "mcp.list", description: "List configured MCP servers with their live connection status.", handler: (*Runtime).mcpListImpl},
 		{name: "mcp.tools", description: "One server's tool list and status.", args: map[string]ArgSpec{"id": str(true, "server id")}, handler: (*Runtime).mcpToolsImpl},

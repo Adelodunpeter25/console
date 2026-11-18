@@ -13,6 +13,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 )
@@ -25,7 +26,9 @@ type Runtime struct {
 	sessions  *services.SessionService
 	projects  *projectssvc.ProjectService
 	mcp         *mcp.Manager
-	automations *automations.Service
+	automations    *automations.Service
+	webhooks       *webhooks.Service
+	webhookBaseURL func() string
 	active      func(string) bool
 	abort     func(string) bool
 	prompt    PromptFunc
