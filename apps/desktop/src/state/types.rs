@@ -10,7 +10,6 @@ use console_core::{
 };
 use console_ui::markdown::render::TranscriptSelection;
 use console_ui::terminal::TerminalView;
-use console_ui::utils::SessionDateGroup;
 use console_ui::{
     CommandPalette, ComposerInput, ContextMenuHandle, FloatingComposerState, GlobalSearchPanel,
     PickerTab, ProjectBrowsePalette, QuickOpenPalette, TranscriptView,
@@ -350,7 +349,8 @@ pub struct ConsoleDesktopApp {
     /// media endpoint (or the parent listing for details). Keyed by path.
     pub open_media_contents: std::collections::HashMap<String, FileMediaDetails>,
     /// Live webview surfaces for media file tabs, keyed by path.
-    pub file_media_views: std::collections::HashMap<String, gpui::Entity<console_ui::FileMediaView>>,
+    pub file_media_views:
+        std::collections::HashMap<String, gpui::Entity<console_ui::FileMediaView>>,
     pub svg_preview_mode: std::collections::HashMap<String, console_ui::SvgViewMode>,
     pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
     pub viewer_list_states: std::collections::HashMap<String, ListState>,
@@ -426,14 +426,7 @@ pub struct ConsoleDesktopApp {
         [f32; 2],
         gpui::Size<gpui::Pixels>,
     )>,
-    /// Calendar-period groups the user collapsed in the sidebar. Shared with
-    /// the sidebar; cloned per frame as a refcount bump.
-    pub collapsed_groups: Rc<std::collections::HashSet<SessionDateGroup>>,
-    /// Which axis the sidebar session list is sectioned by (date buckets or
-    /// project sections). Persisted; defaults to date.
-    pub sidebar_sort_mode: console_ui::utils::SidebarSortMode,
-    /// Collapsed project sections (project id, or "none") in project sort
-    /// mode. Shared with the sidebar; cloned per frame as a refcount bump.
+    /// Collapsed project sections (project id, or "none"). Shared with the sidebar; cloned per frame as a refcount bump.
     pub collapsed_projects: Rc<std::collections::HashSet<String>>,
     /// Last window frame known to be on disk. Seeded from storage at startup
     /// and compared in memory each render, so unchanged frames perform no I/O.

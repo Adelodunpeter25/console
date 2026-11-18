@@ -9,7 +9,7 @@ use console_core::{
     ApprovalMode, ProjectInfo, ProjectInfoExt, SelectedModel, SessionHeader, SessionHeaderExt,
     UpdateSessionDto,
 };
-use console_ui::utils::{SidebarSortMode, group_indices_by_date, group_indices_by_project};
+use console_ui::utils::group_indices_by_project;
 use gpui::{Context, Window};
 
 use super::ConsoleDesktopApp;
@@ -1329,37 +1329,22 @@ impl ConsoleDesktopApp {
                     ids.push(session.id.clone());
                 }
             }
-            match self.sidebar_sort_mode {
-                SidebarSortMode::Date => {
-                    let grouped = group_indices_by_date(self.sessions.len(), timestamp);
-                    for (_, positions) in grouped {
-                        for idx in positions {
-                            let session = &self.sessions[idx];
-                            if !is_live_pinned(idx) && matches_query(session) {
-                                ids.push(session.id.clone());
-                            }
-                        }
-                    }
-                }
-                SidebarSortMode::Project => {
-                    let grouped = group_indices_by_project(
-                        self.sessions.len(),
-                        |index| {
-                            let session = &self.sessions[index];
-                            self.projects
-                                .iter()
-                                .find(|project| project.matches_session(session))
-                                .map(|project| project.id.clone())
-                        },
-                        timestamp,
-                    );
-                    for (_, positions) in grouped {
-                        for idx in positions {
-                            let session = &self.sessions[idx];
-                            if !is_live_pinned(idx) && matches_query(session) {
-                                ids.push(session.id.clone());
-                            }
-                        }
+            let grouped = group_indices_by_project(
+                self.sessions.len(),
+                |index| {
+                    let session = &self.sessions[index];
+                    self.projects
+                        .iter()
+                        .find(|project| project.matches_session(session))
+                        .map(|project| project.id.clone())
+                },
+                timestamp,
+            );
+            for (_, positions) in grouped {
+                for idx in positions {
+                    let session = &self.sessions[idx];
+                    if !is_live_pinned(idx) && matches_query(session) {
+                        ids.push(session.id.clone());
                     }
                 }
             }
@@ -1383,50 +1368,29 @@ impl ConsoleDesktopApp {
                 }
             }
         }
-        match self.sidebar_sort_mode {
-            SidebarSortMode::Date => {
-                let grouped = group_indices_by_date(self.sessions.len(), timestamp);
-                for (group, positions) in grouped {
-                    if self.collapsed_groups.contains(&group) {
-                        continue;
-                    }
-                    for idx in positions {
-                        let session = &self.sessions[idx];
-                        if !draft_ids.contains(&session.id)
-                            && !is_live_pinned(idx)
-                            && session.settled_at.is_none()
-                        {
-                            ids.push(session.id.clone());
-                        }
-                    }
-                }
+        let grouped = group_indices_by_project(
+            self.sessions.len(),
+            |index| {
+                let session = &self.sessions[index];
+                self.projects
+                    .iter()
+                    .find(|project| project.matches_session(session))
+                    .map(|project| project.id.clone())
+            },
+            timestamp,
+        );
+        for (key, positions) in grouped {
+            let collapse_key = key.unwrap_or_else(|| "none".to_string());
+            if self.collapsed_projects.contains(&collapse_key) {
+                continue;
             }
-            SidebarSortMode::Project => {
-                let grouped = group_indices_by_project(
-                    self.sessions.len(),
-                    |index| {
-                        let session = &self.sessions[index];
-                        self.projects
-                            .iter()
-                            .find(|project| project.matches_session(session))
-                            .map(|project| project.id.clone())
-                    },
-                    timestamp,
-                );
-                for (key, positions) in grouped {
-                    let collapse_key = key.unwrap_or_else(|| "none".to_string());
-                    if self.collapsed_projects.contains(&collapse_key) {
-                        continue;
-                    }
-                    for idx in positions {
-                        let session = &self.sessions[idx];
-                        if !draft_ids.contains(&session.id)
-                            && !is_live_pinned(idx)
-                            && session.settled_at.is_none()
-                        {
-                            ids.push(session.id.clone());
-                        }
-                    }
+            for idx in positions {
+                let session = &self.sessions[idx];
+                if !draft_ids.contains(&session.id)
+                    && !is_live_pinned(idx)
+                    && session.settled_at.is_none()
+                {
+                    ids.push(session.id.clone());
                 }
             }
         }
@@ -1727,7 +1691,9 @@ impl ConsoleDesktopApp {
                                         this.wake_records.insert(
                                             session_id.clone(),
                                             vec![console_core::WakeRecord {
-                                                message: "Background work completed, continuing agent".to_string(),
+                                                message:
+                                                    "Background work completed, continuing agent"
+                                                        .to_string(),
                                                 at,
                                             }],
                                         );

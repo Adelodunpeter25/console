@@ -6,8 +6,8 @@ pub mod session_item;
 
 pub use draft_item::{DraftSummary, render_sidebar_draft_item};
 pub use group_header::{
-    drafts_group_header, group_header, pinned_group_header, project_header,
-    search_results_group_header, settled_group_header, sort_mode_toggle,
+    drafts_group_header, pinned_group_header, project_header, search_results_group_header,
+    settled_group_header, workspaces_label,
 };
 pub use session_card::{
     SidebarHoverManager, dismiss_card, on_card_hover, on_row_hover, render_session_card_content,
@@ -47,10 +47,7 @@ use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
 use crate::settings::EnvironmentRow;
 use crate::theme::Theme;
-use crate::utils::{
-    ProjectSectionKey, SessionDateGroup, SidebarSortMode, group_indices_by_date,
-    group_indices_by_project, partition_settled,
-};
+use crate::utils::{ProjectSectionKey, group_indices_by_project, partition_settled};
 
 const ROW_FADE: Duration = Duration::from_millis(140);
 
@@ -119,10 +116,8 @@ enum SidebarRow {
     /// Settled section header — always the last section of the list.
     SettledHeader,
     EmptySearch,
-    GroupHeader {
-        group: SessionDateGroup,
-        collapsed: bool,
-    },
+    /// Pinned section header, shown above the pinned rows.
+    PinnedHeader,
     /// Project section header: display name plus the collapse key (project id
     /// or [`NO_PROJECT_KEY`]).
     ProjectHeader {
@@ -142,10 +137,6 @@ pub struct SidebarView {
     /// with the app state; cloned per frame as a refcount bump.
     pub projects: Rc<Vec<ProjectInfo>>,
     pub selected_session_id: Option<String>,
-    /// Date groups the user collapsed; their sessions are hidden.
-    pub collapsed_groups: Rc<HashSet<SessionDateGroup>>,
-    /// Which axis the session list is sectioned by.
-    pub sort_mode: SidebarSortMode,
     /// Collapsed project sections (project id or [`NO_PROJECT_KEY`]).
     pub collapsed_projects: Rc<HashSet<String>>,
     /// Sessions with a locally active run, keyed by session id with the run's
@@ -173,9 +164,7 @@ pub struct SidebarView {
     on_new_chat: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_search: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_add_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    on_toggle_group: Rc<dyn Fn(SessionDateGroup, &mut Window, &mut App) + 'static>,
     on_toggle_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_toggle_sort_mode: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_drafts: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_pinned: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_settled: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -212,8 +201,6 @@ impl SidebarView {
         sessions: Rc<Vec<SessionHeader>>,
         projects: Rc<Vec<ProjectInfo>>,
         selected_session_id: Option<String>,
-        collapsed_groups: Rc<HashSet<SessionDateGroup>>,
-        sort_mode: SidebarSortMode,
         collapsed_projects: Rc<HashSet<String>>,
         running_sessions: HashMap<String, i64>,
         waiting_sessions: HashSet<String>,
@@ -229,9 +216,7 @@ impl SidebarView {
         on_new_chat: impl Fn(&mut Window, &mut App) + 'static,
         on_search: impl Fn(&mut Window, &mut App) + 'static,
         on_add_project: impl Fn(&mut Window, &mut App) + 'static,
-        on_toggle_group: impl Fn(SessionDateGroup, &mut Window, &mut App) + 'static,
         on_toggle_project: impl Fn(String, &mut Window, &mut App) + 'static,
-        on_toggle_sort_mode: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_drafts: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_pinned: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_settled: impl Fn(&mut Window, &mut App) + 'static,
@@ -257,8 +242,6 @@ impl SidebarView {
             sessions,
             projects,
             selected_session_id,
-            collapsed_groups,
-            sort_mode,
             collapsed_projects,
             running_sessions,
             waiting_sessions,
@@ -272,9 +255,7 @@ impl SidebarView {
             on_new_chat: Rc::new(on_new_chat),
             on_search: Rc::new(on_search),
             on_add_project: Rc::new(on_add_project),
-            on_toggle_group: Rc::new(on_toggle_group),
             on_toggle_project: Rc::new(on_toggle_project),
-            on_toggle_sort_mode: Rc::new(on_toggle_sort_mode),
             on_toggle_drafts: Rc::new(on_toggle_drafts),
             on_toggle_pinned: Rc::new(on_toggle_pinned),
             on_toggle_settled: Rc::new(on_toggle_settled),
@@ -329,8 +310,6 @@ impl RenderOnce for SidebarView {
         let projects = self.projects;
         let selected_id = self.selected_session_id;
         let has_sessions = !self.sessions.is_empty();
-        let collapsed_groups = self.collapsed_groups;
-        let sort_mode = self.sort_mode;
         let collapsed_projects = self.collapsed_projects;
         let running_sessions = self.running_sessions;
         let waiting_sessions = self.waiting_sessions;
@@ -342,9 +321,11 @@ impl RenderOnce for SidebarView {
         let on_new = self.on_new_chat;
         let on_search = self.on_search;
         let on_add = self.on_add_project;
-        let on_toggle_group = self.on_toggle_group;
+        let on_new_chat_in_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+            let on_new = on_new.clone();
+            Rc::new(move |_, window, cx| (on_new)(window, cx))
+        };
         let on_toggle_project = self.on_toggle_project;
-        let on_toggle_sort_mode = self.on_toggle_sort_mode;
         let on_sel = self.on_select_session;
         let on_open_in_new_window = self.on_open_in_new_window;
         let on_rename = self.on_rename_session;
@@ -391,29 +372,12 @@ impl RenderOnce for SidebarView {
                     && active.contains(&idx)
             })
             .collect();
-        let grouped: Vec<(SessionDateGroup, Vec<usize>)> =
-            group_indices_by_date(sessions.len(), session_timestamp)
-                .into_iter()
-                .map(|(group, positions)| {
-                    let filtered: Vec<usize> = positions
-                        .into_iter()
-                        .filter(|&idx| {
-                            !draft_sessions.contains(&sessions[idx].id)
-                                && !is_pinned(idx)
-                                && active.contains(&idx)
-                        })
-                        .collect();
-                    (group, filtered)
-                })
-                .filter(|(_, positions)| !positions.is_empty())
-                .collect();
-
-        // Project sections for project sort mode: the collapse key is the
-        // project id (or "none" for sessions without one); the display name
-        // resolves against the project list. Ordered by most recent activity.
-        let visible_positions: HashSet<usize> = grouped
-            .iter()
-            .flat_map(|(_, positions)| positions.iter().copied())
+        let visible_positions: HashSet<usize> = (0..sessions.len())
+            .filter(|&idx| {
+                !draft_sessions.contains(&sessions[idx].id)
+                    && !is_pinned(idx)
+                    && active.contains(&idx)
+            })
             .collect();
         let project_key = |index: usize| -> ProjectSectionKey {
             let session = &sessions[index];
@@ -456,201 +420,10 @@ impl RenderOnce for SidebarView {
         // The sticky header row above the list. When active search query is
         // non-empty, the single Search Results header replaces all section headers.
         let is_searching = self.search_active && !self.search_query.trim().is_empty();
-        let sort_toggle = sort_mode_toggle(theme, sort_mode, on_toggle_sort_mode.clone());
         let pinned_header = if is_searching {
             search_results_group_header(theme, "Search Results").into_any_element()
-        } else if has_pinned {
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    pinned_group_header(
-                        theme,
-                        pinned_collapsed,
-                        false,
-                        on_add.clone(),
-                        self.on_toggle_pinned.clone(),
-                    )
-                    .into_any_element(),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(4.0))
-                        .child(sort_toggle.into_any_element())
-                        .child(
-                            div()
-                                .id("btn-add-project")
-                                .w(px(20.0))
-                                .h(px(20.0))
-                                .rounded(px(6.0))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_default()
-                                .hover(|s| s.bg(theme.overlay))
-                                .active(|s| s.bg(theme.overlay_strong))
-                                .on_click({
-                                    let on_add = on_add.clone();
-                                    move |_, window, cx| (on_add)(window, cx)
-                                })
-                                .tooltip(Tooltip::text("Add project"))
-                                .child(app_icon(IconName::FolderNew, 15.0, theme.text_ghost)),
-                        ),
-                )
-                .into_any_element()
-        } else if has_drafts {
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    drafts_group_header(
-                        theme,
-                        self.drafts_collapsed,
-                        false,
-                        on_add.clone(),
-                        self.on_toggle_drafts.clone(),
-                    )
-                    .into_any_element(),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(4.0))
-                        .child(sort_toggle.into_any_element())
-                        .child(
-                            div()
-                                .id("btn-add-project")
-                                .w(px(20.0))
-                                .h(px(20.0))
-                                .rounded(px(6.0))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_default()
-                                .hover(|s| s.bg(theme.overlay))
-                                .active(|s| s.bg(theme.overlay_strong))
-                                .on_click({
-                                    let on_add = on_add.clone();
-                                    move |_, window, cx| (on_add)(window, cx)
-                                })
-                                .tooltip(Tooltip::text("Add project"))
-                                .child(app_icon(IconName::FolderNew, 15.0, theme.text_ghost)),
-                        ),
-                )
-                .into_any_element()
         } else {
-            match sort_mode {
-                SidebarSortMode::Date => {
-                    let first_group = grouped
-                        .first()
-                        .map(|(g, _)| *g)
-                        .unwrap_or(SessionDateGroup::Today);
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .child(
-                            group_header(
-                                theme,
-                                first_group.label(),
-                                collapsed_groups.contains(&first_group),
-                                false,
-                                on_add.clone(),
-                                on_toggle_group.clone(),
-                                first_group,
-                            )
-                            .into_any_element(),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(4.0))
-                                .child(sort_toggle.into_any_element())
-                                .child(
-                                    div()
-                                        .id("btn-add-project")
-                                        .w(px(20.0))
-                                        .h(px(20.0))
-                                        .rounded(px(6.0))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_default()
-                                        .hover(|s| s.bg(theme.overlay))
-                                        .active(|s| s.bg(theme.overlay_strong))
-                                        .on_click({
-                                            let on_add = on_add.clone();
-                                            move |_, window, cx| (on_add)(window, cx)
-                                        })
-                                        .child(app_icon(
-                                            IconName::FolderNew,
-                                            15.0,
-                                            theme.text_ghost,
-                                        )),
-                                ),
-                        )
-                        .into_any_element()
-                }
-                SidebarSortMode::Project => {
-                    let (first_key, first_name) = project_sections
-                        .first()
-                        .map(|(key, name, _)| (collapse_key(key), name.clone()))
-                        .unwrap_or_else(|| (NO_PROJECT_KEY.to_string(), "No Project".to_string()));
-                    let first_collapsed = collapsed_projects.contains(&first_key);
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .child(
-                            project_header(
-                                theme,
-                                first_name,
-                                first_key,
-                                first_collapsed,
-                                false,
-                                on_add.clone(),
-                                on_toggle_project.clone(),
-                            )
-                            .into_any_element(),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(4.0))
-                                .child(sort_toggle.into_any_element())
-                                .child(
-                                    div()
-                                        .id("btn-add-project")
-                                        .w(px(20.0))
-                                        .h(px(20.0))
-                                        .rounded(px(6.0))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_default()
-                                        .hover(|s| s.bg(theme.overlay))
-                                        .active(|s| s.bg(theme.overlay_strong))
-                                        .on_click({
-                                            let on_add = on_add.clone();
-                                            move |_, window, cx| (on_add)(window, cx)
-                                        })
-                                        .child(app_icon(
-                                            IconName::FolderNew,
-                                            15.0,
-                                            theme.text_ghost,
-                                        )),
-                                ),
-                        )
-                        .into_any_element()
-                }
-            }
+            workspaces_label(theme, on_add.clone()).into_any_element()
         };
 
         // Scrollable rows: when search is active with a non-empty query, shows
@@ -661,17 +434,8 @@ impl RenderOnce for SidebarView {
         if is_searching {
             let mut ordered_positions: Vec<usize> = Vec::new();
             ordered_positions.extend(pinned_positions.iter().copied());
-            match sort_mode {
-                SidebarSortMode::Date => {
-                    for (_, positions) in &grouped {
-                        ordered_positions.extend(positions.iter().copied());
-                    }
-                }
-                SidebarSortMode::Project => {
-                    for (_, _, positions) in &project_sections {
-                        ordered_positions.extend(positions.iter().copied());
-                    }
-                }
+            for (_, _, positions) in &project_sections {
+                ordered_positions.extend(positions.iter().copied());
             }
             ordered_positions.extend(settled_positions.iter().copied());
             let in_ordered: HashSet<usize> = ordered_positions.iter().copied().collect();
@@ -700,91 +464,30 @@ impl RenderOnce for SidebarView {
                 list_rows.extend(matching_positions.into_iter().map(SidebarRow::Session));
             }
         } else {
-            let render_all_headers = has_drafts || has_pinned;
-            let push_section_rows = |list_rows: &mut Vec<SidebarRow>,
-                                     sections: Vec<(SessionDateGroup, Vec<usize>)>,
-                                     render_all: bool| {
-                if render_all {
-                    for (group, positions) in sections {
-                        let collapsed = collapsed_groups.contains(&group);
-                        list_rows.push(SidebarRow::GroupHeader { group, collapsed });
-                        if !collapsed {
-                            list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                        }
-                    }
-                } else {
-                    let mut sections_iter = sections.into_iter();
-                    if let Some((group, positions)) = sections_iter.next()
-                        && !collapsed_groups.contains(&group)
-                    {
-                        list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                    }
-                    for (group, positions) in sections_iter {
-                        let collapsed = collapsed_groups.contains(&group);
-                        list_rows.push(SidebarRow::GroupHeader { group, collapsed });
-                        if !collapsed {
-                            list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                        }
-                    }
-                }
-            };
             if has_pinned {
+                list_rows.push(SidebarRow::PinnedHeader);
                 if !pinned_collapsed {
                     list_rows.extend(pinned_positions.iter().copied().map(SidebarRow::Session));
                 }
-                if has_drafts {
-                    list_rows.push(SidebarRow::DraftsHeader);
-                    if !self.drafts_collapsed {
-                        for i in 0..draft_summaries.len() {
-                            list_rows.push(SidebarRow::Draft(i));
-                        }
+            }
+            if has_drafts {
+                list_rows.push(SidebarRow::DraftsHeader);
+                if !self.drafts_collapsed {
+                    for i in 0..draft_summaries.len() {
+                        list_rows.push(SidebarRow::Draft(i));
                     }
-                }
-            } else if has_drafts && !self.drafts_collapsed {
-                for i in 0..draft_summaries.len() {
-                    list_rows.push(SidebarRow::Draft(i));
                 }
             }
-            match sort_mode {
-                SidebarSortMode::Date => {
-                    push_section_rows(&mut list_rows, grouped, render_all_headers);
-                }
-                SidebarSortMode::Project => {
-                    let sections: Vec<(String, String, Vec<usize>)> = project_sections
-                        .into_iter()
-                        .map(|(key, name, positions)| (collapse_key(&key), name, positions))
-                        .collect();
-                    if render_all_headers {
-                        for (key, name, positions) in sections {
-                            let collapsed = collapsed_projects.contains(&key);
-                            list_rows.push(SidebarRow::ProjectHeader {
-                                name,
-                                key,
-                                collapsed,
-                            });
-                            if !collapsed {
-                                list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                            }
-                        }
-                    } else {
-                        let mut sections_iter = sections.into_iter();
-                        if let Some((key, _name, positions)) = sections_iter.next()
-                            && !collapsed_projects.contains(&key)
-                        {
-                            list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                        }
-                        for (key, name, positions) in sections_iter {
-                            let collapsed = collapsed_projects.contains(&key);
-                            list_rows.push(SidebarRow::ProjectHeader {
-                                name,
-                                key,
-                                collapsed,
-                            });
-                            if !collapsed {
-                                list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                            }
-                        }
-                    }
+            for (key, name, positions) in project_sections {
+                let key = collapse_key(&key);
+                let collapsed = collapsed_projects.contains(&key);
+                list_rows.push(SidebarRow::ProjectHeader {
+                    name,
+                    key,
+                    collapsed,
+                });
+                if !collapsed {
+                    list_rows.extend(positions.into_iter().map(SidebarRow::Session));
                 }
             }
             // Settled chats always come last, in their own collapsed-by-default
@@ -830,8 +533,9 @@ impl RenderOnce for SidebarView {
         let list_on_delete_draft = on_delete_draft;
         let list_renaming_session_id = renaming_session_id;
         let list_rename_input = rename_input;
-        let list_on_add = on_add.clone();
-        let list_on_toggle_group = on_toggle_group.clone();
+        let list_pinned_collapsed = pinned_collapsed;
+        let list_on_toggle_pinned = self.on_toggle_pinned.clone();
+        let list_is_searching = is_searching;
         let list_on_toggle_project = on_toggle_project.clone();
         let list_drafts_collapsed = self.drafts_collapsed;
         let list_on_toggle_drafts = self.on_toggle_drafts;
@@ -850,6 +554,7 @@ impl RenderOnce for SidebarView {
                     .and_then(|session| list_fresh.get(&session.id).copied()),
                 _ => None,
             };
+            let indent = matches!(row, SidebarRow::Session(_)) && !list_is_searching;
             let row = match row {
                 SidebarRow::Draft(draft_index) => {
                     let Some(draft) = list_draft_summaries.get(draft_index) else {
@@ -898,30 +603,20 @@ impl RenderOnce for SidebarView {
                         list_rename_input.clone(),
                     )
                 }
-                SidebarRow::DraftsHeader => drafts_group_header(
-                    theme,
-                    list_drafts_collapsed,
-                    false,
-                    list_on_add.clone(),
-                    list_on_toggle_drafts.clone(),
-                )
-                .into_any_element(),
+                SidebarRow::DraftsHeader => {
+                    drafts_group_header(theme, list_drafts_collapsed, list_on_toggle_drafts.clone())
+                        .into_any_element()
+                }
                 SidebarRow::SettledHeader => settled_group_header(
                     theme,
                     list_settled_collapsed,
                     list_on_toggle_settled.clone(),
                 )
                 .into_any_element(),
-                SidebarRow::GroupHeader { group, collapsed } => group_header(
-                    theme,
-                    group.label(),
-                    collapsed,
-                    false,
-                    list_on_add.clone(),
-                    list_on_toggle_group.clone(),
-                    group,
-                )
-                .into_any_element(),
+                SidebarRow::PinnedHeader => {
+                    pinned_group_header(theme, list_pinned_collapsed, list_on_toggle_pinned.clone())
+                        .into_any_element()
+                }
                 SidebarRow::ProjectHeader {
                     name,
                     key,
@@ -931,8 +626,7 @@ impl RenderOnce for SidebarView {
                     name,
                     key,
                     collapsed,
-                    false,
-                    list_on_add.clone(),
+                    on_new_chat_in_project.clone(),
                     list_on_toggle_project.clone(),
                 )
                 .into_any_element(),
@@ -944,7 +638,11 @@ impl RenderOnce for SidebarView {
                     .child("No matching sessions")
                     .into_any_element(),
             };
-            let row = div().w_full().pb(px(2.0)).child(row);
+            let row = div()
+                .w_full()
+                .pb(px(2.0))
+                .when(indent, |d| d.pl(px(12.0)))
+                .child(row);
             match fade_generation {
                 Some(generation) => row
                     .id(gpui::ElementId::Name(

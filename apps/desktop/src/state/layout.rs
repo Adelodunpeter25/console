@@ -1,10 +1,9 @@
-//! Sidebar and window layout: visibility, width resizing, collapsed date
-//! groups, and window-bounds persistence.
+//! Sidebar and window layout: visibility, width resizing, collapsed project
+//! sections, and window-bounds persistence.
 
 use std::rc::Rc;
 use std::time::Duration;
 
-use console_ui::utils::SessionDateGroup;
 use gpui::{Context, Window};
 
 use super::{ConsoleDesktopApp, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH};
@@ -70,12 +69,6 @@ impl ConsoleDesktopApp {
                     .clone()
                     .unwrap_or_else(|| "__default__".to_string()),
             ),
-            collapsed_groups: self
-                .collapsed_groups
-                .iter()
-                .map(|group| group.index())
-                .collect(),
-            sidebar_sort_mode: self.sidebar_sort_mode.label().to_string(),
             collapsed_projects: self.collapsed_projects.iter().cloned().collect(),
             pinned_collapsed: self.pinned_collapsed,
         });
@@ -306,16 +299,6 @@ impl ConsoleDesktopApp {
         persistence::save_workspaces(document);
     }
 
-    /// Collapse or expand a sidebar date group.
-    pub fn toggle_sidebar_group(&mut self, group: SessionDateGroup, cx: &mut Context<Self>) {
-        let collapsed = Rc::make_mut(&mut self.collapsed_groups);
-        if !collapsed.remove(&group) {
-            collapsed.insert(group);
-        }
-        self.persist_layout();
-        cx.notify();
-    }
-
     /// Collapse or expand a sidebar project section (`project id`, or "none"
     /// for sessions without a project).
     pub fn toggle_sidebar_project(&mut self, project_key: String, cx: &mut Context<Self>) {
@@ -329,13 +312,6 @@ impl ConsoleDesktopApp {
 
     pub fn toggle_sidebar_pinned(&mut self, cx: &mut Context<Self>) {
         self.pinned_collapsed = !self.pinned_collapsed;
-        self.persist_layout();
-        cx.notify();
-    }
-
-    /// Switch the sidebar session sort axis, persisting the choice.
-    pub fn toggle_sidebar_sort_mode(&mut self, cx: &mut Context<Self>) {
-        self.sidebar_sort_mode = self.sidebar_sort_mode.toggle();
         self.persist_layout();
         cx.notify();
     }

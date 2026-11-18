@@ -8,7 +8,6 @@ use crate::types::WorkspacePaneState;
 use console_core::{AgentMessage, ApprovalMode, ConsoleClient, WorkspaceNode};
 use console_ui::common::input::PromptHistoryEntry;
 use console_ui::markdown::render::TranscriptSelection;
-use console_ui::utils::SessionDateGroup;
 use console_ui::{
     CommandPalette, ComposerAttachmentPaste, ComposerEvent, ComposerInput, ContextMenuHandle,
     FloatingComposerState, GlobalSearchPanel, PickerTab, ProjectBrowsePalette, QuickOpenPalette,
@@ -807,14 +806,6 @@ impl ConsoleDesktopApp {
             drafts_collapsed: false,
             pinned_collapsed: layout.pinned_collapsed,
             settled_collapsed: true,
-            collapsed_groups: Rc::new(
-                layout
-                    .collapsed_groups
-                    .iter()
-                    .filter_map(|index| SessionDateGroup::ALL.get(*index).copied())
-                    .collect(),
-            ),
-            sidebar_sort_mode: layout.sidebar_sort_mode(),
             collapsed_projects: Rc::new(layout.collapsed_projects.iter().cloned().collect()),
             is_window_active: window.is_window_active(),
             _subscriptions: subscriptions,
