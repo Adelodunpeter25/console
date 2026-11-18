@@ -54,6 +54,13 @@ pub const SETTLE_SHORTCUT_LABEL: &str = if cfg!(target_os = "macos") {
     "Ctrl+Shift+S"
 };
 
+/// The pin shortcut as it reads on this platform.
+pub const PIN_SHORTCUT_LABEL: &str = if cfg!(target_os = "macos") {
+    "⇧⌘P"
+} else {
+    "Ctrl+Shift+P"
+};
+
 /// Tooltip for the settle toggle: the action it performs, plus the shortcut
 /// that does the same thing from the keyboard.
 pub fn settle_tooltip_label(settled: bool) -> String {

@@ -10,7 +10,7 @@ use gpui::{
     AnyElement, App, ElementId, InteractiveElement, IntoElement, ParentElement, Styled, Window,
 };
 
-use crate::layout::sidebar::session_item::SETTLE_SHORTCUT_LABEL;
+use crate::layout::sidebar::session_item::{PIN_SHORTCUT_LABEL, SETTLE_SHORTCUT_LABEL};
 use crate::primitives::IconName;
 use crate::primitives::menu::{ContextMenuHandle, MenuItem, context_menu};
 
@@ -97,7 +97,8 @@ where
         items.extend(read_item);
         items.extend([
             MenuItem::new(pin_label, move |window, cx| on_toggle_pin(window, cx))
-                .icon(IconName::Pin.path()),
+                .icon(IconName::Pin.path())
+                .shortcut(PIN_SHORTCUT_LABEL),
             MenuItem::new("Rename", move |window, cx| on_rename(window, cx))
                 .icon(IconName::Pencil.path()),
             MenuItem::new(settle_label, move |window, cx| {
