@@ -11,7 +11,7 @@ use crate::theme::Theme;
 type ToggleFn = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
 
 /// The card every collapsible sidebar header shares: a soft rounded
-/// background, a leading chevron that is always visible (rotated when the
+/// background that shows on hover, a leading chevron that is always visible (rotated when the
 /// section is collapsed), and the label.
 fn header_card(theme: Theme, group_name: SharedString) -> gpui::Div {
     div()
@@ -20,10 +20,10 @@ fn header_card(theme: Theme, group_name: SharedString) -> gpui::Div {
         .mt(px(4.0))
         .px(px(8.0))
         .rounded(px(8.0))
-        .bg(theme.sidebar_item_background)
         .flex()
         .items_center()
         .justify_between()
+        .group_hover(group_name.clone(), |s| s.bg(theme.sidebar_item_background))
         .group(group_name)
 }
 
