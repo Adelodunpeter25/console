@@ -1380,9 +1380,6 @@ impl ConsoleDesktopApp {
             timestamp,
         );
         for (key, positions) in grouped {
-            if self.workspaces_collapsed {
-                break;
-            }
             let collapse_key = key.unwrap_or_else(|| "none".to_string());
             if self.collapsed_projects.contains(&collapse_key) {
                 continue;

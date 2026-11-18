@@ -155,8 +155,6 @@ pub struct SidebarView {
     /// Whether the Pinned section is collapsed (rows hidden, sticky header
     /// chevron flipped).
     pub pinned_collapsed: bool,
-    /// Whether the My workspaces section (all project rows) is collapsed.
-    pub workspaces_collapsed: bool,
     /// Whether the Settled section at the bottom of the list is collapsed.
     /// Settled chats hide behind it; the section is omitted when empty.
     pub settled_collapsed: bool,
@@ -170,7 +168,6 @@ pub struct SidebarView {
     on_toggle_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_toggle_drafts: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_pinned: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    on_toggle_workspaces: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_settled: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_rename_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_commit_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -211,7 +208,6 @@ impl SidebarView {
         draft_summaries: Vec<DraftSummary>,
         drafts_collapsed: bool,
         pinned_collapsed: bool,
-        workspaces_collapsed: bool,
         settled_collapsed: bool,
         sidebar_list_state: ListState,
         environments: Vec<EnvironmentRow>,
@@ -223,7 +219,6 @@ impl SidebarView {
         on_toggle_project: impl Fn(String, &mut Window, &mut App) + 'static,
         on_toggle_drafts: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_pinned: impl Fn(&mut Window, &mut App) + 'static,
-        on_toggle_workspaces: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_settled: impl Fn(&mut Window, &mut App) + 'static,
         on_rename_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_commit_rename: impl Fn(&mut Window, &mut App) + 'static,
@@ -253,7 +248,6 @@ impl SidebarView {
             draft_summaries,
             drafts_collapsed,
             pinned_collapsed,
-            workspaces_collapsed,
             settled_collapsed,
             sidebar_list_state,
             on_select_session: Rc::new(on_select_session),
@@ -263,7 +257,6 @@ impl SidebarView {
             on_toggle_project: Rc::new(on_toggle_project),
             on_toggle_drafts: Rc::new(on_toggle_drafts),
             on_toggle_pinned: Rc::new(on_toggle_pinned),
-            on_toggle_workspaces: Rc::new(on_toggle_workspaces),
             on_toggle_settled: Rc::new(on_toggle_settled),
             on_rename_session: Rc::new(on_rename_session),
             on_commit_rename: Rc::new(on_commit_rename),
@@ -482,10 +475,7 @@ impl RenderOnce for SidebarView {
             if !project_sections.is_empty() {
                 list_rows.push(SidebarRow::WorkspacesLabel);
             }
-            for (key, name, positions) in project_sections
-                .into_iter()
-                .filter(|_| !self.workspaces_collapsed)
-            {
+            for (key, name, positions) in project_sections {
                 let key = collapse_key(&key);
                 let collapsed = collapsed_projects.contains(&key);
                 list_rows.push(SidebarRow::ProjectHeader {
@@ -541,8 +531,6 @@ impl RenderOnce for SidebarView {
         let list_renaming_session_id = renaming_session_id;
         let list_rename_input = rename_input;
         let list_pinned_collapsed = pinned_collapsed;
-        let list_workspaces_collapsed = self.workspaces_collapsed;
-        let list_on_toggle_workspaces = self.on_toggle_workspaces.clone();
         let list_on_toggle_pinned = self.on_toggle_pinned.clone();
         let list_is_searching = is_searching;
         let list_on_toggle_project = on_toggle_project.clone();
@@ -622,12 +610,7 @@ impl RenderOnce for SidebarView {
                     list_on_toggle_settled.clone(),
                 )
                 .into_any_element(),
-                SidebarRow::WorkspacesLabel => workspaces_label(
-                    theme,
-                    list_workspaces_collapsed,
-                    list_on_toggle_workspaces.clone(),
-                )
-                .into_any_element(),
+                SidebarRow::WorkspacesLabel => workspaces_label(theme).into_any_element(),
                 SidebarRow::PinnedHeader => {
                     pinned_group_header(theme, list_pinned_collapsed, list_on_toggle_pinned.clone())
                         .into_any_element()

@@ -16,8 +16,6 @@ pub struct PersistedLayoutState {
     pub collapsed_projects: Vec<String>,
     #[serde(default)]
     pub pinned_collapsed: bool,
-    #[serde(default)]
-    pub workspaces_collapsed: bool,
 }
 
 fn default_sidebar_visible() -> bool {
@@ -36,7 +34,6 @@ impl Default for PersistedLayoutState {
             active_workspace_id: None,
             collapsed_projects: Vec::new(),
             pinned_collapsed: false,
-            workspaces_collapsed: false,
         }
     }
 }

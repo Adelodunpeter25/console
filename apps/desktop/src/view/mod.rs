@@ -491,7 +491,6 @@ impl Render for ConsoleDesktopApp {
                             self.draft_summaries(),
                             self.drafts_collapsed,
                             self.pinned_collapsed,
-                            self.workspaces_collapsed,
                             self.settled_collapsed,
                             self.sidebar_list_state.clone(),
                             self.environment_rows(),
@@ -561,16 +560,6 @@ impl Render for ConsoleDesktopApp {
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
                                             this.toggle_sidebar_pinned(cx);
-                                        });
-                                    }
-                                }
-                            },
-                            {
-                                let entity = entity.clone();
-                                move |_w, cx| {
-                                    if let Some(app) = entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            this.toggle_sidebar_workspaces(cx);
                                         });
                                     }
                                 }

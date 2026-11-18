@@ -71,7 +71,6 @@ impl ConsoleDesktopApp {
             ),
             collapsed_projects: self.collapsed_projects.iter().cloned().collect(),
             pinned_collapsed: self.pinned_collapsed,
-            workspaces_collapsed: self.workspaces_collapsed,
         });
     }
 
@@ -313,12 +312,6 @@ impl ConsoleDesktopApp {
 
     pub fn toggle_sidebar_pinned(&mut self, cx: &mut Context<Self>) {
         self.pinned_collapsed = !self.pinned_collapsed;
-        self.persist_layout();
-        cx.notify();
-    }
-
-    pub fn toggle_sidebar_workspaces(&mut self, cx: &mut Context<Self>) {
-        self.workspaces_collapsed = !self.workspaces_collapsed;
         self.persist_layout();
         cx.notify();
     }
