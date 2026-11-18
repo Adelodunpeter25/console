@@ -44,6 +44,15 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// Session key (`session_id` or `"new_chat"`) that a comment staged in
+    /// `pane_id` belongs to: the pane's own active chat, or the workspace's
+    /// focused chat when `pane_id` is a file/diff split.
+    fn comment_target_session_key(&self, pane_id: &str) -> String {
+        self.active_session_for_pane(pane_id)
+            .or_else(|| self.focused_chat().map(|(_, sid)| sid.to_string()))
+            .unwrap_or_else(|| "new_chat".to_string())
+    }
+
     /// Resolve which pane currently shows `path`, preferring the focused pane.
     fn pane_hosting_file(&self, path: &str) -> String {
         let leaves = self.workspace_root.leaves();
@@ -179,7 +188,7 @@ impl ConsoleDesktopApp {
             id,
             server_id: None,
             old_side: request.old_side,
-            staged: false,
+            staged_session_id: None,
             path: request.path.clone(),
             start_line: request.start_line,
             end_line: request.end_line,
@@ -222,25 +231,22 @@ impl ConsoleDesktopApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
-            return;
-        };
-        let Some(comment) = pane
-            .file_comments
-            .iter_mut()
-            .find(|comment| comment.id == comment_id)
-        else {
-            return;
-        };
         let text = text.trim().to_owned();
         if text.is_empty() {
             return;
         }
+        let target_session = self.comment_target_session_key(pane_id);
+        let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
+            return;
+        };
+        let Some(comment) = pane.file_comments.iter_mut().find(|c| c.id == comment_id) else {
+            return;
+        };
         let path = comment.path.clone();
         let was_draft = comment.state == FileCommentState::Draft;
         comment.text = text.clone();
         if was_draft {
-            comment.staged = true;
+            comment.staged_session_id = Some(target_session);
         }
         comment.state = FileCommentState::Added;
         comment.focus_pending = false;
@@ -441,12 +447,13 @@ impl ConsoleDesktopApp {
     ) {
         // A saved comment can be loaded into several panes; it counts as staged
         // if any copy is, so a reopened file does not offer it a second time.
-        let mut staged: Vec<String> = self
+        let mut staged: std::collections::HashMap<String, String> = self
             .workspace_pane_states
             .values()
             .flat_map(|pane| pane.file_comments.iter())
-            .filter(|c| c.staged)
-            .filter_map(|c| c.server_id.clone())
+            .filter_map(|c| {
+                Some((c.server_id.clone()?, c.staged_session_id.clone()?))
+            })
             .collect();
         let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
             return;
@@ -454,7 +461,9 @@ impl ConsoleDesktopApp {
         if pane.comments_project.as_deref() != Some(project_id) {
             return;
         }
-        staged.append(&mut pane.pending_staged_comments);
+        for (server_id, session_id) in pane.pending_staged_comments.drain(..) {
+            staged.insert(server_id, session_id);
+        }
         let mut touched: Vec<String> = Vec::new();
         pane.file_comments.retain(|comment| {
             let keep = comment.state != FileCommentState::Added || comment.server_id.is_none();
@@ -485,9 +494,10 @@ impl ConsoleDesktopApp {
                 .to_string_lossy()
                 .into_owned();
             touched.push(path.clone());
+            let staged_session_id = staged.get(&item.id).cloned();
             pane.file_comments.push(FileComment {
                 id,
-                staged: staged.contains(&item.id),
+                staged_session_id,
                 server_id: Some(item.id),
                 old_side: item.side == FileCommentSide::Old as i32,
                 path,
@@ -649,6 +659,7 @@ impl ConsoleDesktopApp {
     /// The committed comments as prompt blocks. A comment-only send is valid
     /// and carries only these blocks.
     pub(crate) fn staged_comment_prompt(&self, pane_id: &str) -> String {
+        let session_key = self.comment_target_session_key(pane_id);
         let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
         let leaves = if is_chat {
             self.workspace_root.leaves()
@@ -668,7 +679,7 @@ impl ConsoleDesktopApp {
                 continue;
             };
             for comment in &pane.file_comments {
-                if !comment.staged || comment.state == FileCommentState::Draft {
+                if !comment.is_staged_for(&session_key) || comment.state == FileCommentState::Draft {
                     continue;
                 }
                 if let Some(server_id) = comment.server_id.as_deref()
@@ -717,8 +728,9 @@ impl ConsoleDesktopApp {
         merged
     }
 
-    /// Unstage every comment once it has been sent. They stay saved.
+    /// Unstage every comment for this session once it has been sent. They stay saved.
     fn clear_staged_comments(&mut self, pane_id: &str, cx: &mut Context<Self>) {
+        let session_key = self.comment_target_session_key(pane_id);
         let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
         let leaves = if is_chat {
             self.workspace_root.leaves()
@@ -734,7 +746,9 @@ impl ConsoleDesktopApp {
         for pid in pids {
             if let Some(pane) = self.workspace_pane_states.get_mut(pid) {
                 for comment in &mut pane.file_comments {
-                    comment.staged = false;
+                    if comment.is_staged_for(&session_key) {
+                        comment.staged_session_id = None;
+                    }
                 }
             }
         }
@@ -748,11 +762,11 @@ impl ConsoleDesktopApp {
         let Some(closing) = self.workspace_pane_states.get(closing_pane) else {
             return;
         };
-        let staged: Vec<String> = closing
+        let staged: Vec<(String, String)> = closing
             .file_comments
             .iter()
-            .filter(|c| c.staged && c.state != FileCommentState::Draft)
-            .filter_map(|c| c.server_id.clone())
+            .filter(|c| c.state != FileCommentState::Draft)
+            .filter_map(|c| Some((c.server_id.clone()?, c.staged_session_id.clone()?)))
             .collect();
         if staged.is_empty() {
             return;
@@ -787,6 +801,7 @@ impl ConsoleDesktopApp {
         comment_id: u64,
         cx: &mut Context<Self>,
     ) {
+        let target_session = self.comment_target_session_key(pane_id);
         let Some(comment) = self
             .workspace_pane_states
             .get_mut(pane_id)
@@ -797,14 +812,19 @@ impl ConsoleDesktopApp {
         if comment.state == FileCommentState::Draft {
             return;
         }
-        comment.staged = !comment.staged;
-        let (staged, server_id) = (comment.staged, comment.server_id.clone());
+        let next_staged = if comment.is_staged_for(&target_session) {
+            None
+        } else {
+            Some(target_session)
+        };
+        comment.staged_session_id = next_staged.clone();
+        let server_id = comment.server_id.clone();
         // Every pane's copy of the same saved comment follows.
         if let Some(server_id) = server_id {
             for pane in self.workspace_pane_states.values_mut() {
                 for copy in &mut pane.file_comments {
                     if copy.server_id.as_deref() == Some(server_id.as_str()) {
-                        copy.staged = staged;
+                        copy.staged_session_id = next_staged.clone();
                     }
                 }
             }
@@ -819,6 +839,7 @@ impl ConsoleDesktopApp {
         pane_id: &str,
         cx: &mut Context<Self>,
     ) -> Rc<Vec<ComposerComment>> {
+        let session_key = self.comment_target_session_key(pane_id);
         let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
         let leaves = if is_chat {
             self.workspace_root.leaves()
@@ -835,7 +856,7 @@ impl ConsoleDesktopApp {
             self.workspace_pane_states.get(*pid).is_some_and(|pane| {
                 pane.file_comments
                     .iter()
-                    .any(|c| c.staged && c.state != FileCommentState::Draft)
+                    .any(|c| c.is_staged_for(&session_key) && c.state != FileCommentState::Draft)
             })
         });
         if !has_any_staged {
@@ -850,7 +871,7 @@ impl ConsoleDesktopApp {
                 continue;
             };
             for comment in &pane.file_comments {
-                if !comment.staged || comment.state == FileCommentState::Draft {
+                if !comment.is_staged_for(&session_key) || comment.state == FileCommentState::Draft {
                     continue;
                 }
                 if let Some(server_id) = comment.server_id.as_deref()
@@ -924,7 +945,8 @@ impl ConsoleDesktopApp {
             let id = comment.id;
             let start_line = comment.start_line;
             let end_line = comment.end_line;
-            let staged = comment.staged;
+            let target_session = self.comment_target_session_key(pane_id);
+            let staged = comment.is_staged_for(&target_session);
             let card_state = match comment.state {
                 FileCommentState::Draft => FileCommentCardState::Draft,
                 FileCommentState::Added => FileCommentCardState::Added,
@@ -1039,7 +1061,8 @@ impl ConsoleDesktopApp {
 
             let id = comment.id;
             let state = comment.state;
-            let staged = comment.staged;
+            let target_session = self.comment_target_session_key(pane_id);
+            let staged = comment.is_staged_for(&target_session);
             let text = comment.text.clone();
             let input = comment.input.clone();
             let card_path = comment.path.clone();

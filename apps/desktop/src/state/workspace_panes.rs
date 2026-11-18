@@ -598,6 +598,9 @@ impl ConsoleDesktopApp {
                 .and_then(|state| state.loaded_session_id.as_deref())
                 == Some(sid);
             if transcript_has_messages && (already_loaded || prev_sid.as_deref() == Some(sid)) {
+                if prev_sid.as_deref() != Some(sid) {
+                    self.restore_draft_for_pane(pane_id, Some(sid), cx);
+                }
                 self.refresh_file_tree(cx);
                 cx.notify();
                 return;
@@ -825,9 +828,13 @@ impl ConsoleDesktopApp {
             return false;
         };
 
+        let prev_sid = self.active_session_for_pane(&existing_pane_id);
         workspace_ops::select_tab(&mut self.workspace_root, &existing_pane_id, &tab_id);
-        self.active_pane_id = Some(existing_pane_id);
-        self.selected_session_id = Some(session_id);
+        self.active_pane_id = Some(existing_pane_id.clone());
+        self.selected_session_id = Some(session_id.clone());
+        if prev_sid.as_deref() != Some(session_id.as_str()) {
+            self.restore_draft_for_pane(&existing_pane_id, Some(&session_id), cx);
+        }
         self.persist_workspaces();
         cx.notify();
         true
@@ -914,10 +921,7 @@ impl ConsoleDesktopApp {
         self.ensure_workspace_pane_state(&target_pane_id, window, cx);
         if let WorkspaceTabConfig::Chat { session_id, .. } = tab {
             self.selected_session_id = Some(session_id.clone());
-            self.composer_for_pane(&target_pane_id)
-                .update(cx, |input, cx| {
-                    input.set_prompt_history(Vec::new(), cx);
-                });
+            self.restore_draft_for_pane(&target_pane_id, Some(&session_id), cx);
             self.transcript_for_pane(&target_pane_id)
                 .update(cx, |transcript, cx| {
                     transcript.set_messages(Vec::new(), cx);

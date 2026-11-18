@@ -621,6 +621,7 @@ impl ConsoleDesktopApp {
                                     "New Chat",
                                     cx,
                                 );
+                                this.restore_draft_for_pane(&pane_id, Some(&new_session.id), cx);
                                 this.sync_workspace_webviews(cx);
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
                                     t.set_messages(Vec::new(), cx);

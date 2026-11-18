@@ -61,7 +61,7 @@ impl ConsoleDesktopApp {
             if staged.is_empty() {
                 self.browser_annotations.remove(pane_id);
             }
-            self.schedule_drafts_save(cx);
+            self.save_pane_draft(pane_id, cx);
             cx.notify();
         }
     }
@@ -114,12 +114,12 @@ impl ConsoleDesktopApp {
                 .pane_hosting_browser(browser_id)
                 .unwrap_or_else(|| "pane-main".to_string());
             self.append_annotations_for_pane(&fallback, vec![annotation]);
-            self.schedule_drafts_save(cx);
+            self.save_pane_draft(&fallback, cx);
             cx.notify();
             return false;
         };
         self.append_annotations_for_pane(&pane_id, vec![annotation]);
-        self.schedule_drafts_save(cx);
+        self.save_pane_draft(&pane_id, cx);
         cx.notify();
         // Focus stays in the browser webview after Attach, so the prompt the
         // user types next would vanish into the page. Move it to the chat

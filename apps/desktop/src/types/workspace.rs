@@ -18,8 +18,8 @@ pub(crate) struct FileComment {
     pub(crate) server_id: Option<String>,
     /// The lines are numbered in the pre-change file (a removed diff row).
     pub(crate) old_side: bool,
-    /// Included in the next message sent from the pane.
-    pub(crate) staged: bool,
+    /// Session key (`session_id` or `"new_chat"`) this comment is staged for.
+    pub(crate) staged_session_id: Option<String>,
     /// Absolute path; prompts render it project-relative.
     pub(crate) path: String,
     pub(crate) start_line: u32,
@@ -43,6 +43,10 @@ pub(crate) enum FileCommentState {
 }
 
 impl FileComment {
+    pub(crate) fn is_staged_for(&self, session_key: &str) -> bool {
+        self.staged_session_id.as_deref() == Some(session_key)
+    }
+
     /// `address.rs +23-35` (or `+23` for one line), the chip/card label.
     pub(crate) fn label(&self) -> String {
         let name = std::path::Path::new(&self.path)
@@ -100,9 +104,9 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) comments_project: Option<String>,
     /// The project's saved comments plus any card still being typed.
     pub(crate) file_comments: Vec<FileComment>,
-    /// Server ids of comments staged in a pane that has since closed. The next
-    /// load of this pane's comments restores their staged flag.
-    pub(crate) pending_staged_comments: Vec<String>,
+    /// `(server_id, session_key)` of comments staged in a pane that has since
+    /// closed. The next load of this pane's comments restores their staged session.
+    pub(crate) pending_staged_comments: Vec<(String, String)>,
     pub(crate) next_file_comment_id: u64,
     /// Retained tab strip scroll-follow state for this pane.
     pub(crate) tab_strip_follow: TabStripFollow,

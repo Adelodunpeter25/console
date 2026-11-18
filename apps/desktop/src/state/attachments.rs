@@ -84,6 +84,7 @@ impl ConsoleDesktopApp {
 
         if !staged.is_empty() {
             self.append_attachments_for_pane(pane_id, staged);
+            self.save_pane_draft(pane_id, cx);
             cx.notify();
         }
         if !paths.is_empty() {
@@ -103,6 +104,7 @@ impl ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             this.append_attachments_for_pane(&pane_id, attachments);
+                            this.save_pane_draft(&pane_id, cx);
                             cx.notify();
                         });
                     }
@@ -144,6 +146,7 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.append_attachments_for_pane(&pane_id, attachments);
+                        this.save_pane_draft(&pane_id, cx);
                         cx.notify();
                     });
                 }
@@ -182,6 +185,7 @@ impl ConsoleDesktopApp {
                     app.update(cx, |this, cx| match attachment {
                         Some(attachment) => {
                             this.append_attachments_for_pane(&pane_id, vec![attachment]);
+                            this.save_pane_draft(&pane_id, cx);
                             cx.notify();
                         }
                         None => this.set_error("That file is not a supported image.", cx),
@@ -214,6 +218,7 @@ impl ConsoleDesktopApp {
             mime_type: "image/png".to_string(),
         };
         self.append_attachments_for_pane(&pane_id, vec![attachment]);
+        self.save_pane_draft(&pane_id, cx);
         cx.notify();
     }
 
@@ -228,6 +233,7 @@ impl ConsoleDesktopApp {
             if staged.is_empty() {
                 self.attachments.remove(pane_id);
             }
+            self.save_pane_draft(pane_id, cx);
             cx.notify();
         }
     }

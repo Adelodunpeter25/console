@@ -148,6 +148,11 @@ impl ConsoleDesktopApp {
             .map(|draft| draft.annotations.clone())
             .unwrap_or_default();
         self.set_annotations_for_pane(pane_id, draft_annotations);
+        self.history_draft_attachments.remove(pane_id);
+        self.history_draft_annotations.remove(pane_id);
+        self.autocomplete_states.remove(pane_id);
+        self.question_input_for_pane(pane_id)
+            .update(cx, |input, cx| input.clear(cx));
         self.composer_for_pane(pane_id).update(cx, |input, cx| {
             input.set_prompt_history(Vec::new(), cx);
             if let Some((draft_text, mentions)) = draft {
@@ -158,6 +163,30 @@ impl ConsoleDesktopApp {
             input.set_context_files(draft_ctx_files);
             cx.notify();
         });
+    }
+
+    /// Persist the pane's current composer text, mentions, attachments, and
+    /// annotations under its active session's draft.
+    pub(crate) fn save_pane_draft(&mut self, pane_id: &str, cx: &mut Context<Self>) {
+        let session_id = self.active_session_for_pane(pane_id);
+        let (text, mentions) = {
+            let input = self.composer_for_pane(pane_id).read(cx);
+            (input.content().to_string(), input.mentions().to_vec())
+        };
+        let attachments = self.attachments_for_pane(pane_id);
+        let annotations = self.annotations_for_pane(pane_id);
+        self.save_draft_for_session_with_context(
+            session_id.as_deref(),
+            &text,
+            &mentions,
+            &[],
+            &attachments,
+            &annotations,
+            cx,
+        );
+        if let Some(session_id) = session_id {
+            self.schedule_draft_push(session_id, cx);
+        }
     }
 
     pub fn save_draft_for_session_with_context(
