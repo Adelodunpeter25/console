@@ -17,7 +17,7 @@ fn header_card(theme: Theme, id: SharedString) -> gpui::Stateful<gpui::Div> {
     div()
         .id(ElementId::Name(id))
         .w_full()
-        .h(px(30.0))
+        .h(px(32.0))
         .mt(px(4.0))
         .px(px(8.0))
         .rounded(px(8.0))
@@ -114,7 +114,7 @@ pub fn project_header(
         .child(
             div()
                 .id(ElementId::Name(format!("btn-new-chat-{key}").into()))
-                .size(px(24.0))
+                .size(px(20.0))
                 .flex_none()
                 .rounded(px(6.0))
                 .flex()
@@ -125,7 +125,7 @@ pub fn project_header(
                 .active(|s| s.bg(theme.overlay_strong))
                 .tooltip(Tooltip::text("New chat"))
                 .on_click(move |_, window, cx| (on_new_chat)(new_chat_key.clone(), window, cx))
-                .child(app_icon(IconName::Plus, 16.0, theme.text_secondary)),
+                .child(app_icon(IconName::Plus, 14.0, theme.text_secondary)),
         )
 }
 
