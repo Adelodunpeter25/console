@@ -116,8 +116,9 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 	slog.Debug("tool executed", "tool", call.Name, "call", call.ID)
 	content, isError := any(out), false
 	var visual *tools.VisualArtifact
+	var html *tools.HtmlArtifact
 	if envelope, ok := out.(tools.Envelope); ok {
-		content, isError, visual = envelope.Content, envelope.IsError, envelope.Visual
+		content, isError, visual, html = envelope.Content, envelope.IsError, envelope.Visual, envelope.Html
 	}
 	result := tools.ToolResult{
 		ToolCallID: call.ID,
@@ -126,6 +127,7 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 		IsError:    isError,
 		Args:       call.Arguments,
 		Visual:     visual,
+		Html:       html,
 	}
 	if e.OnAfterExecute != nil {
 		e.OnAfterExecute(call, result)

@@ -123,12 +123,24 @@ message VisualPart {
   bytes spec = 2;
 }
 
+// HtmlPart is a client-rendered HTML page artifact attached to a tool result.
+// Like VisualPart it never reaches a model provider; Path points at a
+// workspace .html file clients fetch through the sandboxed html route.
+// Snapshot is an optional PNG for the collapsed card state.
+message HtmlPart {
+  string path = 1;
+  string title = 2;
+  uint32 height = 3;
+  optional bytes snapshot = 4;
+}
+
 message ToolResult {
   string tool_call_id = 1;
   optional string tool_name = 2;
   bytes content = 3;
   optional bool is_error = 4;
   optional VisualPart visual = 5;
+  optional HtmlPart html = 6;
   // Note: the loop's echoed call args are dropped here — they already live
   // in the assistant turn's toolCall part, and no client reads them.
 }

@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/htmlrender"
 	"os"
 	"strconv"
 	"strings"
@@ -357,6 +358,50 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		c.Set("Cache-Control", "private, max-age=30")
 		c.Set("ETag", etag)
 		return c.Status(status).Send(payload)
+	})
+
+	// GET /api/fs/file/html — sandboxed HTML page with serve-time theme/bridge
+	// bootstrap. CSP sandbox gives the page an opaque origin (no cookies,
+	// storage, or API access) while allowing scripts and forms.
+	h.Get("/file/html", func(c *fiber.Ctx) error {
+		filePath := c.Query("path")
+		if filePath == "" {
+			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'path' is required."))
+		}
+		filePath = fssvc.ResolvePath(filePath)
+		if !htmlrender.IsHTMLPath(filePath) {
+			return fail(c, fiber.StatusForbidden, fmt.Errorf("%q is not an HTML file.", filePath))
+		}
+		info, err := os.Stat(filePath)
+		if err != nil {
+			return fail(c, previewStatus(err), err)
+		}
+		if info.IsDir() {
+			return fail(c, fiber.StatusBadRequest, fmt.Errorf("%q is a directory.", filePath))
+		}
+		if info.Size() > htmlrender.MaxFileBytes {
+			return fail(c, fiber.StatusRequestEntityTooLarge, fmt.Errorf("HTML file exceeds %d bytes.", htmlrender.MaxFileBytes))
+		}
+		etag := fssvc.BuildFileETag(info.Size(), info.ModTime().UnixMilli()) + "-" + c.Query("theme", "dark")
+		if c.Get("If-None-Match") == etag {
+			return c.Status(fiber.StatusNotModified).Send(nil)
+		}
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return fail(c, fiber.StatusBadRequest, err)
+		}
+		raw := string(data)
+		if !htmlrender.LooksLikeDocument(raw) {
+			return fail(c, fiber.StatusForbidden, fmt.Errorf("%q does not look like an HTML document.", filePath))
+		}
+		theme := htmlrender.ThemeFor(c.Query("theme", "dark"))
+		body := htmlrender.InjectBootstrap(raw, htmlrender.BootstrapMarkup(theme))
+		c.Set("Content-Type", "text/html; charset=utf-8")
+		c.Set("Content-Security-Policy", "sandbox allow-scripts allow-forms allow-popups allow-downloads")
+		c.Set("X-Content-Type-Options", "nosniff")
+		c.Set("Cache-Control", "private, max-age=30")
+		c.Set("ETag", etag)
+		return c.SendString(body)
 	})
 
 	// GET /api/fs/file

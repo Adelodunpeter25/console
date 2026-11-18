@@ -38,6 +38,16 @@ type VisualArtifact struct {
 	Spec    json.RawMessage `json:"spec"`
 }
 
+// HtmlArtifact is a client-rendered HTML page attached to a tool result.
+// Like VisualArtifact it never reaches a model provider; Path points at a
+// workspace .html file clients fetch through the sandboxed html route.
+type HtmlArtifact struct {
+	Path     string `json:"path"`
+	Title    string `json:"title"`
+	Height   uint32 `json:"height"`
+	Snapshot []byte `json:"snapshot,omitempty"`
+}
+
 // ToolResult is the outcome sent back to the model.
 type ToolResult struct {
 	ToolCallID string          `json:"toolCallId"`
@@ -46,6 +56,7 @@ type ToolResult struct {
 	IsError    bool            `json:"isError,omitempty"`
 	Args       json.RawMessage `json:"args,omitempty"`
 	Visual     *VisualArtifact `json:"visual,omitempty"`
+	Html       *HtmlArtifact    `json:"html,omitempty"`
 }
 
 // ToolError signals a tool failure back to the harness (result carries it
@@ -71,6 +82,8 @@ type Envelope struct {
 	// Visual is a client-rendered artifact carried alongside Content. Content
 	// remains the only part a provider sees.
 	Visual *VisualArtifact
+	// Html is a client-rendered HTML page artifact; same provider boundary.
+	Html *HtmlArtifact
 }
 
 // Tool is the agent-callable unit. Schema() is derived from the input

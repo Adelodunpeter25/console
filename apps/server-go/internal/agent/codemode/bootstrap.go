@@ -115,8 +115,11 @@ const bootstrapScript = `
     };
 
     // Artifacts & chat reference
-    globalThis.visualize = async function(spec) {
-        return await bridge.call({ tool: "visualize", input: { spec: spec } });
+    globalThis.render = async function(input) {
+        return await bridge.call({ tool: "render", input: input });
+    };
+    globalThis.renderPreview = async function(input) {
+        return await bridge.call({ tool: "preview", input: input });
     };
 
     globalThis.readChat = async function(ref, limit) {

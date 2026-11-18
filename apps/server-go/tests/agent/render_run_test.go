@@ -1,13 +1,12 @@
-// Run service: /visualize switches the visual skill on for a session, the
-// skill rides setup, and the tool result carries the artifact. The tool itself
-// is always listed (see run.Capabilities), but a session that never asked for
-// the skill gets neither its reference nor a rendered card: the first call is
-// refused until the skill is read.
+// Run service: /render switches the render skill on for a session, the skill
+// rides setup, and the tool result carries the HtmlArtifact. Without /render
+// the tools are gated: the first call is refused until the skill is read.
 package tests
 
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -17,23 +16,20 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/visualize"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/htmlrender"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
-const visualizeCallArgs = `{"spec":{"version":1,"title":"Signups","blocks":[{"type":"metric","label":"MRR","value":"$42.1k"}]}}`
+const renderCallArgs = `{"html":"<!doctype html><html><body><h1>Signups</h1></body></html>","title":"Signups","height":320}`
 
-// visualizeCaller calls the visualize tool on its first agent turn, then
-// answers. The first turn waits a moment so the test can subscribe to the
-// hub before the run produces events.
-type visualizeCaller struct {
+type renderCaller struct {
 	mu    sync.Mutex
 	calls int
 	reqs  []loop.TurnRequest
 }
 
-func (p *visualizeCaller) RunTurn(ctx context.Context, req loop.TurnRequest, s *stream.Stream[loop.Event]) error {
-	if len(req.Tools) == 0 { // title generation
+func (p *renderCaller) RunTurn(ctx context.Context, req loop.TurnRequest, s *stream.Stream[loop.Event]) error {
+	if len(req.Tools) == 0 {
 		s.Push(loop.Event{Kind: loop.EventText, Text: "title"})
 		s.Complete()
 		return nil
@@ -46,7 +42,7 @@ func (p *visualizeCaller) RunTurn(ctx context.Context, req loop.TurnRequest, s *
 	if n == 1 {
 		time.Sleep(100 * time.Millisecond)
 		s.Push(loop.Event{Kind: loop.EventToolCall, Call: &tools.ToolCall{
-			ID: "c1", Name: "visualize", Arguments: []byte(visualizeCallArgs),
+			ID: "c1", Name: "render", Arguments: []byte(renderCallArgs),
 		}})
 	} else {
 		s.Push(loop.Event{Kind: loop.EventText, Text: "ok"})
@@ -55,7 +51,7 @@ func (p *visualizeCaller) RunTurn(ctx context.Context, req loop.TurnRequest, s *
 	return nil
 }
 
-func (p *visualizeCaller) requests() []loop.TurnRequest {
+func (p *renderCaller) requests() []loop.TurnRequest {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return append([]loop.TurnRequest(nil), p.reqs...)
@@ -78,9 +74,6 @@ func toolList(req loop.TurnRequest) []string {
 	return names
 }
 
-// toolResultContent returns the provider-facing content of the tool result
-// in a request, so the test can prove the spec never reaches the provider.
-// Providers read Content only, so that is what the model sees.
 func toolResultContent(t *testing.T, req loop.TurnRequest) string {
 	t.Helper()
 	for _, message := range req.Messages {
@@ -97,14 +90,15 @@ func toolResultContent(t *testing.T, req loop.TurnRequest) string {
 	return ""
 }
 
-func TestVisualizeCommandActivatesToolAndCarriesArtifact(t *testing.T) {
+func TestRenderCommandActivatesToolAndCarriesArtifact(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	provider := &visualizeCaller{}
+	provider := &renderCaller{}
 	svc.Lookup = func(id string) (loop.Provider, error) { return provider, nil }
 	header := helpers.CreateRunSession(t, sessions)
 
-	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "/visualize chart our signups", Provider: "mock", ModelID: "m"})
+	_ = sessions.AddCapability(header.ID, "render")
+	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "chart our signups", Provider: "mock", ModelID: "m"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,26 +111,23 @@ func TestVisualizeCommandActivatesToolAndCarriesArtifact(t *testing.T) {
 		t.Fatal("run did not settle")
 	}
 
-	sawVisual := false
+	var livePath string
 	check := func(frame run.Frame) {
 		if frame.Event.Kind != loop.EventToolExecutionResult || frame.Event.Result == nil {
 			return
 		}
-		visual := frame.Event.Result.Visual
-		if visual == nil || visual.Version != 1 {
+		h := frame.Event.Result.Html
+		if h == nil || h.Path == "" {
 			return
 		}
-		if !json.Valid(visual.Spec) {
-			t.Error("live visual spec is not valid JSON")
+		if h.Title != "Signups" || h.Height != 320 {
+			t.Errorf("unexpected html artifact: %+v", h)
 		}
-		sawVisual = true
+		livePath = h.Path
 	}
 	for _, frame := range replay {
 		check(frame)
 	}
-	// The subscriber queue is pumped asynchronously, so drain until it goes
-	// quiet rather than assuming the frames are already waiting. The channel
-	// closes when the run settles.
 	idle := time.After(300 * time.Millisecond)
 	for {
 		select {
@@ -151,8 +142,11 @@ func TestVisualizeCommandActivatesToolAndCarriesArtifact(t *testing.T) {
 		}
 	}
 drained:
-	if !sawVisual {
-		t.Fatal("no live tool result carried a visual artifact")
+	if livePath == "" {
+		t.Fatal("no live tool result carried an html artifact")
+	}
+	if _, err := os.Stat(livePath); err != nil {
+		t.Fatalf("rendered scratch file missing at %s: %v", livePath, err)
 	}
 
 	reqs := provider.requests()
@@ -160,25 +154,20 @@ drained:
 		t.Fatalf("agent turns = %d, want at least 2", len(reqs))
 	}
 	first := reqs[0]
-	// Under codemode the provider only sees the REPL tools; visualize stays
-	// available inside the JS runtime.
 	if !hasTool(first, "code") {
-		t.Fatalf("code tool missing after /visualize: %v", toolList(first))
+		t.Fatalf("code tool missing after /render: %v", toolList(first))
 	}
-	if !strings.Contains(first.Setup, "Visualize") {
-		t.Fatalf("setup should carry the /visualize skill:\n%s", first.Setup)
+	if !strings.Contains(first.Setup, "Render & Preview") {
+		t.Fatalf("setup should carry the /render skill:\n%s", first.Setup)
 	}
-	// The provider sees the summary only: the spec is client-facing.
 	content := toolResultContent(t, reqs[1])
-	if !strings.Contains(content, "Rendered visual") {
-		t.Fatalf("provider should see the visual summary, got %s", content)
+	if !strings.Contains(content, "Rendered interactive page") {
+		t.Fatalf("provider should see the render summary, got %s", content)
 	}
-	if strings.Contains(content, "blocks") {
-		t.Fatalf("the spec must not reach the provider, got %s", content)
+	if strings.Contains(content, "<h1>Signups</h1>") {
+		t.Fatalf("raw html must not reach the provider, got %s", content)
 	}
 
-	// The artifact is persisted with the tool result, so a reopened session
-	// can still render the card.
 	loaded, err := sessions.Load(header.ID, 0, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -193,23 +182,24 @@ drained:
 		if !ok || len(result.Results) == 0 {
 			continue
 		}
-		if result.Results[0].Visual != nil {
+		if result.Results[0].Html != nil && result.Results[0].Html.Path == livePath {
 			persisted = true
 		}
 	}
 	if !persisted {
-		t.Fatal("persisted tool result lost the visual artifact")
+		t.Fatal("persisted tool result lost the html artifact")
 	}
 }
 
-func TestVisualizeToolStaysLoadedForLaterMessages(t *testing.T) {
+func TestRenderToolStaysLoadedForLaterMessages(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	provider := &visualizeCaller{}
+	provider := &renderCaller{}
 	svc.Lookup = func(id string) (loop.Provider, error) { return provider, nil }
 	header := helpers.CreateRunSession(t, sessions)
 
-	for _, text := range []string{"/visualize chart our signups", "and now a table"} {
+	_ = sessions.AddCapability(header.ID, "render")
+	for _, text := range []string{"chart our signups", "and now a table"} {
 		hub, err := svc.StartRun(header.ID, run.Prompt{Text: text, Provider: "mock", ModelID: "m"})
 		if err != nil {
 			t.Fatal(err)
@@ -228,14 +218,10 @@ func TestVisualizeToolStaysLoadedForLaterMessages(t *testing.T) {
 	}
 }
 
-// Without /visualize the tool is still listed, but it is gated: the skill
-// reference is not in setup, a call renders nothing, and the refusal hands the
-// model the reference so the retry works. This is what stops a stray call from
-// drawing a card in a chat that never asked for one.
-func TestVisualizeIsGatedWithoutCommand(t *testing.T) {
+func TestRenderIsGatedWithoutCommand(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	provider := &visualizeCaller{}
+	provider := &renderCaller{}
 	svc.Lookup = func(id string) (loop.Provider, error) { return provider, nil }
 	header := helpers.CreateRunSession(t, sessions)
 
@@ -253,17 +239,15 @@ func TestVisualizeIsGatedWithoutCommand(t *testing.T) {
 	if len(reqs) < 2 {
 		t.Fatalf("agent turns = %d, want at least 2", len(reqs))
 	}
-	if strings.Contains(reqs[0].Setup, visualize.SkillText()) {
-		t.Fatalf("setup carries the visualize skill without /visualize:\n%s", reqs[0].Setup)
+	if strings.Contains(reqs[0].Setup, htmlrender.SkillText()) {
+		t.Fatalf("setup carries the render skill without /render:\n%s", reqs[0].Setup)
 	}
 
-	// The model's call was refused, with the reference as the answer.
 	refusal := toolResultContent(t, reqs[1])
-	if !strings.Contains(refusal, "before reading the visualize skill") {
+	if !strings.Contains(refusal, "before reading the render skill") {
 		t.Fatalf("the first call must be refused until the skill is read, got %s", refusal)
 	}
 
-	// Nothing rendered: no persisted tool result carries a visual artifact.
 	loaded, err := sessions.Load(header.ID, 0, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -275,8 +259,8 @@ func TestVisualizeIsGatedWithoutCommand(t *testing.T) {
 		}
 		if result, ok := decoded.(loop.ToolResultMessage); ok {
 			for _, r := range result.Results {
-				if r.Visual != nil {
-					t.Fatal("a gated call rendered a visual artifact")
+				if r.Html != nil {
+					t.Fatal("a gated call rendered an html artifact")
 				}
 			}
 		}

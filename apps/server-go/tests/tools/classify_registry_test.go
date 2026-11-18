@@ -33,7 +33,7 @@ func registered(t *testing.T) map[string]bool {
 	}
 	// Tools living in other packages are named by the run loop; their names are
 	// part of the contract this test pins.
-	for _, n := range []string{"console", "consoleReset", "computer", "computerReset", "visualize", "loadTools", "browser", "browserReset", "code", "codeReset"} {
+	for _, n := range []string{"console", "consoleReset", "computer", "computerReset", "render", "preview", "loadTools", "browser", "browserReset", "code", "codeReset"} {
 		names[n] = true
 	}
 	return names

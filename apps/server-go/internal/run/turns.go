@@ -297,7 +297,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		dto.Text, dto.woken = text, items
 	}
 
-	// A typed /command (/computer-use, /visualize, /console) switches its
+	// A typed /command (/computer-use) switches its
 	// capability on for the session. The message itself is never rewritten:
 	// what the user typed is what gets persisted and displayed, and the
 	// reference travels in setup (sent every turn, never saved).
@@ -514,7 +514,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		// parent already loaded carry over, and get their own loadTools.
 		// Visualize is excluded: a subagent transcript is folded into a
 		// summary, so a visual made there would have no card to render into.
-		ToolSource: func() []tools.Tool { return withoutTool(registry.Tools(), "visualize") },
+		ToolSource: func() []tools.Tool { return withoutTool(withoutTool(registry.Tools(), "render"), "preview") },
 		NestedTools: func(nested *tools.Registry) {
 			if mcpManager != nil {
 				if lt := mcp.NewLoadToolsTool(mcpManager, nested); lt != nil {

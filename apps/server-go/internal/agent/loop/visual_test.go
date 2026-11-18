@@ -95,3 +95,39 @@ func TestMalformedVisualIsDropped(t *testing.T) {
 		t.Fatalf("content = %#v, want summary preserved", results[0].Content)
 	}
 }
+func TestToolResultHtmlRoundTrip(t *testing.T) {
+	snap := []byte{0x89, 0x50, 0x4e, 0x47}
+	original := ToolResultMessage{
+		Role: RoleToolResult,
+		Results: []tools.ToolResult{{
+			ToolCallID: "c2",
+			ToolName:   "render",
+			Content:    []map[string]any{{"type": "text", "text": "Rendered interactive page."}},
+			Html: &tools.HtmlArtifact{
+				Path:     "/tmp/page.html",
+				Title:    "Sidebar designs",
+				Height:   640,
+				Snapshot: snap,
+			},
+		}},
+	}
+	raw, err := ToProtoBytes(original)
+	if err != nil {
+		t.Fatalf("ToProtoBytes: %v", err)
+	}
+	decoded, err := MessageFromProtoBytes(raw)
+	if err != nil {
+		t.Fatalf("MessageFromProtoBytes: %v", err)
+	}
+	msg, ok := decoded.(ToolResultMessage)
+	if !ok {
+		t.Fatalf("decoded type = %T, want ToolResultMessage", decoded)
+	}
+	if len(msg.Results) != 1 || msg.Results[0].Html == nil {
+		t.Fatalf("html missing after round trip: %#v", msg.Results)
+	}
+	got := msg.Results[0].Html
+	if got.Path != "/tmp/page.html" || got.Title != "Sidebar designs" || got.Height != 640 || !bytes.Equal(got.Snapshot, snap) {
+		t.Fatalf("html mismatch: %+v", got)
+	}
+}

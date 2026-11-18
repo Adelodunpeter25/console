@@ -66,24 +66,14 @@ func TestAssistListsComputerUse(t *testing.T) {
 	}
 }
 
-// TestAssistListsVisualize is the discoverability half of /visualize: the
-// command must appear in autocomplete, while the model learns nothing until
-// the user invokes it.
-func TestAssistListsVisualize(t *testing.T) {
-	var found map[string]any
+// TestAssistOmitsAgentSkillsFromSlashPopup verifies that agent-enabled
+// built-in skills (render, browser-use, console) are not exposed as /commands.
+func TestAssistOmitsAgentSkillsFromSlashPopup(t *testing.T) {
 	for _, cmd := range assistCommands(t) {
-		if cmd["name"] == "visualize" {
-			found = cmd
+		switch cmd["name"] {
+		case "render", "browser-use", "console":
+			t.Errorf("%v should not be listed as a /command", cmd["name"])
 		}
-	}
-	if found == nil {
-		t.Fatal("/visualize not listed in assist commands")
-	}
-	if found["builtin"] != true {
-		t.Errorf("visualize builtin = %v, want true", found["builtin"])
-	}
-	if desc, _ := found["description"].(string); desc == "" {
-		t.Error("visualize needs a description for the autocomplete card")
 	}
 }
 

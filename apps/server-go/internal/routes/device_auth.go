@@ -46,7 +46,7 @@ func deviceStreamPath(path string) bool {
 // HTTP route where a query-string token is accepted (media players and
 // embedded webviews cannot always send an Authorization header).
 func mediaFilePath(c *fiber.Ctx) bool {
-	return c.Method() == fiber.MethodGet && c.Path() == "/api/fs/file/media"
+	return c.Method() == fiber.MethodGet && (c.Path() == "/api/fs/file/media" || c.Path() == "/api/fs/file/html")
 }
 
 // isWebSocketUpgrade mirrors the handshake test the upgrader performs. Browser

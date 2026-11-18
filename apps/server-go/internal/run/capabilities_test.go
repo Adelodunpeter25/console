@@ -30,26 +30,35 @@ func TestTypedCommandSwitchesOnAndPersists(t *testing.T) {
 	if on, _ := svc.sessions.Capabilities(id); len(on) != 0 {
 		t.Fatalf("a fresh session must have nothing on: %v", on)
 	}
-	svc.activateInvoked(id, "/visualize show me a chart")
+	svc.activateInvoked(id, "/computer-use click the button")
 	svc.activateInvoked(id, "just a normal message")
+	// Non-slash capabilities must not activate from /render or /console.
+	svc.activateInvoked(id, "/render show me a chart")
+	svc.activateInvoked(id, "/console run dev")
 	on, _ := svc.sessions.Capabilities(id)
-	if len(on) != 1 || on[0] != "visualize" {
-		t.Fatalf("on = %v, want [visualize]", on)
+	if len(on) != 1 || on[0] != "computer-use" {
+		t.Fatalf("on = %v, want [computer-use]", on)
 	}
 	// Idempotent.
-	svc.activateInvoked(id, "/visualize again")
+	svc.activateInvoked(id, "/computer-use again")
 	if on, _ := svc.sessions.Capabilities(id); len(on) != 1 {
 		t.Fatalf("activation must be idempotent: %v", on)
 	}
-	// Survives a restart: a new service over the same store still knows.
+	// Survives a restart.
 	restarted := NewService(svc.sessions)
 	if on, _ := restarted.sessions.Capabilities(id); len(on) != 1 {
 		t.Fatalf("activation lost across a restart: %v", on)
 	}
 }
 
-func TestEveryCommandIsDetected(t *testing.T) {
+func TestEverySlashCommandIsDetected(t *testing.T) {
 	for _, c := range Capabilities {
+		if !c.SlashCommand {
+			if c.Split != nil {
+				t.Errorf("%s is not a SlashCommand but still defines Split", c.Name)
+			}
+			continue
+		}
 		if _, ok := c.Split("/" + c.Name); !ok {
 			t.Errorf("/%s is not recognised by its own Split", c.Name)
 		}
@@ -64,7 +73,7 @@ func TestSetupCarriesOnlyCapabilitiesThatAreOn(t *testing.T) {
 	if refs := svc.capabilitySetup(id); len(refs) != 0 {
 		t.Fatalf("nothing on, setup must carry nothing: %d refs", len(refs))
 	}
-	svc.activateInvoked(id, "/console")
+	_ = svc.sessions.AddCapability(id, "console")
 	refs := svc.capabilitySetup(id)
 	if len(refs) != 1 || !strings.Contains(refs[0], "console") {
 		t.Fatalf("refs = %d", len(refs))
@@ -84,16 +93,14 @@ func TestReadSkillSwitchesOnWhatTheAgentMayEnable(t *testing.T) {
 		return textOf(out)
 	}
 
-	// The agent forgot to ask the user to type /visualize: reading it switches
-	// it on, loads its tool into this run, and persists the choice.
-	text := read("visualize")
+	text := read("render")
 	if !strings.Contains(text, "now switched on") {
 		t.Fatalf("expected a switched-on note, got: %.200s", text)
 	}
-	if _, err := registry.Get("visualize"); err != nil {
-		t.Fatalf("visualize tool was not loaded into the run: %v", err)
+	if _, err := registry.Get("render"); err != nil {
+		t.Fatalf("render tool was not loaded into the run: %v", err)
 	}
-	if on, _ := svc.sessions.Capabilities(id); !contains(on, "visualize") {
+	if on, _ := svc.sessions.Capabilities(id); !contains(on, "render") {
 		t.Fatalf("not persisted: %v", on)
 	}
 
@@ -112,7 +119,7 @@ func TestReadSkillSwitchesOnWhatTheAgentMayEnable(t *testing.T) {
 
 func TestReadSkillListsCapabilitiesWithTheirState(t *testing.T) {
 	svc, id := newCapService(t)
-	svc.activateInvoked(id, "/visualize")
+	_ = svc.sessions.AddCapability(id, "render")
 	lc := &loadContext{sessionID: id, mode: "full-access"}
 	tool := tools.NewReadSkillTool(svc.readSkillCapabilities(lc, tools.NewRegistry()))
 	out, err := tool.Execute(t.Context(), []byte(`{}`))
@@ -120,7 +127,7 @@ func TestReadSkillListsCapabilitiesWithTheirState(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := textOf(out)
-	for _, want := range []string{"visualize", "(built-in, on)", "computer-use", "(built-in, off)", "console"} {
+	for _, want := range []string{"render", "(built-in, on)", "computer-use", "(built-in, off)", "console"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("listing missing %q:\n%s", want, text)
 		}
@@ -131,20 +138,20 @@ func TestReadSkillUnknownNameListsCapabilities(t *testing.T) {
 	svc, id := newCapService(t)
 	tool := tools.NewReadSkillTool(svc.readSkillCapabilities(&loadContext{sessionID: id, mode: "full-access"}, tools.NewRegistry()))
 	_, err := tool.Execute(t.Context(), []byte(`{"name":"nope"}`))
-	if err == nil || !strings.Contains(err.Error(), "visualize") {
+	if err == nil || !strings.Contains(err.Error(), "render") {
 		t.Fatalf("err = %v, want the built-ins listed", err)
 	}
 }
 
 func TestBuiltinSkillsListFollowsTheMode(t *testing.T) {
 	build := builtinSkillsSetup("full-access")
-	for _, want := range []string{"browser-use", "console", "visualize", "computer-use", "/computer-use", "readSkill"} {
+	for _, want := range []string{"browser-use", "console", "render", "computer-use", "/computer-use", "readSkill"} {
 		if !strings.Contains(build, want) {
 			t.Errorf("full-access list missing %q:\n%s", want, build)
 		}
 	}
 	plan := builtinSkillsSetup("plan-mode")
-	for _, want := range []string{"visualize", "browser-use"} {
+	for _, want := range []string{"render", "browser-use"} {
 		if !strings.Contains(plan, want) {
 			t.Errorf("plan mode keeps read-tier %q:\n%s", want, plan)
 		}
@@ -160,16 +167,16 @@ func TestToolsRefuseUntilTheirSkillIsRead(t *testing.T) {
 	svc, id := newCapService(t)
 	registry := tools.NewRegistry()
 	svc.loadCapabilities(&loadContext{sessionID: id, cwd: t.TempDir(), mode: "full-access"}, registry)
-	tool, err := registry.Get("visualize")
+	tool, err := registry.Get("render")
 	if err != nil {
 		t.Fatal(err)
 	}
-	args := []byte(`{"spec":{}}`)
+	args := []byte(`{"html":"<!doctype html><html></html>"}`)
 	_, err = tool.Execute(t.Context(), args)
-	if err == nil || !strings.Contains(err.Error(), "before reading the visualize skill") {
+	if err == nil || !strings.Contains(err.Error(), "before reading the render skill") {
 		t.Fatalf("first call must be refused with the reference, got %v", err)
 	}
-	if on, _ := svc.sessions.Capabilities(id); !contains(on, "visualize") {
+	if on, _ := svc.sessions.Capabilities(id); !contains(on, "render") {
 		t.Fatalf("refusal must switch the skill on: %v", on)
 	}
 	if _, err = tool.Execute(t.Context(), args); err != nil && strings.Contains(err.Error(), "before reading") {
@@ -177,19 +184,13 @@ func TestToolsRefuseUntilTheirSkillIsRead(t *testing.T) {
 	}
 }
 
-func TestPopupListComesFromTheTable(t *testing.T) {
+func TestPopupListOnlyIncludesSlashCommands(t *testing.T) {
 	got := CapabilityDescriptions()
-	if len(got) != len(Capabilities) {
-		t.Fatalf("popup has %d entries for %d capabilities", len(got), len(Capabilities))
-	}
-	for i, c := range Capabilities {
-		if got[i][0] != c.Name || got[i][1] == "" {
-			t.Errorf("entry %d = %v", i, got[i])
-		}
+	if len(got) != 1 || got[0][0] != "computer-use" {
+		t.Fatalf("popup = %v, want only [computer-use]", got)
 	}
 }
 
-// textOf extracts the text of a tool result.
 func textOf(out any) string {
 	switch v := out.(type) {
 	case string:

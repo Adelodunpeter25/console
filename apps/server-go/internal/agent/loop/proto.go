@@ -227,6 +227,14 @@ func toolResultsToProto(results []tools.ToolResult) ([]*consolev1.ToolResult, er
 				Spec:    append([]byte(nil), r.Visual.Spec...),
 			}
 		}
+		if r.Html != nil {
+			item.Html = &consolev1.HtmlPart{
+				Path:     r.Html.Path,
+				Title:    r.Html.Title,
+				Height:   r.Html.Height,
+				Snapshot: append([]byte(nil), r.Html.Snapshot...),
+			}
+		}
 		out = append(out, item)
 	}
 	return out, nil
@@ -347,9 +355,18 @@ func protoToToolResults(items []*consolev1.ToolResult) ([]tools.ToolResult, erro
 				Spec:    append([]byte(nil), v.GetSpec()...),
 			}
 		}
+		var html *tools.HtmlArtifact
+		if h := r.GetHtml(); h != nil && h.GetPath() != "" {
+			html = &tools.HtmlArtifact{
+				Path:     h.GetPath(),
+				Title:    h.GetTitle(),
+				Height:   h.GetHeight(),
+				Snapshot: append([]byte(nil), h.GetSnapshot()...),
+			}
+		}
 		out = append(out, tools.ToolResult{
 			ToolCallID: r.GetToolCallId(), ToolName: r.GetToolName(),
-			Content: content, IsError: r.GetIsError(), Visual: visual,
+			Content: content, IsError: r.GetIsError(), Visual: visual, Html: html,
 		})
 	}
 	return out, nil

@@ -15,7 +15,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/browseruse"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/visualize"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/htmlrender"
 )
 
 // Capability is one built-in capability.
@@ -25,7 +25,9 @@ type Capability struct {
 	Description string
 	// Text is the reference added to setup while the capability is on.
 	Text func() string
-	// Split recognises the typed command in a message.
+	// SlashCommand exposes this capability in the composer's / popup.
+	SlashCommand bool
+	// Split recognises the typed command in a message (nil when not a /command).
 	Split func(text string) (rest string, ok bool)
 	// Load adds the capability's tools to a run's registry.
 	Load func(s *Service, c *loadContext, registry *tools.Registry) error
@@ -57,10 +59,11 @@ type loadContext struct {
 // Capabilities lists every built-in capability, in popup order.
 var Capabilities = []Capability{
 	{
-		Name:        "computer-use",
-		Description: "Drive the computer: read app windows and operate them with keyboard and mouse",
-		Text:        cua.SkillText,
-		Split:       cua.SplitInvocation,
+		Name:         "computer-use",
+		Description:  "Drive the computer: read app windows and operate them with keyboard and mouse",
+		Text:         cua.SkillText,
+		SlashCommand: true,
+		Split:        cua.SplitInvocation,
 		Tier:        tools.TierExec,
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := cua.NewLoader(s.cuaManager, c.sessionID).Load(registry)
@@ -71,7 +74,6 @@ var Capabilities = []Capability{
 		Name:           "browser-use",
 		Description:    "Drive the built-in browser: navigate, observe, extract, and clean up through one JavaScript kernel",
 		Text:           browseruse.SkillText,
-		Split:          browseruse.SplitInvocation,
 		AgentMayEnable: true,
 		AlwaysLoaded:   true,
 		Tier:           tools.TierRead,
@@ -83,16 +85,15 @@ var Capabilities = []Capability{
 		},
 	},
 	{
-		Name:           "visualize",
-		Description:    "Render a chart, table, or metric card in the chat",
-		Text:           visualize.SkillText,
-		Split:          visualize.SplitInvocation,
+		Name:           "render",
+		Description:    "Render an interactive HTML page (chart, dashboard, mockup) inline in the chat",
+		Text:           htmlrender.SkillText,
 		AgentMayEnable: true,
 		AlwaysLoaded:   true,
 		Tier:           tools.TierRead,
-		GatedTools:     []string{"visualize"},
+		GatedTools:     []string{"render", "preview"},
 		Load: func(_ *Service, c *loadContext, registry *tools.Registry) error {
-			_, err := visualize.NewLoader(c.sessionID).Load(registry)
+			_, err := htmlrender.NewLoader(htmlrender.Options{Cwd: c.cwd}, c.browserHandler).Load(registry)
 			return err
 		},
 	},
@@ -100,7 +101,6 @@ var Capabilities = []Capability{
 		Name:           "console",
 		Description:    "Operate the app: run scripts, manage ports and sessions through the console API",
 		Text:           console.SkillText,
-		Split:          console.SplitInvocation,
 		AgentMayEnable: true,
 		AlwaysLoaded:   true,
 		Tier:           tools.TierExec,
@@ -123,11 +123,14 @@ func CapabilityByName(name string) (Capability, bool) {
 	return Capability{}, false
 }
 
-// CapabilityDescriptions is the popup's view of the table.
+// CapabilityDescriptions is the popup's view of the table (only capabilities
+// exposed as /commands).
 func CapabilityDescriptions() [][2]string {
 	out := make([][2]string, 0, len(Capabilities))
 	for _, c := range Capabilities {
-		out = append(out, [2]string{c.Name, c.Description})
+		if c.SlashCommand {
+			out = append(out, [2]string{c.Name, c.Description})
+		}
 	}
 	return out
 }
@@ -142,6 +145,9 @@ func (s *Service) capabilityOn(sessionID string, c Capability) bool {
 // activateInvoked switches on every capability the user typed in text.
 func (s *Service) activateInvoked(sessionID, text string) {
 	for _, c := range Capabilities {
+		if c.Split == nil {
+			continue
+		}
 		if _, ok := c.Split(text); ok {
 			_ = s.sessions.AddCapability(sessionID, c.Name)
 		}

@@ -450,8 +450,10 @@ func formatSummary(tool string, input map[string]any) string {
 		return fmt.Sprintf("webSearch(%v)", input["query"])
 	case "todo":
 		return fmt.Sprintf("todo(%v)", input["op"])
-	case "visualize":
-		return "visualize(...)"
+	case "render":
+		return "render(...)"
+	case "preview":
+		return "renderPreview(...)"
 	case "writePlan":
 		return fmt.Sprintf("writePlan(%v)", input["name"])
 	case "requestFullAccess":

@@ -53,7 +53,7 @@ You interact with the workspace and tools through the ` + "`code`" + ` tool (Jav
 Direct tools are replaced by asynchronous JavaScript functions inside the script.
 PLAN MODE: if the user asks for changes, call await requestFullAccess("short reason") inside code FIRST — before any write attempt.
 
-- Builtins ($` + "`cmd`" + `, file, write, edit, glob, grep, list, fetch, webSearch, todo, ask, askMany, browser, console, mcp, tools, store, load, log, preview, visualize, readChat, readSkill, writePlan, requestFullAccess, spawnContext): call help({query: "shell"}) to search or help() to list all; describe({name: "edit"}) for full docs on one.
+- Builtins ($` + "`cmd`" + `, file, write, edit, glob, grep, list, fetch, webSearch, todo, ask, askMany, browser, console, mcp, tools, store, load, log, preview, render, renderPreview, readChat, readSkill, writePlan, requestFullAccess, spawnContext): call help({query: "shell"}) to search or help() to list all; describe({name: "edit"}) for full docs on one.
 - Harness tools: listTools(), searchTools(query), describeTool(name), tools.<name>(input).
 - MCP servers: mcp.servers(), mcp.tools({id}), mcp.call({id, tool, args}). Do NOT use fetch/webSearch for configured MCP services.
 - Subagents: spawnContext({prompt, role}).

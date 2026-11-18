@@ -59,8 +59,10 @@ func builtinLabel(name string) string {
 		return "Browser"
 	case "browserReset":
 		return "Reset Browser"
-	case "visualize":
-		return "Visualize"
+	case "render":
+		return "Render"
+	case "preview":
+		return "Preview"
 	case "subagent":
 		return "Subagent"
 	case "ask":
@@ -270,7 +272,7 @@ func ToolIconKey(name string) string {
 		return "search"
 	case "webSearch", "webFetch", "browser", "browserReset":
 		return "globe"
-	case "visualize":
+	case "render", "preview":
 		return "chart"
 	case "todo":
 		return "list"

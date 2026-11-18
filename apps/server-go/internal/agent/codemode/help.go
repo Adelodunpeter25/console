@@ -46,7 +46,8 @@ var builtinCatalog = []builtinDoc{
 	{name: "todo", group: "session", signature: "todo(op, [arg])", doc: "Manage the session task list, e.g. todo('view'), todo('start', 1), todo('done', 1)."},
 
 	// Artifacts and context
-	{name: "visualize", group: "artifacts", signature: "visualize(spec)", doc: "Render a chart, table, or metric card in the chat."},
+	{name: "render", group: "artifacts", signature: "render({html|path, title?, height?})", doc: "Publish an interactive HTML page inline in the chat."},
+	{name: "renderPreview", group: "artifacts", signature: "renderPreview({html|path, appearance?, click?, type?})", doc: "Verify an HTML page in the desktop browser and return a screenshot + console errors."},
 	{name: "preview", group: "artifacts", signature: "preview(data)", doc: "Preview arbitrary data in the chat."},
 	{name: "readChat", group: "artifacts", signature: "readChat(ref, [limit])", doc: "Read a previous chat transcript."},
 	{name: "readSkill", group: "skills", signature: "readSkill([name])", doc: "Read a built-in skill's full instructions before first use."},

@@ -149,7 +149,7 @@ func TestEveryToolARunOffersHasALabel(t *testing.T) {
 		}
 	}
 	// Tools only present once activated: bring them in the way a run would.
-	for _, name := range []string{"visualize", "computer", "computer_reset"} {
+	for _, name := range []string{"render", "preview", "computer", "computer_reset"} {
 		seen[name] = true
 	}
 	var missing []string

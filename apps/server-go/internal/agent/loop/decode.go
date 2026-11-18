@@ -88,6 +88,12 @@ type rawToolResult struct {
 		Version uint32          `json:"version"`
 		Spec    json.RawMessage `json:"spec"`
 	} `json:"visual"`
+	Html *struct {
+		Path     string `json:"path"`
+		Title    string `json:"title"`
+		Height   uint32 `json:"height"`
+		Snapshot []byte `json:"snapshot"`
+	} `json:"html"`
 }
 
 // MessageFromSplit decodes a message directly from its skeleton and extracted parts.
@@ -203,6 +209,15 @@ func MessageFromSplit(skeleton []byte, parts []msgparts.Part) (any, error) {
 					return nil, fmt.Errorf("tool result content: %w", err)
 				}
 			}
+			var html *tools.HtmlArtifact
+			if res.Html != nil && res.Html.Path != "" {
+				html = &tools.HtmlArtifact{
+					Path:     res.Html.Path,
+					Title:    res.Html.Title,
+					Height:   res.Html.Height,
+					Snapshot: res.Html.Snapshot,
+				}
+			}
 			var visual *tools.VisualArtifact
 			if res.Visual != nil && res.Visual.Version > 0 {
 				var specBytes []byte
@@ -225,6 +240,7 @@ func MessageFromSplit(skeleton []byte, parts []msgparts.Part) (any, error) {
 				Content:    content,
 				IsError:    res.IsError,
 				Visual:     visual,
+				Html:       html,
 			})
 		}
 		return toolMsg, nil
