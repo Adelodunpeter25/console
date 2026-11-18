@@ -656,7 +656,7 @@ impl RenderOnce for SidebarView {
             let row = div()
                 .w_full()
                 .pb(px(2.0))
-                .when(indent, |d| d.pl(px(12.0)))
+                .when(indent, |d| d.pl(px(6.0)))
                 .child(row);
             match fade_generation {
                 Some(generation) => row

@@ -157,9 +157,9 @@ pub fn project_header(
                 .child(
                     div()
                         .truncate()
-                        .text_size(px(15.0))
+                        .text_size(px(16.5))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.text_secondary)
+                        .text_color(theme.text)
                         .child(name),
                 )
                 .child(
