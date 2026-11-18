@@ -805,6 +805,7 @@ impl ConsoleDesktopApp {
             sidebar_draft_ids,
             drafts_collapsed: false,
             pinned_collapsed: layout.pinned_collapsed,
+            workspaces_collapsed: layout.workspaces_collapsed,
             settled_collapsed: true,
             collapsed_projects: Rc::new(layout.collapsed_projects.iter().cloned().collect()),
             is_window_active: window.is_window_active(),
