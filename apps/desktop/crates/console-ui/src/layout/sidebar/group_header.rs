@@ -13,8 +13,9 @@ type ToggleFn = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
 /// The card every collapsible sidebar header shares: a soft rounded
 /// background that shows on hover, a leading chevron that is always visible (rotated when the
 /// section is collapsed), and the label.
-fn header_card(theme: Theme, group_name: SharedString) -> gpui::Div {
+fn header_card(theme: Theme, id: SharedString) -> gpui::Stateful<gpui::Div> {
     div()
+        .id(ElementId::Name(id))
         .w_full()
         .h(px(36.0))
         .mt(px(4.0))
@@ -23,8 +24,7 @@ fn header_card(theme: Theme, group_name: SharedString) -> gpui::Div {
         .flex()
         .items_center()
         .justify_between()
-        .group_hover(group_name.clone(), |s| s.bg(theme.sidebar_item_background))
-        .group(group_name)
+        .hover(|s| s.bg(theme.sidebar_item_background))
 }
 
 fn header_chevron(theme: Theme, collapsed: bool) -> impl IntoElement {
