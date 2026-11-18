@@ -2,8 +2,8 @@
 //! items so their height, padding, status slot and title style cannot drift.
 
 use gpui::{
-    Div, ElementId, FontWeight, InteractiveElement, ParentElement, Stateful, StatefulInteractiveElement,
-    Styled, div, prelude::FluentBuilder, px,
+    Div, ElementId, FontWeight, InteractiveElement, ParentElement, Stateful,
+    StatefulInteractiveElement, Styled, div, prelude::FluentBuilder, px,
 };
 
 use crate::primitives::tooltip::Tooltip;
