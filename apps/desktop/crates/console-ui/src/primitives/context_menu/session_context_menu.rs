@@ -10,7 +10,9 @@ use gpui::{
     AnyElement, App, ElementId, InteractiveElement, IntoElement, ParentElement, Styled, Window,
 };
 
-use crate::layout::sidebar::session_item::{PIN_SHORTCUT_LABEL, SETTLE_SHORTCUT_LABEL};
+use crate::layout::sidebar::session_item::{
+    DELETE_SHORTCUT_LABEL, PIN_SHORTCUT_LABEL, SETTLE_SHORTCUT_LABEL,
+};
 use crate::primitives::IconName;
 use crate::primitives::menu::{ContextMenuHandle, MenuItem, context_menu};
 
@@ -113,6 +115,7 @@ where
             MenuItem::Separator,
             MenuItem::new("Delete", move |window, cx| on_delete(window, cx))
                 .icon(IconName::TrashBinMinimalistic.path())
+                .shortcut(DELETE_SHORTCUT_LABEL)
                 .destructive(true),
         ]);
         items

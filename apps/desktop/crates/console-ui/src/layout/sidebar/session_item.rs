@@ -61,6 +61,13 @@ pub const PIN_SHORTCUT_LABEL: &str = if cfg!(target_os = "macos") {
     "Ctrl+Shift+P"
 };
 
+/// The delete shortcut as it reads on this platform.
+pub const DELETE_SHORTCUT_LABEL: &str = if cfg!(target_os = "macos") {
+    "⇧⌘D"
+} else {
+    "Ctrl+Shift+D"
+};
+
 /// Tooltip for the settle toggle: the action it performs, plus the shortcut
 /// that does the same thing from the keyboard.
 pub fn settle_tooltip_label(settled: bool) -> String {
