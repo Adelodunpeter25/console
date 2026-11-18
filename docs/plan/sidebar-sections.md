@@ -35,27 +35,27 @@ User-defined, server-synced sections that sit between Pinned and project groupin
 ### 2.1 Proto — new `proto/console/v1/section.proto`
 
 ```proto
-message SessionSection {
+message Section {
   string id = 1;
   string name = 2;
   double position = 3;        // fractional ordering key; see §2.3
   int64 created_at = 4;
   int64 updated_at = 5;
 }
-message CreateSessionSectionRequest { string name = 1; }
-message UpdateSessionSectionRequest {
+message CreateSectionRequest { string name = 1; }
+message UpdateSectionRequest {
   optional string name = 1;
   optional double position = 2;
 }
 message ReorderSectionsRequest { repeated string ids = 1; }  // full order, top to bottom
-message DeleteSessionSectionResponse { string id = 1; bool deleted = 2; }
+message DeleteSectionResponse { string id = 1; bool deleted = 2; }
 ```
 
 Add to `SessionHeader`: `optional string section_id = 20;`
 
 ### 2.2 REST domain — mirror projects
 
-- `GET /api/sections` → bare JSON array of `SessionSection` (protojson, same envelope conventions as projects).
+- `GET /api/sections` → bare JSON array of `Section` (protojson, same envelope conventions as projects).
 - `POST /api/sections` { name } → created section, appended at end.
 - `PATCH /api/sections/:id` { name?, position? } → refreshed section.
 - `DELETE /api/sections/:id` → `{id, deleted}`; member sessions' `section_id` set to NULL in the same transaction.
@@ -80,12 +80,12 @@ Files: `internal/routes/sections.go` (new), registration in `internal/serve/serv
 
 ### 3.1 console-core
 
-- `types`: `SessionSection` struct + `section_id: Option<String>` on the session header type.
+- `types`: `Section` struct + `section_id: Option<String>` on the session header type.
 - Client methods: `sections.list/create/update/delete/reorder`, session update accepting `section_id`.
 
 ### 3.2 State (`src/state/`)
 
-- `sections: Vec<SessionSection>` loaded alongside sessions on connect/refresh; `collapsed_sections: HashSet<String>` persisted like `collapsed_projects`.
+- `sections: Vec<Section>` loaded alongside sessions on connect/refresh; `collapsed_sections: HashSet<String>` persisted like `collapsed_projects`.
 - `move_session_to_section(session_id, Option<section_id>)` → optimistic update + PATCH; clears `pinned_at` locally when assigning (server enforces too).
 - `create_section(name)`, `rename_section`, `delete_section`, `reorder_sections(ordered_ids)` — all optimistic with rollback, same pattern as `set_settled`.
 - `visible_session_ids`: pinned → for each section in manual order (skip collapsed) its member sessions by recency → project groups over *unsectioned* chats → settled tail in search mode. Search path includes sectioned chats.
