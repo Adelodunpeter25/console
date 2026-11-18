@@ -70,3 +70,5 @@ console-server-*
 /console
 /console.exe
 *.js.map
+.console/
+
