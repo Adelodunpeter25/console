@@ -41,6 +41,14 @@ internal fun console.v1.ToolResult.toUi(): ToolResult = ToolResult(
     isError = is_error ?: false,
     // A malformed spec drops only the artifact; the summary content stays.
     visual = visual?.let { v -> bytesToJson(v.spec)?.let { VisualArtifact(v.version, it) } },
+    html = html?.takeIf { it.path.isNotEmpty() }?.let { h ->
+        HtmlArtifact(
+            path = h.path,
+            title = h.title,
+            height = h.height,
+            snapshotBase64 = h.snapshot?.takeIf { it.size > 0 }?.base64(),
+        )
+    },
 )
 
 private fun console.v1.AssistantContentPart.toUi(): MessageContent? = when (val part = part) {

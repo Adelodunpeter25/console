@@ -64,6 +64,7 @@ fun ChatScreen(
     onConnectGithub: () -> Unit = {},
     onOpenPorts: () -> Unit,
     onOpenUrl: (String) -> Unit,
+    onOpenHtmlPreview: (com.console.mobile.data.model.HtmlArtifact) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
@@ -341,6 +342,14 @@ fun ChatScreen(
                         }
                     },
                     onReply = onReply,
+                    onOpenHtmlPreview = onOpenHtmlPreview,
+                    onOpenHtmlEditor = { path ->
+                        AppContainer.appStateHolder.openFile(path, forceEditor = true)
+                        onOpenTab(MobileTab.Files)
+                    },
+                    onOpenHtmlExternal = { path ->
+                        onOpenUrl(AppContainer.consoleApi.fsHtmlUrl(path))
+                    },
                 )
                 ScrollThumb(
                     state = transcriptScroll.listState,

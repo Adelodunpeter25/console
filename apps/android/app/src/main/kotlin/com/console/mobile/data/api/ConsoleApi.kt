@@ -104,6 +104,7 @@ interface ConsoleApi {
     suspend fun readFileRaw(path: String): ByteArray
     /** Authenticated `/api/fs/file/media` URL for video/audio playback (token in query). */
     fun fsMediaUrl(path: String): String
+    fun fsHtmlUrl(path: String, theme: String = "dark"): String
     suspend fun deleteFile(path: String)
     suspend fun createDir(path: String)
     suspend fun deleteDir(path: String)

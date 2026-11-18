@@ -38,6 +38,9 @@ internal fun ChatTranscript(
     onOpenChange: (SessionFileChange) -> Unit,
     onFork: (String) -> Unit,
     onReply: ((String) -> Unit)? = null,
+    onOpenHtmlPreview: (com.console.mobile.data.model.HtmlArtifact) -> Unit = {},
+    onOpenHtmlEditor: (String) -> Unit = {},
+    onOpenHtmlExternal: (String) -> Unit = {},
 ) {
     LazyColumn(
         state = listState,
@@ -65,7 +68,12 @@ internal fun ChatTranscript(
                         )
                     }
                     RunActivity(activity = run, running = running && index >= latestUserIndex, cwd = cwd)
-                    RunVisuals(run)
+                    RunVisuals(
+                        activity = run,
+                        onOpenHtmlPreview = onOpenHtmlPreview,
+                        onOpenHtmlEditor = onOpenHtmlEditor,
+                        onOpenHtmlExternal = onOpenHtmlExternal,
+                    )
                 }
             }
         }
@@ -82,7 +90,12 @@ internal fun ChatTranscript(
         } else if (latestUserIndex == -1 && runs.isNotEmpty() && running) {
             item(key = "unattached-run") {
                 RunActivity(activity = runs.last(), running = true, cwd = cwd)
-                RunVisuals(runs.last())
+                RunVisuals(
+                    activity = runs.last(),
+                    onOpenHtmlPreview = onOpenHtmlPreview,
+                    onOpenHtmlEditor = onOpenHtmlEditor,
+                    onOpenHtmlExternal = onOpenHtmlExternal,
+                )
             }
         }
     }

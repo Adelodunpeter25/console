@@ -38,6 +38,7 @@ import com.console.mobile.feature.browser.rememberBrowserState
 import com.console.mobile.feature.changes.ChangesScreen
 import com.console.mobile.feature.chat.ChatScreen
 import com.console.mobile.feature.devices.DevicesScreen
+import com.console.mobile.feature.chat.html.HtmlPreviewScreen
 import com.console.mobile.feature.files.FilesScreen
 import com.console.mobile.feature.home.HomeScreen
 import com.console.mobile.feature.onboarding.OnboardingScreen
@@ -193,7 +194,10 @@ fun AppNavGraph() {
                         onConnectGithub = { navController.navigate(RouteSettingsProviders) },
                         onOpenPorts = { navController.navigate(RoutePorts) { launchSingleTop = true } },
                         onOpenUrl = { url -> navController.navigate(RouteBrowser(url)) { launchSingleTop = true } },
-                        )
+                        onOpenHtmlPreview = { artifact ->
+                            navController.navigate(RouteHtmlPreview(artifact.path, artifact.title)) { launchSingleTop = true }
+                        },
+                    )
                 }
             }
             // A link target, opened as a push from wherever the link lived, so
@@ -216,6 +220,19 @@ fun AppNavGraph() {
                     // Schemes the WebView will not render still belong to a
                     // system app.
                     onExternalUrl = { handOffToSystem(systemUriHandler, it) },
+                )
+            }
+            composable<RouteHtmlPreview> { entry ->
+                val route = entry.toRoute<RouteHtmlPreview>()
+                HtmlPreviewScreen(
+                    path = route.path,
+                    title = route.title,
+                    onBack = { navController.popBackStack() },
+                    onOpenEditor = { path ->
+                        AppContainer.appStateHolder.openFile(path, forceEditor = true)
+                        navController.navigate(RouteFiles) { launchSingleTop = true }
+                    },
+                    onOpenExternalUrl = { handOffToSystem(systemUriHandler, it) },
                 )
             }
             composable<RouteFiles> {

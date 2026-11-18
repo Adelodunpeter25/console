@@ -16,6 +16,7 @@ import kotlinx.serialization.Serializable
 @Serializable object RoutePorts
 @Serializable object RouteChanges
 @Serializable data class RouteBrowser(val url: String)
+@Serializable data class RouteHtmlPreview(val path: String, val title: String = "")
 @Serializable object RouteSettings
 @Serializable object RouteSettingsFromSetup
 // Settings, opened straight on Providers — where the GitHub token row lives.

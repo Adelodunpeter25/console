@@ -23,6 +23,7 @@ private val AUDIO_EXTENSIONS: Set<String> = setOf(
     ".mp3", ".wav", ".flac", ".ogg", ".m4a"
 )
 private val PDF_EXTENSIONS: Set<String> = setOf(".pdf")
+private val HTML_EXTENSIONS: Set<String> = setOf(".html", ".htm")
 
 private val BINARY_FILE_EXTENSIONS: Set<String> = VIDEO_EXTENSIONS + AUDIO_EXTENSIONS + PDF_EXTENSIONS + setOf(
     ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico",
@@ -79,15 +80,17 @@ fun isLockFileName(fileName: String): Boolean {
 fun isBinaryFileName(fileName: String): Boolean = BINARY_FILE_EXTENSIONS.contains(extensionOf(fileName))
 fun isPreviewableImageName(fileName: String): Boolean = IMAGE_PREVIEW_EXTENSIONS.contains(extensionOf(fileName))
 fun isSvgFileName(fileName: String): Boolean = extensionOf(fileName) == SVG_EXTENSION
+fun isHtmlFileName(fileName: String): Boolean = HTML_EXTENSIONS.contains(extensionOf(fileName))
 
-/** How the file viewer renders a file: fetched image bytes, a media player, a details card, or text. */
-enum class FilePreviewKind { IMAGE, VIDEO, AUDIO, PDF, DETAILS, BLOCKED, TEXT }
+/** How the file viewer renders a file: fetched image bytes, a media player, HTML preview, a details card, or text. */
+enum class FilePreviewKind { IMAGE, VIDEO, AUDIO, PDF, HTML, DETAILS, BLOCKED, TEXT }
 
 fun filePreviewKind(fileName: String): FilePreviewKind = when {
     isPreviewableImageName(fileName) || isSvgFileName(fileName) -> FilePreviewKind.IMAGE
     VIDEO_EXTENSIONS.contains(extensionOf(fileName)) -> FilePreviewKind.VIDEO
     AUDIO_EXTENSIONS.contains(extensionOf(fileName)) -> FilePreviewKind.AUDIO
     PDF_EXTENSIONS.contains(extensionOf(fileName)) -> FilePreviewKind.PDF
+    isHtmlFileName(fileName) -> FilePreviewKind.HTML
     isLockFileName(fileName) -> FilePreviewKind.BLOCKED
     isBinaryFileName(fileName) -> FilePreviewKind.DETAILS
     else -> FilePreviewKind.TEXT

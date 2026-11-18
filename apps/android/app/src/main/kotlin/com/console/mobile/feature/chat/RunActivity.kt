@@ -256,10 +256,23 @@ private fun CollapsibleThinking(text: String) {
  * collapsing the run never moves or hides the card.
  */
 @Composable
-fun RunVisuals(activity: RunActivityState) {
+fun RunVisuals(
+    activity: RunActivityState,
+    onOpenHtmlPreview: (com.console.mobile.data.model.HtmlArtifact) -> Unit = {},
+    onOpenHtmlEditor: (String) -> Unit = {},
+    onOpenHtmlExternal: (String) -> Unit = {},
+) {
     activity.events.forEach { e ->
         if (e is ActivityEvent.ToolCallEvent) {
             e.result?.visual?.let { com.console.mobile.feature.chat.visual.VisualResultCard(it) }
+            e.result?.html?.let {
+                com.console.mobile.feature.chat.html.HtmlResultCard(
+                    artifact = it,
+                    onOpenPreview = onOpenHtmlPreview,
+                    onOpenEditor = onOpenHtmlEditor,
+                    onOpenExternal = onOpenHtmlExternal,
+                )
+            }
         }
     }
 }

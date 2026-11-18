@@ -45,6 +45,15 @@ class HttpTransport(
         return url("/api/fs/file/media", mapOf("path" to path, "token" to token))
     }
 
+    /**
+     * Absolute URL for `GET /api/fs/file/html` with the session token in the
+     * query string so sandboxed WebViews can load it without custom headers.
+     */
+    fun htmlUrl(path: String, theme: String = "dark"): String {
+        val token = authToken()?.takeIf { it.isNotBlank() }
+        return url("/api/fs/file/html", mapOf("path" to path, "theme" to theme, "token" to token))
+    }
+
     fun <T> encodeBody(serializer: KSerializer<T>, value: T): String =
         json.encodeToString(serializer, value)
 

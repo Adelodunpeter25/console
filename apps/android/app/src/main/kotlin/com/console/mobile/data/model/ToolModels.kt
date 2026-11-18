@@ -59,6 +59,8 @@ data class ToolResult(
     val isError: Boolean = false,
     /** Client-rendered artifact (see feature/chat/visual). Never sent to a provider. */
     val visual: VisualArtifact? = null,
+    /** Client-rendered HTML page artifact (see feature/chat/html). Never sent to a provider. */
+    val html: HtmlArtifact? = null,
 )
 
 /** A versioned visual spec riding on a tool result; the spec stays raw JSON until rendered. */
@@ -66,6 +68,15 @@ data class ToolResult(
 data class VisualArtifact(
     val version: Int,
     val spec: kotlinx.serialization.json.JsonElement,
+)
+
+/** An HTML page artifact attached to a render tool result. */
+@Serializable
+data class HtmlArtifact(
+    val path: String,
+    val title: String = "",
+    val height: Int = 0,
+    val snapshotBase64: String? = null,
 )
 
 class ToolError(message: String) : Exception(message)

@@ -19,9 +19,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +44,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,6 +55,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
+import io.github.lyxnx.compose.ui.tablericons.outline.Code
+import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
+import io.github.lyxnx.compose.ui.tablericons.outline.Globe
 import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
@@ -70,8 +77,13 @@ import com.console.mobile.core.util.isBareFileName
 import com.console.mobile.core.util.parseLineSuffix
 import com.console.mobile.core.util.resolveFilePath
 import com.console.mobile.core.util.stripLineSuffix
+import com.console.mobile.data.model.isHtmlFileName
 import com.console.mobile.data.model.isMarkdownPath
+import com.console.mobile.feature.browser.handOffToSystem
+import com.console.mobile.feature.chat.html.HtmlPreviewWebView
 import com.console.mobile.feature.chat.markdown.CustomMarkdown
+import com.console.mobile.ui.components.common.new.OverflowMenu
+import com.console.mobile.ui.components.common.new.OverflowMenuItem
 import com.console.mobile.ui.code.CodeViewer
 import com.console.mobile.ui.code.languageForPath
 import com.console.mobile.ui.components.FileIcon
@@ -156,6 +168,8 @@ fun FilesScreen(onBack: () -> Unit) {
     // Raw bytes for IMAGE and PDF previews; the URL (token included) for VIDEO/AUDIO.
     var fileBytes by remember { mutableStateOf<ByteArray?>(null) }
     var mediaUrl by remember { mutableStateOf<String?>(null) }
+    var htmlAsEditor by remember { mutableStateOf(false) }
+    var pendingHtmlChoice by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var fileLoading by remember { mutableStateOf(false) }
     var fileError by remember { mutableStateOf<String?>(null) }
     // Tapping a previewed image opens the fullscreen zoom dialog.
@@ -221,7 +235,22 @@ fun FilesScreen(onBack: () -> Unit) {
         }
     }
 
-    fun selectFile(path: String, size: Long?, fromLink: Boolean = false, line: Int? = null) {
+    fun loadTextContent(path: String) {
+        scope.launch {
+            fileLoading = true
+            fileError = null
+            try {
+                val file = withContext(Dispatchers.IO) { AppContainer.fsRepository.readFile(path) }
+                if (selectedPath == path) fileContent = file.content
+            } catch (e: Exception) {
+                if (selectedPath == path) fileError = e.message ?: "Failed to load file."
+            } finally {
+                if (selectedPath == path) fileLoading = false
+            }
+        }
+    }
+
+    fun selectFile(path: String, size: Long?, fromLink: Boolean = false, line: Int? = null, forceEditor: Boolean = false) {
         openedFromLink = fromLink
         targetLine = line
         selectedPath = path
@@ -230,9 +259,12 @@ fun FilesScreen(onBack: () -> Unit) {
         fileBytes = null
         mediaUrl = null
         fileError = null
-        // Images and PDFs come from the raw-bytes endpoint; video/audio only
-        // need the authenticated media URL; everything else is text.
+        htmlAsEditor = forceEditor
         val kind = filePreviewKind(path.split("/").lastOrNull() ?: path)
+        if (kind == FilePreviewKind.HTML && !forceEditor) {
+            fileLoading = false
+            return
+        }
         scope.launch {
             fileLoading = true
             try {
@@ -262,6 +294,7 @@ fun FilesScreen(onBack: () -> Unit) {
     val pendingFile = appState.pendingFilePath
     LaunchedEffect(pendingFile, projectRoot) {
         if (pendingFile == null || projectRoot == null) return@LaunchedEffect
+        val forceEditor = appState.pendingFileForceEditor
         AppContainer.appStateHolder.consumePendingFile()
         // Relative paths are the agent's, so they resolve from where it ran (a
         // worktree chat's cwd is not the project folder), like desktop.
@@ -276,7 +309,11 @@ fun FilesScreen(onBack: () -> Unit) {
                 .map { it.absolute_path }
             if (target !in found) closestMatch(cwd ?: projectRoot, found)?.let { target = it }
         }
-        selectFile(target, null, fromLink = true, line = line)
+        if (filePreviewKind(target.substringAfterLast('/')) == FilePreviewKind.HTML && !forceEditor) {
+            pendingHtmlChoice = target to true
+        } else {
+            selectFile(target, null, fromLink = true, line = line, forceEditor = forceEditor)
+        }
     }
 
     // File preview view.
@@ -364,6 +401,14 @@ fun FilesScreen(onBack: () -> Unit) {
                             }
                         },
                     )
+                    kind == FilePreviewKind.HTML && !htmlAsEditor -> {
+                        val uriHandler = LocalUriHandler.current
+                        HtmlPreviewWebView(
+                            path = sel,
+                            modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight),
+                            onExternalUrl = { handOffToSystem(uriHandler, it) },
+                        )
+                    }
                     kind == FilePreviewKind.IMAGE -> when {
                         fileLoading && fileBytes == null -> LoadingState("Loading image…", Modifier.fillMaxSize())
                         fileError != null && fileBytes == null -> EmptyView(title = "Failed to load image", description = fileError, icon = TablerIcons.Outline.AlertTriangle, iconTint = NewTheme.Danger, modifier = Modifier.fillMaxSize())
@@ -417,6 +462,8 @@ fun FilesScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            val headerUriHandler = LocalUriHandler.current
+            var htmlMenuOpen by remember { mutableStateOf(false) }
             PageHeader(
                 title = fileName,
                 subtitle = subtitle,
@@ -424,6 +471,50 @@ fun FilesScreen(onBack: () -> Unit) {
                 backgroundColor = NewTheme.Black,
                 onBack = { openedFromLink = false; selectedPath = null },
                 modifier = Modifier.align(Alignment.TopCenter),
+                actions = if (kind == FilePreviewKind.HTML) {
+                    {
+                        Box {
+                            IconButton(onClick = { htmlMenuOpen = true }) {
+                                Icon(
+                                    TablerIcons.Outline.DotsVertical,
+                                    contentDescription = "HTML options",
+                                    tint = NewTheme.TextPrimary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            OverflowMenu(expanded = htmlMenuOpen, onDismissRequest = { htmlMenuOpen = false }) {
+                                if (htmlAsEditor) {
+                                    OverflowMenuItem(
+                                        label = "Open in browser",
+                                        icon = TablerIcons.Outline.Globe,
+                                        onClick = {
+                                            htmlMenuOpen = false
+                                            htmlAsEditor = false
+                                        },
+                                    )
+                                } else {
+                                    OverflowMenuItem(
+                                        label = "Open in code editor",
+                                        icon = TablerIcons.Outline.Code,
+                                        onClick = {
+                                            htmlMenuOpen = false
+                                            htmlAsEditor = true
+                                            if (fileContent == null) loadTextContent(sel)
+                                        },
+                                    )
+                                }
+                                OverflowMenuItem(
+                                    label = "Open externally",
+                                    icon = TablerIcons.Outline.ExternalLink,
+                                    onClick = {
+                                        htmlMenuOpen = false
+                                        handOffToSystem(headerUriHandler, AppContainer.consoleApi.fsHtmlUrl(sel))
+                                    },
+                                )
+                            }
+                        }
+                    }
+                } else null,
             )
             zoomImage?.let { bytes ->
                 ImagePreviewDialog(image = bytes, onDismiss = { zoomImage = null })
@@ -485,7 +576,16 @@ fun FilesScreen(onBack: () -> Unit) {
                     } else {
                         LazyColumn(state = resultsListState, modifier = Modifier.fillMaxSize()) {
                             items(results, key = { it.path }) { r ->
-                                TreeRowEntry(entry = r, depth = 0, selected = false, expanded = false, badge = gitBadges[r.path], onPressDir = { toggleDir(r.path) }, onPressFile = { selectFile(r.path, null) })
+                                TreeRowEntry(
+                                    entry = r,
+                                    depth = 0,
+                                    selected = false,
+                                    expanded = false,
+                                    badge = gitBadges[r.path],
+                                    onPressDir = { toggleDir(r.path) },
+                                    onPressFile = { selectFile(r.path, null) },
+                                    onOpenHtmlEditor = { selectFile(r.path, null, forceEditor = true) },
+                                )
                             }
                         }
                     }
@@ -500,12 +600,71 @@ fun FilesScreen(onBack: () -> Unit) {
                             TreeKind.Empty -> Text("(empty)", color = NewTheme.TextMuted, fontSize = 13.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, modifier = Modifier.padding(start = (16 + row.depth * 18).dp, top = 2.dp, bottom = 8.dp))
                             TreeKind.Entry -> {
                                 val e = row.entry!!
-                                TreeRowEntry(entry = e, depth = row.depth, selected = selectedPath == e.path, expanded = expanded.contains(e.path), badge = gitBadges[e.path], onPressDir = { toggleDir(e.path) }, onPressFile = { selectFile(e.path, e.size) })
+                                TreeRowEntry(
+                                    entry = e,
+                                    depth = row.depth,
+                                    selected = selectedPath == e.path,
+                                    expanded = expanded.contains(e.path),
+                                    badge = gitBadges[e.path],
+                                    onPressDir = { toggleDir(e.path) },
+                                    onPressFile = { selectFile(e.path, e.size) },
+                                    onOpenHtmlEditor = { selectFile(e.path, e.size, forceEditor = true) },
+                                )
                             }
                         }
                     }
                 }
             }
+        }
+        val choice = pendingHtmlChoice
+        if (choice != null) {
+            val (choicePath, fromLink) = choice
+            val choiceUriHandler = LocalUriHandler.current
+            AlertDialog(
+                onDismissRequest = { pendingHtmlChoice = null },
+                containerColor = NewTheme.Raised,
+                title = {
+                    Text(
+                        choicePath.substringAfterLast('/'),
+                        color = NewTheme.TextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OverflowMenuItem(
+                            label = "Open in browser",
+                            icon = TablerIcons.Outline.Globe,
+                            onClick = {
+                                pendingHtmlChoice = null
+                                selectFile(choicePath, null, fromLink = fromLink, forceEditor = false)
+                            },
+                        )
+                        OverflowMenuItem(
+                            label = "Open in code editor",
+                            icon = TablerIcons.Outline.Code,
+                            onClick = {
+                                pendingHtmlChoice = null
+                                selectFile(choicePath, null, fromLink = fromLink, forceEditor = true)
+                            },
+                        )
+                        OverflowMenuItem(
+                            label = "Open externally",
+                            icon = TablerIcons.Outline.ExternalLink,
+                            onClick = {
+                                pendingHtmlChoice = null
+                                handOffToSystem(choiceUriHandler, AppContainer.consoleApi.fsHtmlUrl(choicePath))
+                            },
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { pendingHtmlChoice = null }) {
+                        Text("Cancel", color = NewTheme.TextSecondary)
+                    }
+                },
+            )
         }
         @Suppress("UNUSED_EXPRESSION")
         fsState
@@ -739,11 +898,30 @@ private fun flattenTree(roots: List<FsTreeEntry>, expanded: Set<String>, childre
 }
 
 @Composable
-private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expanded: Boolean, badge: GitBadgeInfo?, onPressDir: () -> Unit, onPressFile: () -> Unit) {
+private fun TreeRowEntry(
+    entry: FsTreeEntry,
+    depth: Int,
+    selected: Boolean,
+    expanded: Boolean,
+    badge: GitBadgeInfo?,
+    onPressDir: () -> Unit,
+    onPressFile: () -> Unit,
+    onOpenHtmlEditor: () -> Unit = onPressFile,
+) {
+    val isHtml = !entry.is_dir && isHtmlFileName(entry.name)
+    var htmlMenuOpen by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
+    Box(modifier = Modifier.fillMaxWidth()) {
     Row(
         modifier = Modifier.fillMaxWidth()
             .background(if (selected) Color.White.copy(alpha = 0.06f) else Color.Transparent)
-            .clickable { if (entry.is_dir) onPressDir() else onPressFile() }
+            .clickable {
+                when {
+                    entry.is_dir -> onPressDir()
+                    isHtml -> htmlMenuOpen = true
+                    else -> onPressFile()
+                }
+            }
             .padding(start = (16 + depth * 18).dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -782,6 +960,35 @@ private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expa
         if (badge != null) {
             Text(badge.label, color = gitRoleColor(badge.role), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(14.dp))
         }
+    }
+    if (isHtml) {
+        OverflowMenu(expanded = htmlMenuOpen, onDismissRequest = { htmlMenuOpen = false }) {
+            OverflowMenuItem(
+                label = "Open in browser",
+                icon = TablerIcons.Outline.Globe,
+                onClick = {
+                    htmlMenuOpen = false
+                    onPressFile()
+                },
+            )
+            OverflowMenuItem(
+                label = "Open in code editor",
+                icon = TablerIcons.Outline.Code,
+                onClick = {
+                    htmlMenuOpen = false
+                    onOpenHtmlEditor()
+                },
+            )
+            OverflowMenuItem(
+                label = "Open externally",
+                icon = TablerIcons.Outline.ExternalLink,
+                onClick = {
+                    htmlMenuOpen = false
+                    handOffToSystem(uriHandler, AppContainer.consoleApi.fsHtmlUrl(entry.path))
+                },
+            )
+        }
+    }
     }
 }
 

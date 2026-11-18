@@ -43,6 +43,12 @@ class FilePreviewKindTest {
     }
 
     @Test
+    fun htmlFilesGetHtmlKind() {
+        assertEquals(FilePreviewKind.HTML, filePreviewKind("index.html"))
+        assertEquals(FilePreviewKind.HTML, filePreviewKind("PAGE.HTM"))
+    }
+
+    @Test
     fun opaqueBinariesGetDetailsCard() {
         for (name in listOf(
             "archive.zip", "font.ttf", "pkg.apk", "lib.so", "app.dmg", "data.db",

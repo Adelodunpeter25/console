@@ -16,6 +16,8 @@ data class AppState(
     val pendingServersSection: Boolean = false,
     /** A file a link asked to open; the Files screen consumes it. */
     val pendingFilePath: String? = null,
+    /** When true, open an HTML file directly in the code editor instead of prompting. */
+    val pendingFileForceEditor: Boolean = false,
 )
 
 class AppStateHolder(initial: AppState = AppState()) {
@@ -30,17 +32,18 @@ class AppStateHolder(initial: AppState = AppState()) {
     }
 
     /** Jump to the Files tab and open [path] there. */
-    fun openFile(path: String) {
+    fun openFile(path: String, forceEditor: Boolean = false) {
         _state.update { cur ->
             cur.copy(
                 previousTab = if (cur.activeTab != MobileTab.Files) cur.activeTab else cur.previousTab,
                 activeTab = MobileTab.Files,
                 pendingFilePath = path,
+                pendingFileForceEditor = forceEditor,
             )
         }
     }
 
-    fun consumePendingFile() { _state.update { it.copy(pendingFilePath = null) } }
+    fun consumePendingFile() { _state.update { it.copy(pendingFilePath = null, pendingFileForceEditor = false) } }
 
     fun setSelectedProjectId(id: String?) { _state.update { it.copy(selectedProjectId = id) } }
     fun setSelectedSessionId(id: String?) { _state.update { it.copy(selectedSessionId = id) } }
