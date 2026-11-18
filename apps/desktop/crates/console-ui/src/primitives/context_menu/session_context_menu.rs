@@ -121,30 +121,3 @@ where
         items
     })
 }
-
-/// Attach the draft context menu to a sidebar draft row.
-///
-/// Drafts only need a destructive discard action — no rename.
-pub fn draft_context_menu<E>(
-    element: E,
-    id: impl Into<ElementId>,
-    window: &mut Window,
-    cx: &mut App,
-    on_delete: impl Fn(&mut Window, &mut App) + 'static,
-) -> AnyElement
-where
-    E: InteractiveElement + ParentElement + Styled + IntoElement + 'static,
-{
-    let id: ElementId = id.into();
-    let handle = menu_handle(&id, window, cx);
-    let on_delete = Rc::new(on_delete);
-
-    context_menu(element, id, &handle, move |_| {
-        let on_delete = on_delete.clone();
-        vec![
-            MenuItem::new("Delete Draft", move |window, cx| on_delete(window, cx))
-                .icon(IconName::TrashBinMinimalistic.path())
-                .destructive(true),
-        ]
-    })
-}

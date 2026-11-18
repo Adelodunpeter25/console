@@ -1,10 +1,8 @@
-pub mod draft_item;
 pub mod group_header;
 mod item_row;
 pub mod session_card;
 pub mod session_item;
 
-pub use draft_item::{DraftSummary, render_sidebar_draft_item};
 pub use group_header::{
     pinned_group_header, project_header, search_results_group_header, settled_group_header,
 };
@@ -15,6 +13,16 @@ pub use session_item::{
     CancelSessionRename, CommitSessionRename, SidebarSessionItem, init_session_rename_keybindings,
     render_sidebar_session_item,
 };
+
+/// One unsent prompt draft, with preview and target session if any.
+#[derive(Clone, Debug)]
+pub struct DraftSummary {
+    pub session_id: Option<String>,
+    pub title: String,
+    pub preview: String,
+    pub project_name: Option<String>,
+    pub updated_at: i64,
+}
 
 gpui::actions!(console_sidebar_search, [CancelSidebarSearch]);
 
@@ -104,8 +112,6 @@ fn sentence_case_project_name(name: &str) -> String {
 
 #[derive(Clone)]
 enum SidebarRow {
-    /// The "new chat" draft row: unsent composer text with no session yet.
-    NewChatDraft(DraftSummary),
     /// Position into the sidebar's shared session list. Carrying the index
     /// (not the header) keeps row construction allocation-free; only rows
     /// actually rendered by the virtualized list clone their header.
@@ -170,7 +176,6 @@ pub struct SidebarView {
     on_unsettle_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_toggle_read_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_delete_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_delete_draft: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     renaming_session_id: Option<String>,
     rename_input: Option<Entity<ComposerInput>>,
     on_resize_start: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
@@ -219,7 +224,6 @@ impl SidebarView {
         on_unsettle_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_toggle_read_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_delete_session: impl Fn(String, &mut Window, &mut App) + 'static,
-        on_delete_draft: impl Fn(String, &mut Window, &mut App) + 'static,
         renaming_session_id: Option<String>,
         rename_input: Option<Entity<ComposerInput>>,
         on_resize_start: impl Fn(f32, &mut Window, &mut App) + 'static,
@@ -255,7 +259,6 @@ impl SidebarView {
             on_unsettle_session: Rc::new(on_unsettle_session),
             on_toggle_read_session: Rc::new(on_toggle_read_session),
             on_delete_session: Rc::new(on_delete_session),
-            on_delete_draft: Rc::new(on_delete_draft),
             renaming_session_id,
             rename_input,
             on_resize_start: Rc::new(on_resize_start),
@@ -320,7 +323,6 @@ impl RenderOnce for SidebarView {
         let on_cancel_rename = self.on_cancel_rename;
         let on_toggle_pin = self.on_toggle_pin_session;
         let on_del = self.on_delete_session;
-        let on_delete_draft = self.on_delete_draft;
         let renaming_session_id = self.renaming_session_id;
         let rename_input = self.rename_input;
         let on_resize_start = self.on_resize_start;
@@ -383,10 +385,6 @@ impl RenderOnce for SidebarView {
         };
 
         let has_pinned = !pinned_positions.is_empty();
-        let new_chat_draft = draft_summaries
-            .iter()
-            .find(|draft| draft.session_id.is_none())
-            .cloned();
         let pinned_collapsed = self.pinned_collapsed;
 
         // While searching, a single Search Results header replaces all section headers.
@@ -438,9 +436,6 @@ impl RenderOnce for SidebarView {
                     list_rows.extend(pinned_positions.iter().copied().map(SidebarRow::Session));
                 }
             }
-            if let Some(draft) = new_chat_draft {
-                list_rows.push(SidebarRow::NewChatDraft(draft));
-            }
             for (key, name, positions) in project_sections {
                 let key = collapse_key(&key);
                 let collapsed = collapsed_projects.contains(&key);
@@ -484,7 +479,6 @@ impl RenderOnce for SidebarView {
         let list_running_sessions = running_sessions;
         let list_waiting_sessions = waiting_sessions;
         let list_draft_sessions = draft_sessions;
-        let list_on_new = on_new.clone();
         let list_on_sel = on_sel;
         let list_on_open_in_new_window = on_open_in_new_window;
         let list_on_rename = on_rename;
@@ -492,7 +486,6 @@ impl RenderOnce for SidebarView {
         let list_on_cancel_rename = on_cancel_rename;
         let list_on_toggle_pin = on_toggle_pin;
         let list_on_del = on_del;
-        let list_on_delete_draft = on_delete_draft;
         let list_renaming_session_id = renaming_session_id;
         let list_rename_input = rename_input;
         let list_pinned_collapsed = pinned_collapsed;
@@ -504,7 +497,7 @@ impl RenderOnce for SidebarView {
         let list_on_settle = self.on_settle_session;
         let list_on_unsettle = self.on_unsettle_session;
         let list_on_toggle_read = self.on_toggle_read_session;
-        let grouped_rows = list(sidebar_list_state, move |index, window, cx| {
+        let grouped_rows = list(sidebar_list_state, move |index, _window, _cx| {
             let Some(row) = list_rows.get(index).cloned() else {
                 return div().into_any_element();
             };
@@ -516,16 +509,6 @@ impl RenderOnce for SidebarView {
             };
             let indent = matches!(row, SidebarRow::Session(_)) && !list_is_searching;
             let row = match row {
-                SidebarRow::NewChatDraft(draft) => render_sidebar_draft_item(
-                    &draft,
-                    list_selected_id.as_deref(),
-                    &list_on_sel,
-                    &list_on_new,
-                    &list_on_delete_draft,
-                    theme,
-                    window,
-                    cx,
-                ),
                 SidebarRow::Session(session_index) => {
                     // Clone only for rows the virtualized list actually
                     // paints; positions were grouped without touching data.

@@ -124,6 +124,15 @@ impl ConsoleDesktopApp {
         session_id: Option<&str>,
         cx: &mut Context<Self>,
     ) {
+        // A desk pane that has not rendered yet has no composer of its own:
+        // composer_for_pane would fall back to the shared pane-main input,
+        // whose Edited handler resolves "pane-main" — absent from this
+        // workspace — and saves the draft under "new_chat". The pane's real
+        // composer is created on render and ensure_workspace_pane_state
+        // restores the draft then.
+        if pane_id != "pane-main" && !self.workspace_pane_states.contains_key(pane_id) {
+            return;
+        }
         let draft = self.get_draft_with_mentions(session_id);
         let draft_ctx_files = self.get_draft_context_files(session_id);
         let key = session_id.unwrap_or("new_chat");
@@ -293,14 +302,4 @@ impl ConsoleDesktopApp {
         self.sidebar_draft_ids.remove(session_id);
     }
 
-    /// Discard a draft via the sidebar context menu.
-    /// `key` is the draft map key: a session id or `"new_chat"`.
-    pub fn discard_draft(&mut self, key: &str, cx: &mut Context<Self>) {
-        let is_new_chat = key == "new_chat";
-        let session_opt = if is_new_chat { None } else { Some(key) };
-        self.clear_draft_for_session(session_opt, cx);
-        if !is_new_chat {
-            self.sidebar_draft_ids.remove(key);
-        }
-    }
 }
