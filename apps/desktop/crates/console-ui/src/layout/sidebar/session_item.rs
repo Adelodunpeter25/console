@@ -314,7 +314,12 @@ impl RenderOnce for SidebarSessionItem {
                     .gap_x(px(6.0))
                     .child(status_indicator)
                     .child(title)
-                    .when(self.has_draft, |el| el.child(draft_badge(theme))),
+                    .when(self.has_draft, |el| {
+                        el.child(draft_badge(
+                            ElementId::Name(format!("draft-{}", session.id).into()),
+                            theme,
+                        ))
+                    }),
             );
 
         if is_card_active

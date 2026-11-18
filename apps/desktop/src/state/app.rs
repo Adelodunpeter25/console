@@ -804,7 +804,6 @@ impl ConsoleDesktopApp {
             is_main_window: matches!(&target, crate::window::WindowLaunchTarget::RestorePersisted),
             drafts,
             sidebar_draft_ids,
-            drafts_collapsed: false,
             pinned_collapsed: layout.pinned_collapsed,
             settled_collapsed: true,
             collapsed_projects: Rc::new(layout.collapsed_projects.iter().cloned().collect()),

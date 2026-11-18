@@ -2,10 +2,12 @@
 //! items so their height, padding, status slot and title style cannot drift.
 
 use gpui::{
-    Div, ElementId, FontWeight, InteractiveElement, ParentElement, Stateful, Styled, div,
-    prelude::FluentBuilder, px,
+    Div, ElementId, FontWeight, InteractiveElement, ParentElement, Stateful, StatefulInteractiveElement,
+    Styled, div, prelude::FluentBuilder, px,
 };
 
+use crate::primitives::tooltip::Tooltip;
+use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
 const ROW_HEIGHT: f32 = 36.0;
@@ -63,16 +65,15 @@ pub fn title_label(is_active: bool, theme: Theme) -> Div {
         })
 }
 
-/// The "Draft" badge shown next to a title.
-pub fn draft_badge(theme: Theme) -> Div {
+/// The pencil marker shown next to a title when the chat has an unsent draft.
+pub fn draft_badge(id: ElementId, theme: Theme) -> Stateful<Div> {
     div()
+        .id(id)
+        .size(px(STATUS_SLOT))
         .flex_none()
-        .px(px(4.0))
-        .py(px(0.5))
-        .rounded(px(3.0))
-        .bg(theme.accent.opacity(0.15))
-        .text_color(theme.accent)
-        .text_size(px(TITLE_SIZE))
-        .font_weight(FontWeight::MEDIUM)
-        .child("Draft")
+        .flex()
+        .items_center()
+        .justify_center()
+        .tooltip(Tooltip::text("Unsent draft"))
+        .child(app_icon(IconName::Pencil, 13.0, theme.text_tertiary))
 }

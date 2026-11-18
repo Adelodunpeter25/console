@@ -1294,26 +1294,10 @@ impl ConsoleDesktopApp {
     }
 
     /// Visible sidebar session ids top-to-bottom, mirroring the sidebar
-    /// render: sessions with confirmed drafts live in Drafts (excluded here)
-    /// and collapsed date groups are skipped.
+    /// render: collapsed project groups are skipped.
     pub fn visible_session_ids(&self) -> Vec<String> {
-        let draft_ids: HashSet<String> = self
-            .draft_summaries()
-            .into_iter()
-            .filter_map(|d| d.session_id)
-            .collect();
-        let timestamp = |index: usize| {
-            let session = &self.sessions[index];
-            if draft_ids.contains(&session.id) {
-                0
-            } else {
-                session.sort_timestamp()
-            }
-        };
-        let is_live_pinned = |index: usize| {
-            let session = &self.sessions[index];
-            session.pinned_at.is_some() && !draft_ids.contains(&session.id)
-        };
+        let timestamp = |index: usize| self.sessions[index].sort_timestamp();
+        let is_live_pinned = |index: usize| self.sessions[index].pinned_at.is_some();
         let is_searching =
             self.sidebar_search_active && !self.sidebar_search_query.trim().is_empty();
         if is_searching {
@@ -1386,10 +1370,7 @@ impl ConsoleDesktopApp {
             }
             for idx in positions {
                 let session = &self.sessions[idx];
-                if !draft_ids.contains(&session.id)
-                    && !is_live_pinned(idx)
-                    && session.settled_at.is_none()
-                {
+                if !is_live_pinned(idx) && session.settled_at.is_none() {
                     ids.push(session.id.clone());
                 }
             }

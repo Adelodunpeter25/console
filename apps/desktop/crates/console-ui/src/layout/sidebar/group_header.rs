@@ -141,18 +141,6 @@ pub fn pinned_group_header(theme: Theme, collapsed: bool, on_toggle: ToggleFn) -
     )
 }
 
-/// Collapsible header card for the Drafts group.
-pub fn drafts_group_header(theme: Theme, collapsed: bool, on_toggle: ToggleFn) -> impl IntoElement {
-    section_header(
-        theme,
-        "sidebar-group-header-drafts",
-        ElementId::Name("sidebar-group-toggle-drafts".into()),
-        "Drafts",
-        collapsed,
-        on_toggle,
-    )
-}
-
 /// Collapsible header card for the Settled chats group, which always sits at
 /// the bottom of the list.
 pub fn settled_group_header(

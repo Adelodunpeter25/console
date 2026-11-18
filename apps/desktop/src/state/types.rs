@@ -645,7 +645,6 @@ pub struct ConsoleDesktopApp {
     /// Only updated when a tab closes (or submit). Typing never touches this —
     /// so the sidebar stays frozen while a tab is open.
     pub sidebar_draft_ids: std::collections::HashSet<String>,
-    pub drafts_collapsed: bool,
     pub pinned_collapsed: bool,
     pub settled_collapsed: bool,
     pub is_window_active: bool,

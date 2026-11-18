@@ -6,8 +6,7 @@ pub mod session_item;
 
 pub use draft_item::{DraftSummary, render_sidebar_draft_item};
 pub use group_header::{
-    drafts_group_header, pinned_group_header, project_header, search_results_group_header,
-    settled_group_header,
+    pinned_group_header, project_header, search_results_group_header, settled_group_header,
 };
 pub use session_card::{
     SidebarHoverManager, dismiss_card, on_card_hover, on_row_hover, render_session_card_content,
@@ -105,14 +104,12 @@ fn sentence_case_project_name(name: &str) -> String {
 
 #[derive(Clone)]
 enum SidebarRow {
-    Draft(usize),
+    /// The "new chat" draft row: unsent composer text with no session yet.
+    NewChatDraft(DraftSummary),
     /// Position into the sidebar's shared session list. Carrying the index
     /// (not the header) keeps row construction allocation-free; only rows
     /// actually rendered by the virtualized list clone their header.
     Session(usize),
-    /// Drafts section header inside the scroll list — only when the sticky
-    /// top row is occupied by Pinned instead.
-    DraftsHeader,
     /// Settled section header — always the last section of the list.
     SettledHeader,
     EmptySearch,
@@ -149,7 +146,6 @@ pub struct SidebarView {
     pub waiting_sessions: HashSet<String>,
     /// Unsent prompt drafts, each with preview and target session if any.
     pub draft_summaries: Vec<DraftSummary>,
-    pub drafts_collapsed: bool,
     /// Whether the Pinned section is collapsed (rows hidden, sticky header
     /// chevron flipped).
     pub pinned_collapsed: bool,
@@ -164,7 +160,6 @@ pub struct SidebarView {
     on_new_chat: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_search: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_toggle_drafts: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_pinned: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_settled: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_rename_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -204,7 +199,6 @@ impl SidebarView {
         running_sessions: HashMap<String, i64>,
         waiting_sessions: HashSet<String>,
         draft_summaries: Vec<DraftSummary>,
-        drafts_collapsed: bool,
         pinned_collapsed: bool,
         settled_collapsed: bool,
         sidebar_list_state: ListState,
@@ -215,7 +209,6 @@ impl SidebarView {
         on_new_chat: impl Fn(&mut Window, &mut App) + 'static,
         on_search: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_project: impl Fn(String, &mut Window, &mut App) + 'static,
-        on_toggle_drafts: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_pinned: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_settled: impl Fn(&mut Window, &mut App) + 'static,
         on_rename_session: impl Fn(String, &mut Window, &mut App) + 'static,
@@ -244,7 +237,6 @@ impl SidebarView {
             running_sessions,
             waiting_sessions,
             draft_summaries,
-            drafts_collapsed,
             pinned_collapsed,
             settled_collapsed,
             sidebar_list_state,
@@ -253,7 +245,6 @@ impl SidebarView {
             on_new_chat: Rc::new(on_new_chat),
             on_search: Rc::new(on_search),
             on_toggle_project: Rc::new(on_toggle_project),
-            on_toggle_drafts: Rc::new(on_toggle_drafts),
             on_toggle_pinned: Rc::new(on_toggle_pinned),
             on_toggle_settled: Rc::new(on_toggle_settled),
             on_rename_session: Rc::new(on_rename_session),
@@ -340,40 +331,22 @@ impl RenderOnce for SidebarView {
         let on_switch_env = self.on_switch_environment;
         let width = self.width;
 
-        // Filter out sessions that have drafts so they appear exclusively in the
-        // Drafts section without duplicating in date groups below. Session
-        // timestamps resolve once here so both grouping modes share them.
         let sessions = self.sessions;
-        // Settled chats leave every active section (pinned, drafts, date,
-        // project) and gather in their own Settled section at the bottom.
+        // Settled chats leave every active section (pinned, project) and
+        // gather in their own Settled section at the bottom.
         let is_settled = |index: usize| sessions[index].settled_at.is_some();
         let settled_at = |index: usize| sessions[index].settled_at.unwrap_or(0);
         let (active_positions, settled_positions) =
             partition_settled(sessions.len(), is_settled, settled_at);
         let active: HashSet<usize> = active_positions.iter().copied().collect();
         let has_settled = !settled_positions.is_empty();
-        let session_timestamp = |index: usize| {
-            let session = &sessions[index];
-            if draft_sessions.contains(&session.id) {
-                0
-            } else {
-                session.sort_timestamp()
-            }
-        };
+        let session_timestamp = |index: usize| sessions[index].sort_timestamp();
         let is_pinned = |index: usize| sessions[index].pinned_at.is_some();
         let pinned_positions: Vec<usize> = (0..sessions.len())
-            .filter(|&idx| {
-                is_pinned(idx)
-                    && !draft_sessions.contains(&sessions[idx].id)
-                    && active.contains(&idx)
-            })
+            .filter(|&idx| is_pinned(idx) && active.contains(&idx))
             .collect();
         let visible_positions: HashSet<usize> = (0..sessions.len())
-            .filter(|&idx| {
-                !draft_sessions.contains(&sessions[idx].id)
-                    && !is_pinned(idx)
-                    && active.contains(&idx)
-            })
+            .filter(|&idx| !is_pinned(idx) && active.contains(&idx))
             .collect();
         let project_key = |index: usize| -> ProjectSectionKey {
             let session = &sessions[index];
@@ -409,8 +382,11 @@ impl RenderOnce for SidebarView {
             key.clone().unwrap_or_else(|| NO_PROJECT_KEY.to_string())
         };
 
-        let has_drafts = !draft_summaries.is_empty();
         let has_pinned = !pinned_positions.is_empty();
+        let new_chat_draft = draft_summaries
+            .iter()
+            .find(|draft| draft.session_id.is_none())
+            .cloned();
         let pinned_collapsed = self.pinned_collapsed;
 
         // While searching, a single Search Results header replaces all section headers.
@@ -419,9 +395,9 @@ impl RenderOnce for SidebarView {
             .then(|| search_results_group_header(theme, "Search Results").into_any_element());
 
         // Scrollable rows: when search is active with a non-empty query, shows
-        // matching sessions directly under the Search Results header, preserving
-        // the current sort mode's relative ordering. When query is empty (or search
-        // is inactive), shows the normal pinned, drafts, and date/project sections.
+        // matching sessions directly under the Search Results header. When the
+        // query is empty (or search is inactive), shows the normal pinned,
+        // new-chat draft, and project sections.
         let mut list_rows = Vec::new();
         if is_searching {
             let mut ordered_positions: Vec<usize> = Vec::new();
@@ -462,13 +438,8 @@ impl RenderOnce for SidebarView {
                     list_rows.extend(pinned_positions.iter().copied().map(SidebarRow::Session));
                 }
             }
-            if has_drafts {
-                list_rows.push(SidebarRow::DraftsHeader);
-                if !self.drafts_collapsed {
-                    for i in 0..draft_summaries.len() {
-                        list_rows.push(SidebarRow::Draft(i));
-                    }
-                }
+            if let Some(draft) = new_chat_draft {
+                list_rows.push(SidebarRow::NewChatDraft(draft));
             }
             for (key, name, positions) in project_sections {
                 let key = collapse_key(&key);
@@ -513,7 +484,6 @@ impl RenderOnce for SidebarView {
         let list_running_sessions = running_sessions;
         let list_waiting_sessions = waiting_sessions;
         let list_draft_sessions = draft_sessions;
-        let list_draft_summaries = draft_summaries;
         let list_on_new = on_new.clone();
         let list_on_sel = on_sel;
         let list_on_open_in_new_window = on_open_in_new_window;
@@ -529,8 +499,6 @@ impl RenderOnce for SidebarView {
         let list_on_toggle_pinned = self.on_toggle_pinned.clone();
         let list_is_searching = is_searching;
         let list_on_toggle_project = on_toggle_project.clone();
-        let list_drafts_collapsed = self.drafts_collapsed;
-        let list_on_toggle_drafts = self.on_toggle_drafts;
         let list_settled_collapsed = self.settled_collapsed;
         let list_on_toggle_settled = self.on_toggle_settled;
         let list_on_settle = self.on_settle_session;
@@ -548,21 +516,16 @@ impl RenderOnce for SidebarView {
             };
             let indent = matches!(row, SidebarRow::Session(_)) && !list_is_searching;
             let row = match row {
-                SidebarRow::Draft(draft_index) => {
-                    let Some(draft) = list_draft_summaries.get(draft_index) else {
-                        return div().into_any_element();
-                    };
-                    render_sidebar_draft_item(
-                        draft,
-                        list_selected_id.as_deref(),
-                        &list_on_sel,
-                        &list_on_new,
-                        &list_on_delete_draft,
-                        theme,
-                        window,
-                        cx,
-                    )
-                }
+                SidebarRow::NewChatDraft(draft) => render_sidebar_draft_item(
+                    &draft,
+                    list_selected_id.as_deref(),
+                    &list_on_sel,
+                    &list_on_new,
+                    &list_on_delete_draft,
+                    theme,
+                    window,
+                    cx,
+                ),
                 SidebarRow::Session(session_index) => {
                     // Clone only for rows the virtualized list actually
                     // paints; positions were grouped without touching data.
@@ -594,10 +557,6 @@ impl RenderOnce for SidebarView {
                         list_renaming_session_id.as_deref(),
                         list_rename_input.clone(),
                     )
-                }
-                SidebarRow::DraftsHeader => {
-                    drafts_group_header(theme, list_drafts_collapsed, list_on_toggle_drafts.clone())
-                        .into_any_element()
                 }
                 SidebarRow::SettledHeader => settled_group_header(
                     theme,
