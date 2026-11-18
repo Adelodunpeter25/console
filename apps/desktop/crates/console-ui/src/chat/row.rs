@@ -344,7 +344,22 @@ fn render_run_block(
             _ => None,
         })
         .collect();
+    #[expect(clippy::needless_collect)]
+    let htmls: Vec<_> = block
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            ActivityEvent::ToolCall(entry) => entry
+                .result
+                .as_ref()
+                .and_then(|result| result.html.clone())
+                .map(|html| (entry.call.id.clone(), html)),
+            _ => None,
+        })
+        .collect();
     let visual_selection = view_ref.selection.clone();
+    let on_open_browser = view_ref.on_open_url_raw.clone();
+    let on_open_editor = view_ref.on_open_html_editor.clone();
     let run_id = block.run_id.clone();
     let mut segment = div().w_full().flex().flex_col().gap(px(6.0));
     if let Some(label) = block.divider_label {
@@ -378,6 +393,11 @@ fn render_run_block(
         .child(segment)
         .children(visuals.into_iter().map(|(call_id, visual)| {
             crate::chat::visual::VisualCard::new(call_id, visual, visual_selection.clone())
+        }))
+        .children(htmls.into_iter().map(|(call_id, html)| {
+            crate::chat::html::HtmlCard::new(call_id, html)
+                .on_open_browser(on_open_browser.clone())
+                .on_open_editor(on_open_editor.clone())
         }))
         .into_any_element()
 }

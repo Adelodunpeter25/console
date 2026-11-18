@@ -189,7 +189,8 @@ pub struct TranscriptView {
         Option<Rc<dyn Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static>>,
     on_view_subagent: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     on_open_file_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
-    on_open_url_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    pub(crate) on_open_url_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    pub(crate) on_open_html_editor: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     pub(crate) link_handler: Option<LinkHandler>,
     /// The session's recorded file changes grouped by the user message that
     /// started each turn, built once per fetch. A turn's chip row under its
@@ -265,6 +266,7 @@ impl TranscriptView {
             on_view_subagent: None,
             on_open_file_raw: None,
             on_open_url_raw: None,
+            on_open_html_editor: None,
             link_handler: None,
             turn_changes: HashMap::new(),
             session_changes: Rc::new(Vec::new()),

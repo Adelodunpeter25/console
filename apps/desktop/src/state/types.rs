@@ -396,6 +396,7 @@ pub struct ConsoleDesktopApp {
     pub(crate) file_closes_awaiting_save: std::collections::HashMap<String, (String, String)>,
     /// Pending 1-based target line to select/scroll to when a file's EditorView is created/rendered.
     pub pending_file_line: std::collections::HashMap<String, u32>,
+    pub pending_html_open: Option<(String, String)>,
     /// Comment-gutter selections from editor views. The editor reports through
     /// a plain callback (no app context), so handlers push here and a spawned
     /// task opens the card on the app's behalf.

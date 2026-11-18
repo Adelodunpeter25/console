@@ -5,6 +5,13 @@ use gpui::Context;
 use crate::state::app::{ConsoleDesktopApp, ImageFileState};
 use crate::state::FileMediaDetails;
 
+fn is_html_path(path: &str) -> bool {
+    std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("html") || ext.eq_ignore_ascii_case("htm"))
+}
+
 impl ConsoleDesktopApp {
     /// Resolve a clicked transcript file link against the session cwd with a
     /// pane project-path fallback, then open it as a workspace tab.
@@ -103,6 +110,54 @@ impl ConsoleDesktopApp {
     }
 
     pub fn open_file_tab_in_pane(&mut self, pane_id: &str, path: String, cx: &mut Context<Self>) {
+        if is_html_path(&path) {
+            self.pending_html_open = Some((pane_id.to_string(), path));
+            cx.notify();
+            return;
+        }
+        self.open_file_tab_in_pane_force_editor(pane_id, path, cx);
+    }
+
+    pub fn open_html_in_browser_tab(
+        &mut self,
+        pane_id: &str,
+        path: String,
+        cx: &mut Context<Self>,
+    ) {
+        let is_dark = console_ui::theme::Theme::current(cx).is_dark;
+        let pane_id = pane_id.to_string();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            let _ = tx.send(console_ui::chat::resolve_html_url(&path, is_dark).await);
+        });
+        cx.spawn(async move |entity, cx| {
+            let Some(url) = rx.await.ok().flatten() else {
+                return;
+            };
+            let _ = cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        let (browser_id, tab) =
+                            this.new_browser_tab(Some(url), None, None, &pane_id);
+                        workspace_ops::open_tab(&mut this.workspace_root, &pane_id, tab);
+                        this.active_pane_id = Some(pane_id);
+                        this.sync_workspace_webviews(cx);
+                        this.persist_workspaces();
+                        let _ = browser_id;
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    pub fn open_file_tab_in_pane_force_editor(
+        &mut self,
+        pane_id: &str,
+        path: String,
+        cx: &mut Context<Self>,
+    ) {
         let title = std::path::Path::new(&path)
             .file_name()
             .and_then(|n| n.to_str())

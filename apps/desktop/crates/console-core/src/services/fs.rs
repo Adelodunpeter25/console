@@ -334,6 +334,22 @@ impl FsService {
         url
     }
 
+    /// URL for `GET /api/fs/file/html?path=...&theme=...`, used by sandboxed
+    /// webviews and browser tabs.
+    pub async fn html_url(&self, path: &str, theme: &str, auth_token: Option<&str>) -> String {
+        let mut url = format!(
+            "{}/api/fs/file/html?path={}&theme={}",
+            self.transport.url("").await,
+            urlencoding::encode(path),
+            urlencoding::encode(theme),
+        );
+        if let Some(token) = auth_token.filter(|t| !t.is_empty()) {
+            url.push_str("&token=");
+            url.push_str(&urlencoding::encode(token));
+        }
+        url
+    }
+
     /// Probe media file metadata via `GET /api/fs/file/media` with a
     /// `Range: bytes=0-0` request, so headers (size via `Content-Range`,
     /// content type) come back without downloading the body. `None` means the

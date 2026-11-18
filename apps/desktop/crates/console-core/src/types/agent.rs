@@ -393,10 +393,13 @@ pub struct ToolResult {
     pub content: serde_json::Value,
     #[serde(default)]
     pub is_error: Option<bool>,
-    /// Client-rendered artifact (chart/table/metric card). Never sent to a
-    /// model provider; a malformed spec decodes to `None`.
+    /// Client-rendered artifact (workspace image). Never sent to a model
+    /// provider; a malformed spec decodes to `None`.
     #[serde(default)]
     pub visual: Option<VisualArtifact>,
+    /// Client-rendered HTML page artifact. Never sent to a model provider.
+    #[serde(default)]
+    pub html: Option<HtmlArtifact>,
 }
 
 /// A versioned visual spec riding on a tool result; the spec stays raw JSON
@@ -408,12 +411,38 @@ pub struct VisualArtifact {
     pub spec: serde_json::Value,
 }
 
+/// An HTML page artifact attached to a `render` tool result.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HtmlArtifact {
+    pub path: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub height: u32,
+    #[serde(default)]
+    pub snapshot: Option<Vec<u8>>,
+}
+
 fn visual_from_proto(msg: &ProtoToolResult) -> Option<VisualArtifact> {
     let v = msg.visual.as_ref()?;
     let spec: serde_json::Value = serde_json::from_slice(&v.spec).ok()?;
     Some(VisualArtifact {
         version: v.version,
         spec,
+    })
+}
+
+fn html_from_proto(msg: &ProtoToolResult) -> Option<HtmlArtifact> {
+    let h = msg.html.as_ref()?;
+    if h.path.is_empty() {
+        return None;
+    }
+    Some(HtmlArtifact {
+        path: h.path.clone(),
+        title: h.title.clone(),
+        height: h.height,
+        snapshot: h.snapshot.as_ref().filter(|b| !b.is_empty()).cloned(),
     })
 }
 
@@ -427,6 +456,7 @@ impl ToolResult {
             content: decode_json_bytes(&msg.content),
             is_error: msg.is_error,
             visual: visual_from_proto(msg),
+            html: html_from_proto(msg),
         }
     }
 }

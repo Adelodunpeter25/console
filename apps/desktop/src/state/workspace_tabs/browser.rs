@@ -352,7 +352,7 @@ impl ConsoleDesktopApp {
     /// Build the id and tab config for the next browser tab in `pane_id`.
     /// `project_key` wins when given (agent tabs know their workspace); user
     /// tabs fall back to the pane's project selection.
-    fn new_browser_tab(
+    pub(crate) fn new_browser_tab(
         &self,
         url: Option<String>,
         owner_session: Option<String>,

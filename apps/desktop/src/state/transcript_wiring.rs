@@ -205,6 +205,15 @@ pub(crate) fn wire_open_file_for_active_pane(
 }
 
 fn wire_open_url(transcript: &mut TranscriptView, entity: WeakEntity<ConsoleDesktopApp>) {
+    let app_html_editor = entity.clone();
+    transcript.set_on_open_html_editor(move |path, _window, cx| {
+        if let Some(app) = app_html_editor.upgrade() {
+            app.update(cx, |this, cx| {
+                let target_pane = this.target_subtab_pane_id();
+                this.open_file_tab_in_pane_force_editor(&target_pane, path, cx);
+            });
+        }
+    });
     transcript.set_on_open_url(move |url, window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {

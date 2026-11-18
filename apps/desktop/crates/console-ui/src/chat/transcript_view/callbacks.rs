@@ -64,6 +64,13 @@ impl TranscriptView {
         self.rebuild_link_handler();
     }
 
+    pub fn set_on_open_html_editor(
+        &mut self,
+        handler: impl Fn(String, &mut Window, &mut App) + 'static,
+    ) {
+        self.on_open_html_editor = Some(Rc::new(handler));
+    }
+
     pub(super) fn rebuild_link_handler(&mut self) {
         let open_file = self.on_open_file_raw.clone();
         let open_url = self.on_open_url_raw.clone();

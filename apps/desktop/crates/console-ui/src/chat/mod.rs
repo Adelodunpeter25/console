@@ -1,6 +1,7 @@
 pub mod change_chips;
 pub mod cite_overlay;
 pub mod diff_popover;
+pub mod html;
 pub mod image;
 pub mod interaction_card;
 pub mod markdown_helpers;
@@ -16,6 +17,7 @@ pub mod working_indicator;
 
 pub use change_chips::ChangesSummary;
 pub use console_core::{ActivityEvent, ToolCallEntry};
+pub use html::{HtmlCard, resolve_html_url, set_html_render_client};
 pub use image::{
     ChatImage, ImagePreviewHandler, set_workspace_image_client, set_workspace_image_preview,
     workspace_chat_image,

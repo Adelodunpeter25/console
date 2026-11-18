@@ -58,6 +58,7 @@ impl ConsoleDesktopApp {
     ) -> Self {
         let client = ConsoleClient::new(None);
         console_ui::chat::set_workspace_image_client(&client);
+        console_ui::chat::set_html_render_client(&client);
         let ws_doc = startup.workspaces.clone();
         let mut project_workspace_roots = std::collections::HashMap::new();
         let mut project_active_panes = std::collections::HashMap::new();
@@ -709,6 +710,7 @@ impl ConsoleDesktopApp {
             file_saves_pending: std::collections::HashSet::new(),
             file_closes_awaiting_save: std::collections::HashMap::new(),
             pending_file_line: std::collections::HashMap::new(),
+            pending_html_open: None,
             file_comment_tx,
             viewer_diff_views: std::collections::HashMap::new(),
             viewer_cached_markdown_views: std::collections::HashMap::new(),
