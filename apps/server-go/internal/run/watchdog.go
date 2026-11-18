@@ -54,7 +54,7 @@ func (s *Service) watchRun(sessionID string, hub *Hub, done <-chan struct{}) {
 // a newer run on the same session — or the stuck turn finally returning —
 // can never be disturbed: its broadcasts become safe no-ops.
 func (s *Service) forceSettle(sessionID string, hub *Hub) {
-	s.cancelActive(sessionID)
+	s.cancelActive(sessionID, errRunAborted)
 	if !s.releaseSlot(sessionID, hub) {
 		return
 	}
@@ -81,13 +81,13 @@ func (s *Service) releaseSlot(sessionID string, hub *Hub) bool {
 // cancelActive cancels the active run's current context while holding the
 // service lock, so a concurrent turn-boundary swap can't strand the cancel
 // on a stale context. Returns false when no run is active.
-func (s *Service) cancelActive(sessionID string) bool {
+func (s *Service) cancelActive(sessionID string, cause error) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ar, ok := s.active[sessionID]
 	if !ok {
 		return false
 	}
-	ar.cancel()
+	ar.cancel(cause)
 	return true
 }

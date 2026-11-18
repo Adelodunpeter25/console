@@ -138,12 +138,12 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 			}
 			return
 		}
-		nextCtx, nextCancel := context.WithCancel(context.Background())
+		nextCtx, nextCancel := context.WithCancelCause(context.Background())
 		s.mu.Lock()
 		if ar, ok := s.active[sessionID]; ok && ar.hub == hub {
 			ar.cancel = nextCancel
 		} else {
-			nextCancel()
+			nextCancel(errRunAborted)
 		}
 		s.mu.Unlock()
 		current, currentCtx = next, nextCtx
@@ -156,6 +156,16 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 // so the user can steer, edit, or delete it.
 func (s *Service) nextTurn(ctx context.Context, turnErr error, sessionID string, hub *Hub) (Prompt, bool) {
 	if turnErr != nil && !errors.Is(turnErr, context.Canceled) {
+		return Prompt{}, false
+	}
+	// Stop (or watchdog) cancels without a steer cause: whatever is queued —
+	// including a prompt staged in the cancel→clear gap or sent while the
+	// run drains — is discarded so the run actually ends. Only a steer
+	// cancel may drain the staged prompt as the next turn.
+	if ctx.Err() != nil && context.Cause(ctx) != errRunSteered {
+		if _, ok := s.takeStaged(sessionID); ok {
+			s.broadcastQueue(sessionID, false)
+		}
 		return Prompt{}, false
 	}
 	staged, ok := s.takeStaged(sessionID)

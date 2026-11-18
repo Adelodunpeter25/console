@@ -31,6 +31,10 @@ var (
 	ErrActive = errors.New("session already has an active run")
 	// ErrNoSession is returned when the session does not exist.
 	ErrNoSession = errors.New("session not found")
+	// Cancel causes distinguish a user Stop (queued prompts are discarded)
+	// from a steer (the staged prompt intentionally drains as the next turn).
+	errRunAborted = errors.New("run aborted")
+	errRunSteered = errors.New("run steered")
 )
 
 // Attachment is a base64 image sent with a run prompt.
@@ -59,7 +63,7 @@ type Prompt struct {
 type activeRun struct {
 	runID  string
 	hub    *Hub
-	cancel context.CancelFunc
+	cancel context.CancelCauseFunc
 	done   chan struct{}
 }
 
@@ -373,14 +377,14 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	}
 
 	hub := NewHub()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancelCause(context.Background())
 	done := make(chan struct{})
 	runID := "run_" + randomHex(16)
 	s.mu.Lock()
 	// Re-check under lock: a concurrent StartRun may have won the race.
 	if _, ok := s.active[sessionID]; ok {
 		s.mu.Unlock()
-		cancel()
+		cancel(errRunAborted)
 		return nil, ErrActive
 	}
 	s.active[sessionID] = &activeRun{runID: runID, hub: hub, cancel: cancel, done: done}
@@ -397,7 +401,7 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 // everything: any background bash jobs the session started are killed too,
 // not just the in-flight turn.
 func (s *Service) Abort(sessionID string) bool {
-	if !s.cancelActive(sessionID) {
+	if !s.cancelActive(sessionID, errRunAborted) {
 		return false
 	}
 	// Stop is terminal, and the settled run goroutine can be slow to reach
