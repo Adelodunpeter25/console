@@ -134,7 +134,7 @@ func NewSandboxedBashToolWithCwd(mode SandboxMode, jobs *terminal.BashJobManager
 	if len(parentIDs) > 1 {
 		parentCallID = parentIDs[1]
 	}
-	return NewTool("bash", "Run a shell command and return output. For file access prefer read_file/grep/editFile. Long-running commands (builds, test suites, dev servers): background=true returns immediately and the result is delivered when it finishes. A foreground command still running at its timeout keeps running as a background job — you're notified when it finishes.", TierExec,
+	return NewTool("bash", "Run a shell command and return output. Never use this for searching or reading files: use grep(), glob(), list(), readFile and editFile instead of shell grep, rg, find, ls or cat. Long-running commands (builds, test suites, dev servers): background=true returns immediately and the result is delivered when it finishes. A foreground command still running at its timeout keeps running as a background job — you're notified when it finishes.", TierExec,
 		func(ctx context.Context, in bashInput) (any, error) {
 			if in.Command == "" {
 				return nil, NewToolError("command is required")
