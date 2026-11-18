@@ -250,6 +250,20 @@ const bootstrapScript = `
         return await bridge.describeTool({ name: String(name) });
     };
 
+    // Background bash jobs: bashJob("output"|"kill"|"list", jobId, [opts])
+    globalThis.bashJob = async function(action, jobId, opts) {
+        const input = typeof action === "object" && action !== null
+            ? action
+            : Object.assign({ action: String(action) }, jobId ? { jobId: String(jobId) } : {}, opts || {});
+        const res = await bridge.call({ tool: "bashJob", input: input });
+        if (typeof res === "string") return res;
+        if (Array.isArray(res) && res.length > 0 && res[0].text !== undefined) {
+            return res[0].text;
+        }
+        if (res && typeof res.content === "string") return res.content;
+        return typeof res === "object" ? JSON.stringify(res) : String(res);
+    };
+
     // Subagent orchestration
     globalThis.spawnContext = async function(args) {
         return await bridge.call({ tool: "subagent", input: args || {} });
@@ -344,6 +358,7 @@ const bootstrapScript = `
                     if (this.opts.cwd) input.cwd = String(this.opts.cwd);
                     if (this.opts.env) input.env = this.opts.env;
                     if (this.opts.timeoutMs) input.timeoutMs = this.opts.timeoutMs;
+                    if (this.opts.background) input.background = true;
 
                     const startTime = Date.now();
                     let res;
@@ -369,6 +384,13 @@ const bootstrapScript = `
                         rawOutput = JSON.stringify(res);
                     } else {
                         rawOutput = String(res);
+                    }
+
+                    if (this.opts.background) {
+                        if (isError) {
+                            throw new Error(rawOutput);
+                        }
+                        return rawOutput;
                     }
 
                     const parsed = parseBashOutput(rawOutput);

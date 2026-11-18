@@ -613,6 +613,47 @@ func TestCodemodeRequestFullAccess(t *testing.T) {
 	}
 }
 
+func TestCodemodeBackgroundOptionReachesBash(t *testing.T) {
+	tmpDir := t.TempDir()
+	exec := newTestExecutor(t, tmpDir)
+
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	script := `
+var msg = "";
+try { await $({background: true})("echo hi"); msg = "no error"; } catch (e) { msg = String(e.message || e); }
+msg;`
+	res, err := rt.Eval(context.Background(), script, 5*time.Second)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	env := res.(tools.Envelope)
+	if !strings.Contains(fmt.Sprint(env.Content), "Background jobs are not available") {
+		t.Fatalf("background flag did not reach bash, got: %v", env.Content)
+	}
+}
+
+func TestCodemodeBashJobGlobalAndDocs(t *testing.T) {
+	tmpDir := t.TempDir()
+	exec := newTestExecutor(t, tmpDir)
+
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	res, err := rt.Eval(context.Background(), `typeof bashJob;`, 5*time.Second)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if !strings.Contains(fmt.Sprint(res.(tools.Envelope).Content), "function") {
+		t.Fatalf("bashJob global missing: %v", res)
+	}
+}
+
 func jsonString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
