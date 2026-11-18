@@ -12,8 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"os"
+
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel"
 )
 
 func TestWebhookRouteIsPublicAndVerifiesAuth(t *testing.T) {
@@ -82,5 +85,18 @@ func TestWebhookRouteIsPublicAndVerifiesAuth(t *testing.T) {
 	got, _ := store.Get(sub.ID)
 	if got.Status != webhooks.StatusError {
 		t.Fatalf("missing session should mark sub error, got %q", got.Status)
+	}
+}
+
+func TestWebhookBaseURLReadsOpenTunnelAlongsideIroh(t *testing.T) {
+	dir := t.TempDir()
+	if err := tunnel.SetBackend(dir, tunnel.BackendIroh); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "tunnel.json"), []byte(`{"id":"t1","hostname":"hooks.example.test","certificateExpiry":"2030-01-01T00:00:00Z"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := webhookBaseURLFromDir(dir); got != "https://hooks.example.test" {
+		t.Fatalf("webhookBaseURLFromDir = %q, want https://hooks.example.test", got)
 	}
 }

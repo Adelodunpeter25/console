@@ -13,6 +13,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/opentunnel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
@@ -50,10 +51,17 @@ func RegisterWebhookRoutes(app *fiber.App, deliver WebhookDeliverFunc) {
 }
 
 func defaultWebhookBaseURL() string {
+	return webhookBaseURLFromDir(filepath.Join(utils.ConsoleStorageDir(), "tunnel"))
+}
+
+func webhookBaseURLFromDir(tunnelDir string) string {
 	if explicit := strings.TrimSpace(os.Getenv("CONSOLE_PUBLIC_URL")); explicit != "" {
 		return strings.TrimRight(explicit, "/")
 	}
-	if remote, ok := tunnel.ReadInfo(filepath.Join(utils.ConsoleStorageDir(), "tunnel")); ok && remote.Ready && remote.URL != "" {
+	if info, ok := opentunnel.ReadInfo(tunnelDir); ok && info.Ready && info.URL != "" {
+		return strings.TrimRight(info.URL, "/")
+	}
+	if remote, ok := tunnel.ReadInfo(tunnelDir); ok && remote.Ready && remote.URL != "" {
 		return strings.TrimRight(remote.URL, "/")
 	}
 	return ""
