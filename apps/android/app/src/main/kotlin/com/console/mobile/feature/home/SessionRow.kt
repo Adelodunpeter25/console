@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,10 +29,11 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.core.chat.isSessionTitlePending
 import com.console.mobile.core.util.formatRelativeTime
 import com.console.mobile.ui.components.common.new.StatusPill
-import com.console.mobile.ui.components.common.new.TintPill
 import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionHeader
 import com.console.mobile.data.model.SessionStatus
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Pencil
 import kotlinx.coroutines.delay
 
 /** Height of a row's first line: the title and the status pill are both centred in it. */
@@ -100,7 +102,14 @@ internal fun SessionRow(
                         modifier = Modifier.weight(1f, fill = false),
                     )
                 }
-                if (isDraft) TintPill("Draft", NewTheme.Warning, Modifier.padding(start = 8.dp))
+                if (isDraft) {
+                    Icon(
+                        TablerIcons.Outline.Pencil,
+                        contentDescription = "Unsent draft",
+                        tint = NewTheme.TextMuted,
+                        modifier = Modifier.padding(start = 8.dp).size(14.dp),
+                    )
+                }
             }
             if (isDraft && draftPreview != null) {
                 Text(draftPreview, color = NewTheme.Warning, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))

@@ -85,19 +85,27 @@ fun buildGroupedProjectSections(
     val q = searchQuery.trim().lowercase()
     val filteredSessions = if (q.isEmpty()) sessions else sessions.filter { it.title.lowercase().contains(q) }
 
-    // Draft summaries for 0-message sessions
+    // Drafts on 0-message chats group like any other session; a draft whose
+    // chat has no server header yet gets an ephemeral one so the row survives.
     val draftEntries = draftSessions.filter { (id, s) ->
         !isNewChatId(id) && s.messages.isEmpty() && isDraftSession(s)
     }
+    val draftUpdatedAt = draftEntries.mapValues { it.value.draftUpdatedAt }
 
-    val draftHeaders = mutableListOf<SessionHeader>()
+    val seenIds = mutableSetOf<String>()
+    val allSessions = filteredSessions.map { s ->
+        draftUpdatedAt[s.id]?.let { s.copy(updated_at = it) } ?: s
+    }.filter { s ->
+        if (s.id in seenIds) false
+        else {
+            seenIds.add(s.id)
+            true
+        }
+    }.toMutableList()
     for ((id, draftState) in draftEntries) {
-        val serverHeader = filteredSessions.firstOrNull { it.id == id }
-        if (serverHeader != null) {
-            draftHeaders.add(serverHeader.copy(updated_at = draftState.draftUpdatedAt ?: serverHeader.updated_at))
-        } else {
+        if (allSessions.none { it.id == id }) {
             val fallbackProj = projects.firstOrNull()
-            draftHeaders.add(
+            allSessions.add(
                 createEphemeralDraftHeader(
                     id = id,
                     draft = draftState,
@@ -108,31 +116,11 @@ fun buildGroupedProjectSections(
         }
     }
 
-    val draftSection: GroupedProjectSection? = if (draftHeaders.isNotEmpty()) {
-        draftHeaders.sortByDescending { it.updated_at }
-        GroupedProjectSection(
-            projectId = null,
-            projectName = "Drafts",
-            data = draftHeaders,
-            latestAt = draftHeaders.first().updated_at,
-        )
-    } else null
-
-    val draftIds = draftEntries.keys
-    val seenIds = mutableSetOf<String>()
-    val nonDraftSessions = filteredSessions.filter { s ->
-        if (s.id in draftIds || s.id in seenIds) false
-        else {
-            seenIds.add(s.id)
-            true
-        }
-    }
-
     // Settled chats leave every active section and gather in their own
     // Settled section at the bottom, most recently settled first.
-    val settledSessions = nonDraftSessions.filter { (it.settled_at ?: 0L) > 0 }
+    val settledSessions = allSessions.filter { (it.settled_at ?: 0L) > 0 }
         .sortedByDescending { it.settled_at }
-    val activeSessions = nonDraftSessions.filter { (it.settled_at ?: 0L) <= 0 }
+    val activeSessions = allSessions.filter { (it.settled_at ?: 0L) <= 0 }
 
     data class ProjectGroup(val projectId: String?, val projectName: String, val list: MutableList<SessionHeader>)
 
@@ -157,7 +145,7 @@ fun buildGroupedProjectSections(
 
         val resolvedId = project?.id ?: session.project_id
         val groupKey = "project-$resolvedId"
-        val rawName = project?.name ?: folderName(session.cwd).ifBlank { "Drafts" }
+        val rawName = project?.name ?: folderName(session.cwd).ifBlank { "General" }
         val groupName = formatProjectTitle(rawName)
 
         val group = byProject.getOrPut(groupKey) {
@@ -180,7 +168,7 @@ fun buildGroupedProjectSections(
     }
 
     val sortedSections = sections.sortedByDescending { it.latestAt }
-    // Pinned sits at the absolute top, above Drafts.
+    // Pinned sits at the absolute top.
     val ordered = buildList {
         if (pinnedSessions.isNotEmpty()) {
             add(
@@ -192,7 +180,6 @@ fun buildGroupedProjectSections(
                 ),
             )
         }
-        if (draftSection != null) add(draftSection)
         addAll(sortedSections)
         // Settled always last, like desktop, below every active section.
         if (settledSessions.isNotEmpty()) {

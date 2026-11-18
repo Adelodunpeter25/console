@@ -29,7 +29,6 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Plus
  * id, with the no-project bucket as "general". */
 internal fun sectionCollapseKey(section: GroupedProjectSection): String = when {
     section.projectName == "Pinned" -> "pinned"
-    section.projectName == "Drafts" -> "drafts"
     section.projectName == "Settled" -> "settled"
     section.projectId != null -> section.projectId
     else -> "general"

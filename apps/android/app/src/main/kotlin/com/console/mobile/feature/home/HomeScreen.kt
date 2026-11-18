@@ -62,7 +62,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Port of screens/home/home-screen.tsx + components/home/session-list.tsx + hooks/useHomeSessions.
- * Grouped project sections (pinned, drafts, projects), search, pull-refresh, compose.
+ * Grouped project sections (pinned, projects), search, pull-refresh, compose.
  *
  * The row, section header, and long-press sheet live in [SessionRow],
  * [SessionSectionHeader], and [SessionActionsSheet].
@@ -81,7 +81,7 @@ fun HomeScreen(
     var refreshing by remember { mutableStateOf(false) }
     var activeSession by remember { mutableStateOf<SessionHeader?>(null) }
     var branches by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    // Section keys whose sessions are hidden (Pinned/Drafts/Settled/project ids),
+    // Section keys whose sessions are hidden (Pinned/Settled/project ids),
     // persisted across app restarts.
     var collapsedSections by remember { mutableStateOf(AppContainer.preferencesStore.loadCollapsedSections()) }
     val toggleSection: (String) -> Unit = { key ->
@@ -218,7 +218,7 @@ fun HomeScreen(
                                     isFirst = sIdx == 0,
                                     collapsed = collapsed,
                                     onToggle = { toggleSection(sectionKey) },
-                                    onNewChat = if (section.projectId != null && section.projectId != "pinned" && section.projectId != "settled" && section.projectName != "Drafts") {
+                                    onNewChat = if (section.projectId != null && section.projectId != "pinned" && section.projectId != "settled") {
                                         { startChat(section.projectId) }
                                     } else {
                                         null
