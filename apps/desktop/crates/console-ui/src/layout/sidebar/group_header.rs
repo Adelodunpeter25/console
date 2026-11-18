@@ -1,5 +1,5 @@
 use gpui::{
-    App, ElementId, FontWeight, Hsla, InteractiveElement, IntoElement, KeyDownEvent, ParentElement,
+    App, ElementId, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, ParentElement,
     SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use std::rc::Rc;
@@ -10,60 +10,77 @@ use crate::theme::Theme;
 
 type ToggleFn = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
 
+/// The card every collapsible sidebar header shares: a soft rounded
+/// background, a leading chevron that is always visible (rotated when the
+/// section is collapsed), and the label.
+fn header_card(theme: Theme, group_name: SharedString) -> gpui::Div {
+    div()
+        .w_full()
+        .h(px(36.0))
+        .mt(px(4.0))
+        .px(px(8.0))
+        .rounded(px(8.0))
+        .bg(theme.sidebar_item_background)
+        .flex()
+        .items_center()
+        .justify_between()
+        .group(group_name)
+}
+
+fn header_chevron(theme: Theme, collapsed: bool) -> impl IntoElement {
+    app_icon(IconName::ChevronDown, 12.0, theme.text_ghost).when(collapsed, |icon| {
+        icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
+    })
+}
+
+fn header_label(theme: Theme, label: impl Into<SharedString>) -> gpui::Div {
+    div()
+        .truncate()
+        .text_size(px(14.5))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(theme.text_secondary)
+        .child(label.into())
+}
+
 /// Pinned, Drafts and Settled share this layout: a clickable,
-/// keyboard-toggleable label with a hover-revealed chevron.
+/// keyboard-toggleable card.
 fn section_header(
     theme: Theme,
     group_name: impl Into<SharedString>,
     toggle_id: ElementId,
     label: impl Into<SharedString>,
-    label_color: Hsla,
     collapsed: bool,
     on_toggle: ToggleFn,
 ) -> impl IntoElement {
-    let group_name: SharedString = group_name.into();
-    let chevron = app_icon(IconName::ChevronDown, 11.0, theme.text_ghost)
-        .when(collapsed, |icon| {
-            icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
-        })
-        .invisible()
-        .group_hover(group_name.clone(), |icon| icon.visible());
     let toggle_on_click = on_toggle.clone();
     let toggle_on_key = on_toggle;
 
-    div()
-        .h(px(28.0))
-        .flex()
-        .items_center()
-        .group(group_name)
-        .child(
-            div()
-                .id(toggle_id)
-                .tab_index(0)
-                .h(px(22.0))
-                .flex()
-                .items_center()
-                .gap(px(4.0))
-                .cursor_default()
-                .hover(|s| s.bg(theme.overlay))
-                .text_size(px(14.5))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(label_color)
-                .child(label.into())
-                .child(chevron)
-                .on_click(move |_, window, cx| (toggle_on_click)(window, cx))
-                .on_key_down(move |event: &KeyDownEvent, window, cx| {
-                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                        (toggle_on_key)(window, cx);
-                        cx.stop_propagation();
-                    }
-                }),
-        )
+    header_card(theme, group_name.into()).child(
+        div()
+            .id(toggle_id)
+            .tab_index(0)
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .flex()
+            .items_center()
+            .gap(px(10.0))
+            .cursor_default()
+            .child(header_chevron(theme, collapsed))
+            .child(header_label(theme, label))
+            .on_click(move |_, window, cx| (toggle_on_click)(window, cx))
+            .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                    (toggle_on_key)(window, cx);
+                    cx.stop_propagation();
+                }
+            }),
+    )
 }
 
-/// A project row: the bold project name, and a plain `+`
-/// on the right that starts a new chat in that project. Clicking the row
-/// collapses or expands it.
+/// A project card: chevron, the project name, and a plain `+` on the right
+/// that starts a new chat in that project. Clicking the card collapses or
+/// expands it.
 pub fn project_header(
     theme: Theme,
     name: String,
@@ -75,15 +92,8 @@ pub fn project_header(
     let group_name: SharedString = format!("sidebar-project-header-{key}").into();
     let toggle_key = key.clone();
     let new_chat_key = key.clone();
-    let chevron_rotation = if collapsed { 0.75 } else { 0.0 };
 
-    div()
-        .w_full()
-        .h(px(34.0))
-        .flex()
-        .items_center()
-        .justify_between()
-        .group(group_name.clone())
+    header_card(theme, group_name)
         .child(
             div()
                 .id(ElementId::Name(
@@ -92,28 +102,14 @@ pub fn project_header(
                 .tab_index(0)
                 .flex_1()
                 .min_w_0()
-                .h(px(28.0))
+                .h_full()
                 .flex()
                 .items_center()
                 .gap(px(10.0))
                 .cursor_default()
                 .on_click(move |_, window, cx| (on_toggle)(toggle_key.clone(), window, cx))
-                .child(
-                    div()
-                        .truncate()
-                        .text_size(px(15.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.text)
-                        .child(name),
-                )
-                .child(
-                    app_icon(IconName::ChevronDown, 11.0, theme.text_ghost)
-                        .with_transformation(gpui::Transformation::rotate(gpui::percentage(
-                            chevron_rotation,
-                        )))
-                        .invisible()
-                        .group_hover(group_name, |icon| icon.visible()),
-                ),
+                .child(header_chevron(theme, collapsed))
+                .child(header_label(theme, name)),
         )
         .child(
             div()
@@ -129,39 +125,36 @@ pub fn project_header(
                 .active(|s| s.bg(theme.overlay_strong))
                 .tooltip(Tooltip::text("New chat"))
                 .on_click(move |_, window, cx| (on_new_chat)(new_chat_key.clone(), window, cx))
-                .child(app_icon(IconName::Plus, 18.0, theme.text_secondary)),
+                .child(app_icon(IconName::Plus, 16.0, theme.text_secondary)),
         )
 }
 
-/// Collapsible section header for the Pinned sessions group.
+/// Collapsible header card for the Pinned sessions group.
 pub fn pinned_group_header(theme: Theme, collapsed: bool, on_toggle: ToggleFn) -> impl IntoElement {
     section_header(
         theme,
         "sidebar-group-header-pinned",
         ElementId::Name("sidebar-group-toggle-pinned".into()),
         "Pinned",
-        theme.text,
         collapsed,
         on_toggle,
     )
 }
 
-/// Collapsible section header for the Drafts group.
+/// Collapsible header card for the Drafts group.
 pub fn drafts_group_header(theme: Theme, collapsed: bool, on_toggle: ToggleFn) -> impl IntoElement {
     section_header(
         theme,
         "sidebar-group-header-drafts",
         ElementId::Name("sidebar-group-toggle-drafts".into()),
         "Drafts",
-        theme.text,
         collapsed,
         on_toggle,
     )
 }
 
-/// Collapsible section header for the Settled chats group. The section always
-/// sits at the bottom of the list, and its label is dimmed to match the
-/// archived rows below it.
+/// Collapsible header card for the Settled chats group, which always sits at
+/// the bottom of the list.
 pub fn settled_group_header(
     theme: Theme,
     collapsed: bool,
@@ -172,7 +165,6 @@ pub fn settled_group_header(
         "sidebar-group-header-settled",
         ElementId::Name("sidebar-group-toggle-settled".into()),
         "Settled",
-        theme.text_tertiary,
         collapsed,
         on_toggle,
     )
