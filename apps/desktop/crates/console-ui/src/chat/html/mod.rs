@@ -87,6 +87,19 @@ fn ensure_url(row: &str, path: &str, is_dark: bool, cx: &mut App) -> Option<Stri
     None
 }
 
+/// Hides the native webview when its card stops rendering (tab closed, chat
+/// switched). A native view outlives GPUI's element tree, so nothing else
+/// would take it off screen.
+#[cfg(target_os = "macos")]
+struct HostGuard(Rc<WebviewHost>);
+
+#[cfg(target_os = "macos")]
+impl Drop for HostGuard {
+    fn drop(&mut self) {
+        self.0.set_visible(false);
+    }
+}
+
 #[cfg(target_os = "macos")]
 fn ensure_host(row: &str, url: &str, window: &mut Window, cx: &mut App) -> Option<Rc<WebviewHost>> {
     if let Some(existing) = HOSTS.with(|h| h.borrow().get(row).cloned()) {
@@ -334,6 +347,12 @@ impl RenderOnce for HtmlCard {
             {
                 if let Some(u) = &url {
                     if let Some(host) = ensure_host(&self.row, u, window, cx) {
+                        let guarded = host.clone();
+                        let _ = window.use_keyed_state(
+                            ElementId::Name(format!("html-host-guard-{}", self.row).into()),
+                            cx,
+                            move |_, _| HostGuard(guarded),
+                        );
                         div()
                             .w_full()
                             .h(px(frame_height))
