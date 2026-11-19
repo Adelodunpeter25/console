@@ -38,10 +38,30 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.console.mobile.core.util.formatMessageTime
 import com.console.mobile.core.util.parseFileMentions
+import com.console.mobile.data.model.BrowserAnnotationUi
 import com.console.mobile.data.model.ImagePart
 import com.console.mobile.ui.components.ImagePreviewDialog
 import com.console.mobile.ui.components.attachmentBytes
 import com.console.mobile.ui.theme.NewTheme
+
+private fun formatSelectorLabel(selector: String): String {
+    val trimmed = selector.trim()
+    if (trimmed.isEmpty()) return ""
+    val leaf = trimmed.substringAfterLast('>').substringAfterLast('+').substringAfterLast('~').substringAfterLast(' ').trim()
+    if (leaf.startsWith('#')) return leaf
+    val base = leaf.substringBefore(':')
+    val pseudo = if (':' in leaf) ":" + leaf.substringAfter(':') else ""
+    val parts = base.split('.').filter { it.isNotEmpty() }
+    val out = StringBuilder()
+    if (!base.startsWith('.')) {
+        if (parts.isNotEmpty()) out.append(parts[0])
+        if (parts.size > 1) out.append('.').append(parts[1])
+    } else {
+        if (parts.isNotEmpty()) out.append('.').append(parts[0])
+    }
+    out.append(pseudo)
+    return if (out.isEmpty()) leaf else out.toString()
+}
 
 private const val SEND_ANIMATION_MS = 180
 private val SendRise = 10.dp
@@ -56,12 +76,13 @@ fun UserBubble(
     content: String,
     createdAt: Long?,
     attachments: List<ImagePart> = emptyList(),
+    annotations: List<BrowserAnnotationUi> = emptyList(),
     contextFiles: List<String> = emptyList(),
     planMode: Boolean = false,
     source: String? = null,
 ) {
     val context = LocalContext.current
-    var preview by remember { mutableStateOf<ImagePart?>(null) }
+    var preview by remember { mutableStateOf<ByteArray?>(null) }
     var expanded by remember(content) { mutableStateOf(false) }
     var hasOverflow by remember(content) { mutableStateOf(false) }
     // Starts settled unless the message was sent a moment ago; remembered, so
@@ -113,12 +134,65 @@ fun UserBubble(
                         )
                     }
                 }
-                if (attachments.isNotEmpty()) {
-                    Row(modifier = Modifier.padding(bottom = 6.dp)) {
+                if (attachments.isNotEmpty() || annotations.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.padding(bottom = 6.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                    ) {
                         attachments.forEach { att ->
                             val bytes = remember(att) { attachmentBytes(att.data) }
                             if (bytes != null) {
-                                AsyncImage(model = bytes, contentDescription = "Attachment", modifier = Modifier.size(80.dp).clip(RoundedCornerShape(12.dp)).clickable { preview = att }, contentScale = ContentScale.Crop)
+                                AsyncImage(
+                                    model = bytes,
+                                    contentDescription = "Attachment",
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { preview = bytes },
+                                    contentScale = ContentScale.Crop,
+                                )
+                            }
+                        }
+                        annotations.forEach { ann ->
+                            val shotBytes = remember(ann.screenshotBase64) {
+                                ann.screenshotBase64?.let { attachmentBytes(it) }
+                            }
+                            val label = remember(ann) {
+                                when {
+                                    ann.componentName != null && ann.sourceLocation != null -> "<${ann.componentName} />  •  ${ann.sourceLocation}"
+                                    ann.componentName != null -> "<${ann.componentName} />"
+                                    ann.sourceLocation != null -> ann.sourceLocation
+                                    else -> formatSelectorLabel(ann.selector)
+                                }
+                            }
+                            if (shotBytes != null) {
+                                AsyncImage(
+                                    model = shotBytes,
+                                    contentDescription = label,
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { preview = shotBytes },
+                                    contentScale = ContentScale.Crop,
+                                )
+                            } else {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(NewTheme.Raised)
+                                        .padding(6.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = label,
+                                        color = NewTheme.OnUserBubble.copy(alpha = 0.8f),
+                                        fontSize = 10.5.sp,
+                                        lineHeight = 14.sp,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                         }
                     }
@@ -184,10 +258,7 @@ fun UserBubble(
         }
     }
     val current = preview
-    if (current != null && attachments.contains(current)) {
-        val bytes = remember(current) { attachmentBytes(current.data) }
-        if (bytes != null) {
-            ImagePreviewDialog(image = bytes, onDismiss = { preview = null })
-        }
+    if (current != null) {
+        ImagePreviewDialog(image = current, onDismiss = { preview = null })
     }
 }

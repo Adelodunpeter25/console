@@ -30,6 +30,16 @@ data class ImagePart(
     val mimeType: String,
 ) : MessageContent
 
+@Serializable
+data class BrowserAnnotationUi(
+    val id: String,
+    val selector: String = "",
+    val componentName: String? = null,
+    val sourceLocation: String? = null,
+    val userComment: String = "",
+    val screenshotBase64: String? = null,
+)
+
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 @JsonClassDiscriminator("role")
@@ -45,6 +55,7 @@ data class UserMessage(
     override val createdAt: Long? = null,
     val content: String,
     val attachments: List<ImagePart> = emptyList(),
+    val annotations: List<BrowserAnnotationUi> = emptyList(),
     val contextFiles: List<String> = emptyList(),
     /** Mode the turn ran under; null for messages stored before the server recorded it. */
     val approvalMode: String? = null,

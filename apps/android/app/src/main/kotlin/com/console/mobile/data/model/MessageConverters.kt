@@ -21,6 +21,15 @@ private fun bytesToJson(bytes: okio.ByteString): JsonElement? = try {
 private fun console.v1.ImageAttachment.toUi(): ImagePart =
     ImagePart(data = data_, mimeType = mime_type)
 
+private fun console.v1.BrowserAnnotation.toUi(): BrowserAnnotationUi = BrowserAnnotationUi(
+    id = id,
+    selector = selector,
+    componentName = component_name,
+    sourceLocation = source_location,
+    userComment = user_comment,
+    screenshotBase64 = screenshot_base64,
+)
+
 internal fun console.v1.ToolCall.toUi(): ToolCall = ToolCall(
     id = id,
     name = name,
@@ -75,6 +84,7 @@ fun WireMessage.toUi(): AgentMessage? = when (val event = message) {
         createdAt = created_at,
         content = event.value.content,
         attachments = event.value.attachments.map { it.toUi() },
+        annotations = event.value.annotations.map { it.toUi() },
         contextFiles = event.value.context_files,
         approvalMode = event.value.approval_mode,
         source = event.value.source,

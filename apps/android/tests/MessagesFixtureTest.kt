@@ -68,12 +68,15 @@ class MessagesFixtureTest {
     }
 
     @Test
-    fun ignoresUnknownFields() {
+    fun decodesAnnotationsAndIgnoresUnknownFields() {
         val ui = messageAdapter.fromJson(
-            "{\"user\":{\"content\":\"x\",\"annotations\":[{\"id\":\"a\"}]},\"futureField\":1}",
+            "{\"user\":{\"content\":\"x\",\"annotations\":[{\"id\":\"a\",\"selector\":\"div.button\"}]},\"futureField\":1}",
         )!!.toUi()!!
         check(ui is com.console.mobile.data.model.UserMessage)
         assertEquals("x", ui.content)
+        assertEquals(1, ui.annotations.size)
+        assertEquals("a", ui.annotations[0].id)
+        assertEquals("div.button", ui.annotations[0].selector)
     }
 
     @Test
