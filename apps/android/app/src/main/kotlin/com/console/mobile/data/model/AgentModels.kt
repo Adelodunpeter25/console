@@ -31,7 +31,7 @@ data class ImagePart(
 ) : MessageContent
 
 @Serializable
-data class BrowserAnnotationUi(
+data class BrowserAnnotation(
     val id: String,
     val selector: String = "",
     val componentName: String? = null,
@@ -55,7 +55,7 @@ data class UserMessage(
     override val createdAt: Long? = null,
     val content: String,
     val attachments: List<ImagePart> = emptyList(),
-    val annotations: List<BrowserAnnotationUi> = emptyList(),
+    val annotations: List<BrowserAnnotation> = emptyList(),
     val contextFiles: List<String> = emptyList(),
     /** Mode the turn ran under; null for messages stored before the server recorded it. */
     val approvalMode: String? = null,

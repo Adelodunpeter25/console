@@ -30,7 +30,7 @@ import java.nio.ByteOrder
  */
 object SharedNative {
     /** Must match `ABI_VERSION` in `shared-native/src/shared.rs`. */
-    const val EXPECTED_ABI = 4
+    const val EXPECTED_ABI = 5
 
     /** Framed payloads start with `"CSHR"` and this version. */
     private const val MAGIC = 0x4353_4852
@@ -52,6 +52,7 @@ object SharedNative {
     private external fun formatContextWindow(tokens: Int): String?
     private external fun formatModelName(id: String): String?
     private external fun formatTokensPerSecond(rate: Double): String?
+    private external fun formatSelectorLabel(selector: String): String?
     private external fun parsePairingUrl(raw: String): ByteArray?
     private external fun splitPairingLine(raw: String): ByteArray?
     private external fun hostPort(address: String): String?
@@ -175,6 +176,9 @@ object SharedNative {
     /** "42.1 tok/s", or null when the rate is missing, non-finite or not positive. */
     fun tokensPerSecond(rate: Double?): String? =
         if (available) formatTokensPerSecond(rate ?: Double.NaN) else null
+
+    fun selectorLabel(selector: String): String? =
+        if (available) formatSelectorLabel(selector) else null
 
     // ── Pairing ───────────────────────────────────────────────────────────
 

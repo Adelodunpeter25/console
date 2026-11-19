@@ -35,7 +35,7 @@ const VERSION: u16 = 1;
 
 /// Bumped whenever a symbol is added, removed, or changes shape. Kotlin's
 /// `SharedNative.EXPECTED_ABI` must match.
-const ABI_VERSION: jint = 4;
+const ABI_VERSION: jint = 5;
 
 // ── Encoding ──────────────────────────────────────────────────────────────
 
@@ -224,6 +224,20 @@ pub extern "system" fn Java_com_console_mobile_SharedNative_formatTokensPerSecon
     crate::guard(std::ptr::null_mut(), || {
         let rate = if rate.is_nan() { None } else { Some(rate) };
         text(&mut env, throughput::format_tokens_per_second(rate))
+    })
+}
+
+/// `SharedNative.formatSelectorLabel(selector)`.
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_SharedNative_formatSelectorLabel(
+    mut env: JNIEnv,
+    _class: JClass,
+    selector: JString,
+) -> jstring {
+    crate::init_logging();
+    crate::guard(std::ptr::null_mut(), || {
+        let label = read(&mut env, &selector).map(|s| format::format_selector_label(&s));
+        text(&mut env, label)
     })
 }
 

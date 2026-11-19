@@ -38,30 +38,12 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.console.mobile.core.util.formatMessageTime
 import com.console.mobile.core.util.parseFileMentions
-import com.console.mobile.data.model.BrowserAnnotationUi
+import com.console.mobile.core.util.formatSelectorLabel
+import com.console.mobile.data.model.BrowserAnnotation
 import com.console.mobile.data.model.ImagePart
 import com.console.mobile.ui.components.ImagePreviewDialog
 import com.console.mobile.ui.components.attachmentBytes
 import com.console.mobile.ui.theme.NewTheme
-
-private fun formatSelectorLabel(selector: String): String {
-    val trimmed = selector.trim()
-    if (trimmed.isEmpty()) return ""
-    val leaf = trimmed.substringAfterLast('>').substringAfterLast('+').substringAfterLast('~').substringAfterLast(' ').trim()
-    if (leaf.startsWith('#')) return leaf
-    val base = leaf.substringBefore(':')
-    val pseudo = if (':' in leaf) ":" + leaf.substringAfter(':') else ""
-    val parts = base.split('.').filter { it.isNotEmpty() }
-    val out = StringBuilder()
-    if (!base.startsWith('.')) {
-        if (parts.isNotEmpty()) out.append(parts[0])
-        if (parts.size > 1) out.append('.').append(parts[1])
-    } else {
-        if (parts.isNotEmpty()) out.append('.').append(parts[0])
-    }
-    out.append(pseudo)
-    return if (out.isEmpty()) leaf else out.toString()
-}
 
 private const val SEND_ANIMATION_MS = 180
 private val SendRise = 10.dp
@@ -76,7 +58,7 @@ fun UserBubble(
     content: String,
     createdAt: Long?,
     attachments: List<ImagePart> = emptyList(),
-    annotations: List<BrowserAnnotationUi> = emptyList(),
+    annotations: List<BrowserAnnotation> = emptyList(),
     contextFiles: List<String> = emptyList(),
     planMode: Boolean = false,
     source: String? = null,

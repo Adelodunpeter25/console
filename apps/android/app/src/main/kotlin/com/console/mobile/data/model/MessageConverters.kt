@@ -21,7 +21,7 @@ private fun bytesToJson(bytes: okio.ByteString): JsonElement? = try {
 private fun console.v1.ImageAttachment.toUi(): ImagePart =
     ImagePart(data = data_, mimeType = mime_type)
 
-private fun console.v1.BrowserAnnotation.toUi(): BrowserAnnotationUi = BrowserAnnotationUi(
+private fun console.v1.BrowserAnnotation.toUi(): BrowserAnnotation = BrowserAnnotation(
     id = id,
     selector = selector,
     componentName = component_name,
