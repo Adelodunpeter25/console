@@ -101,7 +101,13 @@ impl Drop for HostGuard {
 }
 
 #[cfg(target_os = "macos")]
-fn ensure_host(row: &str, url: &str, window: &mut Window, cx: &mut App) -> Option<Rc<WebviewHost>> {
+fn ensure_host(
+    row: &str,
+    url: &str,
+    on_wheel: Option<WheelHandler>,
+    window: &mut Window,
+    cx: &mut App,
+) -> Option<Rc<WebviewHost>> {
     if let Some(existing) = HOSTS.with(|h| h.borrow().get(row).cloned()) {
         return Some(existing);
     }
@@ -110,10 +116,11 @@ fn ensure_host(row: &str, url: &str, window: &mut Window, cx: &mut App) -> Optio
     let nav_cx = cx.to_async();
     let ipc_cx = cx.to_async();
     let win_cx = cx.to_async();
+    let wheel_cx = cx.to_async();
     let content = HostContent {
         user_agent: None,
         initialization_script: Some(
-            "document.addEventListener('DOMContentLoaded',function(){var s=document.createElement('style');s.textContent='html,body{overflow:hidden!important}';document.head.appendChild(s);});".to_string(),
+            "document.addEventListener('DOMContentLoaded',function(){var s=document.createElement('style');s.textContent='html,body{overflow:hidden!important}';document.head.appendChild(s);});document.addEventListener('wheel',function(e){if(e.ctrlKey)return;window.ipc.postMessage(JSON.stringify({method:'console/wheel',params:{dy:e.deltaMode===1?e.deltaY*16:e.deltaY}}));e.preventDefault();},{passive:false});".to_string(),
         ),
         html: None,
         allow_navigation: Some(Box::new(move |target| {
@@ -145,6 +152,21 @@ fn ensure_host(row: &str, url: &str, window: &mut Window, cx: &mut App) -> Optio
                             }
                         }
                         let _ = ipc_cx.update(|cx| cx.refresh_windows());
+                    }
+                }
+                "console/wheel" => {
+                    if let (Some(handler), Some(dy)) = (
+                        &on_wheel,
+                        val.get("params")
+                            .and_then(|p| p.get("dy"))
+                            .and_then(|d| d.as_f64()),
+                    ) {
+                        let handler = handler.clone();
+                        let dy = dy as f32;
+                        let _ = wheel_cx.update(|cx| {
+                            handler(dy);
+                            cx.refresh_windows();
+                        });
                     }
                 }
                 "console/open-link" => {
@@ -189,7 +211,11 @@ pub struct HtmlCard {
     artifact: HtmlArtifact,
     on_open_browser: Option<HtmlActionHandler>,
     on_open_editor: Option<HtmlActionHandler>,
+    on_wheel: Option<WheelHandler>,
 }
+
+/// Receives vertical wheel deltas the page could not use, in pixels (positive scrolls down).
+pub type WheelHandler = Rc<dyn Fn(f32)>;
 
 impl HtmlCard {
     pub fn new(row: impl Into<String>, artifact: HtmlArtifact) -> Self {
@@ -198,6 +224,7 @@ impl HtmlCard {
             artifact,
             on_open_browser: None,
             on_open_editor: None,
+            on_wheel: None,
         }
     }
 
@@ -208,6 +235,11 @@ impl HtmlCard {
 
     pub fn on_open_editor(mut self, handler: Option<HtmlActionHandler>) -> Self {
         self.on_open_editor = handler;
+        self
+    }
+
+    pub fn on_wheel(mut self, handler: Option<WheelHandler>) -> Self {
+        self.on_wheel = handler;
         self
     }
 }
@@ -348,7 +380,7 @@ impl RenderOnce for HtmlCard {
             #[cfg(target_os = "macos")]
             {
                 if let Some(u) = &url {
-                    if let Some(host) = ensure_host(&self.row, u, window, cx) {
+                    if let Some(host) = ensure_host(&self.row, u, self.on_wheel.clone(), window, cx) {
                         let guarded = host.clone();
                         let _ = window.use_keyed_state(
                             ElementId::Name(format!("html-host-guard-{}", self.row).into()),

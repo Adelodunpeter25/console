@@ -362,6 +362,9 @@ fn render_run_block(
     let visual_selection = view_ref.selection.clone();
     let on_open_browser = view_ref.on_open_url_raw.clone();
     let on_open_editor = view_ref.on_open_html_editor.clone();
+    let wheel_list = view_ref.list_state.clone();
+    let on_wheel: crate::chat::html::WheelHandler =
+        std::rc::Rc::new(move |dy| wheel_list.scroll_by(px(dy)));
     let run_id = block.run_id.clone();
     let mut segment = div().w_full().flex().flex_col().gap(px(6.0));
     if let Some(label) = block.divider_label {
@@ -400,6 +403,7 @@ fn render_run_block(
             crate::chat::html::HtmlCard::new(call_id, html)
                 .on_open_browser(on_open_browser.clone())
                 .on_open_editor(on_open_editor.clone())
+                .on_wheel(Some(on_wheel.clone()))
         }))
         .into_any_element()
 }
