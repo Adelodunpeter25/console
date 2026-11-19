@@ -569,6 +569,7 @@ impl ComposerView {
                                 format!("composer-annotation-{}", ann.id).into(),
                             ))
                             .flex_none()
+                            .max_w(px(260.0))
                             .flex()
                             .items_center()
                             .gap(px(4.0))
@@ -581,6 +582,9 @@ impl ComposerView {
                             .tooltip(Tooltip::text(tooltip))
                             .child(
                                 div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
                                     .text_size(px(11.5))
                                     .text_color(theme.text_secondary)
                                     .child(label),

@@ -129,6 +129,7 @@ pub fn queued_prompt_row(
                     el.child(
                         div()
                             .flex_shrink_0()
+                            .max_w(px(180.0))
                             .px(px(6.0))
                             .py(px(2.0))
                             .rounded(px(10.0))
@@ -136,11 +137,12 @@ pub fn queued_prompt_row(
                             .border_color(theme.border)
                             .text_size(px(10.5))
                             .text_color(theme.text_secondary)
+                            .truncate()
                             .child(
                                 ann.component_name
                                     .as_deref()
-                                    .unwrap_or(&ann.selector)
-                                    .to_string(),
+                                    .map(|c| c.to_string())
+                                    .unwrap_or_else(|| console_shared::format::format_selector_label(&ann.selector)),
                             ),
                     )
                 })

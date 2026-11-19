@@ -495,7 +495,7 @@ impl RenderOnce for UserMessageBubble {
                                                 (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
                                                 (Some(c), None) => format!("<{c} />"),
                                                 (None, Some(s)) => s.clone(),
-                                                (None, None) => ann.selector.clone(),
+                                                (None, None) => console_shared::format::format_selector_label(&ann.selector),
                                             };
                                         let thumb =
                                             ann.screenshot_base64.as_ref().and_then(|b64| {

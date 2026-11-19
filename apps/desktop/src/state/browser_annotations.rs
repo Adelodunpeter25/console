@@ -208,12 +208,18 @@ impl ConsoleDesktopApp {
                     (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
                     (Some(c), None) => format!("<{c} />"),
                     (None, Some(s)) => s.clone(),
+                    (None, None) => console_shared::format::format_selector_label(&ann.selector),
+                };
+                let full_target = match (&ann.component_name, &ann.source_location) {
+                    (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
+                    (Some(c), None) => format!("<{c} />"),
+                    (None, Some(s)) => s.clone(),
                     (None, None) => ann.selector.clone(),
                 };
                 let tooltip = if ann.user_comment.trim().is_empty() {
-                    label.clone()
+                    full_target
                 } else {
-                    format!("{label}\n{}", ann.user_comment.trim())
+                    format!("{full_target}\n{}", ann.user_comment.trim())
                 };
                 console_ui::ComposerAnnotation::new(
                     ann.id.clone(),
