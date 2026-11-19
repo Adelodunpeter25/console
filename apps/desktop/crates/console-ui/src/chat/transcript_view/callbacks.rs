@@ -68,7 +68,9 @@ impl TranscriptView {
         &mut self,
         handler: impl Fn(String, &mut Window, &mut App) + 'static,
     ) {
-        self.on_open_html_editor = Some(Rc::new(handler));
+        let handler: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = Rc::new(handler);
+        crate::markdown::render::set_html_link_editor(handler.clone());
+        self.on_open_html_editor = Some(handler);
     }
 
     pub(super) fn rebuild_link_handler(&mut self) {

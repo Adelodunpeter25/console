@@ -920,6 +920,21 @@ pub fn context_menu<E>(
 where
     E: ParentElement + Styled + InteractiveElement + IntoElement + 'static,
 {
+    context_menu_where(element, id, handle, |_| true, items)
+}
+
+/// [`context_menu`] that only opens when `hit` accepts the pointer position,
+/// for elements where just part of the surface (one link in a paragraph) has a menu.
+pub fn context_menu_where<E>(
+    element: E,
+    id: impl Into<ElementId>,
+    handle: &ContextMenuHandle,
+    hit: impl Fn(Point<Pixels>) -> bool + 'static,
+    items: impl Fn(&mut App) -> Vec<MenuItem> + 'static,
+) -> AnyElement
+where
+    E: ParentElement + Styled + InteractiveElement + IntoElement + 'static,
+{
     let id: ElementId = id.into();
     let open_at = handle.state.borrow().open;
     let handle_for_down = handle.clone();
@@ -930,6 +945,9 @@ where
         .on_mouse_down(
             MouseButton::Right,
             move |event: &MouseDownEvent, window, cx| {
+                if !hit(event.position) {
+                    return;
+                }
                 open_menu(
                     &handle_for_down,
                     event.position,

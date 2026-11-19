@@ -30,7 +30,7 @@ use gpui::{
     relative, size,
 };
 
-use super::file_links::{is_file_link, is_http_url, strip_line_suffix};
+use super::file_links::{is_file_link, is_html_link, is_http_url, strip_line_suffix};
 use super::highlight::TokenClass;
 use super::math::{self, MathMode};
 use super::mend::PENDING_LINK_URL;
@@ -881,6 +881,7 @@ fn text_element_with_selection(
     let styled = StyledText::new(flat.text.clone()).with_runs(runs);
     let layout = styled.layout().clone();
 
+    let menu_browser = link_handler.clone();
     let body: AnyElement = if flat.links.is_empty() {
         styled.into_any_element()
     } else {
@@ -958,7 +959,96 @@ fn text_element_with_selection(
     if !flat.icons.is_empty() {
         container = container.child(icon_overlay(flat.icons.clone(), layout.clone()));
     }
-    container.into_any_element()
+    let html_links: Vec<(Range<usize>, String)> = flat
+        .links
+        .iter()
+        .filter(|(_, url)| !is_http_url(url) && is_file_link(url) && is_html_link(url))
+        .cloned()
+        .collect();
+    let Some(open_browser) = menu_browser.filter(|_| !html_links.is_empty()) else {
+        return container.into_any_element();
+    };
+    HtmlLinkMenu {
+        container,
+        id: SharedString::from(format!("html-link-menu-{}-t{}", key.row, key.index)),
+        layout,
+        links: html_links,
+        open_browser,
+    }
+    .into_any_element()
+}
+
+thread_local! {
+    static HTML_LINK_EDITOR: std::cell::RefCell<Option<Rc<dyn Fn(String, &mut Window, &mut gpui::App)>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Registers what "Open in editor" does for an HTML link in the transcript.
+pub fn set_html_link_editor(handler: Rc<dyn Fn(String, &mut Window, &mut gpui::App)>) {
+    HTML_LINK_EDITOR.with(|slot| *slot.borrow_mut() = Some(handler));
+}
+
+/// Paragraph with a right-click menu (browser / editor) on its HTML links.
+#[derive(IntoElement)]
+struct HtmlLinkMenu {
+    container: gpui::Div,
+    id: SharedString,
+    layout: TextLayout,
+    links: Vec<(Range<usize>, String)>,
+    open_browser: LinkHandler,
+}
+
+impl gpui::RenderOnce for HtmlLinkMenu {
+    fn render(self, window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
+        use crate::primitives::menu::{ContextMenuHandle, MenuItem, context_menu_where};
+        let id: gpui::ElementId = self.id.clone().into();
+        let handle: ContextMenuHandle = window
+            .use_keyed_state(id.clone(), cx, |_, cx| ContextMenuHandle::new(cx))
+            .read(cx)
+            .clone();
+        let target: Rc<std::cell::RefCell<Option<String>>> = Rc::default();
+        let hit_target = target.clone();
+        let layout = self.layout;
+        let links = self.links;
+        let open_browser = self.open_browser;
+        context_menu_where(
+            self.container,
+            id,
+            &handle,
+            move |position| {
+                let index = layout.index_for_position(position).unwrap_or_else(|i| i);
+                let found = links
+                    .iter()
+                    .find(|(range, _)| range.contains(&index))
+                    .map(|(_, url)| url.clone());
+                let hit = found.is_some();
+                *hit_target.borrow_mut() = found;
+                hit
+            },
+            move |_| {
+                let Some(url) = target.borrow().clone() else {
+                    return Vec::new();
+                };
+                let browser_url = url.clone();
+                let browser = open_browser.clone();
+                let mut items = vec![
+                    MenuItem::new("Open in browser", move |window, cx| {
+                        browser(&browser_url, window, cx)
+                    })
+                    .icon(crate::primitives::IconName::Globe.path()),
+                ];
+                if let Some(editor) = HTML_LINK_EDITOR.with(|slot| slot.borrow().clone()) {
+                    items.push(
+                        MenuItem::new("Open in editor", move |window, cx| {
+                            editor(url.clone(), window, cx)
+                        })
+                        .icon(crate::primitives::IconName::File.path()),
+                    );
+                }
+                items
+            },
+        )
+    }
 }
 
 /// The icon for one slot. A favicon that has not arrived (or never will)
