@@ -4,8 +4,7 @@ use console_ui::workspace::EmptyChatState;
 use console_ui::{
     AutomationsPill, ComposerView, ModelDropdownMenu, PickerTab, QuestionInteractionCard,
     ShellEntry, ShellsPill, SubagentsPill, SuggestionsPill, TasksPill, Theme, WorkspaceFooter,
-    centered_stripe,
-    composer_pills, error_banner, notice_banner, queued_prompts_stack,
+    centered_stripe, composer_pills, error_banner, notice_banner, queued_prompts_stack,
 };
 use gpui::{
     App, AppContext, Context, InteractiveElement, IntoElement, ParentElement,
@@ -1020,8 +1019,8 @@ impl ConsoleDesktopApp {
                     }),
                 }
             });
-        let automations_pill =
-            (!snapshot.automations.is_empty() || !snapshot.webhooks.is_empty()).then(|| {
+        let automations_pill = (!snapshot.automations.is_empty() || !snapshot.webhooks.is_empty())
+            .then(|| {
                 let entity_pause = entity.clone();
                 let entity_resume = entity.clone();
                 let entity_del_auto = entity.clone();
@@ -1063,6 +1062,7 @@ impl ConsoleDesktopApp {
             suggestions_pill,
             &pills_scroll,
             theme,
+            cx,
         );
 
         // Built before the composer's `.when` closure so the closure only
@@ -1336,8 +1336,18 @@ impl ConsoleDesktopApp {
         let is_multi = question.is_multi_select.unwrap_or(false);
         let is_approve_deny = !is_multi
             && question.options.as_ref().map(|o| o.len()).unwrap_or(0) == 2
-            && question.options.as_ref().unwrap().iter().any(|o| o.eq_ignore_ascii_case("approve") || o.eq_ignore_ascii_case("allow"))
-            && question.options.as_ref().unwrap().iter().any(|o| o.eq_ignore_ascii_case("deny") || o.eq_ignore_ascii_case("decline"));
+            && question
+                .options
+                .as_ref()
+                .unwrap()
+                .iter()
+                .any(|o| o.eq_ignore_ascii_case("approve") || o.eq_ignore_ascii_case("allow"))
+            && question
+                .options
+                .as_ref()
+                .unwrap()
+                .iter()
+                .any(|o| o.eq_ignore_ascii_case("deny") || o.eq_ignore_ascii_case("decline"));
         let placeholder = if is_approve_deny {
             "Optional: reason or feedback to stay in plan mode..."
         } else {

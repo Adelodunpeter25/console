@@ -5,11 +5,12 @@
 //! is a compact left-aligned summary that opens the surface holding the full
 //! list; multiple kinds sit side by side, never stacked.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use console_core::{Automation, SubagentInfo, TodoItem, WebhookSubscription};
 use gpui::{
-    App, Div, ElementId, FontWeight, ParentElement, ScrollHandle, Stateful,
+    App, Div, ElementId, Entity, FontWeight, ParentElement, ScrollHandle, Stateful,
     StatefulInteractiveElement, Styled, Window, div, linear_color_stop, linear_gradient,
     prelude::*, px,
 };
@@ -28,6 +29,9 @@ pub(crate) type ActionHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'stat
 /// Every pill in the row, status and suggestion alike, is this tall so they
 /// read as one set and match the 31px scroll controls.
 const PILL_HEIGHT: f32 = 31.0;
+/// Hover widens a suggestion chip so its full text is readable.
+const SUGGESTION_COLLAPSED_WIDTH: f32 = 260.0;
+const SUGGESTION_EXPANDED_WIDTH: f32 = 420.0;
 type PickHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 
 /// Follow-up prompts that fill the rest of the row and scroll sideways.
@@ -92,6 +96,7 @@ pub fn composer_pills(
     suggestions: Option<SuggestionsPill>,
     scroll: &ScrollHandle,
     theme: Theme,
+    cx: &mut App,
 ) -> Option<Div> {
     if tasks.is_none()
         && subagents.is_none()
@@ -245,11 +250,14 @@ pub fn composer_pills(
                 .into_iter()
                 .enumerate()
                 .map(|(index, text)| {
+                    let hover = cx.new(|_| Cell::new(false));
                     suggestion_pill(
                         format!("{key}-suggestion-{index}"),
                         text,
                         on_pick.clone(),
+                        hover,
                         theme,
+                        cx,
                     )
                 }),
         );
@@ -428,12 +436,25 @@ fn pill(
 
 /// One follow-up chip: the pill shape of the status row, with an accent
 /// send button so it reads as clickable rather than informational.
-fn suggestion_pill(id: String, text: String, on_pick: PickHandler, theme: Theme) -> Stateful<Div> {
+fn suggestion_pill(
+    id: String,
+    text: String,
+    on_pick: PickHandler,
+    hover: Entity<Cell<bool>>,
+    theme: Theme,
+    cx: &App,
+) -> Stateful<Div> {
     let picked = text.clone();
+    let width_for_hover = hover.clone();
+    let set_hover = hover.clone();
     div()
         .id(ElementId::Name(id.into()))
         .flex_none()
-        .max_w(px(260.0))
+        .max_w(px(if width_for_hover.read(cx).get() {
+            SUGGESTION_EXPANDED_WIDTH
+        } else {
+            SUGGESTION_COLLAPSED_WIDTH
+        }))
         .flex()
         .items_center()
         .gap(px(7.0))
@@ -447,6 +468,12 @@ fn suggestion_pill(id: String, text: String, on_pick: PickHandler, theme: Theme)
         // to be blended onto `raised` or the chip turns see-through on hover.
         .hover(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
         .active(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
+        .on_hover(move |is_hovered, _, cx| {
+            let changed = set_hover.update(cx, |cell, _| cell.replace(*is_hovered) != *is_hovered);
+            if changed {
+                cx.notify(set_hover.entity_id());
+            }
+        })
         .on_click(move |_, window, cx| (on_pick)(picked.clone(), window, cx))
         .child(
             div()
