@@ -53,6 +53,7 @@ func evalJSON(t *testing.T, runtime *Runtime, code string) any {
 
 func TestConsoleSessionLifecycle(t *testing.T) {
 	runtime, sessions := newConsoleSessionRuntime(t, nil)
+	runtime.ceiling = "full-access"
 	created := evalJSON(t, runtime, `console.sessions.create({prompt:"inspect", cwd:"/tmp"})`).(map[string]any)
 	session, ok := created["session"].(map[string]any)
 	if !ok {
@@ -79,6 +80,7 @@ func TestConsoleSessionLifecycle(t *testing.T) {
 
 func TestConsoleSessionDeleteRefusesActiveSession(t *testing.T) {
 	runtime, _ := newConsoleSessionRuntime(t, func(string) bool { return true })
+	runtime.ceiling = "full-access"
 	created := evalJSON(t, runtime, `console.sessions.create({prompt:"active", cwd:"/tmp"})`).(map[string]any)
 	session := created["session"].(map[string]any)
 	id := session["id"].(string)
@@ -89,6 +91,7 @@ func TestConsoleSessionDeleteRefusesActiveSession(t *testing.T) {
 
 func TestConsoleProjectsAddAndList(t *testing.T) {
 	runtime, _ := newConsoleSessionRuntime(t, nil)
+	runtime.ceiling = "full-access"
 	directory := t.TempDir()
 	added := evalJSON(t, runtime, `console.projects.add({directory:"`+directory+`"})`).(map[string]any)
 	if added["path"] != directory {

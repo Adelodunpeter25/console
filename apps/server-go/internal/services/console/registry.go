@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 )
 
@@ -37,12 +38,12 @@ func consoleCatalog() []methodDef {
 	return []methodDef{
 		// Ports
 		{name: "ports.list", description: "List the ports forwarded for this project.", handler: (*Runtime).portsList},
-		{name: "ports.forward", description: "Forward a local port so it is reachable.", args: map[string]ArgSpec{"port": integer(true, "local port number, 1-65535")}, handler: (*Runtime).portsForward},
-		{name: "ports.unforward", description: "Remove a port forward.", args: map[string]ArgSpec{"port": integer(true, "local port number")}, handler: (*Runtime).portsUnforward},
+		{name: "ports.forward", description: "Forward a local port so it is reachable.", requiresFullAccess: true, args: map[string]ArgSpec{"port": integer(true, "local port number, 1-65535")}, handler: (*Runtime).portsForward},
+		{name: "ports.unforward", description: "Remove a port forward.", requiresFullAccess: true, args: map[string]ArgSpec{"port": integer(true, "local port number")}, handler: (*Runtime).portsUnforward},
 
 		// Scripts
 		{name: "scripts.list", description: "List the project's runnable scripts.", handler: (*Runtime).scriptsList},
-		{name: "scripts.run", description: "Run a project script by id.", args: map[string]ArgSpec{
+		{name: "scripts.run", description: "Run a project script by id.", requiresFullAccess: true, args: map[string]ArgSpec{
 			"id":      str(true, "script id from scripts.list"),
 			"wait_ms": integer(false, "milliseconds to wait for the run, capped at 10000"),
 		}, handler: (*Runtime).scriptsRun},
@@ -53,7 +54,7 @@ func consoleCatalog() []methodDef {
 			"cursor": integer(false, "byte offset to resume from"),
 			"limit":  integer(false, "max bytes to return"),
 		}, handler: (*Runtime).scriptsOutput},
-		{name: "scripts.stop", description: "Stop a running script.", args: map[string]ArgSpec{"run_id": str(true, "run id")}, handler: (*Runtime).scriptsStop},
+		{name: "scripts.stop", description: "Stop a running script.", requiresFullAccess: true, args: map[string]ArgSpec{"run_id": str(true, "run id")}, handler: (*Runtime).scriptsStop},
 
 		// Discovery
 		{name: "models", description: "List available providers and models, including thinking levels.", handler: (*Runtime).models},
@@ -68,7 +69,7 @@ func consoleCatalog() []methodDef {
 
 		// Projects
 		{name: "projects.list", description: "List registered projects.", handler: (*Runtime).projectsList},
-		{name: "projects.add", description: "Register a project directory.", args: map[string]ArgSpec{
+		{name: "projects.add", description: "Register a project directory.", requiresFullAccess: true, args: map[string]ArgSpec{
 			"directory": str(true, "absolute or relative path to the project directory"),
 			"name":      str(false, "display name; defaults to the directory base name"),
 		}, handler: (*Runtime).projectsAdd},
@@ -84,7 +85,7 @@ func consoleCatalog() []methodDef {
 			"before":          integer(false, "cursor from a previous read's nextCursor"),
 			"include_deleted": boolean(false, "read a soft-deleted session"),
 		}, handler: (*Runtime).sessionsRead},
-		{name: "sessions.delete", description: "Soft-delete a session; it must not be running.", args: map[string]ArgSpec{"session_id": str(true, "session id")}, handler: (*Runtime).sessionsDelete},
+		{name: "sessions.delete", description: "Soft-delete a session; it must not be running.", requiresFullAccess: true, args: map[string]ArgSpec{"session_id": str(true, "session id")}, handler: (*Runtime).sessionsDelete},
 		{name: "sessions.search", description: "Find messages containing every word of a query across sessions.", args: map[string]ArgSpec{
 			"query":           str(true, "words to search for, case-insensitive"),
 			"session_id":      str(false, "search one session"),
@@ -191,7 +192,7 @@ func consoleCatalog() []methodDef {
 		// MCP servers
 		{name: "mcp.list", description: "List configured MCP servers with their live connection status.", handler: (*Runtime).mcpListImpl},
 		{name: "mcp.tools", description: "One server's tool list and status.", args: map[string]ArgSpec{"id": str(true, "server id")}, handler: (*Runtime).mcpToolsImpl},
-		{name: "mcp.add", description: "Register an MCP server (needs full-access).", args: map[string]ArgSpec{
+		{name: "mcp.add", description: "Register an MCP server (needs full-access).", requiresFullAccess: true, args: map[string]ArgSpec{
 			"id":        str(true, "server id, [A-Za-z0-9_-]+"),
 			"transport": str(true, "http or stdio"),
 			"url":       str(false, "server URL for http transport"),
@@ -202,7 +203,7 @@ func consoleCatalog() []methodDef {
 			"auth":      str(false, "none, static or oauth2; tokens are managed in Settings"),
 			"enabled":   boolean(false, "start enabled"),
 		}, handler: (*Runtime).mcpAddImpl},
-		{name: "mcp.update", description: "Change an MCP server's config; absent keys keep their stored value (needs full-access).", args: map[string]ArgSpec{
+		{name: "mcp.update", description: "Change an MCP server's config; absent keys keep their stored value (needs full-access).", requiresFullAccess: true, args: map[string]ArgSpec{
 			"id":             str(true, "server id"),
 			"label":          str(false, "display label"),
 			"url":            str(false, "server URL"),
@@ -213,10 +214,10 @@ func consoleCatalog() []methodDef {
 			"tier_overrides": object(false, "map of tool name to read/write/exec"),
 			"enabled":        boolean(false, "enable or disable the server"),
 		}, handler: (*Runtime).mcpUpdateImpl},
-		{name: "mcp.remove", description: "Disconnect and delete an MCP server's config (needs full-access).", args: map[string]ArgSpec{"id": str(true, "server id")}, handler: (*Runtime).mcpRemoveImpl},
+		{name: "mcp.remove", description: "Disconnect and delete an MCP server's config (needs full-access).", requiresFullAccess: true, args: map[string]ArgSpec{"id": str(true, "server id")}, handler: (*Runtime).mcpRemoveImpl},
 		{name: "mcp.connect", description: "Connect an MCP server and wait briefly for it to settle.", args: map[string]ArgSpec{"id": str(true, "server id")}, handler: (*Runtime).mcpConnectImpl},
-		{name: "mcp.disconnect", description: "Close an MCP server's live session without touching its config.", args: map[string]ArgSpec{"id": str(true, "server id")}, handler: (*Runtime).mcpDisconnectImpl},
-		{name: "mcp.reset_auth", description: "Drop a server's stored credential so the next connect signs in afresh.", args: map[string]ArgSpec{"id": str(true, "server id")}, handler: (*Runtime).mcpResetAuthImpl},
+		{name: "mcp.disconnect", description: "Close an MCP server's live session without touching its config.", requiresFullAccess: true, args: map[string]ArgSpec{"id": str(true, "server id")}, handler: (*Runtime).mcpDisconnectImpl},
+		{name: "mcp.reset_auth", description: "Drop a server's stored credential so the next connect signs in afresh.", requiresFullAccess: true, args: map[string]ArgSpec{"id": str(true, "server id")}, handler: (*Runtime).mcpResetAuthImpl},
 		{name: "mcp.call", description: "Run one tool on an MCP server directly.", args: map[string]ArgSpec{
 			"id":   str(true, "server id"),
 			"tool": str(true, "tool name"),
@@ -239,6 +240,9 @@ func kernelMethods(r *Runtime) []jskernel.Method {
 			Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 				if err := jskernel.OnlyArgs(args, allowed...); err != nil {
 					return nil, err
+				}
+				if def.requiresFullAccess && permissions.Mode(r.ceiling) != permissions.FullAccess {
+					return nil, fmt.Errorf("console.%s requires full-access (plan mode is read-only); call requestFullAccess to request write access", def.name)
 				}
 				return def.handler(r, ctx, args)
 			},
