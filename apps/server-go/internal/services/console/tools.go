@@ -60,6 +60,10 @@ func (t *consoleTool) Methods() []string {
 	return MethodSignatures()
 }
 
+// PlanSafe lets plan mode invoke the console tool; per-method permissions are
+// enforced inside kernelMethods against the run's ceiling.
+func (t *consoleTool) PlanSafe() bool { return true }
+
 func (t *consoleTool) Execute(ctx context.Context, arguments json.RawMessage) (any, error) {
 	var in consoleInput
 	if err := json.Unmarshal(arguments, &in); err != nil {

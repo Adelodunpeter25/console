@@ -109,7 +109,7 @@ var Capabilities = []Capability{
 		Text:           console.SkillText,
 		AgentMayEnable: true,
 		AlwaysLoaded:   true,
-		Tier:           tools.TierExec,
+		Tier:           tools.TierRead,
 		GatedTools:     []string{"console"},
 		Methods:        console.MethodSignatures,
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
@@ -213,6 +213,11 @@ func (g *referenceGate) Execute(ctx context.Context, arguments json.RawMessage) 
 	}
 	return nil, tools.NewToolError("Not run: you called %s before reading the %s skill. It is loaded now; read it and call %s again.\n\n%s",
 		g.Name(), g.capability.Name, g.Name(), g.capability.Text())
+}
+
+func (g *referenceGate) PlanSafe() bool {
+	safe, ok := g.Tool.(tools.PlanSafe)
+	return ok && safe.PlanSafe()
 }
 
 func (g *referenceGate) Methods() []string {

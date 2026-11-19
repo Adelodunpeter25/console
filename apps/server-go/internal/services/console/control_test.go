@@ -435,6 +435,35 @@ func TestCatalogMatchesInstalledMethods(t *testing.T) {
 	}
 }
 
+func TestPlanModeAllowsSafeMethodsAndBlocksFullAccessMethods(t *testing.T) {
+	var aborted []string
+	runtime, _ := newControlRuntime(t, "plan-mode", &aborted)
+
+	// Allowed in plan mode: discovery, session creation, automations/webhooks.
+	evalJSON(t, runtime, `console.help({namespace:"automation"})`)
+	created := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp"})`).(map[string]any)
+	if created["approval_mode"] != "plan-mode" {
+		t.Fatalf("created approval_mode = %v, want plan-mode", created["approval_mode"])
+	}
+
+	// Blocked in plan mode: delete, ports.forward, scripts.run, projects.add, mcp.disconnect.
+	for _, call := range []string{
+		`console.sessions.delete({session_id:"s1"})`,
+		`console.ports.forward({port:3000})`,
+		`console.ports.unforward({port:3000})`,
+		`console.scripts.run({id:"dev"})`,
+		`console.scripts.stop({run_id:"r1"})`,
+		`console.projects.add({directory:"/tmp"})`,
+		`console.mcp.disconnect({id:"m1"})`,
+		`console.mcp.reset_auth({id:"m1"})`,
+	} {
+		err := evalErr(runtime, call)
+		if err == nil || !strings.Contains(err.Error(), "requires full-access") {
+			t.Fatalf("%s in plan-mode = %v, want requires full-access", call, err)
+		}
+	}
+}
+
 // Every catalog method rejects arguments it does not take, so a typo fails
 // with the accepted names instead of being silently ignored.
 func TestCatalogMethodsRejectUnknownArgs(t *testing.T) {

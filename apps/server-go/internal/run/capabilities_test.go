@@ -151,12 +151,12 @@ func TestBuiltinSkillsListFollowsTheMode(t *testing.T) {
 		}
 	}
 	plan := builtinSkillsSetup("plan-mode")
-	for _, want := range []string{"render", "browser-use"} {
+	for _, want := range []string{"render", "browser-use", "console"} {
 		if !strings.Contains(plan, want) {
-			t.Errorf("plan mode keeps read-tier %q:\n%s", want, plan)
+			t.Errorf("plan mode keeps %q:\n%s", want, plan)
 		}
 	}
-	for _, banned := range []string{"console", "computer-use"} {
+	for _, banned := range []string{"computer-use"} {
 		if strings.Contains(plan, banned) {
 			t.Errorf("plan mode must not list exec-tier %q:\n%s", banned, plan)
 		}

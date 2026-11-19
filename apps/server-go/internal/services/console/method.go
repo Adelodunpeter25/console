@@ -22,10 +22,11 @@ type ArgSpec struct {
 // truth — kernel registration, argument validation, help and describe all
 // read from it, so a method cannot drift between those surfaces.
 type methodDef struct {
-	name        string
-	description string
-	args        map[string]ArgSpec
-	handler     func(*Runtime, context.Context, map[string]any) (*jskernel.Result, error)
+	name               string
+	description        string
+	requiresFullAccess bool
+	args               map[string]ArgSpec
+	handler            func(*Runtime, context.Context, map[string]any) (*jskernel.Result, error)
 }
 
 // argNames lists the accepted argument names: required first, then optional.
