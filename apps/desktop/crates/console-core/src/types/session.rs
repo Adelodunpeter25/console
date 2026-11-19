@@ -44,7 +44,7 @@ impl SessionHeaderExt for SessionHeader {
     }
 
     fn sort_timestamp(&self) -> i64 {
-        self.created_at
+        self.updated_at.max(self.created_at)
     }
 
     fn is_pinned(&self) -> bool {

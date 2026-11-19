@@ -42,6 +42,7 @@ func (s *Service) AppendMessages(sessionID string, messages []types.AgentMessage
 		return err
 	}
 	inserted := 0
+	userInserted := 0
 	for _, msg := range messages {
 		id := msg.ID
 		if id == "" {
@@ -55,12 +56,17 @@ func (s *Service) AppendMessages(sessionID string, messages []types.AgentMessage
 		}
 		if added {
 			inserted++
+			if msg.Role == "user" {
+				userInserted++
+			}
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	s.bumpSessionUpdated(sessionID, now, inserted)
+	// Only a user prompt is activity: streamed assistant/tool messages must
+	// not reorder the sidebar while the user is reading the chat.
+	s.recordMessages(sessionID, now, inserted, userInserted > 0)
 	return nil
 }
 
@@ -112,6 +118,6 @@ func (s *Service) ReplaceMessages(sessionID string, messages []types.AgentMessag
 	}
 	// Images the old history held may no longer be referenced by anything.
 	s.sweepImages(sessionID, projectID, conn)
-	s.bumpSessionUpdated(sessionID, now, len(messages))
+	s.recordMessages(sessionID, now, len(messages), false)
 	return nil
 }
