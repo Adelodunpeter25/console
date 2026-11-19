@@ -40,7 +40,6 @@ internal fun ChatTranscript(
     onReply: ((String) -> Unit)? = null,
     onOpenHtmlPreview: (com.console.mobile.data.model.HtmlArtifact) -> Unit = {},
     onOpenHtmlEditor: (String) -> Unit = {},
-    onOpenHtmlExternal: (String) -> Unit = {},
 ) {
     LazyColumn(
         state = listState,
@@ -72,7 +71,6 @@ internal fun ChatTranscript(
                         activity = run,
                         onOpenHtmlPreview = onOpenHtmlPreview,
                         onOpenHtmlEditor = onOpenHtmlEditor,
-                        onOpenHtmlExternal = onOpenHtmlExternal,
                     )
                 }
             }
@@ -94,7 +92,6 @@ internal fun ChatTranscript(
                     activity = runs.last(),
                     onOpenHtmlPreview = onOpenHtmlPreview,
                     onOpenHtmlEditor = onOpenHtmlEditor,
-                    onOpenHtmlExternal = onOpenHtmlExternal,
                 )
             }
         }

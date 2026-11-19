@@ -25,6 +25,7 @@ fun HtmlPreviewWebView(
     path: String,
     modifier: Modifier = Modifier,
     onExternalUrl: ((String) -> Unit)? = null,
+    nestedInList: Boolean = false,
 ) {
     val pageUrl = remember(path) { AppContainer.consoleApi.fsHtmlUrl(path, theme = "dark") }
     val basePage = remember(pageUrl) { pageUrl.substringBefore('#') }
@@ -38,6 +39,14 @@ fun HtmlPreviewWebView(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
                 setBackgroundColor(Color.TRANSPARENT)
+                if (nestedInList) {
+                    // Inside the transcript list the page owns touches that start on it,
+                    // otherwise the list steals the drag and the page never scrolls.
+                    setOnTouchListener { v, _ ->
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                        false
+                    }
+                }
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = false

@@ -23,7 +23,6 @@ import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Code
 import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
-import io.github.lyxnx.compose.ui.tablericons.outline.ExternalLink
 
 /**
  * Full-screen sandboxed preview for a rendered HTML page, with quick actions
@@ -62,14 +61,6 @@ fun HtmlPreviewScreen(
                             onClick = {
                                 menuOpen = false
                                 onOpenEditor(path)
-                            },
-                        )
-                        OverflowMenuItem(
-                            label = "Open externally",
-                            icon = TablerIcons.Outline.ExternalLink,
-                            onClick = {
-                                menuOpen = false
-                                onOpenExternalUrl(AppContainer.consoleApi.fsHtmlUrl(path))
                             },
                         )
                     }

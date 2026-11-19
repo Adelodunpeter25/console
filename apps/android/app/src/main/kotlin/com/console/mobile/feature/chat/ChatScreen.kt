@@ -356,9 +356,6 @@ fun ChatScreen(
                         AppContainer.appStateHolder.openFile(path, forceEditor = true)
                         onOpenTab(MobileTab.Files)
                     },
-                    onOpenHtmlExternal = { path ->
-                        onOpenUrl(AppContainer.consoleApi.fsHtmlUrl(path))
-                    },
                 )
                 ScrollThumb(
                     state = transcriptScroll.listState,

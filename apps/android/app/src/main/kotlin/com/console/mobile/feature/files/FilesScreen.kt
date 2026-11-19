@@ -503,14 +503,6 @@ fun FilesScreen(onBack: () -> Unit) {
                                         },
                                     )
                                 }
-                                OverflowMenuItem(
-                                    label = "Open externally",
-                                    icon = TablerIcons.Outline.ExternalLink,
-                                    onClick = {
-                                        htmlMenuOpen = false
-                                        handOffToSystem(headerUriHandler, AppContainer.consoleApi.fsHtmlUrl(sel))
-                                    },
-                                )
                             }
                         }
                     }
@@ -520,6 +512,28 @@ fun FilesScreen(onBack: () -> Unit) {
                 ImagePreviewDialog(image = bytes, onDismiss = { zoomImage = null })
             }
         }
+        return
+    }
+
+    // A link to an HTML file asks how to open it before anything else shows, so
+    // the tree never flashes behind the chooser.
+    pendingHtmlChoice?.let { (choicePath, fromLink) ->
+        Box(modifier = Modifier.fillMaxSize().background(NewTheme.Black))
+        HtmlOpenChoiceDialog(
+            fileName = choicePath.substringAfterLast('/'),
+            onBrowser = {
+                pendingHtmlChoice = null
+                selectFile(choicePath, null, fromLink = fromLink, forceEditor = false)
+            },
+            onEditor = {
+                pendingHtmlChoice = null
+                selectFile(choicePath, null, fromLink = fromLink, forceEditor = true)
+            },
+            onDismiss = {
+                pendingHtmlChoice = null
+                onBack()
+            },
+        )
         return
     }
 
@@ -616,56 +630,6 @@ fun FilesScreen(onBack: () -> Unit) {
                 }
             }
         }
-        val choice = pendingHtmlChoice
-        if (choice != null) {
-            val (choicePath, fromLink) = choice
-            val choiceUriHandler = LocalUriHandler.current
-            AlertDialog(
-                onDismissRequest = { pendingHtmlChoice = null },
-                containerColor = NewTheme.Raised,
-                title = {
-                    Text(
-                        choicePath.substringAfterLast('/'),
-                        color = NewTheme.TextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        OverflowMenuItem(
-                            label = "Open in browser",
-                            icon = TablerIcons.Outline.Globe,
-                            onClick = {
-                                pendingHtmlChoice = null
-                                selectFile(choicePath, null, fromLink = fromLink, forceEditor = false)
-                            },
-                        )
-                        OverflowMenuItem(
-                            label = "Open in code editor",
-                            icon = TablerIcons.Outline.Code,
-                            onClick = {
-                                pendingHtmlChoice = null
-                                selectFile(choicePath, null, fromLink = fromLink, forceEditor = true)
-                            },
-                        )
-                        OverflowMenuItem(
-                            label = "Open externally",
-                            icon = TablerIcons.Outline.ExternalLink,
-                            onClick = {
-                                pendingHtmlChoice = null
-                                handOffToSystem(choiceUriHandler, AppContainer.consoleApi.fsHtmlUrl(choicePath))
-                            },
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { pendingHtmlChoice = null }) {
-                        Text("Cancel", color = NewTheme.TextSecondary)
-                    }
-                },
-            )
-        }
         @Suppress("UNUSED_EXPRESSION")
         fsState
     }
@@ -713,6 +677,31 @@ private fun FileDetailsCard(details: FileDetails, fileName: String, modifier: Mo
         }
         PreviewAction(text = "Open externally", icon = TablerIcons.Outline.ExternalLink, onClick = onOpenExternal, modifier = Modifier.padding(top = 16.dp))
     }
+}
+
+@Composable
+private fun HtmlOpenChoiceDialog(
+    fileName: String,
+    onBrowser: () -> Unit,
+    onEditor: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = NewTheme.Raised,
+        title = {
+            Text(fileName, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OverflowMenuItem(label = "Open in browser", icon = TablerIcons.Outline.Globe, onClick = onBrowser)
+                OverflowMenuItem(label = "Open in code editor", icon = TablerIcons.Outline.Code, onClick = onEditor)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = NewTheme.TextSecondary) }
+        },
+    )
 }
 
 @Composable
@@ -977,14 +966,6 @@ private fun TreeRowEntry(
                 onClick = {
                     htmlMenuOpen = false
                     onOpenHtmlEditor()
-                },
-            )
-            OverflowMenuItem(
-                label = "Open externally",
-                icon = TablerIcons.Outline.ExternalLink,
-                onClick = {
-                    htmlMenuOpen = false
-                    handOffToSystem(uriHandler, AppContainer.consoleApi.fsHtmlUrl(entry.path))
                 },
             )
         }

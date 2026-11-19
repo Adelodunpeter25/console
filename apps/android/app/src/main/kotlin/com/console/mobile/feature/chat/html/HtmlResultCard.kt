@@ -1,14 +1,12 @@
 package com.console.mobile.feature.chat.html
 
-import android.util.Base64
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,14 +22,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
 import com.console.mobile.data.model.HtmlArtifact
 import com.console.mobile.ui.components.common.new.OverflowMenu
 import com.console.mobile.ui.components.common.new.OverflowMenuItem
@@ -39,34 +33,27 @@ import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Code
 import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
-import io.github.lyxnx.compose.ui.tablericons.outline.ExternalLink
 import io.github.lyxnx.compose.ui.tablericons.outline.Globe
 
 /**
- * Transcript card for a `render` tool result. Shows the snapshot PNG when
- * available (or a compact interactive-page banner) and opens the sandboxed
- * preview screen, code editor, or external browser.
+ * Transcript card for a `render` tool result. Renders the page live in a
+ * sandboxed WebView; the menu opens it full screen or in the code editor.
  */
 @Composable
 fun HtmlResultCard(
     artifact: HtmlArtifact,
     onOpenPreview: (HtmlArtifact) -> Unit,
     onOpenEditor: (String) -> Unit,
-    onOpenExternal: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     val displayTitle = artifact.title.ifBlank { artifact.path.substringAfterLast('/') }
-    val snapshotBytes = remember(artifact.snapshotBase64) {
-        artifact.snapshotBase64?.let { runCatching { Base64.decode(it, Base64.DEFAULT) }.getOrNull() }
-    }
     var menuOpen by remember { mutableStateOf(false) }
+    val frameHeight = if (artifact.height > 0) artifact.height.coerceIn(160, 600) else 420
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            .clickable { onOpenPreview(artifact) },
+            .padding(vertical = 6.dp),
         color = NewTheme.Card,
         shape = RoundedCornerShape(NewTheme.CardRadius),
         border = BorderStroke(1.dp, NewTheme.Divider),
@@ -111,7 +98,7 @@ fun HtmlResultCard(
                     }
                     OverflowMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         OverflowMenuItem(
-                            label = "Open in browser",
+                            label = "Open full screen",
                             icon = TablerIcons.Outline.Globe,
                             onClick = {
                                 menuOpen = false
@@ -126,53 +113,18 @@ fun HtmlResultCard(
                                 onOpenEditor(artifact.path)
                             },
                         )
-                        OverflowMenuItem(
-                            label = "Open externally",
-                            icon = TablerIcons.Outline.ExternalLink,
-                            onClick = {
-                                menuOpen = false
-                                onOpenExternal(artifact.path)
-                            },
-                        )
                     }
                 }
             }
 
-            if (snapshotBytes != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(snapshotBytes).build(),
-                    contentDescription = displayTitle,
-                    contentScale = ContentScale.FillWidth,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 260.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                )
-            }
-
-            Surface(
-                color = NewTheme.Raised,
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        "Interactive HTML page",
-                        color = NewTheme.TextSecondary,
-                        fontSize = 12.sp,
-                    )
-                    Text(
-                        "Open preview →",
-                        color = NewTheme.Accent,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-            }
+            HtmlPreviewWebView(
+                path = artifact.path,
+                nestedInList = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(frameHeight.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+            )
         }
     }
 }

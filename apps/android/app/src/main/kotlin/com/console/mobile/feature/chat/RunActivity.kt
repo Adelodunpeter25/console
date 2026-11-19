@@ -260,7 +260,6 @@ fun RunVisuals(
     activity: RunActivityState,
     onOpenHtmlPreview: (com.console.mobile.data.model.HtmlArtifact) -> Unit = {},
     onOpenHtmlEditor: (String) -> Unit = {},
-    onOpenHtmlExternal: (String) -> Unit = {},
 ) {
     activity.events.forEach { e ->
         if (e is ActivityEvent.ToolCallEvent) {
@@ -270,7 +269,6 @@ fun RunVisuals(
                     artifact = it,
                     onOpenPreview = onOpenHtmlPreview,
                     onOpenEditor = onOpenHtmlEditor,
-                    onOpenExternal = onOpenHtmlExternal,
                 )
             }
         }
