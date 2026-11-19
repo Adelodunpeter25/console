@@ -380,12 +380,18 @@ mod macos_host {
                 self.set_clip_hidden(true);
                 return;
             }
-            let Some(parent) = (unsafe { self.wk.superview() }) else {
+            let mut slot = self.clip.borrow_mut();
+            // Once reparented, the webview's superview is our container, so the
+            // window-level parent has to come from the container.
+            let parent = match slot.as_ref() {
+                Some(c) => unsafe { c.superview() },
+                None => unsafe { self.wk.superview() },
+            };
+            let Some(parent) = parent else {
                 return;
             };
-            let mut slot = self.clip.borrow_mut();
             let container = match slot.as_ref() {
-                Some(c) if unsafe { c.superview() }.is_some() => c.clone(),
+                Some(c) => c.clone(),
                 _ => {
                     let Some(mtm) = MainThreadMarker::new() else {
                         return;
