@@ -40,7 +40,7 @@ pub async fn resolve_html_url(path: &str, is_dark: bool) -> Option<String> {
 
 #[derive(Default)]
 struct CardState {
-    expanded: bool,
+    collapsed: bool,
     measured_height: Option<f32>,
     url: Option<String>,
     url_loading: bool,
@@ -204,8 +204,8 @@ impl RenderOnce for HtmlCard {
         let (expanded, measured_height) = CARDS
             .lock()
             .ok()
-            .and_then(|m| m.get(&self.row).map(|s| (s.expanded, s.measured_height)))
-            .unwrap_or((false, None));
+            .and_then(|m| m.get(&self.row).map(|s| (!s.collapsed, s.measured_height)))
+            .unwrap_or((true, None));
 
         let display_title = if self.artifact.title.trim().is_empty() {
             std::path::Path::new(&self.artifact.path)
@@ -279,9 +279,9 @@ impl RenderOnce for HtmlCard {
                                 .on_mouse_down(MouseButton::Left, move |_, _window, cx| {
                                     if let Ok(mut map) = CARDS.lock() {
                                         let entry = map.entry(row_toggle.clone()).or_default();
-                                        entry.expanded = !entry.expanded;
+                                        entry.collapsed = !entry.collapsed;
                                         #[cfg(target_os = "macos")]
-                                        if !entry.expanded {
+                                        if entry.collapsed {
                                             HOSTS.with(|h| {
                                                 if let Some(host) = h.borrow().get(&row_toggle) {
                                                     host.set_visible(false);
