@@ -1017,6 +1017,18 @@ impl ConsoleDesktopApp {
                             });
                         }
                     }),
+                    on_edit: {
+                        let entity_edit = entity.clone();
+                        let pane_for_edit = pane_id.to_owned();
+                        Rc::new(move |prompt, _window, cx| {
+                            if let Some(app) = entity_edit.upgrade() {
+                                let pid = pane_for_edit.clone();
+                                app.update(cx, |this, cx| {
+                                    this.edit_suggestion_for_pane(&pid, prompt, cx);
+                                });
+                            }
+                        })
+                    },
                 }
             });
         let automations_pill = (!snapshot.automations.is_empty() || !snapshot.webhooks.is_empty())
@@ -1062,6 +1074,7 @@ impl ConsoleDesktopApp {
             suggestions_pill,
             &pills_scroll,
             theme,
+            window,
             cx,
         );
 

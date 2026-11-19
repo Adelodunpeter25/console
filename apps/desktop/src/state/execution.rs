@@ -400,6 +400,19 @@ impl ConsoleDesktopApp {
             .unwrap_or_default()
     }
 
+    /// Put a suggestion in the composer for editing, replacing any draft.
+    pub(crate) fn edit_suggestion_for_pane(
+        &mut self,
+        pane_id: &str,
+        prompt: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.composer_for_pane(pane_id).update(cx, |input, cx| {
+            input.set_content(prompt, cx);
+        });
+        cx.notify();
+    }
+
     /// A chip click sends the suggestion as a normal prompt in that pane.
     pub(crate) fn send_suggestion_for_pane(
         &mut self,

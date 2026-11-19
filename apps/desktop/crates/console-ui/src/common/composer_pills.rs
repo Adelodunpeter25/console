@@ -19,7 +19,7 @@ use crate::chat::change_chips::ChangesSummary;
 use crate::common::pill_popovers::{
     automations_popover, shells_popover, subagents_popover, tasks_popover,
 };
-use crate::primitives::menu::{ContextMenuHandle, MenuAlign, popover};
+use crate::primitives::menu::{ContextMenuHandle, MenuAlign, MenuItem, context_menu, popover};
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -38,6 +38,7 @@ type PickHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 pub struct SuggestionsPill {
     pub items: Vec<String>,
     pub on_pick: PickHandler,
+    pub on_edit: PickHandler,
 }
 
 /// The active task list plus the menu handle that anchors its popover to the
@@ -96,6 +97,7 @@ pub fn composer_pills(
     suggestions: Option<SuggestionsPill>,
     scroll: &ScrollHandle,
     theme: Theme,
+    window: &mut Window,
     cx: &mut App,
 ) -> Option<Div> {
     if tasks.is_none()
@@ -250,15 +252,48 @@ pub fn composer_pills(
                 .into_iter()
                 .enumerate()
                 .map(|(index, text)| {
+                    let menu_id = format!("{key}-suggestion-menu-{index}");
                     let hover = cx.new(|_| Cell::new(false));
-                    suggestion_pill(
+                    let chip = suggestion_pill(
                         format!("{key}-suggestion-{index}"),
-                        text,
+                        text.clone(),
                         on_pick.clone(),
                         hover,
                         theme,
                         cx,
+                    );
+                    let menu_handle = window
+                        .use_keyed_state(ElementId::Name(menu_id.clone().into()), cx, |_, cx| {
+                            ContextMenuHandle::new(cx)
+                        })
+                        .read(cx)
+                        .clone();
+                    let on_send = on_pick.clone();
+                    let on_edit = suggestions.on_edit.clone();
+                    let send_text = text.clone();
+                    let edit_text = text;
+                    context_menu(
+                        chip,
+                        ElementId::Name(menu_id.into()),
+                        &menu_handle,
+                        move |_| {
+                            let on_send = on_send.clone();
+                            let on_edit = on_edit.clone();
+                            let send_text = send_text.clone();
+                            let edit_text = edit_text.clone();
+                            vec![
+                                MenuItem::new("Send", move |window, cx| {
+                                    on_send(send_text.clone(), window, cx)
+                                })
+                                .icon(IconName::ArrowUp.path()),
+                                MenuItem::new("Edit Before Sending", move |window, cx| {
+                                    on_edit(edit_text.clone(), window, cx)
+                                })
+                                .icon(IconName::Pencil.path()),
+                            ]
+                        },
                     )
+                    .into_any_element()
                 }),
         );
     }
