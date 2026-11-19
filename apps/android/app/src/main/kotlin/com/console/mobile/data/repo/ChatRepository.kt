@@ -325,6 +325,20 @@ class ChatRepository(
         startRun(sessionId, prompt, attachments = emptyList(), contextFiles = emptyList(), clearComposer = false)
     }
 
+    /** Fill the composer with a suggestion for editing, replacing its draft. */
+    fun editSuggestion(sessionId: String, text: String) {
+        val prompt = text.trim()
+        if (prompt.isEmpty()) return
+        chats.update(sessionId) { current ->
+            current.copy(
+                input = prompt,
+                attachments = emptyList(),
+                draftUpdatedAt = System.currentTimeMillis(),
+            )
+        }
+        setSuggestions(sessionId, emptyList())
+    }
+
     fun loadSubagents(sessionId: String) {
         scope.launch {
             try {

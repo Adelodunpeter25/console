@@ -404,6 +404,7 @@ fun ChatScreen(
                     // meaningless mid-run, so both yield the row.
                     suggestions = if (chat.running || chat.queuedPrompt != null) emptyList() else chat.suggestions,
                     onSuggestion = { AppContainer.chatRepository.sendSuggestion(sessionId, it) },
+                    onEditSuggestion = { AppContainer.chatRepository.editSuggestion(sessionId, it) },
                     // The arrow half only shows while the reader is scrolled away
                     // from the latest message.
                     trailing = if (hasMessages) {

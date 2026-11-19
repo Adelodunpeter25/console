@@ -2,7 +2,9 @@ package com.console.mobile.feature.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -64,6 +68,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Bolt
 import io.github.lyxnx.compose.ui.tablericons.outline.Calendar
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.Edit
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerPause
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerPlay
 import io.github.lyxnx.compose.ui.tablericons.outline.X
@@ -182,6 +187,7 @@ fun ComposerPills(
     onChanges: () -> Unit,
     suggestions: List<String> = emptyList(),
     onSuggestion: (String) -> Unit = {},
+    onEditSuggestion: (String) -> Unit = {},
     trailing: (@Composable () -> Unit)? = null,
 ) {
     if (!showTasks && subagents.isEmpty() && shellCount == 0 && automationCount == 0 && webhookCount == 0 && changes.files == 0 && suggestions.isEmpty() && trailing == null) return
@@ -239,7 +245,11 @@ fun ComposerPills(
             // Follow-ups share the scroller, after the status pills, so a phone
             // keeps one row and the pills never lose their place.
             suggestions.forEach { text ->
-                SuggestionPill(text = text, onClick = { onSuggestion(text) })
+                SuggestionPill(
+                    text = text,
+                    onClick = { onSuggestion(text) },
+                    onLongClick = { onEditSuggestion(text) },
+                )
             }
         }
         // Sits on the same level as the pills, pinned to the right.
@@ -331,13 +341,15 @@ private fun Modifier.fadeScrollEdges(scroll: ScrollState, width: Dp = 28.dp): Mo
  * transcript show through.
  */
 @Composable
-private fun SuggestionPill(text: String, onClick: () -> Unit) {
+private fun SuggestionPill(text: String, onClick: () -> Unit, onLongClick: () -> Unit) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Box {
     Row(
         modifier = Modifier
             .widthIn(max = 260.dp)
             .clip(RoundedCornerShape(999.dp))
             .background(NewTheme.Raised)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
             .padding(start = 5.dp, end = 13.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -356,6 +368,19 @@ private fun SuggestionPill(text: String, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 8.dp),
         )
+    }
+    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+        DropdownMenuItem(
+            text = { Text("Send", color = NewTheme.TextPrimary) },
+            onClick = { menuOpen = false; onClick() },
+            leadingIcon = { Icon(TablerIcons.Outline.ArrowUp, contentDescription = null, tint = NewTheme.TextMuted) },
+        )
+        DropdownMenuItem(
+            text = { Text("Edit Before Sending", color = NewTheme.TextPrimary) },
+            onClick = { menuOpen = false; onLongClick() },
+            leadingIcon = { Icon(TablerIcons.Outline.Edit, contentDescription = null, tint = NewTheme.TextMuted) },
+        )
+    }
     }
 }
 
