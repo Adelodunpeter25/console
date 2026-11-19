@@ -89,6 +89,9 @@ type UserMessage struct {
 	// Synthetic marks a server-injected turn (e.g. background work finished)
 	// that the model sees but clients never render.
 	Synthetic bool `json:"synthetic,omitempty"`
+	// Source tags server-initiated turns (e.g. "automation", "webhook") so
+	// transcripts distinguish them from user-typed prompts.
+	Source string `json:"source,omitempty"`
 	// ApprovalMode is the mode the turn ran under, kept for display only.
 	ApprovalMode string `json:"approvalMode,omitempty"`
 }

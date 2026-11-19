@@ -48,6 +48,8 @@ data class UserMessage(
     val contextFiles: List<String> = emptyList(),
     /** Mode the turn ran under; null for messages stored before the server recorded it. */
     val approvalMode: String? = null,
+    /** Server-initiated turn source ("automation", "webhook"); null for user-typed prompts. */
+    val source: String? = null,
 ) : AgentMessage
 
 @Serializable

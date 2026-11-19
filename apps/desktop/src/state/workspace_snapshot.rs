@@ -10,7 +10,9 @@ use std::rc::Rc;
 
 use console_core::types::agent::AskQuestionRequest;
 use console_core::types::{ContextSnapshot, UsageReport};
-use console_core::{BackgroundWork, QueuedPrompt, SubagentInfo, TodoItem};
+use console_core::{
+    Automation, BackgroundWork, QueuedPrompt, SubagentInfo, TodoItem, WebhookSubscription,
+};
 use gpui::{Context, Window};
 
 use super::ConsoleDesktopApp;
@@ -40,6 +42,8 @@ pub(crate) struct PaneChatSnapshot {
     pub subagents: Rc<Vec<SubagentInfo>>,
     pub subagents_running: bool,
     pub shells: Vec<BackgroundWork>,
+    pub automations: Rc<Vec<Automation>>,
+    pub webhooks: Rc<Vec<WebhookSubscription>>,
     pub queued_prompts: Vec<QueuedPrompt>,
     pub suggestions: Vec<String>,
     pub pending_question: Option<AskQuestionRequest>,
@@ -89,6 +93,19 @@ impl ConsoleDesktopApp {
             .map(|sid| self.running_shells_for_session(sid))
             .unwrap_or_default();
 
+        let automations = Rc::new(
+            session_id
+                .as_deref()
+                .map(|sid| self.automations_for_session(sid))
+                .unwrap_or_default(),
+        );
+        let webhooks = Rc::new(
+            session_id
+                .as_deref()
+                .map(|sid| self.webhooks_for_session(sid))
+                .unwrap_or_default(),
+        );
+
         let usage_report = self
             .usage_reports
             .as_ref()
@@ -108,6 +125,8 @@ impl ConsoleDesktopApp {
             subagents,
             subagents_running,
             shells,
+            automations,
+            webhooks,
             queued_prompts: self.queued_prompts_for_pane(pane_id),
             suggestions: self.suggestions_for_pane(pane_id),
             pending_question: self.pending_question_for_pane(pane_id),
@@ -139,6 +158,12 @@ impl ConsoleDesktopApp {
         }
         if snapshot.shells.is_empty() && self.pane_shells_menu(pane_id).is_open() {
             self.pane_shells_menu(pane_id).close(window, cx);
+        }
+        if snapshot.automations.is_empty()
+            && snapshot.webhooks.is_empty()
+            && self.pane_automations_menu(pane_id).is_open()
+        {
+            self.pane_automations_menu(pane_id).close(window, cx);
         }
     }
 }

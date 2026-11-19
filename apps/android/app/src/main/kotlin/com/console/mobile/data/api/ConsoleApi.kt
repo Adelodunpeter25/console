@@ -2,7 +2,9 @@ package com.console.mobile.data.api
 
 import com.console.mobile.data.model.AnswerQuestionDto
 import com.console.mobile.data.model.ApprovalModeOption
+import com.console.mobile.data.model.Automation
 import com.console.mobile.data.model.BackgroundWork
+import com.console.mobile.data.model.WebhookSubscription
 import com.console.mobile.data.model.BackgroundWorkOutput
 import console.v1.ConsoleSettings
 import com.console.mobile.data.model.CreateSessionDto
@@ -206,5 +208,12 @@ interface ConsoleApi {
     suspend fun listScriptRuns(projectId: String, cwd: String? = null): List<ScriptRun>
     suspend fun getScriptRun(projectId: String, runId: String, cwd: String? = null): ScriptRun
     suspend fun stopScriptRun(projectId: String, runId: String, cwd: String? = null): Boolean
+    // automations & webhooks
+    suspend fun getAutomations(sessionId: String? = null): List<Automation>
+    suspend fun pauseAutomation(id: String): Automation
+    suspend fun resumeAutomation(id: String): Automation
+    suspend fun deleteAutomation(id: String)
+    suspend fun getWebhooks(sessionId: String? = null): List<WebhookSubscription>
+    suspend fun deleteWebhook(id: String)
 }
 

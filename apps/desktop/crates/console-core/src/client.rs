@@ -27,6 +27,8 @@ pub struct ConsoleClient {
     pub local_forwards: LocalForwardManager,
     pub scripts: ProjectScriptsService,
     pub mcp: McpService,
+    pub automations: AutomationService,
+    pub webhooks: WebhookService,
 }
 
 impl ConsoleClient {
@@ -63,6 +65,8 @@ impl ConsoleClient {
             local_forwards: LocalForwardManager::new(transport.clone()),
             scripts: ProjectScriptsService::new(transport.clone()),
             mcp: McpService::new(transport.clone()),
+            automations: AutomationService::new(transport.clone()),
+            webhooks: WebhookService::new(transport.clone()),
             transport,
         }
     }

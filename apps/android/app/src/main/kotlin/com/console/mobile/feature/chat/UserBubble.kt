@@ -13,7 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Bell
+import io.github.lyxnx.compose.ui.tablericons.outline.Bolt
+import io.github.lyxnx.compose.ui.tablericons.outline.Calendar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,6 +58,7 @@ fun UserBubble(
     attachments: List<ImagePart> = emptyList(),
     contextFiles: List<String> = emptyList(),
     planMode: Boolean = false,
+    source: String? = null,
 ) {
     val context = LocalContext.current
     var preview by remember { mutableStateOf<ImagePart?>(null) }
@@ -81,6 +87,32 @@ fun UserBubble(
                     .then(if (planMode) Modifier.planModeStripes() else Modifier)
                     .padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
+                val sourceBadge = when (source) {
+                    "automation" -> TablerIcons.Outline.Calendar to "Scheduled run"
+                    "webhook" -> TablerIcons.Outline.Bolt to "Webhook event"
+                    null, "" -> null
+                    else -> TablerIcons.Outline.Bell to source
+                }
+                if (sourceBadge != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    ) {
+                        Icon(
+                            sourceBadge.first,
+                            contentDescription = null,
+                            tint = NewTheme.Accent,
+                            modifier = Modifier.size(13.dp),
+                        )
+                        Text(
+                            sourceBadge.second,
+                            color = NewTheme.Accent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(start = 5.dp),
+                        )
+                    }
+                }
                 if (attachments.isNotEmpty()) {
                     Row(modifier = Modifier.padding(bottom = 6.dp)) {
                         attachments.forEach { att ->

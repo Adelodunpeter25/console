@@ -74,9 +74,10 @@ func (s *Service) ListPrompts(sessionID string) ([]PromptEntry, error) {
 			User *struct {
 				Content   string `json:"content"`
 				Synthetic bool   `json:"synthetic"`
+				Source    string `json:"source"`
 			} `json:"user"`
 		}
-		if json.Unmarshal([]byte(bodies[i]), &msg) != nil || msg.User == nil || msg.User.Synthetic {
+		if json.Unmarshal([]byte(bodies[i]), &msg) != nil || msg.User == nil || msg.User.Synthetic || msg.User.Source != "" {
 			continue
 		}
 		prompts = append(prompts, PromptEntry{ID: r.id, CreatedAt: r.createdAt, Preview: promptPreview(msg.User.Content)})

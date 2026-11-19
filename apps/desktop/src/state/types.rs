@@ -181,6 +181,8 @@ pub struct ConsoleDesktopApp {
     pub subagents_menu: ContextMenuHandle,
     /// Anchors the shells popover to this pane's shells pill.
     pub shells_menu: ContextMenuHandle,
+    /// Anchors the automations & webhooks popover to this pane's pill.
+    pub automations_menu: ContextMenuHandle,
     /// Shared with the sidebar and footer; cloned per frame as a refcount
     /// bump.
     pub projects: Rc<Vec<ProjectInfo>>,
@@ -318,6 +320,11 @@ pub struct ConsoleDesktopApp {
     pub(crate) file_tree_git_watch: Option<(String, gpui::Task<()>)>,
     /// One live forwarded-port SSE stream for the active backend environment.
     pub(crate) port_stream: Option<gpui::Task<()>>,
+    /// Live automations and webhook subscriptions fed by SSE streams.
+    pub automations: Vec<console_core::Automation>,
+    pub webhooks: Vec<console_core::WebhookSubscription>,
+    pub(crate) automation_stream: Option<gpui::Task<()>>,
+    pub(crate) webhook_stream: Option<gpui::Task<()>>,
     /// Trailing-debounce latch so bursts of fs events fetch the tree once.
     pub(crate) fs_tree_fetch_pending: bool,
     /// Fetched change list for each open "View all" review tab, keyed by the

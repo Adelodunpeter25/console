@@ -440,7 +440,11 @@ impl ConsoleDesktopApp {
                         this.stt_status = None;
                         this.refresh_stt_status(cx);
                         this.fetch_usage(cx);
+                        this.automations.clear();
+                        this.webhooks.clear();
                         this.init_port_stream(cx);
+                        this.init_automation_stream(cx);
+                        this.init_webhook_stream(cx);
                         // Favourites are stored per server; refetch from the
                         // one just activated (same shape as bootstrap step 3).
                         let favorites_client = client.clone();

@@ -60,6 +60,49 @@ func InitGlobalDB(db *sql.DB, path string) error {
 		CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
 		CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC);
 
+		-- Automations: server-side schedules an agent created for its own
+		-- session (console.automation.* tools). Global, not per-session: the
+		-- scanner sweeps due rows across all sessions in one query, and
+		-- schedules must survive server restarts independent of session DBs.
+		CREATE TABLE IF NOT EXISTS automations (
+			id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			prompt TEXT NOT NULL,
+			kind TEXT NOT NULL CHECK (kind IN ('once', 'interval')),
+			interval_seconds INTEGER,
+			run_at INTEGER,
+			next_run_at INTEGER NOT NULL,
+			status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'done', 'error')),
+			last_fired_at INTEGER,
+			last_error TEXT,
+			created_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_automations_due ON automations(status, next_run_at);
+		CREATE INDEX IF NOT EXISTS idx_automations_session ON automations(session_id);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_automations_one_active ON automations(session_id) WHERE status = 'active';
+
+		-- Webhook subscriptions: generic external event triggers an agent
+		-- creates for its own session (console.webhooks.*). Global so the
+		-- public ingress route can match incoming events across all sessions
+		-- and subscriptions survive server restarts.
+		CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+			id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			topic TEXT NOT NULL,
+			secret TEXT NOT NULL,
+			filter_json TEXT NOT NULL DEFAULT '{}',
+			prompt TEXT NOT NULL,
+			once INTEGER NOT NULL DEFAULT 1,
+			status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'done', 'expired', 'error')),
+			expires_at INTEGER,
+			last_fired_at INTEGER,
+			fire_count INTEGER NOT NULL DEFAULT 0,
+			last_error TEXT,
+			created_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_webhook_subs_topic ON webhook_subscriptions(topic, status);
+		CREATE INDEX IF NOT EXISTS idx_webhook_subs_session ON webhook_subscriptions(session_id);
+
 		CREATE TABLE IF NOT EXISTS model_favorites (
 			provider TEXT NOT NULL,
 			model_id TEXT NOT NULL,
@@ -317,6 +360,7 @@ func InitSessionDB(db *sql.DB, path string) error {
 			model_id TEXT,
 			provider TEXT,
 			approval_mode TEXT,
+			source TEXT,
 			created_at INTEGER NOT NULL
 		);
 		INSERT OR IGNORE INTO session_queue
@@ -352,6 +396,19 @@ func InitSessionDB(db *sql.DB, path string) error {
 	}
 	if userMsgCount == 0 {
 		if _, err := db.Exec(`ALTER TABLE session_file_changes ADD COLUMN user_message_id TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+
+	// Additive migration: add source to pre-existing session_queue rows.
+	var queueSourceCount int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('session_queue') WHERE name = 'source'`,
+	).Scan(&queueSourceCount); err != nil {
+		return err
+	}
+	if queueSourceCount == 0 {
+		if _, err := db.Exec(`ALTER TABLE session_queue ADD COLUMN source TEXT`); err != nil {
 			return err
 		}
 	}

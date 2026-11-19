@@ -142,6 +142,52 @@ func consoleCatalog() []methodDef {
 			"mode":       str(true, "plan-mode or full-access"),
 		}, handler: (*Runtime).sessionsSetApproval},
 
+		// Automations
+		{name: "automation.create", description: "Schedule future work on this session (once or interval); runs in this same thread with full context.", args: map[string]ArgSpec{
+			"prompt":           str(true, "prompt to run when the schedule fires"),
+			"kind":             str(true, "once or interval"),
+			"interval_seconds": integer(false, "repeat interval in seconds (required when kind is interval)"),
+			"run_at":           integer(false, "unix timestamp in seconds to fire (for kind once)"),
+			"in_seconds":       integer(false, "relative delay in seconds from now (alternative to run_at for kind once)"),
+		}, handler: (*Runtime).automationCreate},
+		{name: "automation.get", description: "Read one automation by id, or list this session's automations when id is omitted.", args: map[string]ArgSpec{
+			"id": str(false, "automation id"),
+		}, handler: (*Runtime).automationGet},
+		{name: "automation.update", description: "Update an active, paused, or errored automation and re-arm its next run from now.", args: map[string]ArgSpec{
+			"id":               str(true, "automation id"),
+			"prompt":           str(false, "new prompt"),
+			"kind":             str(false, "once or interval"),
+			"interval_seconds": integer(false, "new interval in seconds"),
+			"run_at":           integer(false, "new unix timestamp in seconds"),
+			"in_seconds":       integer(false, "relative delay in seconds from now (alternative to run_at for kind once)"),
+		}, handler: (*Runtime).automationUpdate},
+		{name: "automation.pause", description: "Pause an active automation on this session.", args: map[string]ArgSpec{
+			"id": str(true, "automation id"),
+		}, handler: (*Runtime).automationPause},
+		{name: "automation.resume", description: "Resume a paused or errored automation on this session.", args: map[string]ArgSpec{
+			"id": str(true, "automation id"),
+		}, handler: (*Runtime).automationResume},
+		{name: "automation.delete", description: "Delete an automation (call when a monitoring task is complete).", args: map[string]ArgSpec{
+			"id": str(true, "automation id"),
+		}, handler: (*Runtime).automationDelete},
+
+		// Webhooks
+		{name: "webhooks.subscribe", description: "Subscribe this session to incoming webhook events on a topic; wakes the session when a matching event arrives.", args: map[string]ArgSpec{
+			"topic":              str(true, "event topic slug, e.g. github, ci, deploy, custom"),
+			"prompt":             str(true, "prompt to run when a matching webhook arrives"),
+			"filter":             object(false, `optional JSON dot-path matchers, e.g. {"action":"completed","conclusion":["failure","timed_out"]}`),
+			"once":               boolean(false, "fire once and delete (default true), or false to keep listening"),
+			"expires_in_seconds": integer(false, "optional TTL in seconds before the subscription expires"),
+			"secret":             str(false, "optional shared secret / HMAC key; generated automatically when omitted"),
+		}, handler: (*Runtime).webhooksSubscribe},
+		{name: "webhooks.list", description: "List all webhook subscriptions on this session.", handler: (*Runtime).webhooksList},
+		{name: "webhooks.get", description: "Read one webhook subscription on this session by id.", args: map[string]ArgSpec{
+			"id": str(true, "subscription id"),
+		}, handler: (*Runtime).webhooksGet},
+		{name: "webhooks.unsubscribe", description: "Delete a webhook subscription on this session.", args: map[string]ArgSpec{
+			"id": str(true, "subscription id"),
+		}, handler: (*Runtime).webhooksUnsubscribe},
+
 		// MCP servers
 		{name: "mcp.list", description: "List configured MCP servers with their live connection status.", handler: (*Runtime).mcpListImpl},
 		{name: "mcp.tools", description: "One server's tool list and status.", args: map[string]ArgSpec{"id": str(true, "server id")}, handler: (*Runtime).mcpToolsImpl},

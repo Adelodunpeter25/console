@@ -17,7 +17,11 @@ func (s *Service) PromptSession(sessionID, text, modelID, provider, approval, th
 //
 // A busy session queues the prompt behind any the user already staged.
 func (s *Service) promptSession(sessionID, text, modelID, provider, approval, thinking string) (queued bool, err error) {
-	dto := Prompt{Text: text, ModelID: modelID, Provider: provider, ApprovalMode: approval, Thinking: thinking}
+	return s.promptSessionWithSource(sessionID, text, "", modelID, provider, approval, thinking)
+}
+
+func (s *Service) promptSessionWithSource(sessionID, text, source, modelID, provider, approval, thinking string) (queued bool, err error) {
+	dto := Prompt{Text: text, Source: source, ModelID: modelID, Provider: provider, ApprovalMode: approval, Thinking: thinking}
 
 	if !s.IsActive(sessionID) {
 		_, err := s.StartRun(sessionID, dto)
@@ -44,7 +48,9 @@ func (s *Service) promptSession(sessionID, text, modelID, provider, approval, th
 
 func mapPromptErr(sessionID string, err error) error {
 	if errors.Is(err, ErrNoSession) {
-		return fmt.Errorf("session %q not found", sessionID)
+		// %w keeps the sentinel so automation fires can tell a deleted
+		// session (permanent) from a transient failure.
+		return fmt.Errorf("session %q not found: %w", sessionID, ErrNoSession)
 	}
 	return err
 }

@@ -179,7 +179,7 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             // wrong user message. Mirrors the hasWorking guard in attachServerRun.
             val prompt = event.prompt
             val lastUser = session.messages.lastOrNull { it is UserMessage } as? UserMessage
-            if (!prompt.isNullOrBlank() && lastUser?.content != prompt) {
+            if (!prompt.isNullOrBlank() && (lastUser?.content != prompt || lastUser.source != event.source)) {
                 // The server drained a queued prompt as the next turn of this run:
                 // nothing on this device appended its bubble or opened its activity,
                 // so do both, closing the previous turn's activity first.
@@ -191,7 +191,7 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
                         elapsedMs = if (run.startedAt != null) now - run.startedAt else run.elapsedMs)
                 }
                 return closed.copy(
-                    messages = closed.messages + UserMessage(id = newMessageId(), createdAt = now, content = prompt),
+                    messages = closed.messages + UserMessage(id = newMessageId(), createdAt = now, content = prompt, source = event.source),
                     running = true,
                     activeToolCalls = emptyList(),
                     runs = closed.runs + RunActivityState(runId = newMessageId(), startedAt = now, status = RunStatus.Working),

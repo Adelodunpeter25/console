@@ -104,6 +104,7 @@ fun BackgroundWorkOutput?.applyFrame(frame: BackgroundWorkOutputFrame): Backgrou
 data class AgentSessionEvent(
     val type: String,
     val prompt: String? = null,
+    val source: String? = null,
     val turnId: String? = null,
     // Per-token delta: raw until consumed below; the payload is
     // console.v1.ModelStreamPart, decoded with Moshi in ChatEvents

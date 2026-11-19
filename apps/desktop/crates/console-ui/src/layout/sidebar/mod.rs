@@ -220,6 +220,10 @@ pub struct SidebarView {
     pub waiting_sessions: HashSet<String>,
     /// Unsent prompt drafts, each with preview and target session if any.
     pub draft_summaries: Vec<DraftSummary>,
+    /// Sessions with an active or paused automation.
+    pub automation_sessions: HashSet<String>,
+    /// Sessions with an active webhook subscription.
+    pub webhook_sessions: HashSet<String>,
     /// Whether the Pinned section is collapsed (rows hidden, sticky header
     /// chevron flipped).
     pub pinned_collapsed: bool,
@@ -311,6 +315,8 @@ impl SidebarView {
             running_sessions,
             waiting_sessions,
             draft_summaries,
+            automation_sessions: HashSet::new(),
+            webhook_sessions: HashSet::new(),
             pinned_collapsed,
             settled_collapsed,
             sidebar_list_state,
@@ -362,6 +368,16 @@ impl SidebarView {
         self.on_start_search = Some(Rc::new(on_start));
         self.on_clear_search = Some(Rc::new(on_clear));
         self.on_close_search = Some(Rc::new(on_close));
+        self
+    }
+
+    pub fn scheduled_sessions(
+        mut self,
+        automation_sessions: HashSet<String>,
+        webhook_sessions: HashSet<String>,
+    ) -> Self {
+        self.automation_sessions = automation_sessions;
+        self.webhook_sessions = webhook_sessions;
         self
     }
 }
@@ -561,6 +577,8 @@ impl RenderOnce for SidebarView {
         let list_running_sessions = running_sessions;
         let list_waiting_sessions = waiting_sessions;
         let list_draft_sessions = draft_sessions;
+        let list_automation_sessions = self.automation_sessions;
+        let list_webhook_sessions = self.webhook_sessions;
         let list_on_sel = on_sel;
         let list_on_open_in_new_window = on_open_in_new_window;
         let list_on_rename = on_rename;
@@ -602,6 +620,8 @@ impl RenderOnce for SidebarView {
                     let running_started_at = list_running_sessions.get(&session.id).copied();
                     let is_waiting = list_waiting_sessions.contains(&session.id);
                     let has_draft = list_draft_sessions.contains(&session.id);
+                    let has_automation = list_automation_sessions.contains(&session.id);
+                    let has_webhook = list_webhook_sessions.contains(&session.id);
                     render_sidebar_session_item(
                         session,
                         &list_projects,
@@ -609,6 +629,8 @@ impl RenderOnce for SidebarView {
                         running_started_at,
                         is_waiting,
                         has_draft,
+                        has_automation,
+                        has_webhook,
                         &list_on_sel,
                         &list_on_open_in_new_window,
                         &list_on_rename,

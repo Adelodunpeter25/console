@@ -20,11 +20,13 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/usage"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/stt"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
 )
 
 type Config struct {
@@ -78,8 +80,16 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	})
 	RegisterVersionRoutes(app)
 
-	// Authentication is protected by default. Pairing is the sole public
-	// application endpoint; health/version are registered above this boundary.
+	// Authentication is protected by default. Pairing and webhook ingress are
+	// registered above this boundary; webhooks authenticate per-subscription
+	// via secret/HMAC rather than a device token.
+	var runSvc *run.Service
+	RegisterWebhookRoutes(app, func(topic, subID string, headers map[string]string, queryToken string, body []byte) (int, error) {
+		if runSvc == nil {
+			return 0, run.ErrWebhooksUnavailable
+		}
+		return runSvc.DeliverWebhook(topic, subID, headers, queryToken, body)
+	})
 	tokenIssuer := cfg.TokenIssuer
 	if tokenIssuer == nil {
 		tokenIssuer = auth.NewTokenIssuer()
@@ -125,14 +135,22 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	RegisterSttRoutes(app, stt.NewClient(""))
 	RegisterGitHubRoutes(app)
 	registerProviderRoutes(app, services.NewFavoriteService(cfg.DB))
-	runSvc := run.NewService(services.NewSessionService(cfg.DB))
+	runSvc = run.NewService(services.NewSessionService(cfg.DB))
 	runSvc.SetNotifications(cfg.Notifications)
 	runSvc.SetMemories(memory.NewRegistry(""))
 	bashJobs := terminal.NewBashJobManager(cfg.Ports)
 	runSvc.SetBashJobs(bashJobs)
 	runSvc.SetPorts(cfg.Ports)
 	runSvc.SetProjectScripts(scriptsSvc)
+	autoStore := automations.New(cfg.DB.Global())
+	webhookStore := webhooks.New(cfg.DB.Global())
+	runSvc.SetAutomations(autoStore)
+	runSvc.SetWebhooks(webhookStore)
+	runSvc.SetWebhookBaseURL(defaultWebhookBaseURL)
 	runSvc.SetConsoleServices(projects)
+	RegisterAutomationRoutes(app, autoStore)
+	RegisterWebhookManagementRoutes(app, webhookStore, defaultWebhookBaseURL)
+	stopAutomationScanner := runSvc.StartAutomationScanner()
 	mcpManager := mcp.NewManager(mcp.NewConfigStore(""), mcp.NewCredentialStore(""), nil)
 	runSvc.SetMCP(mcpManager)
 	go mcpManager.AutoConnect()
@@ -173,6 +191,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	// scripts. Called once, after the HTTP listener drains, so "stop the
 	// server" really means stop everything — not just the API.
 	shutdown := func() {
+		stopAutomationScanner()
 		runSvc.AbortAll()
 		bashJobs.KillAll()
 		ptyManager.KillAll()

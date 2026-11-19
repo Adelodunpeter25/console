@@ -111,6 +111,15 @@ fun ChatScreen(
     var subagentPanelOpen by remember(sessionId) { mutableStateOf(false) }
     var selectedSubagentId by remember(sessionId) { mutableStateOf<String?>(null) }
     var shellSheet by remember { mutableStateOf(false) }
+    var automationsSheet by remember { mutableStateOf(false) }
+    val allAutomations by AppContainer.automationsRepository.automations.collectAsStateWithLifecycle()
+    val allWebhooks by AppContainer.automationsRepository.webhooks.collectAsStateWithLifecycle()
+    val sessionAutomations = remember(allAutomations, sessionId) {
+        allAutomations.filter { it.sessionId == sessionId && it.status != "done" }
+    }
+    val sessionWebhooks = remember(allWebhooks, sessionId) {
+        allWebhooks.filter { it.sessionId == sessionId && it.status != "done" && it.status != "expired" }
+    }
 
     // Leaving the chat pushes the draft right away instead of waiting out the debounce.
     DisposableEffect(sessionId) {
@@ -385,10 +394,14 @@ fun ChatScreen(
                     showTasks = hasActiveTodos,
                     subagents = subagents,
                     shellCount = liveShells.size,
+                    automationCount = sessionAutomations.size,
+                    webhookCount = sessionWebhooks.size,
+                    hasActiveAutomationOrWebhook = sessionAutomations.any { it.status == "active" } || sessionWebhooks.any { it.status == "active" },
                     changes = changeTotals,
                     onTasks = { todoSheet = true },
                     onSubagents = { subagentPanelOpen = !subagentPanelOpen },
                     onShells = { shellSheet = true },
+                    onAutomations = { automationsSheet = true },
                     onChanges = { jumpToProjectTab(MobileTab.Changes) },
                     // Queued prompts have already been committed to, and chips are
                     // meaningless mid-run, so both yield the row.
@@ -496,6 +509,17 @@ fun ChatScreen(
             works = liveShells,
             onCancel = { workId -> AppContainer.chatRepository.cancelBackgroundWork(sessionId, workId) },
             onDismiss = { shellSheet = false },
+        )
+    }
+    if (automationsSheet) {
+        AutomationsBottomSheet(
+            automations = sessionAutomations,
+            webhooks = sessionWebhooks,
+            onPauseAutomation = { id -> AppContainer.automationsRepository.pauseAutomation(id) },
+            onResumeAutomation = { id -> AppContainer.automationsRepository.resumeAutomation(id) },
+            onDeleteAutomation = { id -> AppContainer.automationsRepository.deleteAutomation(id) },
+            onDeleteWebhook = { id -> AppContainer.automationsRepository.deleteWebhook(id) },
+            onDismiss = { automationsSheet = false },
         )
     }
 

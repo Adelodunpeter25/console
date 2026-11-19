@@ -260,7 +260,11 @@ func WireFrame(e loop.Event) (string, any, bool) {
 	case loop.EventSessionStart:
 		return "sessionStart", map[string]any{"type": "sessionStart"}, false
 	case loop.EventTurnStart:
-		return "turnStart", map[string]any{"type": "turnStart", "prompt": e.Text}, false
+		frame := map[string]any{"type": "turnStart", "prompt": e.Text}
+		if e.Source != "" {
+			frame["source"] = e.Source
+		}
+		return "turnStart", frame, false
 	case loop.EventModelStreamStart:
 		return "modelStreamStart", map[string]any{"type": "modelStreamStart", "turnId": e.Text}, false
 	case loop.EventModelStreamPart:

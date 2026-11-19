@@ -262,37 +262,66 @@ func startRemoteAccess(listenAddr string) func() {
 	target := net.JoinHostPort("127.0.0.1", port)
 	dir := filepath.Join(utils.ConsoleStorageDir(), "tunnel")
 	if tunnel.IrohSelected() {
-		stop, err := tunnel.StartIroh(dir, target, func(id string) {
+		stopIroh, err := tunnel.StartIroh(dir, target, func(id string) {
 			// Record the backend before announcing readiness, so a pairing
 			// process reads iroh rather than a fallback's stale address.
 			_ = tunnel.SetBackend(dir, tunnel.BackendIroh)
 			slog.Info("remote access ready", "iroh_node_id", id)
 		})
 		if err == nil {
-			return stop
+			stopWebhookTunnel := func() {}
+			if webhookTunnelEnabled() {
+				stopWebhookTunnel = startOpenTunnel(dir, target, false)
+			}
+			return func() {
+				stopWebhookTunnel()
+				stopIroh()
+			}
 		}
 		slog.Warn("iroh unavailable, falling back to OpenTunnel", "error", err)
 	}
-	return startOpenTunnel(dir, target)
+	return startOpenTunnel(dir, target, true)
 }
 
-// startOpenTunnel opens the OpenTunnel backend and records it as active.
-func startOpenTunnel(dir, target string) func() {
+func webhookTunnelEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CONSOLE_WEBHOOK_TUNNEL"))) {
+	case "0", "off", "false", "no", "disabled":
+		return false
+	}
+	return true
+}
+
+// startOpenTunnel opens the OpenTunnel backend. When primary is true it records
+// OpenTunnel as the active pairing backend; when false it runs alongside iroh
+// solely to provide a public HTTPS URL for webhooks.
+func startOpenTunnel(dir, target string, primary bool) func() {
 	manager := &opentunnel.Manager{
 		API:    os.Getenv("CONSOLE_TUNNEL_API"),
 		Dir:    dir,
 		Target: target,
 		Logger: slog.Default(),
 		OnReady: func(url string) {
-			slog.Info("remote access ready", "url", url)
+			if primary {
+				slog.Info("remote access ready", "url", url)
+			} else {
+				slog.Info("webhook tunnel ready", "url", url)
+			}
 		},
 	}
 	if err := manager.Start(context.Background()); err != nil {
-		slog.Warn("remote access is unavailable", "error", err)
+		if primary {
+			slog.Warn("remote access is unavailable", "error", err)
+		} else {
+			slog.Warn("webhook tunnel is unavailable", "error", err)
+		}
 		return func() {}
 	}
-	_ = tunnel.SetBackend(dir, tunnel.BackendOpenTunnel)
-	slog.Info("remote access starting", "url", manager.URL())
+	if primary {
+		_ = tunnel.SetBackend(dir, tunnel.BackendOpenTunnel)
+		slog.Info("remote access starting", "url", manager.URL())
+	} else {
+		slog.Info("webhook tunnel starting", "url", manager.URL())
+	}
 	return manager.Close
 }
 

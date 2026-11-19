@@ -77,3 +77,27 @@ pub fn draft_badge(id: ElementId, theme: Theme) -> Stateful<Div> {
         .tooltip(Tooltip::text("Unsent draft"))
         .child(app_icon(IconName::Pencil, 12.0, theme.text_tertiary))
 }
+
+/// Marker shown next to a title when the chat has an active automation or webhook.
+pub fn scheduled_badge(
+    id: ElementId,
+    has_automation: bool,
+    has_webhook: bool,
+    theme: Theme,
+) -> Stateful<Div> {
+    let (icon, tip) = match (has_automation, has_webhook) {
+        (true, true) => (IconName::Calendar, "Active automation & webhook"),
+        (true, false) => (IconName::Calendar, "Scheduled automation"),
+        (false, true) => (IconName::Zap, "Active webhook subscription"),
+        (false, false) => (IconName::Calendar, ""),
+    };
+    div()
+        .id(id)
+        .size(px(STATUS_SLOT))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .tooltip(Tooltip::text(tip))
+        .child(app_icon(icon, 12.0, theme.accent))
+}

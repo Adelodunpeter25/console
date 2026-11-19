@@ -79,6 +79,7 @@ pub fn transcript_row(
             context_files,
             created_at,
             approval_mode,
+            source,
         } => {
             let expand_key = id.clone().unwrap_or_else(|| format!("message-{index}"));
             let user_expanded = view_ref.user_message_expanded(&expand_key);
@@ -86,6 +87,7 @@ pub fn transcript_row(
             let mut bubble = UserMessageBubble::new(content.clone())
                 .created_at(*created_at)
                 .plan_mode(approval_mode.as_deref() == Some(ApprovalMode::PlanMode.value()))
+                .source(source.clone())
                 .selection(view_ref.selection.clone(), format!("user-{index}"))
                 .expanded(user_expanded)
                 .on_toggle_expand(move |_window, cx| {

@@ -37,7 +37,7 @@ The API is large; do not guess method names or arguments. Look them up:
 - `console.describe({name: "sessions.create"})` — full argument docs and an
   example call for one method
 
-Namespaces: `ports`, `scripts`, `sessions`, `projects`, `mcp`, plus
+Namespaces: `ports`, `scripts`, `sessions`, `projects`, `automation`, `webhooks`, `mcp`, plus
 `models`, `approvalModes`, `help` and `describe` at the top level.
 
 ## Rules that always apply

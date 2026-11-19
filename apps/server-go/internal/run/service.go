@@ -16,11 +16,13 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/browseruse"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -56,6 +58,9 @@ type Prompt struct {
 	// Synthetic marks a server-initiated wake turn (finished background work
 	// continuing an idle session). Its text is built from the claimed work.
 	Synthetic bool
+	// Source tags server-initiated turns (e.g. "automation", "webhook") so
+	// transcripts distinguish them from user-typed prompts.
+	Source string
 	// woken lists the work that triggered a synthetic turn (wire event only).
 	woken []background.Work
 }
@@ -79,11 +84,16 @@ type Service struct {
 	memories   *memory.Registry
 	bashJobs   *terminalsvc.BashJobManager
 	background *background.Manager
-	ports      *terminalsvc.PortRegistry
-	scripts    *projectssvc.ProjectScriptsService
-	mcp        *mcp.Manager
-	prompts    promptCache
-	groups     toolGroups
+	// automations backs the console.automation.* tools and the fire scanner
+	// (nil-safe: tools report unavailable and the scanner does nothing).
+	automations *automations.Service
+	// webhooks backs the console.webhooks.* tools and public webhook ingress.
+	webhooks *webhooks.Service
+	ports       *terminalsvc.PortRegistry
+	scripts     *projectssvc.ProjectScriptsService
+	mcp         *mcp.Manager
+	prompts     promptCache
+	groups      toolGroups
 	// cuaManager owns the computer-use driver runtime (nil-safe when the
 	// library is absent: runs simply never activate computer use).
 	cuaManager *cua.Manager
@@ -252,6 +262,8 @@ func (s *Service) SetConsoleServices(projects *projectssvc.ProjectService) {
 	if manager != nil {
 		manager.SetSessions(sessions, projects, s.IsActive, s.abortAndClear, s.startConsoleSession, s.promptSession, console.QueueControl{Get: s.consoleQueued, Clear: s.ClearQueuedPrompt})
 		manager.SetBackgroundWork(s.BackgroundWorkManager)
+		manager.SetAutomations(s.automationStore())
+		manager.SetWebhooks(s.webhookStore())
 	}
 }
 

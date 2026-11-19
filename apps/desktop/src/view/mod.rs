@@ -50,6 +50,7 @@ impl Render for ConsoleDesktopApp {
         let workspace_root = self.workspace_root.clone();
         let active_pane = self.active_pane_id.clone();
         let sessions = self.sessions.clone();
+        let (automation_sessions, webhook_sessions) = self.scheduled_session_sets();
         // Shared "New Chat" action for the empty state's New Chat button. Opens
         // the floating composer, like ⌘N and the sidebar's New Task row, so the
         // project is picked in the card rather than inherited from the pane
@@ -701,6 +702,7 @@ impl Render for ConsoleDesktopApp {
                                 }
                             },
                         )
+                        .scheduled_sessions(automation_sessions, webhook_sessions)
                         .search(
                             self.sidebar_search_active,
                             self.sidebar_search_query.clone(),

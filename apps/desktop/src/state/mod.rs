@@ -7,6 +7,7 @@
 
 mod attachments;
 mod auth;
+mod automations;
 mod autocomplete;
 mod background_shells;
 mod bootstrap;

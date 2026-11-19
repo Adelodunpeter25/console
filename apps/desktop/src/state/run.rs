@@ -619,6 +619,7 @@ impl ConsoleDesktopApp {
             },
             created_at: Some(chrono::Utc::now().timestamp()),
             approval_mode: approval_mode.clone(),
+            source: None,
         };
         self.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
             t.push_message(user_msg, cx);
@@ -1218,8 +1219,30 @@ impl ConsoleDesktopApp {
                     }),
                 );
             }
-            AgentSessionEvent::TurnStart { .. } => {
+            AgentSessionEvent::TurnStart { prompt, source } => {
                 self.set_agent_notice_for_session(run_session_id, None);
+                if source.is_some() && pane_shows_run {
+                    let already_present = self
+                        .transcript_for_pane(run_pane_id)
+                        .read(cx)
+                        .has_trailing_user_message(&prompt, source.as_deref());
+                    if !already_present {
+                        let user_msg = console_core::AgentMessage::User {
+                            id: None,
+                            content: prompt,
+                            attachments: None,
+                            context_files: None,
+                            annotations: None,
+                            created_at: Some(chrono::Utc::now().timestamp()),
+                            approval_mode: None,
+                            source,
+                        };
+                        self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                            t.push_message(user_msg, cx);
+                            t.begin_streaming(cx);
+                        });
+                    }
+                }
             }
             AgentSessionEvent::ContextUpdate { context } => {
                 self.context_usage
@@ -1337,6 +1360,7 @@ impl ConsoleDesktopApp {
                             approval_mode: popped.approval_mode.clone().or_else(|| {
                                 Some(self.pane_approval_mode(run_pane_id).value().to_string())
                             }),
+                            source: None,
                         };
                         if pane_shows_run {
                             self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {

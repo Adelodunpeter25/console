@@ -19,6 +19,7 @@ fn user(created_at: Option<i64>) -> AgentMessage {
         annotations: None,
         created_at,
         approval_mode: None,
+        source: None,
     }
 }
 
@@ -151,6 +152,7 @@ fn next_user_message_still_terminates() {
             annotations: None,
             created_at: Some(300),
             approval_mode: None,
+            source: None,
         },
         assistant_with_tool(310, "c3"),
     ];

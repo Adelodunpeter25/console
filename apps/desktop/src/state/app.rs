@@ -29,6 +29,7 @@ pub(crate) fn user_prompt_history(messages: &[AgentMessage]) -> Vec<PromptHistor
                 id,
                 content,
                 context_files,
+                source: None,
                 ..
             } => Some(PromptHistoryEntry::new(
                 content.clone(),
@@ -315,6 +316,7 @@ impl ConsoleDesktopApp {
         let tasks_menu = ContextMenuHandle::new(cx);
         let subagents_menu = ContextMenuHandle::new(cx);
         let shells_menu = ContextMenuHandle::new(cx);
+        let automations_menu = ContextMenuHandle::new(cx);
 
         let drafts = startup.drafts;
         // Persisted drafts from closed tabs are shown in the sidebar.
@@ -622,6 +624,7 @@ impl ConsoleDesktopApp {
             tasks_menu,
             subagents_menu,
             shells_menu,
+            automations_menu,
             projects: Rc::new(Vec::new()),
             selected_project_id: initial_selected_project_id,
             branches: Rc::new(Vec::new()),
@@ -682,6 +685,10 @@ impl ConsoleDesktopApp {
             file_tree_fs_watch: None,
             file_tree_git_watch: None,
             port_stream: None,
+            automations: Vec::new(),
+            webhooks: Vec::new(),
+            automation_stream: None,
+            webhook_stream: None,
             fs_tree_fetch_pending: false,
             changes_review_data: std::collections::HashMap::new(),
             file_tree_data: std::collections::HashMap::new(),
@@ -870,6 +877,7 @@ impl ConsoleDesktopApp {
                 tasks_menu: app.tasks_menu.clone(),
                 subagents_menu: app.subagents_menu.clone(),
                 shells_menu: app.shells_menu.clone(),
+                automations_menu: app.automations_menu.clone(),
                 selected_project_id: app.selected_project_id.clone(),
                 branches: app.branches.clone(),
                 branch_loaded: app.branch_loaded,
@@ -897,6 +905,8 @@ impl ConsoleDesktopApp {
         // Port forwards can be created by the agent or another client. Keep the
         // title-bar popover synchronized without repeatedly probing the server.
         app.init_port_stream(cx);
+        app.init_automation_stream(cx);
+        app.init_webhook_stream(cx);
 
         app
     }
