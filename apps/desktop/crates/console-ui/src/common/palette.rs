@@ -552,14 +552,24 @@ impl CommandPaletteModal {
             &input,
             window,
             |this, input, event: &ComposerEvent, window, cx| {
-                if matches!(event, ComposerEvent::Edited) {
-                    this.selected = 0;
-                    this.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
-                    let query = input.read(cx).content().trim().to_string();
-                    if let Some(handler) = this.query_handler.clone() {
-                        handler(&query, window, cx);
+                match event {
+                    ComposerEvent::Edited => {
+                        this.selected = 0;
+                        this.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+                        let query = input.read(cx).content().trim().to_string();
+                        if let Some(handler) = this.query_handler.clone() {
+                            handler(&query, window, cx);
+                        }
+                        cx.notify();
                     }
-                    cx.notify();
+                    ComposerEvent::BackspaceOnEmpty => {
+                        if let Some(parent) = this.back_path.clone()
+                            && let Some(callback) = this.browse_callback.clone()
+                        {
+                            callback(&parent, window, cx);
+                        }
+                    }
+                    _ => {}
                 }
             },
         );

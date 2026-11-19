@@ -149,42 +149,25 @@ impl Render for ProjectBrowsePalette {
     }
 }
 
-/// Build clickable breadcrumb trail for `current_path`.
+/// Build clickable breadcrumb trail for `current_path` with root segments (e.g. Users).
 fn build_breadcrumbs(current_path: &str) -> Vec<PaletteBreadcrumb> {
     let mut crumbs = Vec::new();
-    crumbs.push(PaletteBreadcrumb::new("New project", None).icon(IconName::FolderNew));
-
     let home_path = console_shared::path::home_dir()
         .and_then(|h| h.into_os_string().into_string().ok());
 
-    if let Some(ref home) = home_path
-        && (current_path == home || current_path.starts_with(&format!("{home}/")))
-    {
-        crumbs.push(
-            PaletteBreadcrumb::new("Home", Some(home.clone()))
-                .icon(IconName::Home),
-        );
-
-        let rest = current_path.strip_prefix(home).unwrap_or("");
-        let mut accum = home.clone();
-        for seg in rest.split('/').filter(|s| !s.is_empty()) {
+    let mut accum = String::new();
+    let segments: Vec<&str> = current_path.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
+    for seg in segments {
+        if accum.is_empty() && current_path.starts_with('/') {
             accum.push('/');
-            accum.push_str(seg);
-            crumbs.push(PaletteBreadcrumb::new(seg.to_string(), Some(accum.clone())).icon(IconName::Folder));
+        } else if !accum.is_empty() && !accum.ends_with('/') {
+            accum.push('/');
         }
-    } else {
-        // Non-home root path (e.g. /var or Windows drive)
-        let mut accum = String::new();
-        let segments: Vec<&str> = current_path.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
-        for seg in segments {
-            if accum.is_empty() && current_path.starts_with('/') {
-                accum.push('/');
-            } else if !accum.is_empty() && !accum.ends_with('/') {
-                accum.push('/');
-            }
-            accum.push_str(seg);
-            crumbs.push(PaletteBreadcrumb::new(seg.to_string(), Some(accum.clone())).icon(IconName::Folder));
-        }
+        accum.push_str(seg);
+
+        let is_home = home_path.as_deref() == Some(&accum);
+        let icon = if is_home { IconName::Home } else { IconName::Folder };
+        crumbs.push(PaletteBreadcrumb::new(seg.to_string(), Some(accum.clone())).icon(icon));
     }
 
     crumbs
@@ -233,7 +216,7 @@ fn select_folder_entry(
 /// Files are omitted: this picker is for choosing a project root, not opening files.
 fn entries_from_browse(
     current_path: String,
-    parent_path: Option<String>,
+    _parent_path: Option<String>,
     entries: Vec<FsTreeEntry>,
     modal: &Entity<CommandPaletteModal>,
     on_select_project: &Option<Rc<dyn Fn(String, &mut Window, &mut App)>>,
@@ -250,19 +233,7 @@ fn entries_from_browse(
         on_select_project,
     ));
 
-    // Parent directory — pure navigation.
-    if let Some(parent) = parent_path {
-        out.push(
-            PaletteEntry::new(
-                parent.clone(),
-                format!("Back to {}", short_path(&parent)),
-                |_window, _cx| {},
-            )
-            .icon(IconName::ArrowLeft)
-            .section("Actions")
-            .keep_open(true),
-        );
-    }
+
 
     // Subfolders: clicking or Enter navigates into the folder.
     // "Use this folder" (row 1) is the only way to add the project.
