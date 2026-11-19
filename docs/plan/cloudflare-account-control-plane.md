@@ -6,13 +6,13 @@ Status: proposed plan. No implementation yet.
 
 - Console will host a central account service on Cloudflare.
 - The service is a Cloudflare Worker plus Durable Objects.
-- Account identity is email address plus password. No GitHub OAuth in v1.
+- Account identity is email address plus password, with a required display name. No GitHub OAuth in v1.
 - Device apps sign into the account once and discover all servers from it.
 - Servers are added with an explicit "console enroll" command.
 - Two enrollment modes are in v1:
   - browser approval link: console enroll prints a link and the CLI polls
   - headless one-time code: create a code in the dashboard, run console enroll --code CODE
-- Existing device pairing is not preserved as the primary path. Rep pairing is acceptable.
+- Existing device pairing is not preserved as the primary path. Re-pairing is acceptable.
 - A local fallback token is included so a machine can be used from localhost if the account service is unreachable.
 - Account-specific settings and future features live in the per-account Durable Object.
 
@@ -27,6 +27,7 @@ Give servers a way to verify app tokens without calling Cloudflare on every requ
 ## 2. Non-goals for v1
 
 - No GitHub, Google, Apple, passkey, or other OAuth/social login.
+- No email provider, email verification, password reset, recovery codes, or security notices in v1. If the password is forgotten, the account cannot be recovered through the product.
 - No organizations, teams, shared servers, roles, or invite flows. One account owns its own servers.
 - No billing, subscriptions, or entitlements, but the data model must leave space for them.
 - No end-to-end encrypted settings sync. Settings are account data stored by Console.
@@ -90,9 +91,6 @@ Suggested layout:
           settings.ts
           keys.ts
           internal.ts
-        email/
-          client.ts
-          templates.ts
         validation/
           schemas.ts
       tests/
@@ -118,8 +116,6 @@ wrangler.toml bindings:
 
 Secrets:
 
-- EMAIL_API_KEY: API key for the transactional email provider used for verification and password reset.
-- EMAIL_FROM: verified sender address.
 - SESSION_SECRET: secret used to sign or encrypt browser session cookies if cookies are not opaque random tokens stored in the DO.
 - TOKEN_SIGNING_PRIVATE_KEY: private key for signing access tokens. Use ES256 / ECDSA P-256 via WebCrypto. Generate offline and manage as a Worker secret.
 - CONTROL_PLANE_URL: public URL of the Worker, e.g. https://api.console.example.
@@ -141,7 +137,6 @@ Tables:
     accounts (
       id TEXT PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
-      email_verified INTEGER NOT NULL DEFAULT 0,
       password_hash TEXT NOT NULL,
       display_name TEXT NOT NULL,
       created_at INTEGER NOT NULL,
@@ -206,18 +201,9 @@ Tables:
       updated_at INTEGER NOT NULL
     )
 
-    email_tokens (
-      id TEXT PRIMARY KEY,
-      account_id TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      token_hash TEXT NOT NULL UNIQUE,
-      expires_at INTEGER NOT NULL,
-      consumed_at INTEGER
-    )
-
 Rules:
 
-- password_hash uses a slow password hash with a per-user salt. Prefer Argon2id if a Workers-compatible, maintained library is available; otherwise use PBKDF2-SHA256 with a high iteration count and a 16-byte random salt.
+- password_hash uses PBKDF2-SHA256 via Cloudflare WebCrypto with a high iteration count and a 16-byte random salt.
 - Plain passwords are never logged, returned, or stored.
 - Refresh tokens and server secrets are stored hashed. Only the first response after enrollment/redeem contains the plain secret.
 - Email is normalized to lowercase and trimmed.
@@ -285,8 +271,8 @@ All Worker responses use JSON. Errors use a stable shape:
 Used by the dashboard web app.
 
 - POST /auth/signup
-  - body: email, password, display_name?
-  - creates account, sends verification email
+  - body: email, password, display_name (required)
+  - creates account
   - returns account id and a session cookie
 - POST /auth/login
   - body: email, password
@@ -294,16 +280,8 @@ Used by the dashboard web app.
 - POST /auth/logout
   - revokes current browser session
 - GET /auth/me
-  - returns account profile and email verification state
-- POST /auth/verify-email
-  - body: token from email
-- POST /auth/request-password-reset
-  - body: email
-  - always returns success to avoid account enumeration
-- POST /auth/reset-password
-  - body: token, new_password
+  - returns account profile, including display name and email
 
-Email verification is required before creating enrollment codes. It is optional before first login so a user can still sign in and inspect the account.
 
 ### 7.2 Dashboard account routes
 
@@ -386,12 +364,11 @@ Used by desktop and Android after email/password sign-in.
 
 ### 8.1 Signup and app sign-in
 
-1. User enters email and password in the app or dashboard.
+1. User enters email, password, and display name in the app or dashboard.
 2. Worker validates and hashes the password.
-3. Verification email is sent.
-4. App receives a refresh token plus a control-plane access token.
-5. Refresh token is stored in OS secure storage: Keychain on desktop, Keystore on Android.
-6. App fetches the server list from GET /v1/app/servers.
+3. App receives a refresh token plus a control-plane access token.
+4. Refresh token is stored in OS secure storage: Keychain on desktop, Keystore on Android.
+5. App fetches the server list from GET /v1/app/servers.
 
 ### 8.2 Add a new server with browser approval
 
@@ -571,8 +548,7 @@ Do not reuse provider AuthStatus types. Provider accounts remain separate and un
 
 Need at least a minimal hosted web UI for:
 
-- signup, login, logout
-- verify email, reset password
+- signup with required display name, login, logout
 - account profile
 - list servers/devices
 - create headless enrollment code
@@ -592,17 +568,15 @@ The browser approval page must show:
 
 ## 14. Security requirements
 
-- Password hashing with per-user salt and slow KDF.
-- Email verification and password reset tokens are random, hashed at rest, short-lived, and single use.
-- Rate limit login, signup, password reset, enrollment start, and enrollment code redemption.
-- Never return whether an email exists on login or reset.
+- Password hashing with PBKDF2-SHA256, per-user salt, and high iteration count.
+- Rate limit login, signup, enrollment start, and enrollment code redemption.
 - Secure cookies: httpOnly, secure, sameSite=Lax, short-lived; CSRF token for browser POST routes.
 - App refresh tokens rotate on use and are hashed at rest.
 - Server secrets are random 256-bit values, hashed at rest, shown only once.
 - Enrollment codes use a human-safe alphabet with at least 80 bits of entropy.
 - All secret-bearing responses set no-store headers.
 - Do not log request bodies for auth/enrollment routes.
-- Audit log entries for signup, login, enrollment approve, code creation, server revoke, device revoke, password change.
+- Audit log entries for signup, login, enrollment approve, code creation, server revoke, device revoke.
 - Control plane stores no chat/file/provider secret data.
 
 ## 15. Verification
@@ -615,7 +589,7 @@ Control plane:
 
 Manual local checks:
 
-- signup, verify email via dev mail output, login
+- signup with display name, login
 - create code, redeem code with a fake CLI call
 - start browser enrollment, approve, poll status
 - sign app in, list servers, request server token
@@ -662,9 +636,8 @@ Remove old pairing as the default path. Update roadmap, README, install docs, an
 
 ## 17. Open decisions to settle during implementation
 
-- Email provider: Resend, Postmark, or another service. Needed for verification and password reset.
 - Public hostnames: control-plane API domain and dashboard domain.
-- Password hashing library: choose Argon2id if a maintained Workers-compatible package passes review; otherwise PBKDF2-SHA256 with high iterations.
+- Password hashing uses PBKDF2-SHA256 via WebCrypto.
 - Exact enrollment code length and alphabet.
 - Whether server token lifetime stays at 15 minutes.
 - Whether local fallback can read a token from disk automatically or must be pasted into the app once.
