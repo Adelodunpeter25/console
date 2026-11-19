@@ -90,7 +90,7 @@ fun HtmlResultCard(
                     }
                     OverflowMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         OverflowMenuItem(
-                            label = "Open in code editor",
+                            label = "Open in editor",
                             icon = TablerIcons.Outline.Code,
                             onClick = {
                                 menuOpen = false
