@@ -1,5 +1,5 @@
 //! Context-menu presentation for HTML files (in file tree and links).
-//! Offers "Open in browser" and "Open in code editor".
+//! Offers "Open in editor" and "Open in browser".
 
 use std::rc::Rc;
 
@@ -38,14 +38,14 @@ where
         let on_open_browser = on_open_browser.clone();
         let on_open_editor = on_open_editor.clone();
         vec![
-            MenuItem::new("Open in browser", move |window, cx| {
-                on_open_browser(window, cx)
-            })
-            .icon(IconName::Globe.path()),
             MenuItem::new("Open in editor", move |window, cx| {
                 on_open_editor(window, cx)
             })
             .icon(IconName::File.path()),
+            MenuItem::new("Open in browser", move |window, cx| {
+                on_open_browser(window, cx)
+            })
+            .icon(IconName::Globe.path()),
         ]
     })
 }

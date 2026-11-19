@@ -1040,12 +1040,7 @@ impl gpui::RenderOnce for HtmlLinkMenu {
                 };
                 let browser_url = url.clone();
                 let browser = open_browser.clone();
-                let mut items = vec![
-                    MenuItem::new("Open in browser", move |window, cx| {
-                        browser(&browser_url, window, cx)
-                    })
-                    .icon(crate::primitives::IconName::Globe.path()),
-                ];
+                let mut items = Vec::new();
                 if let Some(editor) = HTML_LINK_EDITOR.with(|slot| slot.borrow().clone()) {
                     items.push(
                         MenuItem::new("Open in editor", move |window, cx| {
@@ -1054,6 +1049,12 @@ impl gpui::RenderOnce for HtmlLinkMenu {
                         .icon(crate::primitives::IconName::File.path()),
                     );
                 }
+                items.push(
+                    MenuItem::new("Open in browser", move |window, cx| {
+                        browser(&browser_url, window, cx)
+                    })
+                    .icon(crate::primitives::IconName::Globe.path()),
+                );
                 items
             },
         )
