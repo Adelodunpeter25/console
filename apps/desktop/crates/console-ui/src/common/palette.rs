@@ -572,7 +572,7 @@ impl CommandPaletteModal {
                         if let Some(parent) = this.back_path.clone()
                             && let Some(callback) = this.browse_callback.clone()
                         {
-                            callback(&parent, window, cx);
+                            window.defer(cx, move |window, cx| callback(&parent, window, cx));
                         }
                     }
                     _ => {}
@@ -663,7 +663,7 @@ impl CommandPaletteModal {
         if let Some(parent) = self.back_path.clone()
             && let Some(callback) = self.browse_callback.clone()
         {
-            callback(&parent, window, cx);
+            window.defer(cx, move |window, cx| callback(&parent, window, cx));
         }
     }
 
@@ -968,12 +968,13 @@ impl Render for CommandPaletteModal {
                             .text_color(theme.text_secondary)
                             .hover(|btn| btn.bg(theme.overlay).text_color(theme.text))
                             .on_click(move |_, window, cx| {
-                                if let Some(path) = &back_path
+                                if let Some(path) = back_path.clone()
                                     && let Some(palette) = back_palette.upgrade()
                                 {
                                     let callback = palette.read(cx).browse_callback.clone();
                                     if let Some(callback) = callback {
-                                        callback(path, window, cx);
+                                        let target_path = path.clone();
+                                        window.defer(cx, move |window, cx| callback(&target_path, window, cx));
                                     }
                                 }
                             })
@@ -1020,7 +1021,8 @@ impl Render for CommandPaletteModal {
                                 if let Some(palette) = p.upgrade() {
                                     let callback = palette.read(cx).browse_callback.clone();
                                     if let Some(callback) = callback {
-                                        callback(&path, window, cx);
+                                        let target_path = path.clone();
+                                        window.defer(cx, move |window, cx| callback(&target_path, window, cx));
                                     }
                                 }
                             })
