@@ -1006,7 +1006,16 @@ impl gpui::RenderOnce for HtmlLinkMenu {
             .use_keyed_state(id.clone(), cx, |_, cx| ContextMenuHandle::new(cx))
             .read(cx)
             .clone();
-        let target: Rc<std::cell::RefCell<Option<String>>> = Rc::default();
+        // Kept across frames: the click records the link in one frame and the
+        // open menu reads it back in a later one.
+        let target: Rc<std::cell::RefCell<Option<String>>> = window
+            .use_keyed_state(
+                SharedString::from(format!("{}-target", self.id)),
+                cx,
+                |_, _| Rc::<std::cell::RefCell<Option<String>>>::default(),
+            )
+            .read(cx)
+            .clone();
         let hit_target = target.clone();
         let layout = self.layout;
         let links = self.links;
