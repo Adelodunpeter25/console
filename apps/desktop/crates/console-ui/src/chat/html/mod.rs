@@ -112,7 +112,9 @@ fn ensure_host(row: &str, url: &str, window: &mut Window, cx: &mut App) -> Optio
     let win_cx = cx.to_async();
     let content = HostContent {
         user_agent: None,
-        initialization_script: None,
+        initialization_script: Some(
+            "document.addEventListener('DOMContentLoaded',function(){var s=document.createElement('style');s.textContent='html,body{overflow:hidden!important}';document.head.appendChild(s);});".to_string(),
+        ),
         html: None,
         allow_navigation: Some(Box::new(move |target| {
             let target_base = target.split('#').next().unwrap_or(&target);
@@ -136,7 +138,7 @@ fn ensure_host(row: &str, url: &str, window: &mut Window, cx: &mut App) -> Optio
                         .and_then(|p| p.get("height"))
                         .and_then(|h| h.as_f64())
                     {
-                        let clamped = (h as f32).clamp(80.0, 2000.0);
+                        let clamped = (h as f32).clamp(80.0, 4000.0);
                         if let Ok(mut map) = CARDS.lock() {
                             if let Some(entry) = map.get_mut(&row_key) {
                                 entry.measured_height = Some(clamped);

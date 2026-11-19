@@ -2,7 +2,10 @@ package com.console.mobile.feature.chat.html
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
+import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -26,6 +29,7 @@ fun HtmlPreviewWebView(
     modifier: Modifier = Modifier,
     onExternalUrl: ((String) -> Unit)? = null,
     nestedInList: Boolean = false,
+    onContentHeight: ((Int) -> Unit)? = null,
 ) {
     val pageUrl = remember(path) { AppContainer.consoleApi.fsHtmlUrl(path, theme = "dark") }
     val basePage = remember(pageUrl) { pageUrl.substringBefore('#') }
@@ -40,12 +44,24 @@ fun HtmlPreviewWebView(
                 )
                 setBackgroundColor(Color.TRANSPARENT)
                 if (nestedInList) {
-                    // Inside the transcript list the page owns touches that start on it,
-                    // otherwise the list steals the drag and the page never scrolls.
-                    setOnTouchListener { v, _ ->
-                        v.parent?.requestDisallowInterceptTouchEvent(true)
-                        false
-                    }
+                    // The card is sized to the page, so the page itself never scrolls
+                    // and every drag belongs to the chat list.
+                    isVerticalScrollBarEnabled = false
+                    isHorizontalScrollBarEnabled = false
+                    overScrollMode = View.OVER_SCROLL_NEVER
+                    setOnTouchListener { _, event -> event.actionMasked == MotionEvent.ACTION_MOVE }
+                    addJavascriptInterface(
+                        object {
+                            @JavascriptInterface
+                            fun postMessage(message: String) {
+                                val height = runCatching {
+                                    org.json.JSONObject(message).getJSONObject("params").getInt("height")
+                                }.getOrNull() ?: return
+                                post { onContentHeight?.invoke(height) }
+                            }
+                        },
+                        "ConsoleHost",
+                    )
                 }
                 settings.apply {
                     javaScriptEnabled = true

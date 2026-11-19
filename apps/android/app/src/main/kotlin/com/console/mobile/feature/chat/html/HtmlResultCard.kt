@@ -48,7 +48,11 @@ fun HtmlResultCard(
 ) {
     val displayTitle = artifact.title.ifBlank { artifact.path.substringAfterLast('/') }
     var menuOpen by remember { mutableStateOf(false) }
-    val frameHeight = if (artifact.height > 0) artifact.height.coerceIn(160, 600) else 420
+    // Sized to the page so it never scrolls inside the card; the hint is only
+    // used until the page reports its real height.
+    var frameHeight by remember(artifact.path) {
+        mutableStateOf(if (artifact.height > 0) artifact.height.coerceIn(120, 4000) else 320)
+    }
 
     Surface(
         modifier = modifier
@@ -112,6 +116,7 @@ fun HtmlResultCard(
             HtmlPreviewWebView(
                 path = artifact.path,
                 nestedInList = true,
+                onContentHeight = { frameHeight = it.coerceIn(80, 6000) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(frameHeight.dp)
