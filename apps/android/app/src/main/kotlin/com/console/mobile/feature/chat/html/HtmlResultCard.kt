@@ -70,23 +70,15 @@ fun HtmlResultCard(
                     tint = NewTheme.Accent,
                     modifier = Modifier.size(18.dp),
                 )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        displayTitle,
-                        color = NewTheme.TextPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        artifact.path.substringAfterLast('/'),
-                        color = NewTheme.TextMuted,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                Text(
+                    displayTitle,
+                    color = NewTheme.TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
                 Box {
                     IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(32.dp)) {
                         Icon(
@@ -98,19 +90,19 @@ fun HtmlResultCard(
                     }
                     OverflowMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         OverflowMenuItem(
-                            label = "Open full screen",
-                            icon = TablerIcons.Outline.Globe,
-                            onClick = {
-                                menuOpen = false
-                                onOpenPreview(artifact)
-                            },
-                        )
-                        OverflowMenuItem(
                             label = "Open in code editor",
                             icon = TablerIcons.Outline.Code,
                             onClick = {
                                 menuOpen = false
                                 onOpenEditor(artifact.path)
+                            },
+                        )
+                        OverflowMenuItem(
+                            label = "Open full screen",
+                            icon = TablerIcons.Outline.Globe,
+                            onClick = {
+                                menuOpen = false
+                                onOpenPreview(artifact)
                             },
                         )
                     }

@@ -694,8 +694,8 @@ private fun HtmlOpenChoiceDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                OverflowMenuItem(label = "Open in browser", icon = TablerIcons.Outline.Globe, onClick = onBrowser)
                 OverflowMenuItem(label = "Open in code editor", icon = TablerIcons.Outline.Code, onClick = onEditor)
+                OverflowMenuItem(label = "Open in browser", icon = TablerIcons.Outline.Globe, onClick = onBrowser)
             }
         },
         confirmButton = {
@@ -953,19 +953,19 @@ private fun TreeRowEntry(
     if (isHtml) {
         OverflowMenu(expanded = htmlMenuOpen, onDismissRequest = { htmlMenuOpen = false }) {
             OverflowMenuItem(
-                label = "Open in browser",
-                icon = TablerIcons.Outline.Globe,
-                onClick = {
-                    htmlMenuOpen = false
-                    onPressFile()
-                },
-            )
-            OverflowMenuItem(
                 label = "Open in code editor",
                 icon = TablerIcons.Outline.Code,
                 onClick = {
                     htmlMenuOpen = false
                     onOpenHtmlEditor()
+                },
+            )
+            OverflowMenuItem(
+                label = "Open in browser",
+                icon = TablerIcons.Outline.Globe,
+                onClick = {
+                    htmlMenuOpen = false
+                    onPressFile()
                 },
             )
         }
