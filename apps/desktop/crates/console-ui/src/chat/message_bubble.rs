@@ -20,8 +20,8 @@ use super::ThinkingBlock;
 use base64::Engine as _;
 use console_core::{AssistantContentPart, ImageAttachment};
 use gpui::{
-    App, ElementId, IntoElement, ParentElement, RenderOnce, Styled, Window, div, img, prelude::*,
-    px,
+    App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window, div, img,
+    prelude::*, px,
 };
 
 /// Find the next `pasted <N> lines` label (the friendly text a large-paste
@@ -282,6 +282,7 @@ pub struct UserMessageBubble {
     pub context_files: Vec<String>,
     pub created_at: Option<i64>,
     plan_mode: bool,
+    source: Option<String>,
     selection: Option<TranscriptSelection>,
     selection_row: String,
     on_preview_image: Option<PreviewImageHandler>,
@@ -298,6 +299,7 @@ impl UserMessageBubble {
             context_files: Vec::new(),
             created_at: None,
             plan_mode: false,
+            source: None,
             selection: None,
             selection_row: "user-message".to_owned(),
             on_preview_image: None,
@@ -343,6 +345,12 @@ impl UserMessageBubble {
         self
     }
 
+    /// Server-initiated turn source ("automation", "webhook").
+    pub fn source(mut self, source: Option<String>) -> Self {
+        self.source = source;
+        self
+    }
+
     pub fn expanded(mut self, expanded: bool) -> Self {
         self.expanded = expanded;
         self
@@ -362,6 +370,12 @@ impl RenderOnce for UserMessageBubble {
         let timestamp = format_message_time(self.created_at);
 
         let preview_handler = self.on_preview_image.clone();
+        let source_badge = self.source.as_deref().and_then(|src| match src {
+            "automation" => Some((IconName::Calendar, "Scheduled run")),
+            "webhook" => Some((IconName::Zap, "Webhook event")),
+            "" => None,
+            other => Some((IconName::Bell, other)),
+        });
 
         // Staged file comments ride the prompt as tagged blocks; show them as
         // chips like mentions instead of dumping the raw markup in the bubble.
@@ -551,6 +565,23 @@ impl RenderOnce for UserMessageBubble {
                                 .when(self.plan_mode, |el| {
                                     el.child(
                                         crate::common::plan_mode_stripes(theme).rounded(px(11.0)),
+                                    )
+                                })
+                                .when_some(source_badge, |el, (icon, label)| {
+                                    el.child(
+                                        div()
+                                            .pb(px(4.0))
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(5.0))
+                                            .child(app_icon(icon, 11.5, theme.accent))
+                                            .child(
+                                                div()
+                                                    .text_size(px(11.0))
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(theme.accent)
+                                                    .child(label.to_string()),
+                                            ),
                                     )
                                 })
                                 .text_size(px(14.0))

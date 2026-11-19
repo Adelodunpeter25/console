@@ -17,6 +17,7 @@ fn user(id: Option<&str>) -> AgentMessage {
         annotations: None,
         created_at: None,
         approval_mode: None,
+        source: None,
     }
 }
 

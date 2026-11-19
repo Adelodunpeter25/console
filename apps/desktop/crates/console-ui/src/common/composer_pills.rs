@@ -7,7 +7,7 @@
 
 use std::rc::Rc;
 
-use console_core::{SubagentInfo, TodoItem};
+use console_core::{Automation, SubagentInfo, TodoItem, WebhookSubscription};
 use gpui::{
     App, Div, ElementId, FontWeight, ParentElement, ScrollHandle, Stateful,
     StatefulInteractiveElement, Styled, Window, div, linear_color_stop, linear_gradient,
@@ -15,13 +15,16 @@ use gpui::{
 };
 
 use crate::chat::change_chips::ChangesSummary;
-use crate::common::pill_popovers::{shells_popover, subagents_popover, tasks_popover};
+use crate::common::pill_popovers::{
+    automations_popover, shells_popover, subagents_popover, tasks_popover,
+};
 use crate::primitives::menu::{ContextMenuHandle, MenuAlign, popover};
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
 type ClickHandler = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
 pub(crate) type StopHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
+pub(crate) type ActionHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 /// Every pill in the row, status and suggestion alike, is this tall so they
 /// read as one set and match the 31px scroll controls.
 const PILL_HEIGHT: f32 = 31.0;
@@ -62,17 +65,29 @@ pub struct ShellsPill {
     pub on_stop: StopHandler,
 }
 
+/// The session's active automations and webhook subscriptions.
+pub struct AutomationsPill {
+    pub menu: ContextMenuHandle,
+    pub automations: Rc<Vec<Automation>>,
+    pub webhooks: Rc<Vec<WebhookSubscription>>,
+    pub on_pause: ActionHandler,
+    pub on_resume: ActionHandler,
+    pub on_delete_automation: ActionHandler,
+    pub on_delete_webhook: ActionHandler,
+}
+
 /// The pills row, or `None` when the session has nothing to summarise.
 ///
 /// `changes` carries the session's change totals plus the handler that opens
-/// the changes view. The subagents and shells pills open their own popovers,
-/// the way the tasks pill does.
+/// the changes view. The subagents, shells, and automations pills open their
+/// own popovers, the way the tasks pill does.
 #[allow(clippy::type_complexity)]
 pub fn composer_pills(
     key: &str,
     tasks: Option<TasksPill>,
     subagents: Option<SubagentsPill>,
     shells: Option<ShellsPill>,
+    automations: Option<AutomationsPill>,
     changes: Option<(ChangesSummary, ClickHandler)>,
     suggestions: Option<SuggestionsPill>,
     scroll: &ScrollHandle,
@@ -81,6 +96,7 @@ pub fn composer_pills(
     if tasks.is_none()
         && subagents.is_none()
         && shells.is_none()
+        && automations.is_none()
         && changes.is_none()
         && suggestions.is_none()
     {
@@ -170,6 +186,53 @@ pub fn composer_pills(
             MenuAlign::AboveLeft,
             move |_handle, _window, cx| {
                 shells_popover(shells_list.clone(), on_stop.clone(), Theme::current(cx))
+            },
+        ));
+    }
+
+    if let Some(automations) = automations {
+        let auto_count = automations.automations.len();
+        let hook_count = automations.webhooks.len();
+        let label = match (auto_count, hook_count) {
+            (a, 0) => format!("{a} {}", if a == 1 { "schedule" } else { "schedules" }),
+            (0, w) => format!("{w} {}", if w == 1 { "webhook" } else { "webhooks" }),
+            (a, w) => format!("{a} sched · {w} hook"),
+        };
+        let active = automations.automations.iter().any(|a| a.status == "active")
+            || automations.webhooks.iter().any(|w| w.status == "active");
+        let icon = if auto_count > 0 {
+            IconName::Calendar
+        } else {
+            IconName::Zap
+        };
+        let trigger = pill(
+            format!("{key}-automations"),
+            icon,
+            label,
+            active,
+            None,
+            theme,
+        );
+        let autos = automations.automations;
+        let hooks = automations.webhooks;
+        let on_pause = automations.on_pause;
+        let on_resume = automations.on_resume;
+        let on_del_auto = automations.on_delete_automation;
+        let on_del_hook = automations.on_delete_webhook;
+        row = row.child(popover(
+            trigger,
+            &automations.menu,
+            MenuAlign::AboveLeft,
+            move |_handle, _window, cx| {
+                automations_popover(
+                    autos.clone(),
+                    hooks.clone(),
+                    on_pause.clone(),
+                    on_resume.clone(),
+                    on_del_auto.clone(),
+                    on_del_hook.clone(),
+                    Theme::current(cx),
+                )
             },
         ));
     }

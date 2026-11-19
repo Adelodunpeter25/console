@@ -8,7 +8,7 @@ use gpui::{
     canvas, deferred, div, prelude::FluentBuilder, px,
 };
 
-use super::item_row::{draft_badge, row_container, status_slot, title_label};
+use super::item_row::{draft_badge, row_container, scheduled_badge, status_slot, title_label};
 use super::session_card::{
     CardStatusMark, SidebarHoverManager, dismiss_card, on_card_hover, on_row_hover,
     render_session_card_content,
@@ -85,6 +85,8 @@ pub struct SidebarSessionItem {
     is_active: bool,
     loading_state: Option<SidebarLoadingState>,
     has_draft: bool,
+    has_automation: bool,
+    has_webhook: bool,
     is_renaming: bool,
     rename_input: Option<Entity<ComposerInput>>,
     project_name: String,
@@ -126,6 +128,8 @@ impl SidebarSessionItem {
             is_active,
             loading_state,
             has_draft,
+            has_automation: false,
+            has_webhook: false,
             is_renaming,
             rename_input,
             project_name,
@@ -140,6 +144,12 @@ impl SidebarSessionItem {
             on_toggle_read: Rc::new(on_toggle_read),
             on_delete: Rc::new(on_delete),
         }
+    }
+
+    pub fn scheduled(mut self, has_automation: bool, has_webhook: bool) -> Self {
+        self.has_automation = has_automation;
+        self.has_webhook = has_webhook;
+        self
     }
 }
 
@@ -314,6 +324,14 @@ impl RenderOnce for SidebarSessionItem {
                     .gap_x(px(6.0))
                     .child(status_indicator)
                     .child(title)
+                    .when(self.has_automation || self.has_webhook, |el| {
+                        el.child(scheduled_badge(
+                            ElementId::Name(format!("scheduled-{}", session.id).into()),
+                            self.has_automation,
+                            self.has_webhook,
+                            theme,
+                        ))
+                    })
                     .when(self.has_draft, |el| {
                         el.child(draft_badge(
                             ElementId::Name(format!("draft-{}", session.id).into()),
@@ -453,6 +471,8 @@ pub fn render_sidebar_session_item(
     running_started_at: Option<i64>,
     is_waiting: bool,
     has_draft: bool,
+    has_automation: bool,
+    has_webhook: bool,
     on_select: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_open_in_new_window: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_rename: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -546,5 +566,6 @@ pub fn render_sidebar_session_item(
             move |window, cx| (on_delete)(session_id.clone(), window, cx)
         },
     )
+    .scheduled(has_automation, has_webhook)
     .into_any_element()
 }

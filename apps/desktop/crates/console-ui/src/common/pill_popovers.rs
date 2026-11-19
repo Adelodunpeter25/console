@@ -4,10 +4,10 @@
 
 use std::rc::Rc;
 
-use console_core::{SubagentInfo, TodoItem};
+use console_core::{Automation, SubagentInfo, TodoItem, WebhookSubscription};
 use gpui::{AnyElement, ElementId, FontWeight, div, prelude::*, px};
 
-use crate::common::composer_pills::{ShellEntry, StopHandler};
+use crate::common::composer_pills::{ActionHandler, ShellEntry, StopHandler};
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -321,6 +321,200 @@ pub(crate) fn shells_popover(
         "SHELLS",
         format!("{}", shells.len()),
         "composer-shells-popover-scroll",
+        theme,
+        rows,
+    )
+}
+
+/// The automations & webhooks popover: lists active/paused schedules and
+/// webhook subscriptions for the session with pause/resume and delete actions.
+pub(crate) fn automations_popover(
+    automations: Rc<Vec<Automation>>,
+    webhooks: Rc<Vec<WebhookSubscription>>,
+    on_pause: ActionHandler,
+    on_resume: ActionHandler,
+    on_delete_automation: ActionHandler,
+    on_delete_webhook: ActionHandler,
+    theme: Theme,
+) -> AnyElement {
+    let total = automations.len() + webhooks.len();
+    let mut rows: Vec<AnyElement> = Vec::with_capacity(total);
+
+    for (index, auto) in automations.iter().enumerate() {
+        let is_paused = auto.status == "paused";
+        let is_error = auto.status == "error";
+        let toggle_id = auto.id.clone();
+        let delete_id = auto.id.clone();
+        let on_pause = on_pause.clone();
+        let on_resume = on_resume.clone();
+        let on_delete = on_delete_automation.clone();
+        let subtitle = if auto.kind == "interval" {
+            format!("Every {}s · {}", auto.interval_seconds, auto.status)
+        } else {
+            format!("One-shot · {}", auto.status)
+        };
+        rows.push(
+            div()
+                .id(format!("composer-automation-row-{index}"))
+                .w_full()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .rounded(px(6.0))
+                .px(px(6.0))
+                .py(px(6.0))
+                .hover(|style| style.bg(theme.overlay))
+                .child(app_icon(
+                    IconName::Calendar,
+                    13.0,
+                    if is_error {
+                        theme.danger
+                    } else if is_paused {
+                        theme.text_tertiary
+                    } else {
+                        theme.accent
+                    },
+                ))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(12.5))
+                                .text_color(theme.text)
+                                .child(auto.prompt.clone()),
+                        )
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(10.5))
+                                .text_color(theme.text_tertiary)
+                                .child(subtitle),
+                        ),
+                )
+                .child(
+                    div()
+                        .id(format!("composer-automation-toggle-{index}"))
+                        .size(px(24.0))
+                        .flex_none()
+                        .rounded_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .bg(theme.overlay)
+                        .hover(|s| s.bg(theme.overlay_strong))
+                        .on_click(move |_, window, cx| {
+                            cx.stop_propagation();
+                            if is_paused || is_error {
+                                on_resume(toggle_id.clone(), window, cx);
+                            } else {
+                                on_pause(toggle_id.clone(), window, cx);
+                            }
+                        })
+                        .child(app_icon(
+                            if is_paused || is_error {
+                                IconName::Play
+                            } else {
+                                IconName::Pause
+                            },
+                            11.0,
+                            theme.text_secondary,
+                        )),
+                )
+                .child(
+                    div()
+                        .id(format!("composer-automation-delete-{index}"))
+                        .size(px(24.0))
+                        .flex_none()
+                        .rounded_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .bg(theme.danger.opacity(0.16))
+                        .hover(|s| s.bg(theme.danger.opacity(0.28)))
+                        .on_click(move |_, window, cx| {
+                            cx.stop_propagation();
+                            on_delete(delete_id.clone(), window, cx);
+                        })
+                        .child(app_icon(IconName::Close, 11.0, theme.danger)),
+                )
+                .into_any_element(),
+        );
+    }
+
+    for (index, hook) in webhooks.iter().enumerate() {
+        let delete_id = hook.id.clone();
+        let on_delete = on_delete_webhook.clone();
+        let subtitle = format!("Webhook · {} · {}", hook.topic, hook.status);
+        rows.push(
+            div()
+                .id(format!("composer-webhook-row-{index}"))
+                .w_full()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .rounded(px(6.0))
+                .px(px(6.0))
+                .py(px(6.0))
+                .hover(|style| style.bg(theme.overlay))
+                .child(app_icon(IconName::Zap, 13.0, theme.accent))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(12.5))
+                                .text_color(theme.text)
+                                .child(hook.prompt.clone()),
+                        )
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(10.5))
+                                .text_color(theme.text_tertiary)
+                                .child(subtitle),
+                        ),
+                )
+                .child(
+                    div()
+                        .id(format!("composer-webhook-delete-{index}"))
+                        .size(px(24.0))
+                        .flex_none()
+                        .rounded_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .bg(theme.danger.opacity(0.16))
+                        .hover(|s| s.bg(theme.danger.opacity(0.28)))
+                        .on_click(move |_, window, cx| {
+                            cx.stop_propagation();
+                            on_delete(delete_id.clone(), window, cx);
+                        })
+                        .child(app_icon(IconName::Close, 11.0, theme.danger)),
+                )
+                .into_any_element(),
+        );
+    }
+
+    pill_popover_card(
+        "composer-automations-popover",
+        IconName::Calendar,
+        "AUTOMATIONS & WEBHOOKS",
+        format!("{total}"),
+        "composer-automations-popover-scroll",
         theme,
         rows,
     )

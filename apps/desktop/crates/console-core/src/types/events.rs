@@ -211,6 +211,8 @@ pub enum AgentSessionEvent {
     SessionStart,
     TurnStart {
         prompt: String,
+        #[serde(default)]
+        source: Option<String>,
     },
     ModelStreamStart {
         #[serde(rename = "turnId")]

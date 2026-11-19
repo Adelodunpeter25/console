@@ -33,7 +33,8 @@ pub use autocomplete::{
     init as init_autocomplete_keybindings, slugify_chat_title,
 };
 pub use composer_pills::{
-    ShellEntry, ShellsPill, SubagentsPill, SuggestionsPill, TasksPill, composer_pills,
+    AutomationsPill, ShellEntry, ShellsPill, SubagentsPill, SuggestionsPill, TasksPill,
+    composer_pills,
 };
 pub(crate) use composer_view::plan_mode_stripes;
 pub use composer_view::{ComposerAnnotation, ComposerComment, ComposerView};

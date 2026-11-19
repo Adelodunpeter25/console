@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod assist;
+pub mod automation;
 pub mod auth;
 pub mod chat;
 pub mod chrome;
@@ -26,6 +27,7 @@ pub mod workspace;
 pub use crate::browser_history::{BrowserHistory, BrowserHistoryEntry};
 pub use agent::*;
 pub use assist::*;
+pub use automation::*;
 pub use auth::*;
 pub use chat::*;
 pub use chrome::*;

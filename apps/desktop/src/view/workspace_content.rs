@@ -2,8 +2,9 @@ use console_core::types::ChangesScope;
 use console_core::{SelectedModel, SessionHeaderExt, UpdateSessionDto};
 use console_ui::workspace::EmptyChatState;
 use console_ui::{
-    ComposerView, ModelDropdownMenu, PickerTab, QuestionInteractionCard, ShellEntry, ShellsPill,
-    SubagentsPill, SuggestionsPill, TasksPill, Theme, WorkspaceFooter, centered_stripe,
+    AutomationsPill, ComposerView, ModelDropdownMenu, PickerTab, QuestionInteractionCard,
+    ShellEntry, ShellsPill, SubagentsPill, SuggestionsPill, TasksPill, Theme, WorkspaceFooter,
+    centered_stripe,
     composer_pills, error_banner, notice_banner, queued_prompts_stack,
 };
 use gpui::{
@@ -1008,12 +1009,45 @@ impl ConsoleDesktopApp {
                     }),
                 }
             });
+        let automations_pill =
+            (!snapshot.automations.is_empty() || !snapshot.webhooks.is_empty()).then(|| {
+                let entity_pause = entity.clone();
+                let entity_resume = entity.clone();
+                let entity_del_auto = entity.clone();
+                let entity_del_hook = entity.clone();
+                AutomationsPill {
+                    menu: self.pane_automations_menu(pane_id),
+                    automations: snapshot.automations.clone(),
+                    webhooks: snapshot.webhooks.clone(),
+                    on_pause: Rc::new(move |id, _window, cx| {
+                        if let Some(app) = entity_pause.upgrade() {
+                            app.update(cx, |this, cx| this.pause_automation(id, cx));
+                        }
+                    }),
+                    on_resume: Rc::new(move |id, _window, cx| {
+                        if let Some(app) = entity_resume.upgrade() {
+                            app.update(cx, |this, cx| this.resume_automation(id, cx));
+                        }
+                    }),
+                    on_delete_automation: Rc::new(move |id, _window, cx| {
+                        if let Some(app) = entity_del_auto.upgrade() {
+                            app.update(cx, |this, cx| this.delete_automation(id, cx));
+                        }
+                    }),
+                    on_delete_webhook: Rc::new(move |id, _window, cx| {
+                        if let Some(app) = entity_del_hook.upgrade() {
+                            app.update(cx, |this, cx| this.delete_webhook(id, cx));
+                        }
+                    }),
+                }
+            });
         let pills_key = format!("composer-pills-{pane_id}");
         let composer_pills_row = composer_pills(
             &pills_key,
             tasks,
             subagents_pill,
             shells_pill,
+            automations_pill,
             changes_summary.zip(on_open_changes),
             suggestions_pill,
             &pills_scroll,

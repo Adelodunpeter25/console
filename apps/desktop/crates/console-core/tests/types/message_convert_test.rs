@@ -49,7 +49,27 @@ fn user_message_carries_its_approval_mode() {
     }
     // Stored before the server recorded the mode: unknown, not plan.
     match decode_fixture("user.json") {
-        AgentMessage::User { approval_mode, .. } => assert_eq!(approval_mode, None),
+        AgentMessage::User {
+            approval_mode,
+            source,
+            ..
+        } => {
+            assert_eq!(approval_mode, None);
+            assert_eq!(source, None);
+        }
+        other => panic!("wrong variant: {other:?}"),
+    }
+}
+
+#[test]
+fn user_message_carries_its_source() {
+    let wire: console_proto::AgentMessage =
+        serde_json::from_str(r#"{"user":{"content":"check ci","source":"webhook"}}"#)
+            .expect("decode");
+    match AgentMessage::from_proto(wire).expect("convert") {
+        AgentMessage::User { source, .. } => {
+            assert_eq!(source.as_deref(), Some("webhook"));
+        }
         other => panic!("wrong variant: {other:?}"),
     }
 }

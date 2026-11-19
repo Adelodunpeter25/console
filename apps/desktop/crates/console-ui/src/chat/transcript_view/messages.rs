@@ -83,6 +83,17 @@ impl TranscriptView {
         self.messages.len()
     }
 
+    pub fn has_trailing_user_message(&self, content: &str, source: Option<&str>) -> bool {
+        matches!(
+            self.messages.last(),
+            Some(AgentMessage::User {
+                content: last_content,
+                source: last_source,
+                ..
+            }) if last_content == content && last_source.as_deref() == source
+        )
+    }
+
     /// The image attachments carried by the user message with this id.
     ///
     /// Composer history recall holds a message id rather than the image bytes

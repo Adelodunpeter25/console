@@ -641,7 +641,14 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		hub.Broadcast(loop.Event{Kind: loop.EventTurnStart})
 		s.notifyResumed(sessionID, wakeMessage(dto.woken))
 	} else {
-		hub.Broadcast(loop.Event{Kind: loop.EventTurnStart, Text: dto.Text})
+		hub.Broadcast(loop.Event{Kind: loop.EventTurnStart, Text: dto.Text, Source: dto.Source})
+		if dto.Source != "" && turn.Index == 0 {
+			label := "Scheduled automation running"
+			if dto.Source == "webhook" {
+				label = "Webhook event received"
+			}
+			s.notifyResumed(sessionID, label)
+		}
 	}
 
 	// First user turn on a placeholder title: generate one in the

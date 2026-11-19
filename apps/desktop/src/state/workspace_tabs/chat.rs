@@ -121,6 +121,7 @@ impl ConsoleDesktopApp {
         let tasks_menu = ContextMenuHandle::new(cx);
         let subagents_menu = ContextMenuHandle::new(cx);
         let shells_menu = ContextMenuHandle::new(cx);
+        let automations_menu = ContextMenuHandle::new(cx);
         let usage_pane_id = pane_id.to_string();
         let usage_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
@@ -296,6 +297,7 @@ impl ConsoleDesktopApp {
                 tasks_menu,
                 subagents_menu,
                 shells_menu,
+                automations_menu,
                 selected_project_id: self.selected_project_id.clone(),
                 branches: self.branches.clone(),
                 branch_loaded: self.branch_loaded,
@@ -569,6 +571,14 @@ impl ConsoleDesktopApp {
             .get(pane_id)
             .map(|state| state.shells_menu.clone())
             .unwrap_or_else(|| self.shells_menu.clone())
+    }
+
+    /// The menu anchoring this pane's automations & webhooks popover to its pill.
+    pub(crate) fn pane_automations_menu(&self, pane_id: &str) -> ContextMenuHandle {
+        self.workspace_pane_states
+            .get(pane_id)
+            .map(|state| state.automations_menu.clone())
+            .unwrap_or_else(|| self.automations_menu.clone())
     }
 
     pub(crate) fn set_pane_model(&mut self, pane_id: &str, model: Option<SelectedModel>) {

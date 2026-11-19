@@ -1,5 +1,6 @@
 pub mod assist;
 pub mod auth;
+pub mod automation;
 pub mod chrome;
 pub mod device;
 pub mod drafts;
@@ -27,6 +28,9 @@ pub mod usage;
 
 pub use assist::AssistService;
 pub use auth::AuthService;
+pub use automation::{
+    AutomationService, AutomationStreamEvent, WebhookService, WebhookStreamEvent,
+};
 pub use chrome::{ChromeImportData, ChromeService};
 pub use device::DeviceService;
 pub use drafts::DraftService;

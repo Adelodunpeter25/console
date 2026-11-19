@@ -168,6 +168,7 @@ impl AgentMessage {
                 },
                 created_at: msg.created_at,
                 approval_mode: u.approval_mode,
+                source: u.source,
             }),
             ProtoMessageEvent::Assistant(a) => Some(AgentMessage::Assistant {
                 id: opt_string(a.id.clone()),
@@ -235,6 +236,8 @@ pub enum AgentMessage {
             rename = "approvalMode"
         )]
         approval_mode: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
     },
     #[serde(rename = "assistant")]
     Assistant {

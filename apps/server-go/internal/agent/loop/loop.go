@@ -138,6 +138,7 @@ type Event struct {
 	QueuedAll    []types.QueuedPrompt `json:"queuedPrompts,omitempty"`
 	Title        string               `json:"title,omitempty"`
 	ApprovalMode string               `json:"approvalMode,omitempty"`
+	Source       string               `json:"source,omitempty"`
 	Subagent     any                  `json:"subagent,omitempty"`
 	// Items/Action carry the session todo list for EventTodoUpdate.
 	Items  []types.TodoItem `json:"items,omitempty"`
