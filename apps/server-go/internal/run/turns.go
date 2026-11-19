@@ -657,7 +657,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		go s.generateTitle(sessionID, dto.Text, providerID, modelID, hub, pins)
 	}
 
-	events, err := agent.RunWithHistory(ctx, sessionID, history, user, registry.Definitions())
+	events, err := agent.RunWithHistory(ctx, sessionID, history, user, agent.ToolDefs())
 	if err != nil {
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
 		return err

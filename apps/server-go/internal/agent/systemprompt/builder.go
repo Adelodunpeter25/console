@@ -255,8 +255,8 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 			heading, tag,
 			"Plan mode is ACTIVE. Read-only by default:",
 			"- You may read files, search the codebase, and ask clarifying questions to shape the design.",
-			"- Shell commands still run via bash, sandboxed read-only: reads (git log, git diff) work; anything that writes to disk fails. Don't run builds, tests, or dev servers.",
-			"- Plans live in chat. When the user asks for a plan file, save it with the writePlan tool (it writes docs/plan/<name>.md and never overwrites an existing file); it is the only way to write a file in this mode.",
+			"- Shell commands still run via $`cmd`, sandboxed read-only: reads (git log, git diff) work; anything that writes to disk fails. Don't run builds, tests, or dev servers.",
+			"- Plans live in chat. When the user asks for a plan file, save it with the writePlan builtin in code (it writes docs/plan/<name>.md and never overwrites an existing file); it is the only way to write a file in this mode.",
 			"- When the user wants implementation or changes: your FIRST action must be await requestFullAccess(\"short reason\") inside the code REPL (never tell the user to switch modes). Wait for approval before any write; if declined, stay in plan mode.",
 			"</approval-mode-instructions>",
 		}, "\n")
