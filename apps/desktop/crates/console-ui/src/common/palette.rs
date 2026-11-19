@@ -61,6 +61,29 @@ pub fn init_palette_keybindings(cx: &mut App) {
     ]);
 }
 
+/// An interactive breadcrumb pill displayed above the search input or results.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PaletteBreadcrumb {
+    pub label: SharedString,
+    pub path: Option<String>,
+    pub icon: Option<IconName>,
+}
+
+impl PaletteBreadcrumb {
+    pub fn new(label: impl Into<SharedString>, path: Option<String>) -> Self {
+        Self {
+            label: label.into(),
+            path,
+            icon: None,
+        }
+    }
+
+    pub fn icon(mut self, icon: IconName) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+}
+
 /// How a palette row draws its leading icon.
 #[derive(Clone)]
 pub enum PaletteIcon {
@@ -508,6 +531,10 @@ pub struct CommandPaletteModal {
     /// Navigation hook for `keep_open` rows (e.g. drilling into a folder):
     /// called with the entry's id instead of dismissing the palette.
     browse_callback: Option<Rc<dyn Fn(&str, &mut Window, &mut App)>>,
+    /// Optional breadcrumbs for folder hierarchy navigation.
+    breadcrumbs: Vec<PaletteBreadcrumb>,
+    /// Optional parent path for the header back button.
+    back_path: Option<String>,
     /// Monotonic token for debounced async searches: a result is applied only
     /// while its generation is still the latest (see [`Self::set_entries`]).
     search_generation: u64,
@@ -549,6 +576,8 @@ impl CommandPaletteModal {
             scroll: ScrollHandle::new(),
             query_handler: None,
             browse_callback: None,
+            breadcrumbs: Vec::new(),
+            back_path: None,
             search_generation: 0,
             _subscription: subscription,
         }
@@ -572,9 +601,23 @@ impl CommandPaletteModal {
         self.input.update(cx, |input, cx| input.clear(cx));
         self.selected = 0;
         self.tab = None;
+        self.breadcrumbs.clear();
+        self.back_path = None;
         self.search_generation = 0;
         self.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
         self.apply_tab_placeholder(cx);
+        cx.notify();
+    }
+
+    /// Set breadcrumb trail and back-path for folder navigation palettes.
+    pub fn set_navigation_crumbs(
+        &mut self,
+        crumbs: Vec<PaletteBreadcrumb>,
+        back_path: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.breadcrumbs = crumbs;
+        self.back_path = back_path;
         cx.notify();
     }
 
@@ -847,6 +890,123 @@ impl Render for CommandPaletteModal {
             });
         }
 
+        let navigation_bar = (!self.breadcrumbs.is_empty() || self.back_path.is_some()).then(|| {
+            let palette = palette.clone();
+            let back_path = self.back_path.clone();
+            let can_back = back_path.is_some();
+            
+            let mut bar = div()
+                .flex_none()
+                .h(px(34.0))
+                .px(px(12.0))
+                .flex()
+                .items_center()
+                .gap(px(6.0))
+                .border_b_1()
+                .border_color(theme.border)
+                .bg(theme.overlay.opacity(0.35))
+                .text_size(px(12.0));
+
+            // Back button (←)
+            let back_palette = palette.clone();
+            bar = bar.child(
+                div()
+                    .id("palette-nav-back")
+                    .size(px(22.0))
+                    .rounded(px(5.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .when(can_back, |btn| {
+                        btn.cursor_pointer()
+                            .text_color(theme.text_secondary)
+                            .hover(|btn| btn.bg(theme.overlay).text_color(theme.text))
+                            .on_click(move |_, window, cx| {
+                                if let Some(path) = &back_path
+                                    && let Some(palette) = back_palette.upgrade()
+                                {
+                                    let callback = palette.read(cx).browse_callback.clone();
+                                    if let Some(callback) = callback {
+                                        callback(path, window, cx);
+                                    }
+                                }
+                            })
+                    })
+                    .when(!can_back, |btn| {
+                        btn.text_color(theme.text_ghost.opacity(0.4))
+                    })
+                    .child(app_icon(IconName::ArrowLeft, 13.0, if can_back { theme.text_secondary } else { theme.text_ghost.opacity(0.4) })),
+            );
+
+            // Breadcrumb trail
+            let mut crumbs_container = div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .overflow_hidden();
+
+            let crumb_count = self.breadcrumbs.len();
+            for (i, crumb) in self.breadcrumbs.iter().enumerate() {
+                let is_last = i + 1 == crumb_count;
+                let crumb_path = crumb.path.clone();
+                let crumb_palette = palette.clone();
+
+                let crumb_el = div()
+                    .id(ElementId::from(("palette-crumb", i)))
+                    .flex_none()
+                    .max_w(px(140.0))
+                    .h(px(22.0))
+                    .px(px(5.0))
+                    .rounded(px(4.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(4.0))
+                    .text_size(px(11.5))
+                    .when(!is_last && crumb_path.is_some(), |el| {
+                        let path = crumb_path.clone().unwrap();
+                        let p = crumb_palette.clone();
+                        el.cursor_pointer()
+                            .text_color(theme.text_secondary)
+                            .hover(|el| el.bg(theme.overlay).text_color(theme.text))
+                            .on_click(move |_, window, cx| {
+                                if let Some(palette) = p.upgrade() {
+                                    let callback = palette.read(cx).browse_callback.clone();
+                                    if let Some(callback) = callback {
+                                        callback(&path, window, cx);
+                                    }
+                                }
+                            })
+                    })
+                    .when(is_last, |el| {
+                        el.font_weight(FontWeight::MEDIUM)
+                            .text_color(theme.text)
+                    })
+                    .when_some(crumb.icon, |el, icon| {
+                        el.child(app_icon(icon, 12.0, if is_last { theme.text } else { theme.text_secondary }))
+                    })
+                    .child(
+                        div()
+                            .truncate()
+                            .child(crumb.label.clone()),
+                    );
+
+                crumbs_container = crumbs_container.child(crumb_el);
+
+                if !is_last {
+                    crumbs_container = crumbs_container.child(
+                        div()
+                            .flex_none()
+                            .text_color(theme.text_ghost.opacity(0.6))
+                            .child(app_icon(IconName::ChevronRight, 10.0, theme.text_ghost.opacity(0.6))),
+                    );
+                }
+            }
+
+            bar.child(crumbs_container)
+        });
+
         let tabs = (self.show_tabs && layout.sections.len() >= 2).then(|| {
             let mut bar = div()
                 .flex_none()
@@ -932,6 +1092,7 @@ impl Render for CommandPaletteModal {
                     )))
                     .child(div().flex_1().min_w_0().child(self.input.clone())),
             )
+            .children(navigation_bar)
             .children(tabs)
             .when(!layout.rows.is_empty(), |card| card.child(list))
             .when(empty, |card| {

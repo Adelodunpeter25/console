@@ -20,6 +20,7 @@ use gpui::{App, AppContext, Context, Entity, IntoElement, Render, Window};
 use crate::CommandPaletteModal;
 use crate::IconName;
 use crate::PaletteEntry;
+use crate::common::palette::PaletteBreadcrumb;
 
 pub struct ProjectBrowsePalette {
     modal: Entity<CommandPaletteModal>,
@@ -113,13 +114,10 @@ impl ProjectBrowsePalette {
                     let _ = this.update(cx, |this, cx| {
                         this.current_path = Some(resp.current_path.clone());
                         this.parent_path = resp.parent_path.clone();
+                        let crumbs = build_breadcrumbs(&resp.current_path);
                         this.modal.update(cx, |m, cx| {
-                            // Show the current path in the placeholder so the
-                            // user always knows where they are.
-                            m.set_placeholder(
-                                format!("Filter in {}…", short_path(&resp.current_path)),
-                                cx,
-                            );
+                            m.set_navigation_crumbs(crumbs, resp.parent_path.clone(), cx);
+                            m.set_placeholder("Search folders…", cx);
                             m.set_entries(
                                 entries_from_browse(
                                     resp.current_path,
@@ -149,6 +147,47 @@ impl Render for ProjectBrowsePalette {
         // Return the modal entity directly — same as CommandPalette.
         self.modal.clone()
     }
+}
+
+/// Build clickable breadcrumb trail for `current_path`.
+fn build_breadcrumbs(current_path: &str) -> Vec<PaletteBreadcrumb> {
+    let mut crumbs = Vec::new();
+    crumbs.push(PaletteBreadcrumb::new("New project", None).icon(IconName::FolderNew));
+
+    let home_path = console_shared::path::home_dir()
+        .and_then(|h| h.into_os_string().into_string().ok());
+
+    if let Some(ref home) = home_path
+        && (current_path == home || current_path.starts_with(&format!("{home}/")))
+    {
+        crumbs.push(
+            PaletteBreadcrumb::new("Home", Some(home.clone()))
+                .icon(IconName::Home),
+        );
+
+        let rest = current_path.strip_prefix(home).unwrap_or("");
+        let mut accum = home.clone();
+        for seg in rest.split('/').filter(|s| !s.is_empty()) {
+            accum.push('/');
+            accum.push_str(seg);
+            crumbs.push(PaletteBreadcrumb::new(seg.to_string(), Some(accum.clone())).icon(IconName::Folder));
+        }
+    } else {
+        // Non-home root path (e.g. /var or Windows drive)
+        let mut accum = String::new();
+        let segments: Vec<&str> = current_path.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
+        for seg in segments {
+            if accum.is_empty() && current_path.starts_with('/') {
+                accum.push('/');
+            } else if !accum.is_empty() && !accum.ends_with('/') {
+                accum.push('/');
+            }
+            accum.push_str(seg);
+            crumbs.push(PaletteBreadcrumb::new(seg.to_string(), Some(accum.clone())).icon(IconName::Folder));
+        }
+    }
+
+    crumbs
 }
 
 /// Shorten a path for the placeholder (home → ~, otherwise basename tail).
