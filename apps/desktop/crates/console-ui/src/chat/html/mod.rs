@@ -1,22 +1,19 @@
 //! Inline HTML render card for `render` tool results.
 //!
-//! Collapsed state shows the snapshot PNG (when present) or a compact titled
-//! banner; expanding mounts a sandboxed `WebviewHost` pointed at
-//! `/api/fs/file/html`. Non-macOS platforms degrade cleanly to snapshot +
-//! open-in-browser.
+//! Shows the snapshot PNG (when present) or a compact interactive-page banner
+//! with "Open in browser" (dedicated Browser workspace tab) and "Open in editor".
+//! Opening in a real workspace tab gives full space, real developer tools,
+//! scrolling, and avoids native NSView window-overlay clipping bugs.
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::{Arc, LazyLock, Mutex};
 
 use console_core::{ConsoleClient, HtmlArtifact};
+use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, ElementId, HitboxBehavior, ImageFormat, InteractiveElement, IntoElement, MouseButton,
-    ObjectFit, ParentElement, RenderOnce, Styled, Window, canvas, div, img, prelude::*, px,
+    App, AppContext, ElementId, ImageFormat, InteractiveElement, IntoElement, MouseButton,
+    ObjectFit, ParentElement, RenderOnce, Styled, StyledImage, Window, div, img, px,
 };
 
-use crate::browser::host::{HostCallbacks, HostContent, SystemWebviewHost as WebviewHost};
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -38,134 +35,7 @@ pub async fn resolve_html_url(path: &str, is_dark: bool) -> Option<String> {
     Some(client.fs.html_url(path, theme, token.as_deref()).await)
 }
 
-#[derive(Default)]
-struct CardState {
-    expanded: bool,
-    measured_height: Option<f32>,
-    url: Option<String>,
-    url_loading: bool,
-}
-
-static CARDS: LazyLock<Mutex<HashMap<String, CardState>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-#[cfg(target_os = "macos")]
-thread_local! {
-    static HOSTS: RefCell<HashMap<String, Rc<WebviewHost>>> = RefCell::new(HashMap::new());
-}
-
-fn ensure_url(row: &str, path: &str, is_dark: bool, cx: &mut App) -> Option<String> {
-    let mut map = CARDS.lock().ok()?;
-    let entry = map.entry(row.to_string()).or_default();
-    if let Some(url) = &entry.url {
-        return Some(url.clone());
-    }
-    if entry.url_loading {
-        return None;
-    }
-    entry.url_loading = true;
-    drop(map);
-
-    let row_key = row.to_string();
-    let path_owned = path.to_string();
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    tokio::spawn(async move {
-        let _ = tx.send(resolve_html_url(&path_owned, is_dark).await);
-    });
-    cx.spawn(async move |cx| {
-        let url = rx.await.ok().flatten();
-        cx.update(|cx| {
-            if let Ok(mut map) = CARDS.lock() {
-                let entry = map.entry(row_key).or_default();
-                entry.url_loading = false;
-                entry.url = url;
-            }
-            cx.refresh_windows();
-        });
-    })
-    .detach();
-    None
-}
-
-#[cfg(target_os = "macos")]
-fn ensure_host(row: &str, url: &str, window: &mut Window, cx: &mut App) -> Option<Rc<WebviewHost>> {
-    if let Some(existing) = HOSTS.with(|h| h.borrow().get(row).cloned()) {
-        return Some(existing);
-    }
-    let base_page = url.split('#').next().unwrap_or(url).to_string();
-    let row_key = row.to_string();
-    let nav_cx = cx.to_async();
-    let ipc_cx = cx.to_async();
-    let win_cx = cx.to_async();
-    let content = HostContent {
-        user_agent: None,
-        initialization_script: None,
-        html: None,
-        allow_navigation: Some(Box::new(move |target| {
-            let target_base = target.split('#').next().unwrap_or(&target);
-            if target_base == base_page {
-                return true;
-            }
-            if target.starts_with("http://") || target.starts_with("https://") {
-                let _ = nav_cx.update(|cx| cx.open_url(&target));
-            }
-            false
-        })),
-        on_ipc: Some(Box::new(move |body| {
-            let Ok(val) = serde_json::from_str::<serde_json::Value>(&body) else {
-                return;
-            };
-            let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("");
-            match method {
-                "console/size-changed" => {
-                    if let Some(h) = val
-                        .get("params")
-                        .and_then(|p| p.get("height"))
-                        .and_then(|h| h.as_f64())
-                    {
-                        let clamped = (h as f32).clamp(80.0, 2000.0);
-                        if let Ok(mut map) = CARDS.lock() {
-                            if let Some(entry) = map.get_mut(&row_key) {
-                                entry.measured_height = Some(clamped);
-                            }
-                        }
-                        let _ = ipc_cx.update(|cx| cx.refresh_windows());
-                    }
-                }
-                "console/open-link" => {
-                    if let Some(link) = val
-                        .get("params")
-                        .and_then(|p| p.get("url"))
-                        .and_then(|u| u.as_str())
-                    {
-                        let link = link.to_string();
-                        let _ = ipc_cx.update(|cx| cx.open_url(&link));
-                    }
-                }
-                _ => {}
-            }
-        })),
-        on_title: None,
-        on_new_window_url: Some(Box::new(move |target| {
-            if target.starts_with("http://") || target.starts_with("https://") {
-                let _ = win_cx.update(|cx| cx.open_url(&target));
-            }
-        })),
-    };
-    let callbacks = HostCallbacks {
-        on_responder_change: Box::new(|_| {}),
-        on_nav_start: Box::new(|| {}),
-        on_nav_finish: Box::new(|| {}),
-        on_nav_error: Box::new(|_| {}),
-    };
-    let host = WebviewHost::create(window, content, callbacks).ok()?;
-    host.load_url(url);
-    let rc = Rc::new(host);
-    HOSTS.with(|h| h.borrow_mut().insert(row.to_string(), rc.clone()));
-    Some(rc)
-}
-
-pub type HtmlActionHandler = Rc<dyn Fn(String, &mut Window, &mut App)>;
+pub type HtmlActionHandler = std::rc::Rc<dyn Fn(String, &mut Window, &mut App)>;
 
 /// One inline card for a `render` tool result.
 #[derive(IntoElement)]
@@ -198,15 +68,8 @@ impl HtmlCard {
 }
 
 impl RenderOnce for HtmlCard {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
-        let url = ensure_url(&self.row, &self.artifact.path, theme.is_dark, cx);
-        let (expanded, measured_height) = CARDS
-            .lock()
-            .ok()
-            .and_then(|m| m.get(&self.row).map(|s| (s.expanded, s.measured_height)))
-            .unwrap_or((false, None));
-
         let display_title = if self.artifact.title.trim().is_empty() {
             std::path::Path::new(&self.artifact.path)
                 .file_name()
@@ -222,20 +85,10 @@ impl RenderOnce for HtmlCard {
             .unwrap_or(&self.artifact.path)
             .to_string();
 
-        let frame_height = measured_height
-            .unwrap_or_else(|| {
-                if self.artifact.height > 0 {
-                    (self.artifact.height as f32).clamp(80.0, 2000.0)
-                } else {
-                    420.0
-                }
-            });
-
-        let row_toggle = self.row.clone();
         let path_editor = self.artifact.path.clone();
+        let path_browser = self.artifact.path.clone();
         let on_open_editor = self.on_open_editor.clone();
         let on_open_browser = self.on_open_browser.clone();
-        let url_for_tab = url.clone();
 
         let header = div()
             .w_full()
@@ -276,36 +129,6 @@ impl RenderOnce for HtmlCard {
                     .flex()
                     .items_center()
                     .gap(px(6.0))
-                    .when(cfg!(target_os = "macos"), |el| {
-                        el.child(
-                            div()
-                                .id(ElementId::Name(format!("html-toggle-{}", self.row).into()))
-                                .px(px(8.0))
-                                .py(px(4.0))
-                                .rounded(px(6.0))
-                                .bg(theme.raised)
-                                .hover(|s| s.bg(theme.overlay_strong))
-                                .cursor_pointer()
-                                .text_size(px(11.5))
-                                .text_color(theme.text)
-                                .child(if expanded { "Collapse" } else { "Expand" })
-                                .on_mouse_down(MouseButton::Left, move |_, _window, cx| {
-                                    if let Ok(mut map) = CARDS.lock() {
-                                        let entry = map.entry(row_toggle.clone()).or_default();
-                                        entry.expanded = !entry.expanded;
-                                        #[cfg(target_os = "macos")]
-                                        if !entry.expanded {
-                                            HOSTS.with(|h| {
-                                                if let Some(host) = h.borrow().get(&row_toggle) {
-                                                    host.set_visible(false);
-                                                }
-                                            });
-                                        }
-                                    }
-                                    cx.refresh_windows();
-                                }),
-                        )
-                    })
                     .when_some(on_open_editor, |el, handler| {
                         el.child(
                             div()
@@ -323,75 +146,42 @@ impl RenderOnce for HtmlCard {
                                 }),
                         )
                     })
-                    .when_some(url_for_tab.zip(on_open_browser), |el, (u, handler)| {
+                    .when_some(on_open_browser.clone(), |el, handler| {
+                        let is_dark = theme.is_dark;
+                        let p = path_browser.clone();
                         el.child(
                             div()
                                 .id(ElementId::Name(format!("html-tab-{}", self.row).into()))
                                 .px(px(8.0))
                                 .py(px(4.0))
                                 .rounded(px(6.0))
-                                .hover(|s| s.bg(theme.overlay))
+                                .bg(theme.raised)
+                                .hover(|s| s.bg(theme.overlay_strong))
                                 .cursor_pointer()
                                 .text_size(px(11.5))
-                                .text_color(theme.text_secondary)
-                                .child("Browser tab")
+                                .text_color(theme.text)
+                                .child("Open in browser")
                                 .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                    handler(u.clone(), window, cx);
+                                    let h = handler.clone();
+                                    let path_clone = p.clone();
+                                    let (tx, rx) = tokio::sync::oneshot::channel();
+                                    tokio::spawn(async move {
+                                        let _ = tx.send(resolve_html_url(&path_clone, is_dark).await);
+                                    });
+                                    let win_handle = window.window_handle();
+                                    cx.spawn(async move |cx| {
+                                        let Some(url) = rx.await.ok().flatten() else { return; };
+                                        let _ = cx.update_window(win_handle, move |_view, window, cx| {
+                                            h(url, window, cx);
+                                        });
+                                    })
+                                    .detach();
                                 }),
                         )
                     }),
             );
 
-        let body = if expanded {
-            #[cfg(target_os = "macos")]
-            {
-                if let Some(u) = &url {
-                    if let Some(host) = ensure_host(&self.row, u, window, cx) {
-                        host.set_visible(true);
-                        div()
-                            .w_full()
-                            .h(px(frame_height))
-                            .relative()
-                            .child(
-                                canvas(
-                                    move |bounds, window, _| {
-                                        host.sync_bounds(bounds, window.scale_factor());
-                                        window.insert_hitbox(bounds, HitboxBehavior::Normal)
-                                    },
-                                    move |_, _hitbox, _window, _| {},
-                                )
-                                .absolute()
-                                .size_full(),
-                            )
-                            .into_any_element()
-                    } else {
-                        div()
-                            .p(px(14.0))
-                            .text_size(px(12.5))
-                            .text_color(theme.text_tertiary)
-                            .child("Could not start webview.")
-                            .into_any_element()
-                    }
-                } else {
-                    div()
-                        .p(px(14.0))
-                        .text_size(px(12.5))
-                        .text_color(theme.text_tertiary)
-                        .child("Loading page…")
-                        .into_any_element()
-                }
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                let _ = (window, frame_height);
-                div()
-                    .p(px(14.0))
-                    .text_size(px(12.5))
-                    .text_color(theme.text_tertiary)
-                    .child("Inline webview is macOS-only; use External to open in your browser.")
-                    .into_any_element()
-            }
-        } else if let Some(bytes) = self.artifact.snapshot {
+        let body = if let Some(bytes) = self.artifact.snapshot {
             let image = Arc::new(gpui::Image::from_bytes(ImageFormat::Png, bytes));
             div()
                 .w_full()
@@ -405,12 +195,49 @@ impl RenderOnce for HtmlCard {
                 )
                 .into_any_element()
         } else {
+            let on_browser_click = on_open_browser;
+            let is_dark = theme.is_dark;
+            let p = self.artifact.path.clone();
             div()
-                .px(px(12.0))
-                .py(px(12.0))
-                .text_size(px(12.5))
-                .text_color(theme.text_secondary)
-                .child("Interactive HTML page — click Expand to load inline, or open in a browser tab.")
+                .w_full()
+                .p(px(12.0))
+                .flex()
+                .items_center()
+                .justify_between()
+                .rounded(px(6.0))
+                .cursor_pointer()
+                .hover(|s| s.bg(theme.overlay))
+                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                    if let Some(h) = &on_browser_click {
+                        let h = h.clone();
+                        let path_clone = p.clone();
+                        let (tx, rx) = tokio::sync::oneshot::channel();
+                        tokio::spawn(async move {
+                            let _ = tx.send(resolve_html_url(&path_clone, is_dark).await);
+                        });
+                        let win_handle = window.window_handle();
+                        cx.spawn(async move |cx| {
+                            let Some(url) = rx.await.ok().flatten() else { return; };
+                            let _ = cx.update_window(win_handle, move |_view, window, cx| {
+                                h(url, window, cx);
+                            });
+                        })
+                        .detach();
+                    }
+                })
+                .child(
+                    div()
+                        .text_size(px(12.5))
+                        .text_color(theme.text_secondary)
+                        .child("Interactive HTML page"),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(theme.accent)
+                        .child("Open in browser tab →"),
+                )
                 .into_any_element()
         };
 
