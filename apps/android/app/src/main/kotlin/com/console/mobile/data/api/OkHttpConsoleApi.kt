@@ -5,7 +5,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.console.mobile.data.model.toUi
 import com.console.mobile.data.model.ApprovalModeOption
+import com.console.mobile.data.model.Automation
 import com.console.mobile.data.model.BackgroundWork
+import com.console.mobile.data.model.WebhookSubscription
 import com.console.mobile.data.model.BackgroundWorkOutput
 import com.console.mobile.data.model.SessionBootstrapResponse
 import console.v1.AuthStatusResponse
@@ -1005,6 +1007,38 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         )
         val stopped = http.unwrapOrRawAdapter(raw, stopScriptRunAdapter, "stop script run")
         return stopped.stopped
+    }
+
+    // --- automations & webhooks ----------------------------------------------
+
+    override suspend fun getAutomations(sessionId: String?): List<Automation> {
+        val raw = http.get("/api/automations", mapOf("sessionId" to sessionId))
+        return http.unwrap(raw, ListSerializer(Automation.serializer()), "load automations")
+    }
+
+    override suspend fun pauseAutomation(id: String): Automation {
+        val raw = http.post("/api/automations/${enc(id)}/pause")
+        return http.unwrap(raw, Automation.serializer(), "pause automation")
+    }
+
+    override suspend fun resumeAutomation(id: String): Automation {
+        val raw = http.post("/api/automations/${enc(id)}/resume")
+        return http.unwrap(raw, Automation.serializer(), "resume automation")
+    }
+
+    override suspend fun deleteAutomation(id: String) {
+        val raw = http.delete("/api/automations/${enc(id)}")
+        ensureOk(raw, "delete automation")
+    }
+
+    override suspend fun getWebhooks(sessionId: String?): List<WebhookSubscription> {
+        val raw = http.get("/api/webhooks", mapOf("sessionId" to sessionId))
+        return http.unwrap(raw, ListSerializer(WebhookSubscription.serializer()), "load webhooks")
+    }
+
+    override suspend fun deleteWebhook(id: String) {
+        val raw = http.delete("/api/webhooks/${enc(id)}")
+        ensureOk(raw, "delete webhook")
     }
 
     private fun ensureOk(raw: String, action: String) {

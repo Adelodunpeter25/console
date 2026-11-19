@@ -12,6 +12,7 @@ import com.console.mobile.data.local.ChatPersistence
 import com.console.mobile.data.local.PreferencesStore
 import com.console.mobile.data.local.TokenStore
 import com.console.mobile.data.repo.AuthRepository
+import com.console.mobile.data.repo.AutomationsRepository
 import com.console.mobile.data.repo.SetupRepository
 import com.console.mobile.data.repo.ChatRepository
 import com.console.mobile.data.repo.EnvironmentsRepository
@@ -193,6 +194,9 @@ object AppContainer {
     lateinit var scriptsRepository: ScriptsRepository
         private set
 
+    lateinit var automationsRepository: AutomationsRepository
+        private set
+
     /**
      * Teardown that outlives any screen — dropping the port tunnels when the
      * server changes. Screens keep their own scopes for their own work.
@@ -361,6 +365,11 @@ object AppContainer {
             apiClient = consoleApiClient,
             httpClient = httpClient,
         )
+        automationsRepository = AutomationsRepository(
+            api = consoleApi,
+            apiClient = consoleApiClient,
+            httpClient = httpClient,
+        )
         environmentsRepository = EnvironmentsRepository(
             preferencesStore = preferencesStore,
             environmentsState = environmentsStateHolder,
@@ -380,6 +389,7 @@ object AppContainer {
                 // for whichever server is active now.
                 backgroundScope.launch { portsRepository.stop() }
                 scriptsRepository.clear()
+                automationsRepository.restart()
                 projectRepository.loadProjects()
                 sessionRepository.loadSessions()
                 providerRepository.loadProviders()
@@ -404,6 +414,8 @@ object AppContainer {
                     "pairing, diffs, labels and file icons are disabled",
             )
         }
+
+        automationsRepository.start()
 
         notificationCoordinator = NotificationCoordinator(
             context = app,

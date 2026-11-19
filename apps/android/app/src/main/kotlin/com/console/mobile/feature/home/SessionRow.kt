@@ -33,6 +33,8 @@ import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionHeader
 import com.console.mobile.data.model.SessionStatus
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Bolt
+import io.github.lyxnx.compose.ui.tablericons.outline.Calendar
 import io.github.lyxnx.compose.ui.tablericons.outline.Pencil
 import kotlinx.coroutines.delay
 
@@ -48,6 +50,8 @@ internal fun SessionRow(
     status: SessionStatus?,
     isDraft: Boolean,
     draftPreview: String?,
+    hasAutomation: Boolean = false,
+    hasWebhook: Boolean = false,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
@@ -100,6 +104,22 @@ internal fun SessionRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                if (hasAutomation) {
+                    Icon(
+                        TablerIcons.Outline.Calendar,
+                        contentDescription = "Scheduled automation",
+                        tint = NewTheme.Accent,
+                        modifier = Modifier.padding(start = 8.dp).size(14.dp),
+                    )
+                }
+                if (hasWebhook) {
+                    Icon(
+                        TablerIcons.Outline.Bolt,
+                        contentDescription = "Active webhook",
+                        tint = NewTheme.Accent,
+                        modifier = Modifier.padding(start = 6.dp).size(14.dp),
                     )
                 }
                 if (isDraft) {

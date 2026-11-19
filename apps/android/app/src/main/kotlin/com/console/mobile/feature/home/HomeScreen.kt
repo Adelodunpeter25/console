@@ -77,6 +77,14 @@ fun HomeScreen(
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
     val chatSessions by AppContainer.chatStateHolder.sessions.collectAsStateWithLifecycle()
     val sessionStatuses by AppContainer.sessionStateHolder.statuses.collectAsStateWithLifecycle()
+    val allAutomations by AppContainer.automationsRepository.automations.collectAsStateWithLifecycle()
+    val allWebhooks by AppContainer.automationsRepository.webhooks.collectAsStateWithLifecycle()
+    val automationSessionIds = remember(allAutomations) {
+        allAutomations.filter { it.status == "active" || it.status == "paused" }.map { it.sessionId }.toSet()
+    }
+    val webhookSessionIds = remember(allWebhooks) {
+        allWebhooks.filter { it.status == "active" }.map { it.sessionId }.toSet()
+    }
     var searchQuery by remember { mutableStateOf("") }
     var refreshing by remember { mutableStateOf(false) }
     var activeSession by remember { mutableStateOf<SessionHeader?>(null) }
@@ -241,6 +249,8 @@ fun HomeScreen(
                                                 status = status,
                                                 isDraft = isDraft,
                                                 draftPreview = preview,
+                                                hasAutomation = session.id in automationSessionIds,
+                                                hasWebhook = session.id in webhookSessionIds,
                                                 onClick = {
                                                     scope.launch { AppContainer.sessionRepository.loadDetail(session.id) }
                                                     AppContainer.appStateHolder.openChatSession(session.id)

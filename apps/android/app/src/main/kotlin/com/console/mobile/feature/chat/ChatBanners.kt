@@ -51,15 +51,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.ChangeTotals
+import com.console.mobile.data.model.Automation
 import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.BackgroundWorkOutput
+import com.console.mobile.data.model.WebhookSubscription
 import com.console.mobile.data.model.applyFrame
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowLeft
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
+import io.github.lyxnx.compose.ui.tablericons.outline.Bolt
+import io.github.lyxnx.compose.ui.tablericons.outline.Calendar
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.PlayerPause
+import io.github.lyxnx.compose.ui.tablericons.outline.PlayerPlay
+import io.github.lyxnx.compose.ui.tablericons.outline.X
 import io.github.lyxnx.compose.ui.tablericons.outline.FileDiff
 import io.github.lyxnx.compose.ui.tablericons.outline.GridDots
 import io.github.lyxnx.compose.ui.tablericons.outline.ListCheck
@@ -164,16 +171,20 @@ fun ComposerPills(
     showTasks: Boolean,
     subagents: List<SubagentInfo>,
     shellCount: Int,
+    automationCount: Int = 0,
+    webhookCount: Int = 0,
+    hasActiveAutomationOrWebhook: Boolean = false,
     changes: ChangeTotals,
     onTasks: () -> Unit,
     onSubagents: () -> Unit,
     onShells: () -> Unit,
+    onAutomations: () -> Unit = {},
     onChanges: () -> Unit,
     suggestions: List<String> = emptyList(),
     onSuggestion: (String) -> Unit = {},
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    if (!showTasks && subagents.isEmpty() && shellCount == 0 && changes.files == 0 && suggestions.isEmpty() && trailing == null) return
+    if (!showTasks && subagents.isEmpty() && shellCount == 0 && automationCount == 0 && webhookCount == 0 && changes.files == 0 && suggestions.isEmpty() && trailing == null) return
     val scroll = rememberScrollState()
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).padding(bottom = 8.dp),
@@ -210,6 +221,19 @@ fun ComposerPills(
                     text = "$shellCount ${if (shellCount == 1) "shell" else "shells"}",
                     running = true,
                     onClick = onShells,
+                )
+            }
+            if (automationCount > 0 || webhookCount > 0) {
+                val label = when {
+                    automationCount > 0 && webhookCount > 0 -> "$automationCount sched · $webhookCount hook"
+                    automationCount > 0 -> "$automationCount ${if (automationCount == 1) "schedule" else "schedules"}"
+                    else -> "$webhookCount ${if (webhookCount == 1) "webhook" else "webhooks"}"
+                }
+                ContextPill(
+                    icon = if (automationCount > 0) TablerIcons.Outline.Calendar else TablerIcons.Outline.Bolt,
+                    text = label,
+                    running = hasActiveAutomationOrWebhook,
+                    onClick = onAutomations,
                 )
             }
             // Follow-ups share the scroller, after the status pills, so a phone
@@ -642,5 +666,111 @@ private fun StopShellButton(onClick: () -> Unit, enabled: Boolean = true) {
             tint = NewTheme.Danger.copy(alpha = if (enabled) 1f else 0.5f),
             modifier = Modifier.size(16.dp),
         )
+    }
+}
+
+@Composable
+fun AutomationsBottomSheet(
+    automations: List<Automation>,
+    webhooks: List<WebhookSubscription>,
+    onPauseAutomation: (String) -> Unit,
+    onResumeAutomation: (String) -> Unit,
+    onDeleteAutomation: (String) -> Unit,
+    onDeleteWebhook: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val total = automations.size + webhooks.size
+    BaseSheet(onDismiss = onDismiss, title = "Automations & Webhooks ($total)") {
+        if (total == 0) {
+            SectionCard { Note("No active automations or webhooks on this chat.") }
+        } else {
+            SectionCard {
+                automations.forEachIndexed { index, auto ->
+                    val isPaused = auto.status == "paused"
+                    val isError = auto.status == "error"
+                    val subtitle = if (auto.kind == "interval") {
+                        "Every ${auto.intervalSeconds}s · ${auto.status}"
+                    } else {
+                        "One-shot · ${auto.status}"
+                    }
+                    OptionRow(
+                        title = auto.prompt,
+                        subtitle = subtitle,
+                        leading = {
+                            Icon(
+                                TablerIcons.Outline.Calendar,
+                                contentDescription = null,
+                                tint = if (isError) NewTheme.Danger else if (isPaused) NewTheme.TextMuted else NewTheme.Accent,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        trailing = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(
+                                    modifier = Modifier.size(34.dp).clip(CircleShape)
+                                        .background(NewTheme.Raised)
+                                        .clickable {
+                                            if (isPaused || isError) onResumeAutomation(auto.id)
+                                            else onPauseAutomation(auto.id)
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        if (isPaused || isError) TablerIcons.Outline.PlayerPlay else TablerIcons.Outline.PlayerPause,
+                                        contentDescription = if (isPaused || isError) "Resume" else "Pause",
+                                        tint = NewTheme.TextSecondary,
+                                        modifier = Modifier.size(15.dp),
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier.size(34.dp).clip(CircleShape)
+                                        .background(NewTheme.Danger.copy(alpha = 0.16f))
+                                        .clickable { onDeleteAutomation(auto.id) },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        TablerIcons.Outline.X,
+                                        contentDescription = "Delete",
+                                        tint = NewTheme.Danger,
+                                        modifier = Modifier.size(15.dp),
+                                    )
+                                }
+                            }
+                        },
+                    ) {}
+                    if (index < automations.lastIndex || webhooks.isNotEmpty()) SectionDivider(startInset = 42.dp)
+                }
+                webhooks.forEachIndexed { index, hook ->
+                    OptionRow(
+                        title = hook.prompt,
+                        subtitle = "Webhook · ${hook.topic} · ${hook.status}",
+                        leading = {
+                            Icon(
+                                TablerIcons.Outline.Bolt,
+                                contentDescription = null,
+                                tint = NewTheme.Accent,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        trailing = {
+                            Box(
+                                modifier = Modifier.size(34.dp).clip(CircleShape)
+                                    .background(NewTheme.Danger.copy(alpha = 0.16f))
+                                    .clickable { onDeleteWebhook(hook.id) },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    TablerIcons.Outline.X,
+                                    contentDescription = "Delete",
+                                    tint = NewTheme.Danger,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                            }
+                        },
+                    ) {}
+                    if (index < webhooks.lastIndex) SectionDivider(startInset = 42.dp)
+                }
+            }
+        }
     }
 }
