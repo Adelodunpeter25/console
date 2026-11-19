@@ -216,11 +216,6 @@ impl RenderOnce for HtmlCard {
         } else {
             self.artifact.title.clone()
         };
-        let file_name = std::path::Path::new(&self.artifact.path)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(&self.artifact.path)
-            .to_string();
 
         let frame_height = measured_height
             .unwrap_or_else(|| {
@@ -263,13 +258,6 @@ impl RenderOnce for HtmlCard {
                             .truncate()
                             .child(display_title),
                     )
-                    .child(
-                        div()
-                            .text_size(px(11.5))
-                            .text_color(theme.text_tertiary)
-                            .truncate()
-                            .child(file_name),
-                    ),
             )
             .child(
                 div()
@@ -283,11 +271,10 @@ impl RenderOnce for HtmlCard {
                                 .px(px(8.0))
                                 .py(px(4.0))
                                 .rounded(px(6.0))
-                                .bg(theme.raised)
-                                .hover(|s| s.bg(theme.overlay_strong))
+                                .hover(|s| s.bg(theme.overlay))
                                 .cursor_pointer()
                                 .text_size(px(11.5))
-                                .text_color(theme.text)
+                                .text_color(theme.text_secondary)
                                 .child(if expanded { "Collapse" } else { "Expand" })
                                 .on_mouse_down(MouseButton::Left, move |_, _window, cx| {
                                     if let Ok(mut map) = CARDS.lock() {
