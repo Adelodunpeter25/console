@@ -2,8 +2,8 @@ use console_core::WorkspaceTabConfig;
 use console_ui::workspace::ops as workspace_ops;
 use gpui::Context;
 
-use crate::state::app::{ConsoleDesktopApp, ImageFileState};
 use crate::state::FileMediaDetails;
+use crate::state::app::{ConsoleDesktopApp, ImageFileState};
 
 fn is_html_path(path: &str) -> bool {
     std::path::Path::new(path)
@@ -419,12 +419,14 @@ impl ConsoleDesktopApp {
             | console_core::FileKind::Audio
             | console_core::FileKind::Pdf
             | console_core::FileKind::Details => {
-                self.open_media_contents
-                    .insert(path.clone(), FileMediaDetails {
+                self.open_media_contents.insert(
+                    path.clone(),
+                    FileMediaDetails {
                         kind: media_kind_for(kind),
                         mime_label: String::new(),
                         size_bytes: None,
-                    });
+                    },
+                );
                 cx.notify();
 
                 let client = self.client.clone();
@@ -437,17 +439,15 @@ impl ConsoleDesktopApp {
                     let result = match file_kind {
                         console_core::FileKind::Video
                         | console_core::FileKind::Audio
-                        | console_core::FileKind::Pdf => client
-                            .fs
-                            .media_file_meta(&file_path)
-                            .await
-                            .map(|meta| {
+                        | console_core::FileKind::Pdf => {
+                            client.fs.media_file_meta(&file_path).await.map(|meta| {
                                 meta.map(|m| FileMediaDetails {
                                     kind: media_kind_for(file_kind),
                                     mime_label: m.content_type,
                                     size_bytes: m.size_bytes,
                                 })
-                            }),
+                            })
+                        }
                         _ => client.fs.file_size(&file_path).await.map(|size| {
                             Some(FileMediaDetails {
                                 kind: None,
@@ -464,8 +464,7 @@ impl ConsoleDesktopApp {
                                         // Details files have no player kind;
                                         // their card renders from mime_label
                                         // + size, and `kind` only picks the icon.
-                                        this.open_media_contents
-                                            .insert(file_path.clone(), details);
+                                        this.open_media_contents.insert(file_path.clone(), details);
                                     }
                                     Ok(None) => {
                                         this.open_media_contents.insert(
@@ -478,10 +477,8 @@ impl ConsoleDesktopApp {
                                         );
                                     }
                                     Err(err) => {
-                                        this.open_file_errors.insert(
-                                            file_path.clone(),
-                                            err.to_string(),
-                                        );
+                                        this.open_file_errors
+                                            .insert(file_path.clone(), err.to_string());
                                     }
                                 }
                                 cx.notify();
@@ -819,9 +816,7 @@ impl ConsoleDesktopApp {
 
 /// Map a classified file kind to the media player it needs; `Details` gets
 /// the metadata card (`None`).
-pub(crate) fn media_kind_for(
-    kind: console_core::FileKind,
-) -> Option<console_ui::MediaFileKind> {
+pub(crate) fn media_kind_for(kind: console_core::FileKind) -> Option<console_ui::MediaFileKind> {
     match kind {
         console_core::FileKind::Video => Some(console_ui::MediaFileKind::Video),
         console_core::FileKind::Audio => Some(console_ui::MediaFileKind::Audio),

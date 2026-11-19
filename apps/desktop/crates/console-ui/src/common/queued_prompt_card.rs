@@ -142,7 +142,9 @@ pub fn queued_prompt_row(
                                 ann.component_name
                                     .as_deref()
                                     .map(|c| c.to_string())
-                                    .unwrap_or_else(|| console_shared::format::format_selector_label(&ann.selector)),
+                                    .unwrap_or_else(|| {
+                                        console_shared::format::format_selector_label(&ann.selector)
+                                    }),
                             ),
                     )
                 })

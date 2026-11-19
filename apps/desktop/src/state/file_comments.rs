@@ -451,9 +451,7 @@ impl ConsoleDesktopApp {
             .workspace_pane_states
             .values()
             .flat_map(|pane| pane.file_comments.iter())
-            .filter_map(|c| {
-                Some((c.server_id.clone()?, c.staged_session_id.clone()?))
-            })
+            .filter_map(|c| Some((c.server_id.clone()?, c.staged_session_id.clone()?)))
             .collect();
         let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
             return;
@@ -679,7 +677,8 @@ impl ConsoleDesktopApp {
                 continue;
             };
             for comment in &pane.file_comments {
-                if !comment.is_staged_for(&session_key) || comment.state == FileCommentState::Draft {
+                if !comment.is_staged_for(&session_key) || comment.state == FileCommentState::Draft
+                {
                     continue;
                 }
                 if let Some(server_id) = comment.server_id.as_deref()
@@ -871,7 +870,8 @@ impl ConsoleDesktopApp {
                 continue;
             };
             for comment in &pane.file_comments {
-                if !comment.is_staged_for(&session_key) || comment.state == FileCommentState::Draft {
+                if !comment.is_staged_for(&session_key) || comment.state == FileCommentState::Draft
+                {
                     continue;
                 }
                 if let Some(server_id) = comment.server_id.as_deref()

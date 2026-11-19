@@ -419,14 +419,33 @@ mod macos_host {
             drop(slot);
 
             let r = |v: Pixels| f32::from(v).round() as i32;
-            let key = (r(bounds.origin.x), r(bounds.origin.y), r(bounds.size.width), r(bounds.size.height));
-            let clip_key = (r(clipped.origin.x), r(clipped.origin.y), r(clipped.size.width), r(clipped.size.height));
+            let key = (
+                r(bounds.origin.x),
+                r(bounds.origin.y),
+                r(bounds.size.width),
+                r(bounds.size.height),
+            );
+            let clip_key = (
+                r(clipped.origin.x),
+                r(clipped.origin.y),
+                r(clipped.size.width),
+                r(clipped.size.height),
+            );
             if self.last_bounds.get() != Some(key) || self.last_clip.get() != Some(clip_key) {
                 self.last_bounds.set(Some(key));
                 self.last_clip.set(Some(clip_key));
-                let (cx, cy, cw, ch) = (clip_key.0 as f64, clip_key.1 as f64, clip_key.2 as f64, clip_key.3 as f64);
+                let (cx, cy, cw, ch) = (
+                    clip_key.0 as f64,
+                    clip_key.1 as f64,
+                    clip_key.2 as f64,
+                    clip_key.3 as f64,
+                );
                 let parent_frame = parent.frame();
-                let top = if parent.isFlipped() { cy } else { parent_frame.size.height - cy - ch };
+                let top = if parent.isFlipped() {
+                    cy
+                } else {
+                    parent_frame.size.height - cy - ch
+                };
                 container.setFrame(NSRect::new(NSPoint::new(cx, top), NSSize::new(cw, ch)));
                 let (bx, by, bh) = (key.0 as f64, key.1 as f64, key.3 as f64);
                 self.wk.setFrame(NSRect::new(

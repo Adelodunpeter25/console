@@ -100,7 +100,6 @@ fn data_url_for_html(html: &str) -> String {
     out
 }
 
-
 /// One file tab's media surface. Created per path by the app shell and reused
 /// while the tab is open; `close` hides and detaches the native view.
 pub struct FileMediaView {
@@ -150,7 +149,10 @@ impl FileMediaView {
         }
         self.media_url = url;
         if let Some(host) = &self.host {
-            host.load_url(&data_url_for_html(&media_page_html(self.kind, &self.media_url)));
+            host.load_url(&data_url_for_html(&media_page_html(
+                self.kind,
+                &self.media_url,
+            )));
         }
         cx.notify();
     }
@@ -293,9 +295,12 @@ impl FileMediaView {
             .unwrap_or_else(|| "The media preview could not start.".to_string());
         // BlockedFilePanel has no secondary action; the "Open externally"
         // affordance lives in the toolbar row, which renders regardless.
-        BlockedFilePanel::new(format!("{} preview unavailable", self.kind.label()), message)
-            .icon(self.kind.icon())
-            .into_any_element()
+        BlockedFilePanel::new(
+            format!("{} preview unavailable", self.kind.label()),
+            message,
+        )
+        .icon(self.kind.icon())
+        .into_any_element()
     }
 
     fn render_video_area(&self, theme: Theme) -> gpui::AnyElement {
@@ -445,9 +450,7 @@ mod tests {
             "http://h/api/fs/file/media?path=%2Fa.mp4&token=t",
         );
         assert!(html.contains("<video"));
-        assert!(html.contains(
-            "src=\"http://h/api/fs/file/media?path=%2Fa.mp4&amp;token=t\""
-        ));
+        assert!(html.contains("src=\"http://h/api/fs/file/media?path=%2Fa.mp4&amp;token=t\""));
     }
 
     #[test]

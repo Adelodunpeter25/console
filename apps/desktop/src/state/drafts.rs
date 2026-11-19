@@ -330,5 +330,4 @@ impl ConsoleDesktopApp {
     pub fn revoke_sidebar_draft(&mut self, session_id: &str) {
         self.sidebar_draft_ids.remove(session_id);
     }
-
 }

@@ -264,14 +264,13 @@ impl RenderOnce for HtmlCard {
             self.artifact.title.clone()
         };
 
-        let frame_height = measured_height
-            .unwrap_or_else(|| {
-                if self.artifact.height > 0 {
-                    (self.artifact.height as f32).clamp(80.0, 2000.0)
-                } else {
-                    420.0
-                }
-            });
+        let frame_height = measured_height.unwrap_or_else(|| {
+            if self.artifact.height > 0 {
+                (self.artifact.height as f32).clamp(80.0, 2000.0)
+            } else {
+                420.0
+            }
+        });
 
         let row_toggle = self.row.clone();
         let path_editor = self.artifact.path.clone();
@@ -304,7 +303,7 @@ impl RenderOnce for HtmlCard {
                             .text_color(theme.text)
                             .truncate()
                             .child(display_title),
-                    )
+                    ),
             )
             .child(
                 div()
@@ -380,7 +379,8 @@ impl RenderOnce for HtmlCard {
             #[cfg(target_os = "macos")]
             {
                 if let Some(u) = &url {
-                    if let Some(host) = ensure_host(&self.row, u, self.on_wheel.clone(), window, cx) {
+                    if let Some(host) = ensure_host(&self.row, u, self.on_wheel.clone(), window, cx)
+                    {
                         let guarded = host.clone();
                         let _ = window.use_keyed_state(
                             ElementId::Name(format!("html-host-guard-{}", self.row).into()),

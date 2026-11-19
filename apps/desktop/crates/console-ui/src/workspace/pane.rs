@@ -379,9 +379,8 @@ fn render_node(
             let on_resize = on_resize_split.clone();
             let split_id = split.id.clone();
             let direction = split.direction;
-            let animate = new_pane.is_some_and(|id| {
-                split.children[1].leaves().iter().any(|leaf| leaf.id == id)
-            });
+            let animate = new_pane
+                .is_some_and(|id| split.children[1].leaves().iter().any(|leaf| leaf.id == id));
 
             div()
                 .id(ElementId::Name(
@@ -474,11 +473,7 @@ fn render_node(
                                     SpringAnimation::new(SpringConfig::new(1800.0, 85.0, 1.0))
                                         .to(size_1)
                                         .with_epsilon(0.5);
-                                if animate {
-                                    spring.from(0.0)
-                                } else {
-                                    spring
-                                }
+                                if animate { spring.from(0.0) } else { spring }
                             },
                             move |el, s| {
                                 let progress = (s / size_1.max(1.0)).clamp(0.0, 1.0);

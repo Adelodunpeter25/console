@@ -557,26 +557,24 @@ impl CommandPaletteModal {
         let subscription = cx.subscribe_in(
             &input,
             window,
-            |this, input, event: &ComposerEvent, window, cx| {
-                match event {
-                    ComposerEvent::Edited => {
-                        this.selected = 0;
-                        this.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
-                        let query = input.read(cx).content().trim().to_string();
-                        if let Some(handler) = this.query_handler.clone() {
-                            handler(&query, window, cx);
-                        }
-                        cx.notify();
+            |this, input, event: &ComposerEvent, window, cx| match event {
+                ComposerEvent::Edited => {
+                    this.selected = 0;
+                    this.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+                    let query = input.read(cx).content().trim().to_string();
+                    if let Some(handler) = this.query_handler.clone() {
+                        handler(&query, window, cx);
                     }
-                    ComposerEvent::BackspaceOnEmpty => {
-                        if let Some(parent) = this.back_path.clone()
-                            && let Some(callback) = this.browse_callback.clone()
-                        {
-                            window.defer(cx, move |window, cx| callback(&parent, window, cx));
-                        }
-                    }
-                    _ => {}
+                    cx.notify();
                 }
+                ComposerEvent::BackspaceOnEmpty => {
+                    if let Some(parent) = this.back_path.clone()
+                        && let Some(callback) = this.browse_callback.clone()
+                    {
+                        window.defer(cx, move |window, cx| callback(&parent, window, cx));
+                    }
+                }
+                _ => {}
             },
         );
         Self {
@@ -648,7 +646,12 @@ impl CommandPaletteModal {
         self.select_action_callback = Some(Rc::new(callback));
     }
 
-    fn on_select_action(&mut self, _: &PaletteSelectAction, window: &mut Window, cx: &mut Context<Self>) {
+    fn on_select_action(
+        &mut self,
+        _: &PaletteSelectAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(cb) = self.select_action_callback.clone() {
             cb(window, cx);
         } else {
@@ -936,124 +939,144 @@ impl Render for CommandPaletteModal {
             });
         }
 
-        let navigation_bar = (!self.breadcrumbs.is_empty() || self.back_path.is_some()).then(|| {
-            let palette = palette.clone();
-            let back_path = self.back_path.clone();
-            let can_back = back_path.is_some();
-            
-            let mut bar = div()
-                .flex_none()
-                .h(px(34.0))
-                .px(px(12.0))
-                .flex()
-                .items_center()
-                .gap(px(6.0))
-                .border_b_1()
-                .border_color(theme.border)
-                .bg(theme.overlay.opacity(0.35))
-                .text_size(px(12.0));
+        let navigation_bar =
+            (!self.breadcrumbs.is_empty() || self.back_path.is_some()).then(|| {
+                let palette = palette.clone();
+                let back_path = self.back_path.clone();
+                let can_back = back_path.is_some();
 
-            // Back button (←)
-            let back_palette = palette.clone();
-            bar = bar.child(
-                div()
-                    .id("palette-nav-back")
-                    .size(px(22.0))
-                    .rounded(px(5.0))
+                let mut bar = div()
+                    .flex_none()
+                    .h(px(34.0))
+                    .px(px(12.0))
                     .flex()
                     .items_center()
-                    .justify_center()
-                    .when(can_back, |btn| {
-                        btn.cursor_pointer()
-                            .text_color(theme.text_secondary)
-                            .hover(|btn| btn.bg(theme.overlay).text_color(theme.text))
-                            .on_click(move |_, window, cx| {
-                                if let Some(path) = back_path.clone()
-                                    && let Some(palette) = back_palette.upgrade()
-                                {
-                                    let callback = palette.read(cx).browse_callback.clone();
-                                    if let Some(callback) = callback {
-                                        let target_path = path.clone();
-                                        window.defer(cx, move |window, cx| callback(&target_path, window, cx));
+                    .gap(px(6.0))
+                    .border_b_1()
+                    .border_color(theme.border)
+                    .bg(theme.overlay.opacity(0.35))
+                    .text_size(px(12.0));
+
+                // Back button (←)
+                let back_palette = palette.clone();
+                bar = bar.child(
+                    div()
+                        .id("palette-nav-back")
+                        .size(px(22.0))
+                        .rounded(px(5.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .when(can_back, |btn| {
+                            btn.cursor_pointer()
+                                .text_color(theme.text_secondary)
+                                .hover(|btn| btn.bg(theme.overlay).text_color(theme.text))
+                                .on_click(move |_, window, cx| {
+                                    if let Some(path) = back_path.clone()
+                                        && let Some(palette) = back_palette.upgrade()
+                                    {
+                                        let callback = palette.read(cx).browse_callback.clone();
+                                        if let Some(callback) = callback {
+                                            let target_path = path.clone();
+                                            window.defer(cx, move |window, cx| {
+                                                callback(&target_path, window, cx)
+                                            });
+                                        }
                                     }
-                                }
-                            })
-                    })
-                    .when(!can_back, |btn| {
-                        btn.text_color(theme.text_ghost.opacity(0.4))
-                    })
-                    .child(app_icon(IconName::ArrowLeft, 13.0, if can_back { theme.text_secondary } else { theme.text_ghost.opacity(0.4) })),
-            );
+                                })
+                        })
+                        .when(!can_back, |btn| {
+                            btn.text_color(theme.text_ghost.opacity(0.4))
+                        })
+                        .child(app_icon(
+                            IconName::ArrowLeft,
+                            13.0,
+                            if can_back {
+                                theme.text_secondary
+                            } else {
+                                theme.text_ghost.opacity(0.4)
+                            },
+                        )),
+                );
 
-            // Breadcrumb trail
-            let mut crumbs_container = div()
-                .flex_1()
-                .min_w_0()
-                .flex()
-                .items_center()
-                .gap(px(4.0))
-                .overflow_hidden();
-
-            let crumb_count = self.breadcrumbs.len();
-            for (i, crumb) in self.breadcrumbs.iter().enumerate() {
-                let is_last = i + 1 == crumb_count;
-                let crumb_path = crumb.path.clone();
-                let crumb_palette = palette.clone();
-
-                let crumb_el = div()
-                    .id(ElementId::from(("palette-crumb", i)))
-                    .flex_none()
-                    .max_w(px(140.0))
-                    .h(px(22.0))
-                    .px(px(5.0))
-                    .rounded(px(4.0))
+                // Breadcrumb trail
+                let mut crumbs_container = div()
+                    .flex_1()
+                    .min_w_0()
                     .flex()
                     .items_center()
                     .gap(px(4.0))
-                    .text_size(px(11.5))
-                    .when(!is_last && crumb_path.is_some(), |el| {
-                        let path = crumb_path.clone().unwrap();
-                        let p = crumb_palette.clone();
-                        el.cursor_pointer()
-                            .text_color(theme.text_secondary)
-                            .hover(|el| el.bg(theme.overlay).text_color(theme.text))
-                            .on_click(move |_, window, cx| {
-                                if let Some(palette) = p.upgrade() {
-                                    let callback = palette.read(cx).browse_callback.clone();
-                                    if let Some(callback) = callback {
-                                        let target_path = path.clone();
-                                        window.defer(cx, move |window, cx| callback(&target_path, window, cx));
+                    .overflow_hidden();
+
+                let crumb_count = self.breadcrumbs.len();
+                for (i, crumb) in self.breadcrumbs.iter().enumerate() {
+                    let is_last = i + 1 == crumb_count;
+                    let crumb_path = crumb.path.clone();
+                    let crumb_palette = palette.clone();
+
+                    let crumb_el = div()
+                        .id(ElementId::from(("palette-crumb", i)))
+                        .flex_none()
+                        .max_w(px(140.0))
+                        .h(px(22.0))
+                        .px(px(5.0))
+                        .rounded(px(4.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(4.0))
+                        .text_size(px(11.5))
+                        .when(!is_last && crumb_path.is_some(), |el| {
+                            let path = crumb_path.clone().unwrap();
+                            let p = crumb_palette.clone();
+                            el.cursor_pointer()
+                                .text_color(theme.text_secondary)
+                                .hover(|el| el.bg(theme.overlay).text_color(theme.text))
+                                .on_click(move |_, window, cx| {
+                                    if let Some(palette) = p.upgrade() {
+                                        let callback = palette.read(cx).browse_callback.clone();
+                                        if let Some(callback) = callback {
+                                            let target_path = path.clone();
+                                            window.defer(cx, move |window, cx| {
+                                                callback(&target_path, window, cx)
+                                            });
+                                        }
                                     }
-                                }
-                            })
-                    })
-                    .when(is_last, |el| {
-                        el.font_weight(FontWeight::MEDIUM)
-                            .text_color(theme.text)
-                    })
-                    .when_some(crumb.icon, |el, icon| {
-                        el.child(app_icon(icon, 12.0, if is_last { theme.text } else { theme.text_secondary }))
-                    })
-                    .child(
-                        div()
-                            .truncate()
-                            .child(crumb.label.clone()),
-                    );
+                                })
+                        })
+                        .when(is_last, |el| {
+                            el.font_weight(FontWeight::MEDIUM).text_color(theme.text)
+                        })
+                        .when_some(crumb.icon, |el, icon| {
+                            el.child(app_icon(
+                                icon,
+                                12.0,
+                                if is_last {
+                                    theme.text
+                                } else {
+                                    theme.text_secondary
+                                },
+                            ))
+                        })
+                        .child(div().truncate().child(crumb.label.clone()));
 
-                crumbs_container = crumbs_container.child(crumb_el);
+                    crumbs_container = crumbs_container.child(crumb_el);
 
-                if !is_last {
-                    crumbs_container = crumbs_container.child(
-                        div()
-                            .flex_none()
-                            .text_color(theme.text_ghost.opacity(0.6))
-                            .child(app_icon(IconName::ChevronRight, 10.0, theme.text_ghost.opacity(0.6))),
-                    );
+                    if !is_last {
+                        crumbs_container = crumbs_container.child(
+                            div()
+                                .flex_none()
+                                .text_color(theme.text_ghost.opacity(0.6))
+                                .child(app_icon(
+                                    IconName::ChevronRight,
+                                    10.0,
+                                    theme.text_ghost.opacity(0.6),
+                                )),
+                        );
+                    }
                 }
-            }
 
-            bar.child(crumbs_container)
-        });
+                bar.child(crumbs_container)
+            });
 
         let tabs = (self.show_tabs && layout.sections.len() >= 2).then(|| {
             let mut bar = div()

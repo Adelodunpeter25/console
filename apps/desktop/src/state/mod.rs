@@ -7,8 +7,8 @@
 
 mod attachments;
 mod auth;
-mod automations;
 mod autocomplete;
+mod automations;
 mod background_shells;
 mod bootstrap;
 mod browser_actions;

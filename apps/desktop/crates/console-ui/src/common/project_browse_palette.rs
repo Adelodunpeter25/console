@@ -120,16 +120,19 @@ impl ProjectBrowsePalette {
                         let modal_ref = modal.clone();
                         this.modal.update(cx, |m, cx| {
                             m.set_navigation_crumbs(crumbs, resp.parent_path.clone(), cx);
-                            m.set_select_action_callback({
-                                let folder = folder_for_select.clone();
-                                let modal = modal_ref.clone();
-                                move |window, cx| {
-                                    if let Some(on_select) = &on_select {
-                                        on_select(folder.clone(), window, cx);
+                            m.set_select_action_callback(
+                                {
+                                    let folder = folder_for_select.clone();
+                                    let modal = modal_ref.clone();
+                                    move |window, cx| {
+                                        if let Some(on_select) = &on_select {
+                                            on_select(folder.clone(), window, cx);
+                                        }
+                                        modal.update(cx, |m, cx| m.hide(cx));
                                     }
-                                    modal.update(cx, |m, cx| m.hide(cx));
-                                }
-                            }, cx);
+                                },
+                                cx,
+                            );
                             m.set_placeholder("Search folders…", cx);
                             m.set_entries(
                                 entries_from_browse(
@@ -165,11 +168,14 @@ impl Render for ProjectBrowsePalette {
 /// Build clickable breadcrumb trail for `current_path` with root segments (e.g. Users).
 fn build_breadcrumbs(current_path: &str) -> Vec<PaletteBreadcrumb> {
     let mut crumbs = Vec::new();
-    let home_path = console_shared::path::home_dir()
-        .and_then(|h| h.into_os_string().into_string().ok());
+    let home_path =
+        console_shared::path::home_dir().and_then(|h| h.into_os_string().into_string().ok());
 
     let mut accum = String::new();
-    let segments: Vec<&str> = current_path.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
+    let segments: Vec<&str> = current_path
+        .split(['/', '\\'])
+        .filter(|s| !s.is_empty())
+        .collect();
     for seg in segments {
         if accum.is_empty() && current_path.starts_with('/') {
             accum.push('/');
@@ -179,7 +185,11 @@ fn build_breadcrumbs(current_path: &str) -> Vec<PaletteBreadcrumb> {
         accum.push_str(seg);
 
         let is_home = home_path.as_deref() == Some(&accum);
-        let icon = if is_home { IconName::Home } else { IconName::Folder };
+        let icon = if is_home {
+            IconName::Home
+        } else {
+            IconName::Folder
+        };
         crumbs.push(PaletteBreadcrumb::new(seg.to_string(), Some(accum.clone())).icon(icon));
     }
 
@@ -245,8 +255,6 @@ fn entries_from_browse(
         modal,
         on_select_project,
     ));
-
-
 
     // Subfolders: clicking or Enter navigates into the folder.
     // "Use this folder" (row 1) is the only way to add the project.

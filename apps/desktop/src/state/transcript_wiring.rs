@@ -14,7 +14,9 @@ pub(crate) fn wire_preview_image(
     entity: WeakEntity<ConsoleDesktopApp>,
 ) {
     let preview_entity = entity.clone();
-    let handler = move |image: std::sync::Arc<gpui::Image>, _window: &mut gpui::Window, cx: &mut gpui::App| {
+    let handler = move |image: std::sync::Arc<gpui::Image>,
+                        _window: &mut gpui::Window,
+                        cx: &mut gpui::App| {
         if let Some(app) = preview_entity.upgrade() {
             app.update(cx, |this, cx| {
                 this.preview_image_data(image, cx);

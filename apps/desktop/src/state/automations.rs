@@ -84,12 +84,13 @@ impl ConsoleDesktopApp {
     fn apply_automation_event(&mut self, ev: AutomationEvent) {
         if ev.event_type == "deleted"
             || (ev.event_type == "fired"
-                && ev
-                    .automation
-                    .as_ref()
-                    .is_some_and(|a| a.status == "done"))
+                && ev.automation.as_ref().is_some_and(|a| a.status == "done"))
         {
-            if let Some(id) = ev.id.as_deref().or(ev.automation.as_ref().map(|a| a.id.as_str())) {
+            if let Some(id) = ev
+                .id
+                .as_deref()
+                .or(ev.automation.as_ref().map(|a| a.id.as_str()))
+            {
                 self.automations.retain(|a| a.id != id);
             }
             return;
@@ -106,10 +107,7 @@ impl ConsoleDesktopApp {
     fn apply_webhook_event(&mut self, ev: WebhookEvent) {
         if ev.event_type == "deleted"
             || (ev.event_type == "fired"
-                && ev
-                    .subscription
-                    .as_ref()
-                    .is_some_and(|s| s.status == "done"))
+                && ev.subscription.as_ref().is_some_and(|s| s.status == "done"))
         {
             if let Some(id) = ev
                 .id

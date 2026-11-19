@@ -227,7 +227,10 @@ impl RenderOnce for QuestionInteractionCard {
                         let neg_val = if custom_answer.is_empty() {
                             serde_json::Value::String(negative_opt.clone())
                         } else {
-                            serde_json::Value::String(format!("{}: {}", negative_opt, custom_answer))
+                            serde_json::Value::String(format!(
+                                "{}: {}",
+                                negative_opt, custom_answer
+                            ))
                         };
                         let neg_label = if custom_answer.is_empty() {
                             negative_opt.clone()

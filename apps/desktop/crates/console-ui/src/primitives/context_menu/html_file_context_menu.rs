@@ -7,8 +7,8 @@ use gpui::{
     AnyElement, App, ElementId, InteractiveElement, IntoElement, ParentElement, Styled, Window,
 };
 
-use crate::primitives::menu::{context_menu, ContextMenuHandle, MenuItem};
 use crate::primitives::IconName;
+use crate::primitives::menu::{ContextMenuHandle, MenuItem, context_menu};
 
 fn menu_handle(id: &ElementId, window: &mut Window, cx: &mut App) -> ContextMenuHandle {
     window

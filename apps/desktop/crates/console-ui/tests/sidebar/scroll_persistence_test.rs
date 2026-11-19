@@ -1,4 +1,4 @@
-use console_ui::layout::sidebar::{resolve_scroll_offset_after_row_change, SidebarRowKey};
+use console_ui::layout::sidebar::{SidebarRowKey, resolve_scroll_offset_after_row_change};
 use gpui::{ListOffset, px};
 
 #[test]

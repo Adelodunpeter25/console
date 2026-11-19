@@ -822,7 +822,6 @@ impl<'a> Ctx<'a> {
         self
     }
 
-
     fn with_cache(&self, view: &'a MarkdownView) -> Self {
         Self {
             row: self.row.clone(),

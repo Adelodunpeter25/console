@@ -177,7 +177,9 @@ pub fn resolve_scroll_offset_after_row_change(
         };
     }
 
-    let anchor_ix = old_offset.item_ix.min(previous_keys.len().saturating_sub(1));
+    let anchor_ix = old_offset
+        .item_ix
+        .min(previous_keys.len().saturating_sub(1));
     for prev_ix in (0..=anchor_ix).rev() {
         let prev_key = &previous_keys[prev_ix];
         if let Some(new_ix) = current_keys.iter().position(|k| k == prev_key) {
@@ -542,10 +544,8 @@ impl RenderOnce for SidebarView {
             }
         }
         let list_rows = Rc::new(list_rows);
-        let current_row_keys: Vec<SidebarRowKey> = list_rows
-            .iter()
-            .map(|row| row.key(&sessions))
-            .collect();
+        let current_row_keys: Vec<SidebarRowKey> =
+            list_rows.iter().map(|row| row.key(&sessions)).collect();
         let tracker = cx.default_global::<SidebarScrollTracker>();
         let previous_row_keys = std::mem::replace(&mut tracker.row_keys, current_row_keys.clone());
 

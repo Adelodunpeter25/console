@@ -1466,9 +1466,7 @@ impl ConsoleDesktopApp {
         // run re-attached after a restart does not restart from zero.
         let now = wake_at
             .or_else(|| {
-                if self.active_session_for_pane(&pane_id).as_deref()
-                    == Some(session_id.as_str())
-                {
+                if self.active_session_for_pane(&pane_id).as_deref() == Some(session_id.as_str()) {
                     self.transcript_for_pane(&pane_id)
                         .read(cx)
                         .latest_user_prompt_at()

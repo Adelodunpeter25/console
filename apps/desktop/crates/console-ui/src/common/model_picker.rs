@@ -202,9 +202,9 @@ impl RenderOnce for ModelDropdownMenu {
                 None => visible_models
                     .iter()
                     .position(|(prov, _, m)| {
-                        selected_model.as_ref().is_some_and(|s| {
-                            s.provider == *prov && s.model_id == m.id
-                        })
+                        selected_model
+                            .as_ref()
+                            .is_some_and(|s| s.provider == *prov && s.model_id == m.id)
                     })
                     .unwrap_or(0),
             })

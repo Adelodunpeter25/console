@@ -2,9 +2,7 @@
 //! specs show a compact fallback.
 
 use console_core::{VisualArtifact, VisualBlock, VisualParse, parse_visual};
-use gpui::{
-    AnyElement, App, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px,
-};
+use gpui::{AnyElement, App, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px};
 
 use crate::markdown::render::TranscriptSelection;
 use crate::theme::Theme;
@@ -42,15 +40,16 @@ impl RenderOnce for VisualCard {
                 for block in spec.blocks {
                     match block {
                         VisualBlock::Image { path, alt } => {
-                            col = col.child(
-                                crate::chat::image::ChatImage::new(path, None).alt(alt),
-                            );
+                            col =
+                                col.child(crate::chat::image::ChatImage::new(path, None).alt(alt));
                         }
                     }
                 }
                 col.into_any_element()
             }
-            VisualParse::Unsupported | VisualParse::Invalid => fallback("Visual unavailable", theme),
+            VisualParse::Unsupported | VisualParse::Invalid => {
+                fallback("Visual unavailable", theme)
+            }
         };
         div()
             .w_full()
