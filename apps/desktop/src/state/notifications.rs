@@ -53,13 +53,20 @@ impl ConsoleDesktopApp {
                                     // finished background work. Its old run stream has
                                     // ended, so re-attach to the new run. Wait briefly
                                     // so the old run's sessionEnd lands first.
+                                    let wake_message = event.body.clone();
+                                    let resumed_at = chrono::Utc::now().timestamp();
                                     cx.background_executor()
                                         .timer(std::time::Duration::from_millis(400))
                                         .await;
                                     let _ = cx.update(|cx| {
                                         if let Some(app) = entity.upgrade() {
                                             app.update(cx, |this, cx| {
-                                                this.attach_resumed_session(&session_id, cx);
+                                                this.attach_resumed_session(
+                                                    &session_id,
+                                                    &wake_message,
+                                                    resumed_at,
+                                                    cx,
+                                                );
                                             });
                                         }
                                     });
@@ -199,12 +206,40 @@ impl ConsoleDesktopApp {
     }
 
     /// Re-attach every pane showing `session_id` to its freshly woken run.
-    fn attach_resumed_session(&mut self, session_id: &str, cx: &mut Context<Self>) {
-        if session_id.is_empty() || self.is_session_running(session_id) {
+    fn attach_resumed_session(
+        &mut self,
+        session_id: &str,
+        wake_message: &str,
+        resumed_at: i64,
+        cx: &mut Context<Self>,
+    ) {
+        if session_id.is_empty() {
+            return;
+        }
+        let is_background_wake = !wake_message.is_empty()
+            && wake_message != "Scheduled automation running"
+            && wake_message != "Webhook event received";
+        if is_background_wake {
+            let records = self.wake_records.entry(session_id.to_string()).or_default();
+            let already_recorded = records
+                .last()
+                .is_some_and(|record| record.at >= resumed_at - 5);
+            if !already_recorded {
+                records.push(console_core::WakeRecord {
+                    message: wake_message.to_string(),
+                    at: resumed_at,
+                });
+                if records.len() > 16 {
+                    let excess = records.len() - 16;
+                    records.drain(..excess);
+                }
+            }
+        }
+        if self.is_session_running(session_id) {
             return;
         }
         // The wake turn just started: seed timers from the recorded
-        // backgroundWorkContinue receipt time, not the original prompt.
+        // backgroundWorkContinue / resumed receipt time, not the original prompt.
         let wake_at = self
             .wake_records
             .get(session_id)
@@ -219,16 +254,13 @@ impl ConsoleDesktopApp {
         let Some(pane_id) = pane else { return };
 
         // The backgroundWorkContinue frame is broadcast once at wake time; a
-        // client that missed it (app asleep, stream down) never sees it again
+        // client that missed it (old run stream ended) never sees it again
         // because attach passes no `since`. Push the transcript boundary here
-        // unless the live handler already did, or wake-turn activity merges
-        // into the previous run's block until the next history reload.
-        let last_record = self
+        // unless the live handler already did.
+        let boundary = self
             .wake_records
             .get(session_id)
             .and_then(|records| records.last())
-            .cloned();
-        let boundary = last_record
             .filter(|record| {
                 record.at
                     > self
@@ -237,81 +269,10 @@ impl ConsoleDesktopApp {
                         .copied()
                         .unwrap_or(i64::MIN)
             })
-            .map(|record| (record.message, record.at));
-        if boundary.is_none()
-            && !self
-                .wake_records
-                .get(session_id)
-                .is_some_and(|records| !records.is_empty())
-        {
-            // The wake frame never arrived at all: recover the wake time from
-            // history the same way bootstrap does, so later resumes dedupe.
-            let client = self.client.clone();
-            let session = session_id.to_string();
-            let had_record = boundary.is_some();
-            cx.spawn(async move |this, cx| {
-                let Ok(bootstrap) = client.sessions.get_bootstrap(&session).await else {
-                    return;
-                };
-                let Some(at) = super::sessions::infer_wake_at(&bootstrap.detail.messages)
-                else {
-                    return;
-                };
-                let _ = cx.update(|cx| {
-                    if let Some(app) = this.upgrade() {
-                        app.update(cx, |app, cx| {
-                            // A live backgroundWorkContinue may have landed
-                            // while the fetch was in flight; it wins — both
-                            // its record and its boundary push.
-                            if app
-                                .wake_records
-                                .get(&session)
-                                .is_some_and(|records| !records.is_empty())
-                                || had_record
-                            {
-                                return;
-                            }
-                            app.wake_records.insert(
-                                session.clone(),
-                                vec![console_core::WakeRecord {
-                                    message:
-                                        "Background work completed, continuing agent"
-                                            .to_string(),
-                                    at,
-                                }],
-                            );
-                            if app
-                                .wake_boundary_pushed_at
-                                .get(&session)
-                                .is_none_or(|pushed| at > *pushed)
-                                && let Some(pane_id) = app
-                                    .workspace_root
-                                    .leaves()
-                                    .into_iter()
-                                    .map(|leaf| leaf.id.clone())
-                                    .find(|id| {
-                                        app.active_session_for_pane(id).as_deref()
-                                            == Some(session.as_str())
-                                    })
-                            {
-                                app.wake_boundary_pushed_at.insert(session.clone(), at);
-                                app.transcript_for_pane(&pane_id).update(cx, |t, cx| {
-                                    t.push_run_boundary(
-                                        "Background work completed, continuing agent"
-                                            .to_string(),
-                                        at,
-                                        cx,
-                                    );
-                                });
-                            }
-                        });
-                    }
-                });
-            })
-            .detach();
-        }
+            .map(|record| (record.message.clone(), record.at));
         if let Some((message, at)) = boundary {
-            self.wake_boundary_pushed_at.insert(session_id.to_string(), at);
+            self.wake_boundary_pushed_at
+                .insert(session_id.to_string(), at);
             self.transcript_for_pane(&pane_id).update(cx, |t, cx| {
                 t.push_run_boundary(message, at, cx);
             });

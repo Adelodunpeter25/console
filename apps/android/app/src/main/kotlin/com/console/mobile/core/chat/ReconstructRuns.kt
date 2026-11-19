@@ -269,17 +269,4 @@ fun buildUserRunMap(
     return map
 }
 
-fun inferWakeAt(messages: List<AgentMessage>): Long? {
-    val lastUser = messages.indexOfLast { it is UserMessage }
-    if (lastUser < 0) return null
-    return messages.drop(lastUser + 1)
-        .filterIsInstance<AgentMessage>()
-        .mapNotNull { msg ->
-            val at = msg.createdAt ?: return@mapNotNull null
-            when (msg) {
-                is AssistantMessage, is ToolResultMessage -> at
-                else -> null
-            }
-        }
-        .minOrNull()
-}
+
