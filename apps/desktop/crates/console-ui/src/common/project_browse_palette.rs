@@ -115,8 +115,21 @@ impl ProjectBrowsePalette {
                         this.current_path = Some(resp.current_path.clone());
                         this.parent_path = resp.parent_path.clone();
                         let crumbs = build_breadcrumbs(&resp.current_path);
+                        let folder_for_select = resp.current_path.clone();
+                        let on_select = on_select_project.clone();
+                        let modal_ref = modal.clone();
                         this.modal.update(cx, |m, cx| {
                             m.set_navigation_crumbs(crumbs, resp.parent_path.clone(), cx);
+                            m.set_select_action_callback({
+                                let folder = folder_for_select.clone();
+                                let modal = modal_ref.clone();
+                                move |window, cx| {
+                                    if let Some(on_select) = &on_select {
+                                        on_select(folder.clone(), window, cx);
+                                    }
+                                    modal.update(cx, |m, cx| m.hide(cx));
+                                }
+                            }, cx);
                             m.set_placeholder("Search folders…", cx);
                             m.set_entries(
                                 entries_from_browse(

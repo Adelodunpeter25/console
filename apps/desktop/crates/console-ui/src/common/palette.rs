@@ -41,7 +41,9 @@ gpui::actions!(
         PaletteConfirm,
         PaletteCancel,
         PaletteNextTab,
-        PalettePrevTab
+        PalettePrevTab,
+        PaletteSelectAction,
+        PaletteNavBack
     ]
 );
 
@@ -55,9 +57,11 @@ pub fn init_palette_keybindings(cx: &mut App) {
         KeyBinding::new("ctrl-n", PaletteNext, context),
         KeyBinding::new("ctrl-p", PalettePrev, context),
         KeyBinding::new("enter", PaletteConfirm, context),
+        KeyBinding::new("cmd-enter", PaletteSelectAction, context),
         KeyBinding::new("escape", PaletteCancel, context),
         KeyBinding::new("tab", PaletteNextTab, context),
         KeyBinding::new("shift-tab", PalettePrevTab, context),
+        KeyBinding::new("alt-left", PaletteNavBack, context),
     ]);
 }
 
@@ -531,6 +535,8 @@ pub struct CommandPaletteModal {
     /// Navigation hook for `keep_open` rows (e.g. drilling into a folder):
     /// called with the entry's id instead of dismissing the palette.
     browse_callback: Option<Rc<dyn Fn(&str, &mut Window, &mut App)>>,
+    /// Action hook for ⌘Enter (e.g. Add project for the currently selected or browsed folder).
+    select_action_callback: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
     /// Optional breadcrumbs for folder hierarchy navigation.
     breadcrumbs: Vec<PaletteBreadcrumb>,
     /// Optional parent path for the header back button.
@@ -586,6 +592,7 @@ impl CommandPaletteModal {
             scroll: ScrollHandle::new(),
             query_handler: None,
             browse_callback: None,
+            select_action_callback: None,
             breadcrumbs: Vec::new(),
             back_path: None,
             search_generation: 0,
@@ -611,6 +618,7 @@ impl CommandPaletteModal {
         self.input.update(cx, |input, cx| input.clear(cx));
         self.selected = 0;
         self.tab = None;
+        self.select_action_callback = None;
         self.breadcrumbs.clear();
         self.back_path = None;
         self.search_generation = 0;
@@ -629,6 +637,34 @@ impl CommandPaletteModal {
         self.breadcrumbs = crumbs;
         self.back_path = back_path;
         cx.notify();
+    }
+
+    /// Set callback for ⌘Enter (e.g. "Add project" on current folder).
+    pub fn set_select_action_callback(
+        &mut self,
+        callback: impl Fn(&mut Window, &mut App) + 'static,
+        _cx: &mut Context<Self>,
+    ) {
+        self.select_action_callback = Some(Rc::new(callback));
+    }
+
+    fn on_select_action(&mut self, _: &PaletteSelectAction, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(cb) = self.select_action_callback.clone() {
+            cb(window, cx);
+        } else {
+            // Fallback: if there is an action entry (like "Use this folder"), trigger it
+            if let Some(entry) = self.entries.iter().find(|e| !e.keep_open).cloned() {
+                self.confirm_entry(entry, window, cx);
+            }
+        }
+    }
+
+    fn on_nav_back(&mut self, _: &PaletteNavBack, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(parent) = self.back_path.clone()
+            && let Some(callback) = self.browse_callback.clone()
+        {
+            callback(&parent, window, cx);
+        }
     }
 
     /// Show the placeholder for the tab in front, or the default one.
@@ -1068,6 +1104,8 @@ impl Render for CommandPaletteModal {
             .occlude()
             .key_context(CONTEXT)
             .on_action(cx.listener(Self::on_confirm))
+            .on_action(cx.listener(Self::on_select_action))
+            .on_action(cx.listener(Self::on_nav_back))
             .on_action(cx.listener(Self::on_cancel))
             .on_action(cx.listener(|this, _: &PaletteNext, _, cx| this.move_selection(1, cx)))
             .on_action(cx.listener(|this, _: &PalettePrev, _, cx| this.move_selection(-1, cx)))

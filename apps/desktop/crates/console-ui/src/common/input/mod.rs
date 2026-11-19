@@ -1273,7 +1273,7 @@ impl ComposerInput {
     }
 
     fn backspace(&mut self, _: &Backspace, window: &mut Window, cx: &mut Context<Self>) {
-        if matches!(self.mode, FieldMode::Composer) && self.content.is_empty() {
+        if (matches!(self.mode, FieldMode::Composer) || matches!(self.mode, FieldMode::Search)) && self.content.is_empty() {
             cx.emit(ComposerEvent::BackspaceOnEmpty);
             return;
         }
