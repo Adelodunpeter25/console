@@ -160,7 +160,9 @@ mod macos_host {
     use objc2::runtime::{AnyObject, ProtocolObject};
     use objc2::{DefinedClass, MainThreadOnly, define_class, msg_send};
     use objc2_app_kit::NSView;
-    use objc2_foundation::{MainThreadMarker, NSError, NSObjectProtocol, NSString};
+    use objc2_foundation::{
+        MainThreadMarker, NSError, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
+    };
     use objc2_web_kit::{WKNavigationDelegate, WKWebView};
     use wry::WebViewExtMacOS;
     use wry::dpi::{LogicalPosition, LogicalSize};
@@ -251,6 +253,8 @@ mod macos_host {
         wk: Retained<WKWebView>,
         last_bounds: Cell<Option<(i32, i32, i32, i32)>>,
         visible: Cell<bool>,
+        clip: std::cell::RefCell<Option<Retained<NSView>>>,
+        last_clip: Cell<Option<(i32, i32, i32, i32)>>,
         _responder_observer: Option<Retained<ResponderObserver>>,
         _navigation_delegate: Option<Retained<ConsoleNavigationDelegate>>,
     }
@@ -332,6 +336,8 @@ mod macos_host {
                 wk,
                 last_bounds: Cell::new(None),
                 visible: Cell::new(false),
+                clip: std::cell::RefCell::new(None),
+                last_clip: Cell::new(None),
                 _responder_observer: responder_observer,
                 _navigation_delegate: Some(navigation_delegate),
             }
@@ -364,11 +370,86 @@ mod macos_host {
             });
         }
 
+        /// Places the page at `bounds` but shows only the `visible` part of it.
+        /// A native view ignores GPUI's clipping, so the page lives inside a
+        /// masking container sized to the visible rect; the page keeps its full
+        /// size (no reflow) and is offset inside. Hidden when nothing is visible.
+        pub fn sync_bounds_clipped(&self, bounds: Bounds<Pixels>, visible: Bounds<Pixels>) {
+            let clipped = visible.intersect(&bounds);
+            if f32::from(clipped.size.width) < 1.0 || f32::from(clipped.size.height) < 1.0 {
+                self.set_clip_hidden(true);
+                return;
+            }
+            let Some(parent) = (unsafe { self.wk.superview() }) else {
+                return;
+            };
+            let mut slot = self.clip.borrow_mut();
+            let container = match slot.as_ref() {
+                Some(c) if unsafe { c.superview() }.is_some() => c.clone(),
+                _ => {
+                    let Some(mtm) = MainThreadMarker::new() else {
+                        return;
+                    };
+                    let container = NSView::initWithFrame(
+                        NSView::alloc(mtm),
+                        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1.0, 1.0)),
+                    );
+                    container.setWantsLayer(true);
+                    unsafe {
+                        let layer: *mut AnyObject = msg_send![&*container, layer];
+                        if !layer.is_null() {
+                            let _: () = msg_send![layer, setMasksToBounds: true];
+                        }
+                    }
+                    container.addSubview(&self.wk);
+                    parent.addSubview(&container);
+                    lower_below_scene_overlay(&container);
+                    *slot = Some(container.clone());
+                    self.last_bounds.set(None);
+                    self.last_clip.set(None);
+                    container
+                }
+            };
+            drop(slot);
+
+            let r = |v: Pixels| f32::from(v).round() as i32;
+            let key = (r(bounds.origin.x), r(bounds.origin.y), r(bounds.size.width), r(bounds.size.height));
+            let clip_key = (r(clipped.origin.x), r(clipped.origin.y), r(clipped.size.width), r(clipped.size.height));
+            if self.last_bounds.get() != Some(key) || self.last_clip.get() != Some(clip_key) {
+                self.last_bounds.set(Some(key));
+                self.last_clip.set(Some(clip_key));
+                let (cx, cy, cw, ch) = (clip_key.0 as f64, clip_key.1 as f64, clip_key.2 as f64, clip_key.3 as f64);
+                let parent_frame = parent.frame();
+                let top = if parent.isFlipped() { cy } else { parent_frame.size.height - cy - ch };
+                container.setFrame(NSRect::new(NSPoint::new(cx, top), NSSize::new(cw, ch)));
+                let (bx, by, bh) = (key.0 as f64, key.1 as f64, key.3 as f64);
+                self.wk.setFrame(NSRect::new(
+                    NSPoint::new(bx - cx, ch - (by - cy) - bh),
+                    NSSize::new(key.2 as f64, bh),
+                ));
+            }
+            self.set_clip_hidden(false);
+        }
+
+        fn set_clip_hidden(&self, hidden: bool) {
+            if let Some(container) = self.clip.borrow().as_ref() {
+                if container.isHidden() != hidden {
+                    container.setHidden(hidden);
+                }
+            }
+            self.visible.set(!hidden);
+            let _ = self.webview.set_visible(!hidden);
+        }
+
         pub fn set_visible(&self, visible: bool) {
             if self.visible.get() == visible {
                 return;
             }
             self.visible.set(visible);
+            if self.clip.borrow().is_some() {
+                self.set_clip_hidden(!visible);
+                return;
+            }
             let _ = self.webview.set_visible(visible);
         }
 
@@ -696,6 +777,7 @@ impl WebviewHost {
         }
     }
     pub fn sync_bounds(&self, _bounds: Bounds<Pixels>, _scale: f32) {}
+    pub fn sync_bounds_clipped(&self, _bounds: Bounds<Pixels>, _visible: Bounds<Pixels>) {}
     pub fn set_visible(&self, _visible: bool) {}
     pub fn native_focus_within(&self) -> bool {
         false
