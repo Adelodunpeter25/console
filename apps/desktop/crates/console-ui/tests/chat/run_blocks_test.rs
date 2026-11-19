@@ -51,6 +51,7 @@ fn tool_result(call_id: &str, created_at: i64) -> AgentMessage {
             content: serde_json::Value::Null,
             is_error: Some(false),
             visual: None,
+            html: None,
         }],
         created_at: Some(created_at),
     }
