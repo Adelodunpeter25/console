@@ -756,3 +756,42 @@ func TestCodeModePropagatesHtmlArtifact(t *testing.T) {
 		t.Fatalf("unexpected Html artifact: %+v", env.Html)
 	}
 }
+
+func TestCodemodePromotedBackgroundCommand(t *testing.T) {
+	promotedText := "The command was still running after 30000ms, so it was moved to the background instead of being killed.\nStarted: job_123\nBackground work: work_123\nTime limit: none (runs until it exits or is killed)\n\nThe job runs in the background. You will be notified automatically with its exit code and output when it finishes — do not poll or wait for it. Continue with other work, or end your turn and tell the user what you are waiting on.\nThis response is not an exit result. Use bashJob (jobId=\"job_123\") only to peek at partial output or to kill it."
+	mockBash := tools.NewTool("bash", "Mock bash", tools.TierExec, func(_ context.Context, _ map[string]any) (any, error) {
+		return promotedText, nil
+	})
+	reg := tools.NewRegistry(mockBash)
+	rt, err := codemode.NewRuntime(loop.NewExecutor(reg, permissions.FullAccess), codemode.Options{})
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+	ctx := context.Background()
+
+	// Without .nothrow(), a promoted background command throws with the notice.
+	res1, err := rt.Eval(ctx, `
+		var caught = "";
+		try { await $("sleep 60"); } catch (e) { caught = String(e.message || e); }
+		caught;
+	`, 5*time.Second)
+	if err != nil {
+		t.Fatalf("eval 1: %v", err)
+	}
+	if out := fmt.Sprint(res1.(tools.Envelope).Content); !strings.Contains(out, "moved to the background") || !strings.Contains(out, "job_123") {
+		t.Fatalf("expected thrown background notice, got: %s", out)
+	}
+
+	// With .nothrow(), ok is false, backgrounded is true, exitCode is null, and stderr/stdout carry the notice.
+	res2, err := rt.Eval(ctx, `
+		const r = await $("sleep 60").nothrow();
+		({ ok: r.ok, backgrounded: r.backgrounded, exitCode: r.exitCode, hasNotice: r.stderr.includes("moved to the background") });
+	`, 5*time.Second)
+	if err != nil {
+		t.Fatalf("eval 2: %v", err)
+	}
+	out2 := fmt.Sprint(res2.(tools.Envelope).Content)
+	if !strings.Contains(out2, `"ok":false`) || !strings.Contains(out2, `"backgrounded":true`) || !strings.Contains(out2, `"exitCode":null`) || !strings.Contains(out2, `"hasNotice":true`) {
+		t.Fatalf("unexpected nothrow result for promoted background command: %s", out2)
+	}
+}

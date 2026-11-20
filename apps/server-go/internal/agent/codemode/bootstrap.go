@@ -426,6 +426,23 @@ const bootstrapScript = `
                         return rawOutput;
                     }
 
+                    if (rawOutput.includes("This response is not an exit result.")) {
+                        if (!this._noThrow) {
+                            throw new Error(rawOutput);
+                        }
+                        return {
+                            code: null,
+                            exitCode: null,
+                            stdout: rawOutput,
+                            stderr: rawOutput,
+                            ok: false,
+                            backgrounded: true,
+                            durationMs: durationMs,
+                            text() { return rawOutput; },
+                            json() { throw new Error("Command moved to background; no JSON exit output yet."); }
+                        };
+                    }
+
                     const parsed = parseBashOutput(rawOutput);
                     let exitCode = parsed.exitCode;
                     let stdout = parsed.stdout;
