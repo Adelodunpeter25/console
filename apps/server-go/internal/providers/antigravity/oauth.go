@@ -237,8 +237,11 @@ func doRefresh(client *http.Client, cred ParsedCredential) (OAuthCredential, err
 
 // refreshCredential dedupes a refresh (keyed by refresh token) and writes
 // the result through save.
-func refreshCredential(key string, client *http.Client, cred ParsedCredential, save func(OAuthCredential) error) (ParsedCredential, error) {
+func refreshCredential(key string, client *http.Client, cred ParsedCredential, reload func() (ParsedCredential, error), save func(OAuthCredential) error) (ParsedCredential, error) {
 	return shared.SingleFlight(key, func() (ParsedCredential, error) {
+		if fresh, err := reload(); err == nil && (fresh.AccessToken != cred.AccessToken || fresh.ExpiresAtMs == 0 || time.Now().UnixMilli()+RefreshSkewMs < fresh.ExpiresAtMs) {
+			return fresh, nil
+		}
 		updated, err := doRefresh(client, cred)
 		if err != nil {
 			return ParsedCredential{}, err
@@ -262,7 +265,7 @@ func RefreshIfNeeded(client *http.Client, cred ParsedCredential) (ParsedCredenti
 	if cred.ExpiresAtMs == 0 || time.Now().UnixMilli()+RefreshSkewMs < cred.ExpiresAtMs {
 		return cred, nil
 	}
-	return refreshCredential(cred.RefreshToken, client, cred, saveActiveCredential)
+	return refreshCredential(cred.RefreshToken, client, cred, LoadCredential, saveActiveCredential)
 }
 
 // RefreshFor refreshes a PINNED account's credential, writing the rotated
@@ -271,7 +274,12 @@ func RefreshFor(accountID string, client *http.Client, cred ParsedCredential) (P
 	if accountID == "" {
 		return RefreshIfNeeded(client, cred)
 	}
-	return refreshCredential(cred.RefreshToken, client, cred, func(c OAuthCredential) error {
+	if cred.ExpiresAtMs == 0 || time.Now().UnixMilli()+RefreshSkewMs < cred.ExpiresAtMs {
+		return cred, nil
+	}
+	return refreshCredential(cred.RefreshToken, client, cred, func() (ParsedCredential, error) {
+		return LoadCredentialFor(accountID)
+	}, func(c OAuthCredential) error {
 		return SaveCredentialFor(accountID, c)
 	})
 }

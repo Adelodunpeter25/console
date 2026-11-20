@@ -6,6 +6,8 @@ package tests
 
 import (
 	"encoding/json"
+	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -267,5 +269,54 @@ func TestSharedSingleFlightDistinctKeys(t *testing.T) {
 	wg.Wait()
 	if runs.Load() != 2 {
 		t.Fatalf("fn ran %d times, want 2 (one per distinct key, concurrent calls deduped)", runs.Load())
+	}
+}
+
+type failRoundTripper struct{}
+
+func (failRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("unexpected HTTP request")
+}
+
+func TestRefreshForSkipsFreshCredentials(t *testing.T) {
+	noHTTP := &http.Client{Transport: failRoundTripper{}}
+	future := time.Now().Add(time.Hour).UnixMilli()
+
+	cCred := claude.ParsedCredential{AccessToken: "c-tok", RefreshToken: "c-ref", ExpiresAtMs: future}
+	if got, err := claude.RefreshFor("acc_1", noHTTP, cCred); err != nil || got.AccessToken != "c-tok" {
+		t.Fatalf("claude.RefreshFor = %+v (err=%v), want no-op", got, err)
+	}
+
+	xCred := codex.ParsedCredential{AccessToken: "x-tok", RefreshToken: "x-ref", ExpiresAtMs: future}
+	if got, err := codex.RefreshFor("acc_1", noHTTP, xCred); err != nil || got.AccessToken != "x-tok" {
+		t.Fatalf("codex.RefreshFor = %+v (err=%v), want no-op", got, err)
+	}
+
+	aCred := antigravity.ParsedCredential{AccessToken: "a-tok", RefreshToken: "a-ref", ExpiresAtMs: future}
+	if got, err := antigravity.RefreshFor("acc_1", noHTTP, aCred); err != nil || got.AccessToken != "a-tok" {
+		t.Fatalf("antigravity.RefreshFor = %+v (err=%v), want no-op", got, err)
+	}
+}
+
+func TestRefreshForReloadsAlreadyRotatedCredential(t *testing.T) {
+	newAccounts(t)
+	acct := registerActive(t, "claude", "u@x.io", "u@x.io")
+	future := time.Now().Add(time.Hour).UnixMilli()
+	if err := claude.SaveCredentialFor(acct.ID, claude.OAuthCredential{
+		AccessToken: "fresh-tok", RefreshToken: "fresh-ref", ExpiresAt: future, Email: "u@x.io",
+	}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	noHTTP := &http.Client{Transport: failRoundTripper{}}
+	stale := claude.ParsedCredential{
+		AccessToken: "stale-tok", RefreshToken: "stale-ref", ExpiresAtMs: time.Now().Add(-time.Minute).UnixMilli(),
+	}
+	got, err := claude.RefreshFor(acct.ID, noHTTP, stale)
+	if err != nil {
+		t.Fatalf("RefreshFor err = %v, want reload from disk", err)
+	}
+	if got.AccessToken != "fresh-tok" || got.RefreshToken != "fresh-ref" {
+		t.Fatalf("RefreshFor = %+v, want fresh credential from disk", got)
 	}
 }
