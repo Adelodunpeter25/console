@@ -1,6 +1,7 @@
 package run
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -104,16 +105,76 @@ func TestReadSkillSwitchesOnWhatTheAgentMayEnable(t *testing.T) {
 		t.Fatalf("not persisted: %v", on)
 	}
 
-	// Computer use needs the user: the agent is told to ask, and nothing turns on.
-	text = read("computer-use")
-	if !strings.Contains(text, "only the user can switch it on") || !strings.Contains(text, "/computer-use") {
-		t.Fatalf("expected an ask-the-user note, got: %.200s", text)
+}
+
+func readComputerUse(t *testing.T, svc *Service, id string, ask tools.AskHandler) (string, error) {
+	t.Helper()
+	registry := tools.NewRegistry()
+	lc := &loadContext{sessionID: id, cwd: t.TempDir(), mode: "full-access", askHandler: ask}
+	tool := tools.NewReadSkillTool(svc.readSkillCapabilities(lc, registry))
+	out, err := tool.Execute(t.Context(), []byte(`{"name":"computer-use"}`))
+	if err != nil {
+		return "", err
 	}
-	if on, _ := svc.sessions.Capabilities(id); contains(on, "computer-use") {
-		t.Fatal("the agent must not be able to switch on computer use")
+	return textOf(out), nil
+}
+
+func TestComputerUseNeedsTheUsersConsent(t *testing.T) {
+	var asked []string
+	allow := func(answer string) tools.AskHandler {
+		return func(_ context.Context, req tools.AskQuestionRequest) (tools.AskAnswer, error) {
+			asked = append(asked, req.Question)
+			return tools.AskAnswer{Text: answer}, nil
+		}
 	}
-	if _, err := registry.Get("computer-use"); err == nil {
-		t.Fatal("computer-use tools must not be loaded")
+
+	t.Run("denied leaves it off", func(t *testing.T) {
+		svc, id := newCapService(t)
+		if _, err := readComputerUse(t, svc, id, allow("Deny")); err == nil {
+			t.Fatal("a declined request must fail")
+		}
+		if on, _ := svc.sessions.Capabilities(id); contains(on, "computer-use") {
+			t.Fatal("declined consent must not switch computer use on")
+		}
+	})
+
+	t.Run("skipped counts as no", func(t *testing.T) {
+		svc, id := newCapService(t)
+		if _, err := readComputerUse(t, svc, id, allow("")); err == nil {
+			t.Fatal("a skipped prompt must not enable computer use")
+		}
+		if on, _ := svc.sessions.Capabilities(id); contains(on, "computer-use") {
+			t.Fatal("skipped consent must not switch computer use on")
+		}
+	})
+
+	t.Run("nobody attached cannot approve", func(t *testing.T) {
+		svc, id := newCapService(t)
+		_, err := readComputerUse(t, svc, id, nil)
+		if err == nil || !strings.Contains(err.Error(), "/computer-use") {
+			t.Fatalf("want a hint to type the command, got %v", err)
+		}
+		if on, _ := svc.sessions.Capabilities(id); contains(on, "computer-use") {
+			t.Fatal("no user means no consent")
+		}
+	})
+
+	t.Run("allowed switches it on", func(t *testing.T) {
+		svc, id := newCapService(t)
+		text, err := readComputerUse(t, svc, id, allow("Allow"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(text, "now switched on") {
+			t.Fatalf("expected a switched-on note, got: %.200s", text)
+		}
+		if on, _ := svc.sessions.Capabilities(id); !contains(on, "computer-use") {
+			t.Fatalf("not persisted: %v", on)
+		}
+	})
+
+	if len(asked) == 0 || !strings.Contains(asked[0], "computer use") {
+		t.Fatalf("the user was never asked: %v", asked)
 	}
 }
 
