@@ -87,6 +87,7 @@ fn decodes_binary_history_page() {
         }],
         has_more: true,
         next_cursor: Some(42),
+        wake_records: Vec::new(),
     };
     let decoded = console_proto::SessionMessagesPage::decode(wire.encode_to_vec().as_slice())
         .expect("encode/decode round trip");
