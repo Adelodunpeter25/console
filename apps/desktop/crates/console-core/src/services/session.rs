@@ -169,10 +169,9 @@ impl SessionService {
             body.data
                 .ok_or_else(|| anyhow!("Session bootstrap data is missing"))
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to get session bootstrap".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to get session bootstrap".into()
+            })))
         }
     }
 

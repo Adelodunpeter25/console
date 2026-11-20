@@ -1,8 +1,6 @@
 //! Automation and webhook subscription services + SSE streams.
 
-use crate::types::{
-    ApiResponse, Automation, AutomationEvent, WebhookEvent, WebhookSubscription,
-};
+use crate::types::{ApiResponse, Automation, AutomationEvent, WebhookEvent, WebhookSubscription};
 use crate::utils::HttpTransport;
 use anyhow::{Context, Result, anyhow};
 use futures_util::Stream;
@@ -62,7 +60,10 @@ impl AutomationService {
     pub async fn pause(&self, id: &str) -> Result<Automation> {
         let url = self
             .transport
-            .url(&format!("/api/automations/{}/pause", urlencoding::encode(id)))
+            .url(&format!(
+                "/api/automations/{}/pause",
+                urlencoding::encode(id)
+            ))
             .await;
         let response = self
             .transport
@@ -91,7 +92,10 @@ impl AutomationService {
     pub async fn resume(&self, id: &str) -> Result<Automation> {
         let url = self
             .transport
-            .url(&format!("/api/automations/{}/resume", urlencoding::encode(id)))
+            .url(&format!(
+                "/api/automations/{}/resume",
+                urlencoding::encode(id)
+            ))
             .await;
         let response = self
             .transport
@@ -253,10 +257,9 @@ impl WebhookService {
         if body.success {
             Ok(())
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to delete webhook subscription".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to delete webhook subscription".into()
+            })))
         }
     }
 

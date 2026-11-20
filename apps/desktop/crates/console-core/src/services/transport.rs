@@ -76,9 +76,8 @@ impl Transport {
         &self,
         client: &ConsoleClient,
         session_id: Option<&str>,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<crate::services::AutomationStreamEvent>> + Send>>,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<crate::services::AutomationStreamEvent>> + Send>>>
+    {
         client.automations.watch(session_id).await
     }
 

@@ -372,7 +372,8 @@ impl FsService {
 
         let status = resp.status();
         if !status.is_success() {
-            if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::BAD_REQUEST
+            if status == reqwest::StatusCode::NOT_FOUND
+                || status == reqwest::StatusCode::BAD_REQUEST
             {
                 return Ok(None);
             }

@@ -5,8 +5,7 @@
 use console_core::{
     SessionHeader, SessionWorktree, desk_leaf_id, desk_pane_prefix, is_session_workspace_key,
     is_worktree_workspace_key, namespace_pane_ids, project_id_of_workspace_key,
-    session_workspace_key, split_workspace_key, workspace_key_for_session,
-    worktree_workspace_key,
+    session_workspace_key, split_workspace_key, workspace_key_for_session, worktree_workspace_key,
 };
 
 fn session(project_id: Option<&str>, worktree: Option<&str>) -> SessionHeader {
