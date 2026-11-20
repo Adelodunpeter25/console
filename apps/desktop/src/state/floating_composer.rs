@@ -17,8 +17,8 @@ use std::rc::Rc;
 use crate::persistence::store::{PersistedBranchChoice, PersistedFloatingChoices};
 
 use console_core::{
-    ApprovalMode, CreateSessionDto, CreateWorktreeSpec, ImageAttachment, LaunchPromptDto,
-    LaunchWorktreeDto, SelectedModel, SessionHeader, ThinkingLevel,
+    AgentMessage, ApprovalMode, CreateSessionDto, CreateWorktreeSpec, ImageAttachment,
+    LaunchPromptDto, LaunchWorktreeDto, SelectedModel, SessionHeader, ThinkingLevel,
 };
 use console_ui::common::{
     BranchChoice, FloatingComposerView, FloatingSnapshot, FloatingSubmit, ModelDropdownMenu,
@@ -1052,6 +1052,16 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         let client = self.client.clone();
+        let optimistic_user_msg = AgentMessage::User {
+            id: None,
+            content: prompt.clone(),
+            attachments: (!staged_attachments.is_empty()).then(|| staged_attachments.clone()),
+            context_files: (!context_files.is_empty()).then(|| context_files.clone()),
+            annotations: None,
+            created_at: Some(chrono::Utc::now().timestamp()),
+            approval_mode: Some(approval_mode.value().to_string()),
+            source: None,
+        };
         let launch = LaunchWorktreeDto {
             cwd: submit.cwd.clone(),
             project_id: submit.project_id.clone(),
@@ -1094,9 +1104,16 @@ impl ConsoleDesktopApp {
                                 window,
                                 cx,
                             );
+                            let target_pane = this
+                                .active_pane_id
+                                .clone()
+                                .unwrap_or_else(|| pane_id.clone());
+                            this.transcript_for_pane(&target_pane).update(cx, |t, cx| {
+                                t.push_message(optimistic_user_msg, cx);
+                            });
                             // The server starts the run once the worktree exists;
                             // watch the launch state and attach when it lands.
-                            this.watch_worktree_launch(&pane_id, new_session.id.clone(), cx);
+                            this.watch_worktree_launch(&target_pane, new_session.id.clone(), cx);
                             cx.notify();
                         }
                         Err(error) => {
@@ -1206,6 +1223,14 @@ impl ConsoleDesktopApp {
                         Some(_) => false,
                         None => {
                             this.apply_session_header_for_pane(&pane_id, &detail.header, cx);
+                            if this.active_session_for_pane(&pane_id).as_deref()
+                                == Some(session_id.as_str())
+                                && !detail.messages.is_empty()
+                            {
+                                this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
+                                    t.set_messages(detail.messages, cx);
+                                });
+                            }
                             this.attach_session_run_for_pane(
                                 pane_id.clone(),
                                 session_id.clone(),

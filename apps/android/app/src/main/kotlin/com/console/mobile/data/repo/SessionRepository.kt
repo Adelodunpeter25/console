@@ -178,10 +178,30 @@ class SessionRepository(
                 if (created.thinking_level.isNullOrBlank() && view.thinkingLevel != null) {
                     sessions.setView(created.id, sessions.getView(created.id).copy(thinkingLevel = view.thinkingLevel))
                 }
-                // The prompt lives on the server now; the new chat's composer
-                // starts clean.
+                // The prompt lives on the server now; show it optimistically
+                // above the "Creating worktree…" banner while the worktree
+                // provisions, and start the new chat's composer clean.
+                val contextFiles = com.console.mobile.core.util.mentionPaths(prompt)
+                val optimisticUserMessage = com.console.mobile.data.model.UserMessage(
+                    id = com.console.mobile.core.chat.newMessageId(),
+                    createdAt = System.currentTimeMillis(),
+                    content = prompt,
+                    attachments = draft.attachments.map {
+                        com.console.mobile.data.model.ImagePart(
+                            data = com.console.mobile.data.model.encodeBase64(it.bytes),
+                            mimeType = it.mimeType,
+                        )
+                    },
+                    contextFiles = contextFiles,
+                    approvalMode = view.approvalMode.takeIf { it.isNotBlank() },
+                )
                 chats.update(created.id) { state ->
-                    state.copy(input = "", attachments = emptyList(), draftUpdatedAt = null)
+                    state.copy(
+                        messages = state.messages + optimisticUserMessage,
+                        input = "",
+                        attachments = emptyList(),
+                        draftUpdatedAt = null,
+                    )
                 }
                 discardNewChat(draftId)
                 chats.remove(draftId)
