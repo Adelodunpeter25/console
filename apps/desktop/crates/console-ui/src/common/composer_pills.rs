@@ -253,7 +253,11 @@ pub fn composer_pills(
                 .enumerate()
                 .map(|(index, text)| {
                     let menu_id = format!("{key}-suggestion-menu-{index}");
-                    let hover = cx.new(|_| Cell::new(false));
+                    let hover = window.use_keyed_state(
+                        ElementId::Name(format!("{key}-suggestion-hover-{index}").into()),
+                        cx,
+                        |_, _| Cell::new(false),
+                    );
                     let chip = suggestion_pill(
                         format!("{key}-suggestion-{index}"),
                         text.clone(),
@@ -504,10 +508,9 @@ fn suggestion_pill(
         .hover(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
         .active(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
         .on_hover(move |is_hovered, _, cx| {
-            let changed = set_hover.update(cx, |cell, _| cell.replace(*is_hovered) != *is_hovered);
-            if changed {
-                cx.notify(set_hover.entity_id());
-            }
+            set_hover.update(cx, |cell, _| {
+                cell.set(*is_hovered);
+            });
         })
         .on_click(move |_, window, cx| (on_pick)(picked.clone(), window, cx))
         .child(
