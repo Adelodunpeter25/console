@@ -202,11 +202,17 @@ message SubagentEndEvent {
 // refreshed header. Served by default; `Accept: application/json` keeps the
 // old mixed envelope. Messages are real proto messages, so tool arguments and
 // results cross as raw bytes instead of base64.
+message WakeRecord {
+  string message = 1;
+  int64 at = 2;
+}
+
 message SessionMessagesPage {
   SessionHeader header = 1;
   repeated AgentMessage messages = 2;
   bool has_more = 3;
   optional int64 next_cursor = 4;
+  repeated WakeRecord wake_records = 5;
 }
 
 // Detached work listed on a reopened chat. Same rows the JSON bootstrap
@@ -243,4 +249,5 @@ message SessionBootstrapResponse {
   repeated QueuedPrompt queued_prompts = 8;
   repeated BackgroundWork background_work = 9;
   optional ChatDraft draft = 10;
+  repeated WakeRecord wake_records = 11;
 }

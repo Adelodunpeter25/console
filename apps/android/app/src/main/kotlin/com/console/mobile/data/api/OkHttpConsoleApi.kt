@@ -172,6 +172,9 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
                 messages = page.messages.mapNotNull { it.toUi() },
                 hasMore = page.has_more,
                 nextCursor = page.next_cursor,
+                wakeRecords = page.wake_records.map {
+                    com.console.mobile.core.chat.WakeRecord(message = it.message, at = it.at)
+                },
             )
         }
         // JSON is the explicit opt-out; header and messages still decode
@@ -186,11 +189,18 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         val messages = obj["messages"]?.jsonArray?.mapNotNull { item ->
             runCatching { messageMoshi.fromJson(item.toString())?.toUi() }.getOrNull()
         } ?: emptyList()
+        val wakeRecords = (obj["wakeRecords"] as? JsonArray)?.mapNotNull { item ->
+            val o = item as? JsonObject ?: return@mapNotNull null
+            val msg = o["message"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            val at = o["at"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
+            com.console.mobile.core.chat.WakeRecord(message = msg, at = at)
+        } ?: emptyList()
         return SessionDetailResponse(
             header = header,
             messages = messages,
             hasMore = obj["hasMore"]?.jsonPrimitive?.booleanOrNull ?: false,
             nextCursor = obj["nextCursor"]?.jsonPrimitive?.longOrNull,
+            wakeRecords = wakeRecords,
         )
     }
 
@@ -204,6 +214,9 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
                     messages = wire.messages.mapNotNull { it.toUi() },
                     hasMore = wire.has_more,
                     nextCursor = wire.next_cursor,
+                    wakeRecords = wire.wake_records.map {
+                        com.console.mobile.core.chat.WakeRecord(message = it.message, at = it.at)
+                    },
                 ),
                 changes = wire.changes,
                 todos = wire.todos,

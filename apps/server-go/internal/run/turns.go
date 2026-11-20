@@ -353,6 +353,10 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			_ = s.sessions.UpdateThinkingLevel(sessionID, effectiveThinking)
 		}
 	}
+	var wakeLabel string
+	if dto.Synthetic {
+		wakeLabel = wakeMessage(dto.woken)
+	}
 	user := loop.UserMessage{
 		Role:         loop.RoleUser,
 		Content:      dto.Text,
@@ -361,6 +365,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		Synthetic:    dto.Synthetic,
 		Source:       dto.Source,
 		ApprovalMode: string(mode),
+		WakeLabel:    wakeLabel,
 	}
 	for _, a := range dto.Attachments {
 		user.Attachments = append(user.Attachments, loop.ImageAttachment{Data: a.Data, MimeType: a.MimeType})

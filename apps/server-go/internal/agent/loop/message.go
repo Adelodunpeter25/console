@@ -94,6 +94,8 @@ type UserMessage struct {
 	Source string `json:"source,omitempty"`
 	// ApprovalMode is the mode the turn ran under, kept for display only.
 	ApprovalMode string `json:"approvalMode,omitempty"`
+	// WakeLabel is the human label for a synthetic wake turn.
+	WakeLabel string `json:"wakeLabel,omitempty"`
 }
 
 // RenderedAnnotations returns the <browser_annotation> markup for a set of

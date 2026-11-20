@@ -1673,6 +1673,16 @@ impl ConsoleDesktopApp {
                                         cx,
                                     );
                                 });
+                                if !detail.wake_records.is_empty() {
+                                    let merged = merge_wake_records(
+                                        &detail.wake_records,
+                                        this.wake_records
+                                            .get(&session_id)
+                                            .map(Vec::as_slice)
+                                            .unwrap_or(&[]),
+                                    );
+                                    this.wake_records.insert(session_id.clone(), merged);
+                                }
                                 let app_entity_for_older = entity.clone();
                                 transcript.update(cx, |t, cx| {
                                     t.set_wake_records(
@@ -1789,4 +1799,21 @@ impl ConsoleDesktopApp {
         })
         .detach();
     }
+}
+
+pub(crate) fn merge_wake_records(
+    server: &[console_core::WakeRecord],
+    local: &[console_core::WakeRecord],
+) -> Vec<console_core::WakeRecord> {
+    let mut merged = server.to_vec();
+    for record in local {
+        let dup = merged.iter().any(|existing| {
+            (existing.at - record.at).abs() <= 5 && existing.message == record.message
+        });
+        if !dup {
+            merged.push(record.clone());
+        }
+    }
+    merged.sort_by_key(|r| r.at);
+    merged
 }

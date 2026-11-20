@@ -38,6 +38,7 @@ type rawUserMessage struct {
 	Synthetic    bool                 `json:"synthetic"`
 	Source       string               `json:"source"`
 	ApprovalMode string               `json:"approvalMode"`
+	WakeLabel    string               `json:"wakeLabel"`
 	ContextFiles []string             `json:"contextFiles"`
 	Attachments  []rawImageAttachment `json:"attachments"`
 	Annotations  []json.RawMessage    `json:"annotations"`
@@ -254,6 +255,7 @@ func MessageFromSplit(skeleton []byte, parts []msgparts.Part) (any, error) {
 			Synthetic:    root.User.Synthetic,
 			Source:       root.User.Source,
 			ApprovalMode: root.User.ApprovalMode,
+			WakeLabel:    root.User.WakeLabel,
 			ContextFiles: append([]string(nil), root.User.ContextFiles...),
 		}
 		for _, att := range root.User.Attachments {

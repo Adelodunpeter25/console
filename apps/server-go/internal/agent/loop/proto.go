@@ -110,6 +110,9 @@ func userToProto(m UserMessage) *consolev1.AgentUserMessage {
 	if m.Source != "" {
 		out.Source = &m.Source
 	}
+	if m.WakeLabel != "" {
+		out.WakeLabel = &m.WakeLabel
+	}
 	out.ContextFiles = append(out.ContextFiles, m.ContextFiles...)
 	for _, a := range m.Attachments {
 		out.Attachments = append(out.Attachments, &consolev1.ImageAttachment{
@@ -244,7 +247,7 @@ func toolResultsToProto(results []tools.ToolResult) ([]*consolev1.ToolResult, er
 }
 
 func protoToUser(m *consolev1.AgentUserMessage) UserMessage {
-	out := UserMessage{Role: RoleUser, Content: m.GetContent(), Synthetic: m.GetSynthetic(), Source: m.GetSource(), ApprovalMode: m.GetApprovalMode()}
+	out := UserMessage{Role: RoleUser, Content: m.GetContent(), Synthetic: m.GetSynthetic(), Source: m.GetSource(), ApprovalMode: m.GetApprovalMode(), WakeLabel: m.GetWakeLabel()}
 	out.ContextFiles = append(out.ContextFiles, m.GetContextFiles()...)
 	for _, a := range m.GetAttachments() {
 		out.Attachments = append(out.Attachments, ImageAttachment{

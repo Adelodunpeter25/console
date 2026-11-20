@@ -68,6 +68,7 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 		}
 		header := sessionHeaderToProto(result.Header)
 		messages := visibleMessages(result.Messages)
+		wakeRecords := extractWakeRecords(result.Messages)
 
 		changes, err := sessions.GetSessionFileChanges(id, -1)
 		if err != nil {
@@ -119,7 +120,7 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 				Header: header, Messages: messagesToProto(messages), HasMore: result.HasMore,
 				NextCursor: result.NextCursor, Changes: changeRows, Todos: todoItems,
 				Suggestions: suggestions, QueuedPrompts: queued, BackgroundWork: rows,
-				Draft: stored,
+				Draft: stored, WakeRecords: wakeRecords,
 			}
 			raw, err := proto.Marshal(body)
 			if err != nil {
@@ -160,6 +161,10 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 			draft = raw
 		}
 
+		wakeData, err := marshalProtoList(wakeRecords)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
 			"header":         json.RawMessage(headerRaw),
 			"messages":       messages,
@@ -171,6 +176,7 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 			"queuedPrompts":  queuedPrompts,
 			"backgroundWork": work,
 			"draft":          draft,
+			"wakeRecords":    wakeData,
 		}})
 	})
 }

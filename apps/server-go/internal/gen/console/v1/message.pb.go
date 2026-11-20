@@ -316,7 +316,9 @@ type AgentUserMessage struct {
 	// field existed; clients treat that as unknown, not as a default mode.
 	ApprovalMode *string `protobuf:"bytes,6,opt,name=approval_mode,json=approvalMode,proto3,oneof" json:"approval_mode,omitempty"`
 	// Server-initiated turn source ("automation", "webhook"); absent for user-typed prompts.
-	Source        *string `protobuf:"bytes,7,opt,name=source,proto3,oneof" json:"source,omitempty"`
+	Source *string `protobuf:"bytes,7,opt,name=source,proto3,oneof" json:"source,omitempty"`
+	// Human label for a synthetic wake turn (e.g. "Bash tool completed, continuing agent").
+	WakeLabel     *string `protobuf:"bytes,8,opt,name=wake_label,json=wakeLabel,proto3,oneof" json:"wake_label,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -396,6 +398,13 @@ func (x *AgentUserMessage) GetApprovalMode() string {
 func (x *AgentUserMessage) GetSource() string {
 	if x != nil && x.Source != nil {
 		return *x.Source
+	}
+	return ""
+}
+
+func (x *AgentUserMessage) GetWakeLabel() string {
+	if x != nil && x.WakeLabel != nil {
+		return *x.WakeLabel
 	}
 	return ""
 }
@@ -1256,7 +1265,7 @@ const file_console_v1_message_proto_rawDesc = "" +
 	"\x10_source_locationB\a\n" +
 	"\x05_roleB\x12\n" +
 	"\x10_accessible_nameB\x14\n" +
-	"\x12_screenshot_base64\"\xd3\x02\n" +
+	"\x12_screenshot_base64\"\x86\x03\n" +
 	"\x10AgentUserMessage\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\x12#\n" +
 	"\rcontext_files\x18\x02 \x03(\tR\fcontextFiles\x12=\n" +
@@ -1264,9 +1273,12 @@ const file_console_v1_message_proto_rawDesc = "" +
 	"\vannotations\x18\x04 \x03(\v2\x1d.console.v1.BrowserAnnotationR\vannotations\x12\x1c\n" +
 	"\tsynthetic\x18\x05 \x01(\bR\tsynthetic\x12(\n" +
 	"\rapproval_mode\x18\x06 \x01(\tH\x00R\fapprovalMode\x88\x01\x01\x12\x1b\n" +
-	"\x06source\x18\a \x01(\tH\x01R\x06source\x88\x01\x01B\x10\n" +
+	"\x06source\x18\a \x01(\tH\x01R\x06source\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"wake_label\x18\b \x01(\tH\x02R\twakeLabel\x88\x01\x01B\x10\n" +
 	"\x0e_approval_modeB\t\n" +
-	"\a_source\"f\n" +
+	"\a_sourceB\r\n" +
+	"\v_wake_label\"f\n" +
 	"\bTextPart\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x120\n" +
 	"\x11thought_signature\x18\x02 \x01(\tH\x00R\x10thoughtSignature\x88\x01\x01B\x14\n" +

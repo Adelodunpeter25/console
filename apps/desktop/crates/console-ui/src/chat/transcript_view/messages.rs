@@ -48,6 +48,7 @@ impl TranscriptView {
         self.tool_calls_state.borrow_mut().clear();
         self.thinking_expanded.borrow_mut().clear();
         self.expanded_user_messages.borrow_mut().clear();
+        self.rebuild_run_boundaries();
         self.invalidate_activity_cache();
         self.has_more = has_more;
         self.next_cursor = next_cursor;

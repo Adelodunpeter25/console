@@ -258,11 +258,13 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 				result.Header.Unread = session.IsUnread(result.Header)
 			}
 		}
+		wakeRecords := extractWakeRecords(result.Messages)
 		page := &consolev1.SessionMessagesPage{
-			Header:     sessionHeaderToProto(result.Header),
-			Messages:   messagesToProto(visibleMessages(result.Messages)),
-			HasMore:    result.HasMore,
-			NextCursor: result.NextCursor,
+			Header:      sessionHeaderToProto(result.Header),
+			Messages:    messagesToProto(visibleMessages(result.Messages)),
+			HasMore:     result.HasMore,
+			NextCursor:  result.NextCursor,
+			WakeRecords: wakeRecords,
 		}
 		if wantsBinary(c) {
 			raw, err := proto.Marshal(page)
@@ -279,9 +281,14 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
 		}
+		wakeData, err := marshalProtoList(wakeRecords)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
 			"hasMore": result.HasMore, "header": json.RawMessage(headerRaw),
 			"messages": visibleMessages(result.Messages), "nextCursor": result.NextCursor,
+			"wakeRecords": wakeData,
 		}})
 	})
 

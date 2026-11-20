@@ -279,11 +279,26 @@ pub enum AgentMessage {
 /// One recorded wake turn for a session: when a `backgroundWorkContinue`
 /// frame arrived and what it said. Kept per session so run boundaries can be
 /// rebuilt after history reloads (the frame itself is live-only).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WakeRecord {
     pub message: String,
-    /// Client receipt time, unix seconds.
+    /// Wake time, unix seconds.
     pub at: i64,
+}
+
+impl WakeRecord {
+    pub fn from_proto(p: console_proto::WakeRecord) -> Self {
+        let at = if p.at > 10_000_000_000 {
+            p.at / 1000
+        } else {
+            p.at
+        };
+        Self {
+            message: p.message,
+            at,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

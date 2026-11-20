@@ -9,7 +9,7 @@ pub struct SessionPageOptions {
     pub before: Option<i64>,
 }
 
-use super::agent::{AgentMessage, ImageAttachment, QueuedPrompt, TodoItem};
+use super::agent::{AgentMessage, ImageAttachment, QueuedPrompt, TodoItem, WakeRecord};
 use super::events::BackgroundWork;
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
@@ -77,6 +77,9 @@ pub struct SessionDetailResponse {
     /// Rowid cursor for the next older batch; null when at the start of history.
     #[serde(default)]
     pub next_cursor: Option<i64>,
+    /// Persisted wake-turn markers extracted from synthetic user turns.
+    #[serde(default)]
+    pub wake_records: Vec<WakeRecord>,
 }
 
 fn deserialize_messages<'de, D>(deserializer: D) -> Result<Vec<AgentMessage>, D::Error>
@@ -123,6 +126,11 @@ impl SessionDetailResponse {
                 .collect(),
             has_more: p.has_more,
             next_cursor: p.next_cursor,
+            wake_records: p
+                .wake_records
+                .into_iter()
+                .map(WakeRecord::from_proto)
+                .collect(),
         }
     }
 }
@@ -142,6 +150,11 @@ impl SessionBootstrapResponse {
                     .collect(),
                 has_more: p.has_more,
                 next_cursor: p.next_cursor,
+                wake_records: p
+                    .wake_records
+                    .into_iter()
+                    .map(WakeRecord::from_proto)
+                    .collect(),
             },
             changes: p.changes,
             todos: p.todos,

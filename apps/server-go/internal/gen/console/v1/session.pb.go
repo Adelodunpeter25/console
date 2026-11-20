@@ -1344,19 +1344,72 @@ func (x *SubagentEndEvent) GetTotalTurns() int32 {
 // refreshed header. Served by default; `Accept: application/json` keeps the
 // old mixed envelope. Messages are real proto messages, so tool arguments and
 // results cross as raw bytes instead of base64.
+type WakeRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	At            int64                  `protobuf:"varint,2,opt,name=at,proto3" json:"at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WakeRecord) Reset() {
+	*x = WakeRecord{}
+	mi := &file_console_v1_session_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WakeRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WakeRecord) ProtoMessage() {}
+
+func (x *WakeRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WakeRecord.ProtoReflect.Descriptor instead.
+func (*WakeRecord) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *WakeRecord) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *WakeRecord) GetAt() int64 {
+	if x != nil {
+		return x.At
+	}
+	return 0
+}
+
 type SessionMessagesPage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Header        *SessionHeader         `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
 	Messages      []*AgentMessage        `protobuf:"bytes,2,rep,name=messages,proto3" json:"messages,omitempty"`
 	HasMore       bool                   `protobuf:"varint,3,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
 	NextCursor    *int64                 `protobuf:"varint,4,opt,name=next_cursor,json=nextCursor,proto3,oneof" json:"next_cursor,omitempty"`
+	WakeRecords   []*WakeRecord          `protobuf:"bytes,5,rep,name=wake_records,json=wakeRecords,proto3" json:"wake_records,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SessionMessagesPage) Reset() {
 	*x = SessionMessagesPage{}
-	mi := &file_console_v1_session_proto_msgTypes[15]
+	mi := &file_console_v1_session_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1368,7 +1421,7 @@ func (x *SessionMessagesPage) String() string {
 func (*SessionMessagesPage) ProtoMessage() {}
 
 func (x *SessionMessagesPage) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[15]
+	mi := &file_console_v1_session_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1381,7 +1434,7 @@ func (x *SessionMessagesPage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionMessagesPage.ProtoReflect.Descriptor instead.
 func (*SessionMessagesPage) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{15}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SessionMessagesPage) GetHeader() *SessionHeader {
@@ -1412,6 +1465,13 @@ func (x *SessionMessagesPage) GetNextCursor() int64 {
 	return 0
 }
 
+func (x *SessionMessagesPage) GetWakeRecords() []*WakeRecord {
+	if x != nil {
+		return x.WakeRecords
+	}
+	return nil
+}
+
 // Detached work listed on a reopened chat. Same rows the JSON bootstrap
 // returns, but proto-encoded so a binary session open carries no JSON.
 type BackgroundWork struct {
@@ -1434,7 +1494,7 @@ type BackgroundWork struct {
 
 func (x *BackgroundWork) Reset() {
 	*x = BackgroundWork{}
-	mi := &file_console_v1_session_proto_msgTypes[16]
+	mi := &file_console_v1_session_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1446,7 +1506,7 @@ func (x *BackgroundWork) String() string {
 func (*BackgroundWork) ProtoMessage() {}
 
 func (x *BackgroundWork) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[16]
+	mi := &file_console_v1_session_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1459,7 +1519,7 @@ func (x *BackgroundWork) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackgroundWork.ProtoReflect.Descriptor instead.
 func (*BackgroundWork) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{16}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *BackgroundWork) GetId() string {
@@ -1564,13 +1624,14 @@ type SessionBootstrapResponse struct {
 	QueuedPrompts  []*QueuedPrompt        `protobuf:"bytes,8,rep,name=queued_prompts,json=queuedPrompts,proto3" json:"queued_prompts,omitempty"`
 	BackgroundWork []*BackgroundWork      `protobuf:"bytes,9,rep,name=background_work,json=backgroundWork,proto3" json:"background_work,omitempty"`
 	Draft          *ChatDraft             `protobuf:"bytes,10,opt,name=draft,proto3,oneof" json:"draft,omitempty"`
+	WakeRecords    []*WakeRecord          `protobuf:"bytes,11,rep,name=wake_records,json=wakeRecords,proto3" json:"wake_records,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SessionBootstrapResponse) Reset() {
 	*x = SessionBootstrapResponse{}
-	mi := &file_console_v1_session_proto_msgTypes[17]
+	mi := &file_console_v1_session_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1582,7 +1643,7 @@ func (x *SessionBootstrapResponse) String() string {
 func (*SessionBootstrapResponse) ProtoMessage() {}
 
 func (x *SessionBootstrapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[17]
+	mi := &file_console_v1_session_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1595,7 +1656,7 @@ func (x *SessionBootstrapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionBootstrapResponse.ProtoReflect.Descriptor instead.
 func (*SessionBootstrapResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{17}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SessionBootstrapResponse) GetHeader() *SessionHeader {
@@ -1664,6 +1725,13 @@ func (x *SessionBootstrapResponse) GetBackgroundWork() []*BackgroundWork {
 func (x *SessionBootstrapResponse) GetDraft() *ChatDraft {
 	if x != nil {
 		return x.Draft
+	}
+	return nil
+}
+
+func (x *SessionBootstrapResponse) GetWakeRecords() []*WakeRecord {
+	if x != nil {
+		return x.WakeRecords
 	}
 	return nil
 }
@@ -1834,13 +1902,18 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"totalTurnsB\n" +
 	"\n" +
 	"\b_summaryB\b\n" +
-	"\x06_error\"\xcf\x01\n" +
+	"\x06_error\"6\n" +
+	"\n" +
+	"WakeRecord\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\x12\x0e\n" +
+	"\x02at\x18\x02 \x01(\x03R\x02at\"\x8a\x02\n" +
 	"\x13SessionMessagesPage\x121\n" +
 	"\x06header\x18\x01 \x01(\v2\x19.console.v1.SessionHeaderR\x06header\x124\n" +
 	"\bmessages\x18\x02 \x03(\v2\x18.console.v1.AgentMessageR\bmessages\x12\x19\n" +
 	"\bhas_more\x18\x03 \x01(\bR\ahasMore\x12$\n" +
 	"\vnext_cursor\x18\x04 \x01(\x03H\x00R\n" +
-	"nextCursor\x88\x01\x01B\x0e\n" +
+	"nextCursor\x88\x01\x01\x129\n" +
+	"\fwake_records\x18\x05 \x03(\v2\x16.console.v1.WakeRecordR\vwakeRecordsB\x0e\n" +
 	"\f_next_cursor\"\xbf\x04\n" +
 	"\x0eBackgroundWork\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
@@ -1869,7 +1942,7 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\f_finished_atB\n" +
 	"\n" +
 	"\b_summaryB\b\n" +
-	"\x06_error\"\x9d\x04\n" +
+	"\x06_error\"\xd8\x04\n" +
 	"\x18SessionBootstrapResponse\x121\n" +
 	"\x06header\x18\x01 \x01(\v2\x19.console.v1.SessionHeaderR\x06header\x124\n" +
 	"\bmessages\x18\x02 \x03(\v2\x18.console.v1.AgentMessageR\bmessages\x12\x19\n" +
@@ -1882,7 +1955,8 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\x0equeued_prompts\x18\b \x03(\v2\x18.console.v1.QueuedPromptR\rqueuedPrompts\x12C\n" +
 	"\x0fbackground_work\x18\t \x03(\v2\x1a.console.v1.BackgroundWorkR\x0ebackgroundWork\x120\n" +
 	"\x05draft\x18\n" +
-	" \x01(\v2\x15.console.v1.ChatDraftH\x01R\x05draft\x88\x01\x01B\x0e\n" +
+	" \x01(\v2\x15.console.v1.ChatDraftH\x01R\x05draft\x88\x01\x01\x129\n" +
+	"\fwake_records\x18\v \x03(\v2\x16.console.v1.WakeRecordR\vwakeRecordsB\x0e\n" +
 	"\f_next_cursorB\b\n" +
 	"\x06_draftBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
 
@@ -1898,7 +1972,7 @@ func file_console_v1_session_proto_rawDescGZIP() []byte {
 	return file_console_v1_session_proto_rawDescData
 }
 
-var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_console_v1_session_proto_goTypes = []any{
 	(*TodoItem)(nil),                       // 0: console.v1.TodoItem
 	(*SessionWorktree)(nil),                // 1: console.v1.SessionWorktree
@@ -1915,35 +1989,38 @@ var file_console_v1_session_proto_goTypes = []any{
 	(*SubagentStartEvent)(nil),             // 12: console.v1.SubagentStartEvent
 	(*SubagentActivityEvent)(nil),          // 13: console.v1.SubagentActivityEvent
 	(*SubagentEndEvent)(nil),               // 14: console.v1.SubagentEndEvent
-	(*SessionMessagesPage)(nil),            // 15: console.v1.SessionMessagesPage
-	(*BackgroundWork)(nil),                 // 16: console.v1.BackgroundWork
-	(*SessionBootstrapResponse)(nil),       // 17: console.v1.SessionBootstrapResponse
-	nil,                                    // 18: console.v1.BackgroundWork.MetadataEntry
-	(*ImageAttachment)(nil),                // 19: console.v1.ImageAttachment
-	(*BrowserAnnotation)(nil),              // 20: console.v1.BrowserAnnotation
-	(*AgentMessage)(nil),                   // 21: console.v1.AgentMessage
-	(*ChatDraft)(nil),                      // 22: console.v1.ChatDraft
+	(*WakeRecord)(nil),                     // 15: console.v1.WakeRecord
+	(*SessionMessagesPage)(nil),            // 16: console.v1.SessionMessagesPage
+	(*BackgroundWork)(nil),                 // 17: console.v1.BackgroundWork
+	(*SessionBootstrapResponse)(nil),       // 18: console.v1.SessionBootstrapResponse
+	nil,                                    // 19: console.v1.BackgroundWork.MetadataEntry
+	(*ImageAttachment)(nil),                // 20: console.v1.ImageAttachment
+	(*BrowserAnnotation)(nil),              // 21: console.v1.BrowserAnnotation
+	(*AgentMessage)(nil),                   // 22: console.v1.AgentMessage
+	(*ChatDraft)(nil),                      // 23: console.v1.ChatDraft
 }
 var file_console_v1_session_proto_depIdxs = []int32{
 	1,  // 0: console.v1.SessionHeader.worktree:type_name -> console.v1.SessionWorktree
 	9,  // 1: console.v1.SubagentInfo.activities:type_name -> console.v1.SubagentActivityItem
-	19, // 2: console.v1.QueuedPrompt.attachments:type_name -> console.v1.ImageAttachment
-	20, // 3: console.v1.QueuedPrompt.annotations:type_name -> console.v1.BrowserAnnotation
+	20, // 2: console.v1.QueuedPrompt.attachments:type_name -> console.v1.ImageAttachment
+	21, // 3: console.v1.QueuedPrompt.annotations:type_name -> console.v1.BrowserAnnotation
 	2,  // 4: console.v1.SessionMessagesPage.header:type_name -> console.v1.SessionHeader
-	21, // 5: console.v1.SessionMessagesPage.messages:type_name -> console.v1.AgentMessage
-	18, // 6: console.v1.BackgroundWork.metadata:type_name -> console.v1.BackgroundWork.MetadataEntry
-	2,  // 7: console.v1.SessionBootstrapResponse.header:type_name -> console.v1.SessionHeader
-	21, // 8: console.v1.SessionBootstrapResponse.messages:type_name -> console.v1.AgentMessage
-	7,  // 9: console.v1.SessionBootstrapResponse.changes:type_name -> console.v1.SessionFileChange
-	0,  // 10: console.v1.SessionBootstrapResponse.todos:type_name -> console.v1.TodoItem
-	11, // 11: console.v1.SessionBootstrapResponse.queued_prompts:type_name -> console.v1.QueuedPrompt
-	16, // 12: console.v1.SessionBootstrapResponse.background_work:type_name -> console.v1.BackgroundWork
-	22, // 13: console.v1.SessionBootstrapResponse.draft:type_name -> console.v1.ChatDraft
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	22, // 5: console.v1.SessionMessagesPage.messages:type_name -> console.v1.AgentMessage
+	15, // 6: console.v1.SessionMessagesPage.wake_records:type_name -> console.v1.WakeRecord
+	19, // 7: console.v1.BackgroundWork.metadata:type_name -> console.v1.BackgroundWork.MetadataEntry
+	2,  // 8: console.v1.SessionBootstrapResponse.header:type_name -> console.v1.SessionHeader
+	22, // 9: console.v1.SessionBootstrapResponse.messages:type_name -> console.v1.AgentMessage
+	7,  // 10: console.v1.SessionBootstrapResponse.changes:type_name -> console.v1.SessionFileChange
+	0,  // 11: console.v1.SessionBootstrapResponse.todos:type_name -> console.v1.TodoItem
+	11, // 12: console.v1.SessionBootstrapResponse.queued_prompts:type_name -> console.v1.QueuedPrompt
+	17, // 13: console.v1.SessionBootstrapResponse.background_work:type_name -> console.v1.BackgroundWork
+	23, // 14: console.v1.SessionBootstrapResponse.draft:type_name -> console.v1.ChatDraft
+	15, // 15: console.v1.SessionBootstrapResponse.wake_records:type_name -> console.v1.WakeRecord
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_session_proto_init() }
@@ -1961,16 +2038,16 @@ func file_console_v1_session_proto_init() {
 	file_console_v1_session_proto_msgTypes[12].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[13].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[14].OneofWrappers = []any{}
-	file_console_v1_session_proto_msgTypes[15].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[16].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[17].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[18].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_session_proto_rawDesc), len(file_console_v1_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

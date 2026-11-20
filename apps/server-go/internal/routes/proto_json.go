@@ -43,6 +43,31 @@ func marshalProtoList[T proto.Message](items []T) (json.RawMessage, error) {
 	return json.Marshal(elements)
 }
 
+// extractWakeRecords collects wake-turn markers from synthetic user messages
+// before visibleMessages drops them from the client transcript.
+func extractWakeRecords(raw []json.RawMessage) []*consolev1.WakeRecord {
+	var out []*consolev1.WakeRecord
+	for _, row := range raw {
+		var msg consolev1.AgentMessage
+		if err := protoUnmarshal.Unmarshal(row, &msg); err != nil {
+			continue
+		}
+		user := msg.GetUser()
+		if user == nil || !user.GetSynthetic() {
+			continue
+		}
+		label := user.GetWakeLabel()
+		if label == "" {
+			label = "Background work completed, continuing agent"
+		}
+		out = append(out, &consolev1.WakeRecord{
+			Message: label,
+			At:      msg.GetCreatedAt(),
+		})
+	}
+	return out
+}
+
 // visibleMessages drops server-injected (synthetic) user turns, such as the
 // wake-up message for finished background work. The model keeps them in its
 // history; clients never render them.

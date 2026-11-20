@@ -60,6 +60,8 @@ message AgentUserMessage {
   optional string approval_mode = 6;
   // Server-initiated turn source ("automation", "webhook"); absent for user-typed prompts.
   optional string source = 7;
+  // Human label for a synthetic wake turn (e.g. "Bash tool completed, continuing agent").
+  optional string wake_label = 8;
 }
 
 message TextPart {

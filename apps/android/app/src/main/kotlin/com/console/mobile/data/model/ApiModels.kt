@@ -199,6 +199,7 @@ data class SessionDetailResponse(
     val messages: List<AgentMessage> = emptyList(),
     val hasMore: Boolean = false,
     val nextCursor: Long? = null,
+    val wakeRecords: List<com.console.mobile.core.chat.WakeRecord> = emptyList(),
 )
 
 // One-call chat open: `GET /api/sessions/:id/bootstrap`. Decoded manually in

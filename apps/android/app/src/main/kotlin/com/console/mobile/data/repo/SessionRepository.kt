@@ -504,7 +504,7 @@ class SessionRepository(
 
     private fun applyDetail(sessionId: String, detail: SessionDetailResponse) {
         applyHeader(sessionId, detail.header)
-        chatRepo.loadMessages(sessionId, detail.messages)
+        chatRepo.loadMessages(sessionId, detail.messages, detail.wakeRecords)
         chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
     }
 
@@ -525,7 +525,7 @@ class SessionRepository(
         scope.launch {
             try {
                 val detail = withContext(Dispatchers.IO) { api.getSession(sessionId, limit, before) }
-                chatRepo.prependMessages(sessionId, detail.messages)
+                chatRepo.prependMessages(sessionId, detail.messages, detail.wakeRecords)
                 chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
             } catch (e: Exception) {
                 android.util.Log.w("SessionRepository", "loadOlder($sessionId, before=$before) failed", e)
@@ -578,7 +578,7 @@ class SessionRepository(
             chatRepo.setLoadingOlder(sessionId, true)
             try {
                 val detail = withContext(Dispatchers.IO) { api.getSession(sessionId, OLDER_PAGE, before) }
-                chatRepo.prependMessages(sessionId, detail.messages)
+                chatRepo.prependMessages(sessionId, detail.messages, detail.wakeRecords)
                 chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
             } catch (e: Exception) {
                 android.util.Log.w("SessionRepository", "loadUntilUserMessages($sessionId, $count) failed", e)

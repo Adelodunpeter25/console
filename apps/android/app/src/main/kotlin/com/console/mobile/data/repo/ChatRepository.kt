@@ -408,16 +408,25 @@ class ChatRepository(
         }
     }
 
-    fun loadMessages(sessionId: String, messages: List<AgentMessage>) {
+    fun loadMessages(
+        sessionId: String,
+        messages: List<AgentMessage>,
+        serverWakeRecords: List<com.console.mobile.core.chat.WakeRecord> = emptyList(),
+    ) {
         if (messages.isEmpty()) return
         val withIds = ensureMessageIds(messages)
         chats.update(sessionId) { current ->
+            val wakeRecords = mergeWakeRecords(serverWakeRecords, current.wakeRecords)
             // The server's history is the source of truth even mid-run; the live
             // stream only owns the in-flight buffers and the newest run's
             // activity, which is re-paired with the latest prompt here.
             if (current.running) {
                 val merged = mergeLiveHistory(withIds, current.messages)
-                current.copy(messages = merged, runs = withLiveRun(merged, current.runs, wakeRecords = current.wakeRecords))
+                current.copy(
+                    messages = merged,
+                    wakeRecords = wakeRecords,
+                    runs = withLiveRun(merged, current.runs, wakeRecords = wakeRecords),
+                )
             } else {
                 current.copy(
                     messages = withIds,
@@ -425,7 +434,8 @@ class ChatRepository(
                     streamingThinking = "",
                     activeToolCalls = emptyList(),
                     pendingQuestions = emptyList(),
-                    runs = reconstructRuns(withIds, current.wakeRecords),
+                    wakeRecords = wakeRecords,
+                    runs = reconstructRuns(withIds, wakeRecords),
                 )
             }
         }
@@ -446,9 +456,29 @@ class ChatRepository(
      * are already populated, so [ensureMessageIds] leaves them untouched and
      * the LazyColumn keys stay stable across the prepend.
      */
-    fun prependMessages(sessionId: String, older: List<AgentMessage>) {
+    fun prependMessages(
+        sessionId: String,
+        older: List<AgentMessage>,
+        serverWakeRecords: List<com.console.mobile.core.chat.WakeRecord> = emptyList(),
+    ) {
         if (older.isEmpty()) return
-        chats.update(sessionId) { prependOlderMessages(it, older) }
+        chats.update(sessionId) { current ->
+            val wakeRecords = mergeWakeRecords(serverWakeRecords, current.wakeRecords)
+            prependOlderMessages(current.copy(wakeRecords = wakeRecords), older)
+        }
+    }
+
+    private fun mergeWakeRecords(
+        server: List<com.console.mobile.core.chat.WakeRecord>,
+        local: List<com.console.mobile.core.chat.WakeRecord>,
+    ): List<com.console.mobile.core.chat.WakeRecord> {
+        if (server.isEmpty()) return local
+        val merged = server.toMutableList()
+        for (record in local) {
+            val dup = merged.any { kotlin.math.abs(it.at - record.at) <= 5_000L && it.message == record.message }
+            if (!dup) merged.add(record)
+        }
+        return merged.sortedBy { it.at }
     }
 
     fun handleEvent(sessionId: String, event: AgentSessionEvent) {
