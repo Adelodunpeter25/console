@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -32,6 +33,47 @@ func EnsureDisplay() error {
 		return err
 	}
 	return os.Setenv("DISPLAY", display)
+}
+
+// DisplayPlan says which display computer use would run on, without starting
+// anything. Source is "existing" (DISPLAY already works), "attached" (a running
+// session was found) or "xvfb" (a private one would be started on demand).
+type DisplayPlan struct {
+	Display string
+	Source  string
+}
+
+// PlanDisplay reports the display plan on Linux; other platforms have no
+// display to plan and get a zero value.
+func PlanDisplay() (DisplayPlan, error) {
+	if runtime.GOOS != "linux" {
+		return DisplayPlan{}, nil
+	}
+	return planDisplay(os.Getenv("DISPLAY"), x11SocketDir, os.Getuid(), exec.LookPath)
+}
+
+// PlanDisplayForTest exposes planning against a temporary socket directory and
+// a stubbed Xvfb lookup.
+func PlanDisplayForTest(current, socketDir string, uid int, lookPath func(string) (string, error)) (DisplayPlan, error) {
+	return planDisplay(current, socketDir, uid, lookPath)
+}
+
+func planDisplay(current, socketDir string, uid int, lookPath func(string) (string, error)) (DisplayPlan, error) {
+	display, err := resolveDisplay(current, socketDir, uid)
+	if err == nil {
+		source := "attached"
+		if display == current {
+			source = "existing"
+		}
+		return DisplayPlan{Display: display, Source: source}, nil
+	}
+	if !errors.Is(err, ErrNoDisplay) {
+		return DisplayPlan{}, err
+	}
+	if _, lookErr := lookPath("Xvfb"); lookErr != nil {
+		return DisplayPlan{}, ErrXvfbMissing
+	}
+	return DisplayPlan{Source: "xvfb"}, nil
 }
 
 // ResolveDisplayForTest exposes resolution so the order is pinned against a

@@ -168,7 +168,18 @@ func computerUseStatusCmd() *cobra.Command {
 				}
 				return nil
 			}
+			if status.DisplayError != "" {
+				fmt.Printf("computer use: unavailable\n  %s\n", status.DisplayError)
+				return nil
+			}
 			fmt.Printf("computer use: available\n")
+			if status.DisplaySource != "" {
+				if status.Display != "" {
+					fmt.Printf("  display %s (%s)\n", status.Display, status.DisplaySource)
+				} else {
+					fmt.Printf("  display: a private Xvfb will be started when needed\n")
+				}
+			}
 			if status.ABIMajor > 0 {
 				fmt.Printf("  ABI %d.%d.%d, permission mode %s\n",
 					status.ABIMajor, status.ABIMinor, status.ABIPatch, status.PermissionMode)
@@ -192,6 +203,9 @@ func computerUseProbeCmd() *cobra.Command {
 		Use:   "probe",
 		Short: "Launch an app, read its window, and report what came back",
 		RunE: func(_ *cobra.Command, _ []string) error {
+			if runtime.GOOS != "darwin" {
+				return fmt.Errorf("probe is macOS only; use `console computer-use eval` on %s", runtime.GOOS)
+			}
 			cua.EnsureHostEnv()
 			restore := redirectOutput(out)
 			defer restore()

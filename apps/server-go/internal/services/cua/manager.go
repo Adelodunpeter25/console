@@ -162,6 +162,11 @@ type Status struct {
 	ABIMinor       int    `json:"abiMinor,omitempty"`
 	ABIPatch       int    `json:"abiPatch,omitempty"`
 	LibraryPath    string `json:"libraryPath,omitempty"`
+	// Display and DisplaySource say where it would run on Linux. DisplayError
+	// is why it could not run there, and makes Available false.
+	Display       string `json:"display,omitempty"`
+	DisplaySource string `json:"displaySource,omitempty"`
+	DisplayError  string `json:"displayError,omitempty"`
 }
 
 // Status probes the library and reports without failing the caller.
@@ -182,7 +187,14 @@ func (m *Manager) Status() Status {
 	m.mu.Unlock()
 	if driver == nil {
 		// Not opened yet: the ABI probe above is the useful signal, and a
-		// library that loads cleanly means computer use is installable.
+		// library that loads cleanly means computer use is installable, as
+		// long as there is somewhere for it to draw.
+		plan, planErr := PlanDisplay()
+		out.Display, out.DisplaySource = plan.Display, plan.Source
+		if planErr != nil {
+			out.DisplayError = planErr.Error()
+			return out
+		}
 		out.Available = true
 		return out
 	}
