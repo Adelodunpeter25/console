@@ -358,9 +358,9 @@ impl WorkspaceNode {
     pub fn find_leaf(&self, id: &str) -> Option<&LeafPaneNode> {
         match self {
             Self::Leaf(node) => (node.id == id).then_some(node),
-            Self::Split(node) => {
-                node.children[0].find_leaf(id).or_else(|| node.children[1].find_leaf(id))
-            }
+            Self::Split(node) => node.children[0]
+                .find_leaf(id)
+                .or_else(|| node.children[1].find_leaf(id)),
         }
     }
 
@@ -470,11 +470,7 @@ pub fn namespace_pane_ids(
     renamed
 }
 
-fn namespace_leaf_ids(
-    node: &mut WorkspaceNode,
-    prefix: &str,
-    renamed: &mut Vec<(String, String)>,
-) {
+fn namespace_leaf_ids(node: &mut WorkspaceNode, prefix: &str, renamed: &mut Vec<(String, String)>) {
     match node {
         WorkspaceNode::Leaf(leaf) => {
             let local = leaf
@@ -578,4 +574,67 @@ pub fn dead_worktree_workspace_keys<'a>(
         .filter(|key| is_worktree_workspace_key(key) && !live.contains(*key))
         .map(str::to_owned)
         .collect()
+}
+
+/// One row of the ⌘T workspace switcher: a desk and the chat it was made for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeskRow {
+    pub key: Option<String>,
+    pub session_id: String,
+    pub title: String,
+    /// The project the chat belongs to, shown where a tab list would show
+    /// "current" or a time.
+    pub project_name: String,
+    /// The worktree branch, for a desk that lives in its own checkout.
+    pub branch: Option<String>,
+    pub provider: String,
+    pub last_active_at_ms: i64,
+}
+
+/// The newest tab activity in a desk, or 0 for one that has none.
+pub fn desk_last_active_ms(root: &WorkspaceNode) -> i64 {
+    root.leaves()
+        .iter()
+        .flat_map(|leaf| leaf.tabs.iter())
+        .filter_map(|tab| tab.last_active_at_ms())
+        .max()
+        .unwrap_or(0)
+}
+
+/// Rows for the workspace switcher, most recently used first.
+///
+/// `desks` is every open desk as `(key, last_active_ms)`. A desk is shown as
+/// the chat it belongs to: the most recently updated session whose workspace
+/// key is the desk's, found through `key_of`. A desk with no matching chat
+/// (its chat was deleted) has nothing to name it by and is left out.
+pub fn desk_rows(
+    desks: &[(Option<String>, i64)],
+    sessions: &[crate::types::session::SessionHeader],
+    key_of: impl Fn(&crate::types::session::SessionHeader) -> Option<String>,
+    project_name_of: impl Fn(&crate::types::session::SessionHeader) -> String,
+) -> Vec<DeskRow> {
+    let mut rows: Vec<DeskRow> = desks
+        .iter()
+        .filter_map(|(key, last_active)| {
+            let session = sessions
+                .iter()
+                .filter(|session| key_of(session) == *key)
+                .max_by_key(|session| session.updated_at)?;
+            Some(DeskRow {
+                key: key.clone(),
+                session_id: session.id.clone(),
+                title: crate::types::session::SessionHeaderExt::display_title(session).to_string(),
+                project_name: project_name_of(session),
+                branch: session
+                    .worktree
+                    .as_ref()
+                    .map(|worktree| worktree.branch.clone())
+                    .filter(|branch| !branch.is_empty()),
+                provider: session.provider.clone(),
+                last_active_at_ms: *last_active,
+            })
+        })
+        .collect();
+    rows.sort_by_key(|row| std::cmp::Reverse(row.last_active_at_ms));
+    rows
 }
