@@ -131,6 +131,14 @@ func toolResultToProto(r tools.ToolResult) *consolev1.ToolResult {
 			Spec:    append([]byte(nil), r.Visual.Spec...),
 		}
 	}
+	if r.Html != nil {
+		out.Html = &consolev1.HtmlPart{
+			Path:     r.Html.Path,
+			Title:    r.Html.Title,
+			Height:   r.Html.Height,
+			Snapshot: append([]byte(nil), r.Html.Snapshot...),
+		}
+	}
 	return out
 }
 
