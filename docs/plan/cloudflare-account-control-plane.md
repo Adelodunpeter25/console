@@ -15,8 +15,9 @@ Status: proposed plan. No implementation yet.
 - Existing device pairing is not preserved as the primary path. Re-pairing is acceptable.
 - A local fallback token is included so a machine can be used from localhost if the account service is unreachable.
 - Account-specific settings and future features live in the per-account Durable Object.
-- User-level skills are synced by account in v1. Project skills stay project-local.
-- The control plane is the source of truth for account skills; enrolled servers mirror them locally.
+- User-level skills under `~/.agents/skills` are synced by account in v1. Project skills stay project-local.
+- Local skill changes are uploaded automatically; account changes are mirrored automatically to enrolled servers.
+- The control plane is the source of truth for account skills; enrolled servers mirror them under `~/.console/sync/skills`.
 
 ## 1. Goals
 
@@ -485,40 +486,53 @@ This is not an account login. It is a machine-local admin escape path.
 
 Skills are specialized instructions the model can load on demand. Today skills are discovered from user config directories and project directories on each server. That makes first setup simple, but daily use painful: the same skill has to be copied to every machine and kept there by hand.
 
-This feature syncs user-level skills through the account. Project skills remain local to the repository.
+This feature syncs the user-level `~/.agents/skills` skill library through the account. Project skills remain local to the repository. This is intended to work with skills installed by `npx skills` / skills.sh: once a skill lands under `~/.agents/skills`, the server detects it and syncs it automatically.
 
 ### 9.1 Source of truth
 
-- The Account DO is the source of truth for account skills.
-- A skill record stores name, description, full markdown body, version, and deleted_at.
+- The local source root is the user-level `~/.agents/skills` directory only.
+- Do not sync project-local `.agents/skills`, `.console/skills`, or `.agent/skills` directories found inside repositories.
+- The Account DO is the source of truth for account skills after upload.
+- A skill record stores name, source path, frontmatter, full markdown body, checksum, version, and deleted_at.
 - The full skill body is stored in the DO. Skills are prompt/workflow text, not secret storage.
 - Every active skill has a unique normalized name. Project skills can still override an account skill with the same name when a run happens inside that project.
-- Deletes are soft so devices can remove their mirrored copy on the next sync.
+- Unknown frontmatter fields are preserved. A skill does not need to be "known" by Console in advance.
+- Deletes are soft. When a local source skill disappears, the account skill is marked deleted with a 30-day undo window.
 
-### 9.2 Editing and conflict rules
+### 9.2 What gets synced
 
-- Skills can be created, edited, and deleted from the hosted dashboard and from signed-in desktop/Android apps.
-- Updates require expected_version. If another device changed the skill first, the write returns a conflict instead of silently overwriting it.
-- Skill names are normalized for uniqueness but the original display name is preserved.
-- Importing local skills is explicit: a CLI command pushes the current local user skill files into the account and reports conflicts instead of guessing.
-- v1 sync is one-way from the account to servers after an explicit import/edit. Servers do not silently push arbitrary local changes back to the account.
+- Sync supported skill files under `~/.agents/skills`:
+  - flat markdown files such as `~/.agents/skills/writing.md`
+  - directory skills such as `~/.agents/skills/rust/SKILL.md`
+  - markdown extensions `.md`, `.mdc`, and `.markdown`
+- Ignore hidden files/directories, `.DS_Store`, `node_modules`, temporary files, and non-markdown files.
+- Parse frontmatter for name/description/hide, but preserve the original raw body and unknown fields.
+- If a file cannot be parsed, leave it local and log a warning; do not block syncing other skills.
 
-### 9.3 Server mirror
+### 9.3 Automatic upload and conflict rules
+
+- The server watches or polls `~/.agents/skills` and uploads new or changed skills automatically.
+- Local changes use last-write-wins for v1: a changed checksum uploads a new version and becomes the account copy.
+- Skills can also be created, edited, and deleted from the hosted dashboard and from signed-in desktop/Android apps.
+- When editing from dashboard/app, updates require expected_version. A stale version returns a conflict instead of silently overwriting another editor.
+- Skill names are normalized for uniqueness but the original display name and source path are preserved.
+- Local deletion soft-deletes the account skill with a 30-day undo window. This keeps accidental `npx` reinstall/removal operations recoverable.
+
+### 9.4 Server mirror
 
 - Each enrolled server includes synced_skills_revision in its heartbeat.
 - When the control plane sees a newer skills_revision, heartbeat returns skills_changed.
-- The server then calls GET /v1/sync/skills and atomically writes the bundle to a local mirror under ~/.console/sync/skills/<name>/SKILL.md.
-- Skill discovery adds ~/.console/sync as a user-level skill root after the existing local user roots and before project roots.
+- The server then calls GET /v1/sync/skills and atomically writes the bundle to a local mirror under `~/.console/sync/skills/<name>/SKILL.md`.
+- Skill discovery adds `~/.console/sync` as a user-level skill root after the existing local user roots and before project roots.
 - Precedence is: closest project skills win, then account-synced skills, then local user skills of the same name.
 - Deleted account skills remove the mirrored file on the next sync.
 - The server keeps the last successful mirror on disk. If the control plane is unavailable, existing skills continue to work.
 
-### 9.4 CLI surface
+### 9.5 CLI surface
 
-- console skills status: show account connection, current local revision, and remote revision.
-- console skills pull: fetch the account bundle into the local mirror immediately.
-- console skills push: import local user skills into the account; conflicts must be resolved explicitly.
+- console skills status: show account connection, local source revision, mirror revision, and remote revision.
 - console skills list: show account skill names, versions, and descriptions.
+- console skills sync: run an immediate two-way sync check. Normal operation is automatic; this is only for debugging and explicit refresh.
 
 ## 10. Token design
 
@@ -589,7 +603,7 @@ CLI commands:
 - console enroll [--name NAME] [--code CODE]
 - console local-access [--rotate]
 - console account-status
-- console skills status|list|pull|push
+- console skills status|list|sync
 - console enroll --reset maybe later, only if needed
 
 Changes in existing files:
@@ -603,6 +617,7 @@ Changes in existing files:
 - internal/serve/serve.go: start heartbeat goroutine after successful enrollment; do not block boot if unenrolled.
 - internal/db/schema.go: remove or ignore old auth tables for primary auth. Do not migrate old pairings.
 - internal/services/skills_service.go and internal/agent/systemprompt/skills.go: add ~/.console/sync as a user-level skill root after existing local user roots and before project roots, so account-synced skills override local user skills but project skills still win.
+- internal/cloudauth/skills.go: watch or poll `~/.agents/skills`, parse supported markdown skill files, upload changed checksums automatically, and mirror account bundles into `~/.console/sync/skills`.
 
 Server startup behavior:
 
@@ -621,7 +636,7 @@ Desktop:
 - Fetch server list from control plane on sign-in and refresh.
 - For each selected server, obtain a server-scoped token and set it on HttpTransport.
 - Add local fallback detection: if a server is localhost and Cloudflare is unreachable, use local access token from disk or prompt for it.
-- Add account skills management: list, create, edit, delete, and show version conflicts.
+- Add account skills management: list, create, edit, delete, show version conflicts, and display local source/mirror status.
 
 Android:
 
@@ -753,4 +768,4 @@ Remove old pairing as the default path. Update roadmap, README, install docs, an
 
 ## 19. Definition of done
 
-A user can sign up with email/password on a fresh machine, enroll a server with either browser approval or a one-time code, sign into a second device with the same account, see the server automatically, connect to it without pairing, create and edit user skills that sync to every enrolled server, revoke a device or server from the dashboard, and still access a local server from localhost if the control plane is unavailable.
+A user can sign up with email/password on a fresh machine, enroll a server with either browser approval or a one-time code, sign into a second device with the same account, see the server automatically, connect to it without pairing, install or edit skills under `~/.agents/skills` that sync automatically to every enrolled server, revoke a device or server from the dashboard, and still access a local server from localhost if the control plane is unavailable.
