@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
@@ -28,6 +29,8 @@ type Provider struct {
 	BaseURL          string
 	HTTPClient       *http.Client
 	CredentialLoader func() (ParsedCredential, error)
+
+	assignments assignmentCache
 }
 
 func (p *Provider) baseURL() string {
@@ -109,9 +112,15 @@ func (p *Provider) runTurn(ctx context.Context, req loop.TurnRequest, events *st
 	// cascade id.
 	var assignment *modelAssignment
 	if meta.isAssignRouter {
-		assignment, err = assignModel(ctx, p.httpClient(), auth, chatUID, routerPrompt)
-		if err != nil {
-			return err
+		routerUID := chatUID
+		if pinned, ok := p.assignments.get(cascadeID, routerUID, time.Now()); ok {
+			assignment = pinned
+		} else {
+			assignment, err = assignModel(ctx, p.httpClient(), auth, chatUID, routerPrompt)
+			if err != nil {
+				return err
+			}
+			p.assignments.put(cascadeID, routerUID, assignment, time.Now())
 		}
 		chatUID = assignment.modelUID
 	}
