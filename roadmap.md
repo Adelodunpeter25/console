@@ -21,8 +21,8 @@ High-level direction only — implementation details live in `docs/`.
 - [x] Computer use — agent controls the computer (keyboard, mouse, screen)
 - [x] Plan and Full Access modes — two permission modes, Plan by default; Shift+Tab toggles on desktop, a Plan chip on mobile
 - [x] Codemode — the agent writes JavaScript that calls the harness's own tools through a `code` tool backed by a persistent per-session REPL; the harness tool list collapses to the REPL tools (default path)
-- [ ] Automations — scheduled and triggered agent runs
-- [ ] Pull requests — read and write pull requests from the agent and the apps (`docs/plan/pull-requests.md`)
+- [x] Automations — scheduled and triggered agent runs
+- [x] Pull requests — read and write pull requests from the agent and the apps (`docs/plan/pull-requests.md`)
 
 ## Accounts
 
