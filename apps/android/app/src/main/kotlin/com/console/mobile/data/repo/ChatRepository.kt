@@ -334,6 +334,7 @@ class ChatRepository(
                 input = prompt,
                 attachments = emptyList(),
                 draftUpdatedAt = System.currentTimeMillis(),
+                focusRequest = current.focusRequest + 1,
             )
         }
         setSuggestions(sessionId, emptyList())

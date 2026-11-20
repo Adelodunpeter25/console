@@ -71,6 +71,9 @@ data class ChatSessionState(
     val context: ContextSnapshot? = null,
     val attachments: List<ImageAttachment> = emptyList(),
     val draftUpdatedAt: Long? = null,
+    // Bumped by actions that put text in the composer (e.g. Edit Before Sending)
+    // so it takes focus even when the tap happened outside it.
+    val focusRequest: Int = 0,
     // Message pagination. The session API returns the newest page on open;
     // `nextCursor` is the rowid to pass back as `before` to walk backwards.
     val hasMoreMessages: Boolean = false,

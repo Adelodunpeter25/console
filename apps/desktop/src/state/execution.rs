@@ -1,6 +1,6 @@
 use console_core::ImageAttachment;
 use console_core::types::agent::AskQuestionRequest;
-use gpui::Context;
+use gpui::{Context, Focusable, Window};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
@@ -405,10 +405,12 @@ impl ConsoleDesktopApp {
         &mut self,
         pane_id: &str,
         prompt: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.composer_for_pane(pane_id).update(cx, |input, cx| {
             input.set_content(prompt, cx);
+            window.focus(&input.focus_handle(cx), cx);
         });
         cx.notify();
     }

@@ -1,4 +1,6 @@
 package com.console.mobile.feature.chat
+
+import kotlinx.coroutines.flow.map
 import io.github.lyxnx.compose.ui.tablericons.outline.MessageChatbot
 
 import androidx.compose.foundation.background
@@ -286,6 +288,9 @@ fun Composer(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val focusRequest by AppContainer.chatStateHolder.sessions
+        .map { it[sessionId]?.focusRequest ?: 0 }
+        .collectAsStateWithLifecycle(initialValue = 0)
     // The user's intent, not raw focus. A sheet or the picker steals window focus,
     // which would otherwise look like "the user left"; focus changes seen while
     // something is held are ignored, so intent survives and is restored after.
@@ -306,6 +311,12 @@ fun Composer(
             keyboard?.show()
         } catch (_: Exception) {
             // Not attached yet; the next tap will do it.
+        }
+    }
+    LaunchedEffect(focusRequest) {
+        if (focusRequest > 0) {
+            wantsOpen = true
+            focusField()
         }
     }
     // Open for reasons other than the keyboard: a sheet/picker is showing, focus

@@ -1020,11 +1020,11 @@ impl ConsoleDesktopApp {
                     on_edit: {
                         let entity_edit = entity.clone();
                         let pane_for_edit = pane_id.to_owned();
-                        Rc::new(move |prompt, _window, cx| {
+                        Rc::new(move |prompt, window, cx| {
                             if let Some(app) = entity_edit.upgrade() {
                                 let pid = pane_for_edit.clone();
                                 app.update(cx, |this, cx| {
-                                    this.edit_suggestion_for_pane(&pid, prompt, cx);
+                                    this.edit_suggestion_for_pane(&pid, prompt, window, cx);
                                 });
                             }
                         })
