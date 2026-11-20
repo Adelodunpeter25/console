@@ -290,7 +290,7 @@ func ConvertMessages(messages []any, retention loop.CacheRetention) []ClaudeMess
 	if retention != loop.CacheNone && len(merged) > 0 {
 		last := &merged[len(merged)-1]
 		if n := len(last.Content); n > 0 {
-			last.Content[n-1]["cache_control"] = map[string]any{"type": "ephemeral"}
+			last.Content[n-1]["cache_control"] = CacheControl(retention)
 		}
 	}
 	return merged
@@ -355,7 +355,7 @@ func ConvertTools(defs []tools.Definition, retention loop.CacheRetention) []Clau
 			tool.Description = t.Description
 		}
 		if retention != loop.CacheNone && i == len(defs)-1 {
-			tool.CacheControl = map[string]any{"type": "ephemeral"}
+			tool.CacheControl = CacheControl(retention)
 		}
 		out = append(out, tool)
 	}

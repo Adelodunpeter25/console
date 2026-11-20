@@ -158,7 +158,7 @@ func BuildRequestBody(modelID, systemPrompt string, messages []any, toolDefs []t
 	if trimmed != "" {
 		block := map[string]any{"type": "text", "text": trimmed}
 		if retention != loop.CacheNone {
-			block["cache_control"] = map[string]any{"type": "ephemeral"}
+			block["cache_control"] = CacheControl(retention)
 		}
 		system = append(system, block)
 	}
@@ -169,6 +169,16 @@ func BuildRequestBody(modelID, systemPrompt string, messages []any, toolDefs []t
 	}
 	body["stream"] = true
 	return body
+}
+
+// CacheControl is the cache marker for a retention. Long retention asks for
+// the one-hour lifetime so a pause past five minutes does not wipe the cache.
+func CacheControl(retention loop.CacheRetention) map[string]any {
+	marker := map[string]any{"type": "ephemeral"}
+	if retention == loop.CacheLong {
+		marker["ttl"] = "1h"
+	}
+	return marker
 }
 
 // AppendTail adds per-request context to the final user message, after its

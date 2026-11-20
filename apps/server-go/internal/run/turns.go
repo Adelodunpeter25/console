@@ -649,7 +649,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	}
 	agent.SystemSections = systemSections(prompt.Sections)
 	agent.Model = modelID
-	agent.CacheRetention = loop.CacheShort
+	agent.CacheRetention = loop.CacheLong
 	// Stable per conversation, scoped by provider+model so cached prefixes
 	// stay valid.
 	agent.ConversationID = fmt.Sprintf("%s:%s:%s", sessionID, providerID, modelID)
