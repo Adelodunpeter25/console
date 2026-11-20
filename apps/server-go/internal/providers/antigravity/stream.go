@@ -351,7 +351,11 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		return nil
 	})
 
-	UpdateLastExecutionID(p.session(req.ConversationID), lastResponseID)
+	state := p.session(req.ConversationID)
+	UpdateLastExecutionID(state, lastResponseID)
+	if req.ConversationID != "" {
+		savePersistedState(req.ConversationID, state)
+	}
 
 	usage := NormalizeUsage(lastUsage, req.CacheRetention)
 	if usage == nil {
