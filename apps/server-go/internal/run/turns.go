@@ -696,6 +696,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		slog.Info("run usage", "session", sessionID, "provider", providerID, "model", modelID,
 			"turns", total.Turns, "input", total.Input, "cacheRead", total.CacheRead,
 			"cacheWrite", total.CacheWrite, "output", total.Output, "coldMisses", total.ColdMisses,
+			"missTurns", total.MissTurns, "unreported", total.UnreportedTurns,
 			"hitRate", hitRate(total))
 	}()
 	for {

@@ -401,6 +401,30 @@ func WithSetup(setup string, history []any) []any {
 
 var prefixTracker PrefixTracker
 
+// logTurnCache reports a turn whose prompt was mostly not served from cache,
+// and a turn the provider returned no usage for, so a provider that stops
+// reporting cache numbers is visible instead of silently counted as zero.
+func (a *Agent) logTurnCache(sessionID string, usage *TurnUsage) {
+	provider := a.ConversationID
+	if parts := strings.Split(a.ConversationID, ":"); len(parts) >= 3 {
+		provider = parts[1]
+	}
+	if usage == nil || (usage.CacheStatus == CacheUnknown && usage.PromptTokens() == 0) {
+		slog.Info("turn usage unreported", "session", sessionID, "provider", provider, "model", a.Model)
+		return
+	}
+	if !IsCacheMiss(usage) {
+		return
+	}
+	turn := 0
+	if a.Usage != nil {
+		turn = a.Usage.Snapshot().Turns
+	}
+	slog.Info("cache miss", "session", sessionID, "provider", provider, "model", a.Model, "turn", turn,
+		"read", usage.CacheRead, "write", usage.CacheWrite, "input", usage.Input,
+		"hit", fmt.Sprintf("%.0f%%", usage.HitRatio()*100))
+}
+
 // WithTail appends the request tail as a final user message; an empty tail
 // is a no-op. Providers with implicit caching use it on Messages.
 func WithTail(tail string, messages []any) []any {
@@ -536,6 +560,7 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 	if a.Usage != nil {
 		a.Usage.AddTurn(assistant.Usage)
 	}
+	a.logTurnCache(sessionID, assistant.Usage)
 	if assistant.StopReason == "" {
 		assistant.StopReason = StopStop
 	}
