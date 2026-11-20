@@ -82,7 +82,7 @@ Run only the relevant file, e.g. `cd apps/server-go && go test ./tests/services/
 ## Order of work
 1. A1 + A3 (display resolution and clear errors). Fixes the immediate pain, no new process.
 2. A2 (managed Xvfb).
-3. B1 + B2 (agent activation with approval).
+3. B (agent activation, no approval prompt).
 4. A4 + A6 (CLI and skill text), then A5 packaging.
 Each step is one commit with a single-line message.
 
