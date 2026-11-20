@@ -19,8 +19,16 @@ const bootstrapScript = `
     });
 
     // File primitives
-    globalThis.file = async function(path) {
-        const res = await bridge.call({ tool: "readFile", input: { path: String(path) } });
+    // file(path, [startLine], [endLine]) or file(path, { startLine, endLine }).
+    globalThis.file = async function(path, a, b) {
+        const input = { path: String(path) };
+        if (a && typeof a === "object") {
+            Object.assign(input, a);
+        } else {
+            if (a) input.startLine = a;
+            if (b) input.endLine = b;
+        }
+        const res = await bridge.call({ tool: "readFile", input: input });
         if (typeof res === "string") return res;
         if (Array.isArray(res) && res.length > 0 && res[0].text !== undefined) {
             return res[0].text;
@@ -49,7 +57,11 @@ const bootstrapScript = `
 
     globalThis.glob = async function(pattern, root) {
         const input = { pattern: String(pattern) };
-        if (root) input.root = String(root);
+        if (root && typeof root === "object") {
+            Object.assign(input, root);
+        } else if (root) {
+            input.root = String(root);
+        }
         const res = await bridge.call({ tool: "glob", input: input });
         let text = "";
         if (typeof res === "string") {
@@ -60,8 +72,11 @@ const bootstrapScript = `
             text = String(res);
         }
         const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-        if (lines.length > 0 && lines[0].startsWith("Matched ")) {
+        if (lines.length > 0 && /^(Matched|Found) \d+ file/.test(lines[0])) {
             return lines.slice(1);
+        }
+        if (lines.length === 1 && lines[0].startsWith("No files matched")) {
+            return [];
         }
         return lines;
     };
@@ -71,8 +86,8 @@ const bootstrapScript = `
         return await bridge.call({ tool: "grep", input: input });
     };
 
-    globalThis.list = async function(path) {
-        return await bridge.call({ tool: "listDir", input: { path: String(path || ".") } });
+    globalThis.list = async function(path, options) {
+        return await bridge.call({ tool: "listDir", input: Object.assign({ path: String(path || ".") }, options || {}) });
     };
     globalThis.listDir = globalThis.list;
 
@@ -114,6 +129,18 @@ const bootstrapScript = `
         return await bridge.call({ tool: "todo", input: input });
     };
 
+    // batchWrite(files, [options]): files is [{path, content}, ...].
+    globalThis.batchWrite = async function(files, options) {
+        const input = Object.assign({ files: files }, options || {});
+        return await bridge.call({ tool: "batchWrite", input: input });
+    };
+
+    // memory(op, [options]): op is store|recall|list|edit|delete.
+    globalThis.memory = async function(op, options) {
+        const input = typeof op === "object" && op !== null ? op : Object.assign({ op: String(op) }, options || {});
+        return await bridge.call({ tool: "memory", input: input });
+    };
+
     // Artifacts & chat reference
     globalThis.render = async function(input) {
         return await bridge.call({ tool: "render", input: input });
@@ -124,12 +151,16 @@ const bootstrapScript = `
 
     globalThis.readChat = async function(ref, limit) {
         const input = { ref: String(ref) };
-        if (limit) input.limit = limit;
+        if (limit && typeof limit === "object") {
+            Object.assign(input, limit);
+        } else if (limit) {
+            input.limit = limit;
+        }
         return await bridge.call({ tool: "readChat", input: input });
     };
 
-    globalThis.readSkill = async function(name) {
-        const input = name ? { name: String(name) } : {};
+    globalThis.readSkill = async function(name, options) {
+        const input = Object.assign(name ? { name: String(name) } : {}, options || {});
         return await bridge.call({ tool: "readSkill", input: input });
     };
 
@@ -164,6 +195,8 @@ const bootstrapScript = `
             input = { question: String(question || "") };
             if (Array.isArray(options)) {
                 input.options = options.map(String);
+            } else if (options && typeof options === "object") {
+                Object.assign(input, options);
             }
             if (isMultiSelect) {
                 input.isMultiSelect = true;

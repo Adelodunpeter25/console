@@ -386,6 +386,9 @@ var Glob = NewTool("glob", "Find files matching a glob pattern (e.g. 'src/**/*.t
 			return nil, NewToolError("Invalid glob pattern %s: %v", in.Pattern, err)
 		}
 		sort.Strings(matches)
+		if len(matches) > maxResults {
+			matches = matches[:maxResults]
+		}
 		resolvedRoot, _ := filepath.Abs(root)
 		return textResult(formatGlobMatches(matches, in.Pattern, resolvedRoot)), nil
 	})

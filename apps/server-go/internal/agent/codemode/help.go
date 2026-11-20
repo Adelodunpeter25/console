@@ -29,19 +29,22 @@ var builtinCatalog = []builtinDoc{
 	{name: "bashJob", group: "shell", signature: "bashJob(action, [jobId], [opts])", doc: "Manage background jobs started with $({background:true}). action is output (peek at partial output; opts {cursor, limit}), kill, or list. Returns text."},
 
 	// Files
-	{name: "file", group: "files", signature: "file(path)", doc: "Read a file's text contents. Relative to the process CWD or absolute. Aliases: readFile."},
+	{name: "file", group: "files", signature: "file(path, [startLine], [endLine]) | file(path, {startLine, endLine})", doc: "Read a file's text. Default cap is 300 lines, so pass a 1-based inclusive range to page through larger files. Relative to the process CWD or absolute. Aliases: readFile."},
 	{name: "write", group: "files", signature: "write(path, content)", doc: "Write/overwrite a file, creating parent directories. Aliases: writeFile."},
 	{name: "edit", group: "files", signature: "edit(path, oldStr, newStr)", doc: "Exact string replacement in a file; throws if oldStr is missing or not unique. Aliases: editFile."},
-	{name: "glob", group: "files", signature: "glob(pattern, [root])", doc: "Find file paths matching a glob pattern."},
-	{name: "grep", group: "files", signature: "grep(pattern, [options])", doc: "Search file contents for a pattern."},
-	{name: "list", group: "files", signature: "list(path)", doc: "List directory entries. Aliases: listDir."},
+	{name: "glob", group: "files", signature: "glob(pattern, [root]) | glob(pattern, {root, maxResults})", doc: "Find file paths matching a glob pattern. Default 200 results; raise maxResults for more."},
+	{name: "grep", group: "files", signature: "grep(pattern, [options])", doc: "Search file contents. Options: root, include, maxResults, mode (regex|plain|fuzzy), caseMode (smart|sensitive|insensitive), wholeWord, contextLines."},
+	{name: "list", group: "files", signature: "list(path, [{showHidden}])", doc: "List directory entries; pass {showHidden:true} for dotfiles. Aliases: listDir."},
+
+	{name: "batchWrite", group: "files", signature: "batchWrite(files, [{stopOnError}])", doc: "Write many files at once; files is [{path, content}, ...]."},
+	{name: "memory", group: "session", signature: "memory(op, [opts])", doc: "Store and recall durable notes. op is store|recall|list|edit|delete; opts {content, tags, scope, query, id}."},
 
 	// Web
 	{name: "fetch", group: "web", signature: "fetch(url, [options])", doc: "Fetch a web page as markdown or text. Aliases: webFetch."},
 	{name: "webSearch", group: "web", signature: "webSearch(query, [options])", doc: "Search the web (DuckDuckGo/Brave)."},
 
 	// User interaction
-	{name: "ask", group: "user", signature: "ask(question, [options], [isMultiSelect])", doc: "Ask the user a clarifying question; returns their answer."},
+	{name: "ask", group: "user", signature: "ask(question, [options], [isMultiSelect]) | ask({question, options, isMultiSelect, skippable})", doc: "Ask the user a clarifying question; returns their answer. Pass skippable:false for a required question."},
 	{name: "askMany", group: "user", signature: "askMany(questions)", doc: "Ask the user multiple questions in sequence."},
 
 	// Session task list
@@ -51,8 +54,8 @@ var builtinCatalog = []builtinDoc{
 	{name: "render", group: "artifacts", signature: "render({html|path, title?, height?})", doc: "Publish an interactive HTML page inline in the chat."},
 	{name: "renderPreview", group: "artifacts", signature: "renderPreview({html|path, appearance?, click?, type?})", doc: "Verify an HTML page in the desktop browser and return a screenshot + console errors."},
 	{name: "preview", group: "artifacts", signature: "preview(data)", doc: "Preview arbitrary data in the chat."},
-	{name: "readChat", group: "artifacts", signature: "readChat(ref, [limit])", doc: "Read a previous chat transcript."},
-	{name: "readSkill", group: "skills", signature: "readSkill([name])", doc: "Read a built-in skill's full instructions before first use."},
+	{name: "readChat", group: "artifacts", signature: "readChat(ref, [limit]) | readChat(ref, {limit, before})", doc: "Read a previous chat transcript, most recent first; pass the returned cursor as before to read older messages."},
+	{name: "readSkill", group: "skills", signature: "readSkill([name], [{cwd}])", doc: "Read a skill's full instructions before first use; cwd sets where project-level skills are discovered."},
 	{name: "writePlan", group: "plan", signature: "writePlan(name, content)", doc: "Save a Markdown design plan to docs/plan/<name>.md (plan mode)."},
 	{name: "requestFullAccess", group: "plan", signature: "requestFullAccess(reason)", doc: "Request user approval to escalate from plan mode to Full Access. Call before any write attempt in plan mode."},
 
