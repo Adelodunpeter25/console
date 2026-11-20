@@ -181,15 +181,26 @@ func (s *Service) compactionHooks(sessionID string, model types.Model, systemPro
 	emergencyChars := compaction.EmergencyChars
 	return &loop.CompactionHooks{
 		PreTurn: func(ctx context.Context, history []any) []any {
-			if !compaction.ShouldCompact(history, model.ContextWindow, options, systemPrompt, defs) {
-				return history
+			checkpoint := s.compactions.checkpoint(sessionID)
+			working, reused := checkpoint.Apply(history)
+			if !reused {
+				working = history
 			}
-			// Compaction rewrites the prefix anyway; rebuild setup next run.
+			if !compaction.ShouldCompact(working, model.ContextWindow, options, systemPrompt, defs) {
+				return working
+			}
+			result := compaction.CompactHistory(working, options)
+			if summary, ok := s.summarizeCompaction(ctx, model, working, pins); ok {
+				result = compaction.CompactHistoryWithSummary(working, options, summary)
+			}
+			if result.TokensAfter >= result.TokensBefore {
+				return working
+			}
+			// Compaction rewrites the prefix once; rebuild setup next run and
+			// keep this result so later turns append to it instead of
+			// recompacting from scratch (which would move the cut every turn).
 			s.prompts.forget(sessionID)
-			result := compaction.CompactHistory(history, options)
-			if summary, ok := s.summarizeCompaction(ctx, model, history, pins); ok {
-				result = compaction.CompactHistoryWithSummary(history, options, summary)
-			}
+			checkpoint.Set(history, result.CompactedMessages)
 			return result.CompactedMessages
 		},
 		IsOverflow: compaction.IsContextOverflowError,

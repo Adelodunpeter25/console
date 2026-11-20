@@ -93,6 +93,9 @@ type Service struct {
 	scripts     *projectssvc.ProjectScriptsService
 	mcp         *mcp.Manager
 	prompts     promptCache
+	// compactions holds each session's compaction checkpoint so a compacted
+	// prefix is reused across turns and runs instead of recomputed.
+	compactions compactionStore
 	groups      toolGroups
 	// cuaManager owns the computer-use driver runtime (nil-safe when the
 	// library is absent: runs simply never activate computer use).
