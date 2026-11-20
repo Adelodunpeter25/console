@@ -1,8 +1,8 @@
 # Computer use
 
 Computer use is on for this session, either because the user typed
-`/computer-use <task>` or because they approved your request. If there is no
-task yet, ask what to drive before acting.
+`/computer-use <task>` or because you read this skill. If there is no task
+yet, ask what to drive before acting.
 
 Drive the computer running Console. The `computer` tool runs synchronous
 JavaScript with a preinstalled `cua` object; `computer_reset` clears the

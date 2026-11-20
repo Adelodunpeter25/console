@@ -1,7 +1,6 @@
 package run
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -107,74 +106,29 @@ func TestReadSkillSwitchesOnWhatTheAgentMayEnable(t *testing.T) {
 
 }
 
-func readComputerUse(t *testing.T, svc *Service, id string, ask tools.AskHandler) (string, error) {
-	t.Helper()
+func TestAgentSwitchesOnComputerUseWithoutAsking(t *testing.T) {
+	svc, id := newCapService(t)
 	registry := tools.NewRegistry()
-	lc := &loadContext{sessionID: id, cwd: t.TempDir(), mode: "full-access", askHandler: ask}
+	lc := &loadContext{sessionID: id, cwd: t.TempDir(), mode: "full-access"}
 	tool := tools.NewReadSkillTool(svc.readSkillCapabilities(lc, registry))
 	out, err := tool.Execute(t.Context(), []byte(`{"name":"computer-use"}`))
 	if err != nil {
-		return "", err
+		t.Fatal(err)
 	}
-	return textOf(out), nil
+	if !strings.Contains(textOf(out), "now switched on") {
+		t.Fatalf("expected a switched-on note, got: %.200s", textOf(out))
+	}
+	if on, _ := svc.sessions.Capabilities(id); !contains(on, "computer-use") {
+		t.Fatalf("not persisted: %v", on)
+	}
 }
 
-func TestComputerUseNeedsTheUsersConsent(t *testing.T) {
-	var asked []string
-	allow := func(answer string) tools.AskHandler {
-		return func(_ context.Context, req tools.AskQuestionRequest) (tools.AskAnswer, error) {
-			asked = append(asked, req.Question)
-			return tools.AskAnswer{Text: answer}, nil
-		}
-	}
-
-	t.Run("denied leaves it off", func(t *testing.T) {
-		svc, id := newCapService(t)
-		if _, err := readComputerUse(t, svc, id, allow("Deny")); err == nil {
-			t.Fatal("a declined request must fail")
-		}
-		if on, _ := svc.sessions.Capabilities(id); contains(on, "computer-use") {
-			t.Fatal("declined consent must not switch computer use on")
-		}
-	})
-
-	t.Run("skipped counts as no", func(t *testing.T) {
-		svc, id := newCapService(t)
-		if _, err := readComputerUse(t, svc, id, allow("")); err == nil {
-			t.Fatal("a skipped prompt must not enable computer use")
-		}
-		if on, _ := svc.sessions.Capabilities(id); contains(on, "computer-use") {
-			t.Fatal("skipped consent must not switch computer use on")
-		}
-	})
-
-	t.Run("nobody attached cannot approve", func(t *testing.T) {
-		svc, id := newCapService(t)
-		_, err := readComputerUse(t, svc, id, nil)
-		if err == nil || !strings.Contains(err.Error(), "/computer-use") {
-			t.Fatalf("want a hint to type the command, got %v", err)
-		}
-		if on, _ := svc.sessions.Capabilities(id); contains(on, "computer-use") {
-			t.Fatal("no user means no consent")
-		}
-	})
-
-	t.Run("allowed switches it on", func(t *testing.T) {
-		svc, id := newCapService(t)
-		text, err := readComputerUse(t, svc, id, allow("Allow"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(text, "now switched on") {
-			t.Fatalf("expected a switched-on note, got: %.200s", text)
-		}
-		if on, _ := svc.sessions.Capabilities(id); !contains(on, "computer-use") {
-			t.Fatalf("not persisted: %v", on)
-		}
-	})
-
-	if len(asked) == 0 || !strings.Contains(asked[0], "computer use") {
-		t.Fatalf("the user was never asked: %v", asked)
+func TestComputerUseStaysOffInPlanMode(t *testing.T) {
+	svc, id := newCapService(t)
+	lc := &loadContext{sessionID: id, mode: "plan-mode"}
+	tool := tools.NewReadSkillTool(svc.readSkillCapabilities(lc, tools.NewRegistry()))
+	if _, err := tool.Execute(t.Context(), []byte(`{"name":"computer-use"}`)); err == nil {
+		t.Fatal("plan mode must not expose computer-use")
 	}
 }
 
@@ -206,7 +160,7 @@ func TestReadSkillUnknownNameListsCapabilities(t *testing.T) {
 
 func TestBuiltinSkillsListFollowsTheMode(t *testing.T) {
 	build := builtinSkillsSetup("full-access")
-	for _, want := range []string{"browser-use", "console", "render", "computer-use", "/computer-use", "readSkill"} {
+	for _, want := range []string{"browser-use", "console", "render", "computer-use", "readSkill"} {
 		if !strings.Contains(build, want) {
 			t.Errorf("full-access list missing %q:\n%s", want, build)
 		}

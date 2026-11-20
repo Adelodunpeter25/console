@@ -13,8 +13,7 @@
 
 ## Goals
 - Linux is first class, with the same flow as macOS: no manual env edits, no hand-started processes.
-- The agent can request computer use itself. The user consents through the approval flow
-  instead of having to type a slash command.
+- The agent can switch computer use on itself, like `console`, with no approval prompt.
 
 ## Part A: Linux support
 
@@ -62,24 +61,14 @@ Keep the macOS-only TCC text under a macOS heading.
 
 ## Part B: Agent-enabled activation
 
-### B1. Let the agent request it
-- Set `AgentMayEnable: true` for `computer-use` in `run/capabilities.go`.
-- Add an `Activate` that, before enabling, goes through the permission system. Computer use is
-  `TierExec` and has real-world side effects, so activation raises an approval prompt in the
-  chat ("Allow computer use for this session?"). A deny returns a clear tool error.
-- Typing `/computer-use <task>` stays as a shortcut that pre-approves.
+Computer use works like `console`: the agent calls `readSkill` and it switches on, with no
+approval prompt. `AgentMayEnable: true` is the only change in `run/capabilities.go`.
+Typing `/computer-use <task>` stays as a shortcut.
 
-### B2. Respect the modes
-- Plan mode denies the exec tier, so the capability is neither listed nor enabled there. That is
-  the existing `Tier` behaviour and needs no new code.
-- Full Access mode skips the prompt only if the user's existing approval rules already allow exec.
-  Do not add a new bypass.
-
-### B3. Update texts
-- `skill_tool.go` message for a non-activatable capability stays as the fallback.
-- Fix the wording in the capability reference. The task after the command is optional.
-- The `capabilities_test.go` assertion on "only the user can switch it on" for computer-use needs
-  a different capability or a stub, since computer-use no longer matches.
+- Plan mode denies the exec tier, so the capability is neither listed nor enabled there. That is the
+  existing `Tier` behaviour and needs no new code.
+- An earlier iteration added an Allow/Deny prompt through the ask flow. It was removed on purpose:
+  switching it on should not need permission.
 
 ## Part C: Tests (per AGENTS.md, specific test files, no inline test modules)
 - `tests/services/cua_hostenv_linux_test.go` (build tag linux): resolve order with a stubbed
@@ -101,4 +90,3 @@ Each step is one commit with a single-line message.
 - Does the cua driver have a working Linux X11 backend, or only macOS and Windows? This decides the size of Part A.
 - Wayland-only desktops: out of scope for v1 (report unsupported), or use XWayland?
 - When attaching to a real desktop on Linux, should the agent ask for confirmation, as macOS does through TCC?
-- Should approval last for the session, or per-use?

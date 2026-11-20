@@ -35,10 +35,6 @@ type Capability struct {
 	// AgentMayEnable lets the agent switch it on via readSkill. False when only
 	// the user may, by typing the command.
 	AgentMayEnable bool
-	// Consent, when set, makes the agent's switch-on ask the user first. The
-	// capability has real-world side effects (computer use drives the screen),
-	// so the agent may request it but never grants it to itself.
-	Consent string
 	// AlwaysLoaded capabilities have their tools present every turn; only the
 	// reference is opt-in.
 	AlwaysLoaded bool
@@ -59,9 +55,6 @@ type loadContext struct {
 	// the same place as the low-level browser tool. The browser-use kernel
 	// rides it instead of keeping its own connection.
 	browserHandler tools.BrowserHandler
-	// askHandler reaches the user for consent prompts. Nil when nobody is
-	// attached, in which case a consent-gated capability cannot be enabled.
-	askHandler tools.AskHandler
 }
 
 // Capabilities lists every built-in capability, in popup order.
@@ -74,7 +67,6 @@ var Capabilities = []Capability{
 		Split:          cua.SplitInvocation,
 		Tier:           tools.TierExec,
 		AgentMayEnable: true,
-		Consent:        "Agent wants to use computer use: it will read app windows and operate them with the keyboard and mouse.",
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := cua.NewLoader(s.cuaManager, c.sessionID).Load(registry)
 			return err
@@ -279,8 +271,6 @@ func builtinSkillsSetup(mode string) string {
 			line += fmt.Sprintf(" (tool: %s)", strings.Join(c.GatedTools, ", "))
 		} else if !c.AgentMayEnable {
 			line += " (only the user can switch it on: ask them to type /" + c.Name + ")"
-		} else if c.Consent != "" {
-			line += " (readSkill asks the user to approve it, or they can type /" + c.Name + ")"
 		}
 		lines = append(lines, line)
 	}
@@ -303,9 +293,6 @@ func (s *Service) readSkillCapabilities(lc *loadContext, registry *tools.Registr
 			tc := tools.Capability{Name: c.Name, Description: c.Description, Text: c.Text(), Active: s.capabilityOn(lc.sessionID, c)}
 			if c.AgentMayEnable {
 				tc.Activate = func() error {
-					if err := requestConsent(lc, c); err != nil {
-						return err
-					}
 					if err := s.sessions.AddCapability(lc.sessionID, c.Name); err != nil {
 						return err
 					}
@@ -318,35 +305,6 @@ func (s *Service) readSkillCapabilities(lc *loadContext, registry *tools.Registr
 		}
 		return out
 	}
-}
-
-const (
-	consentAllow = "Allow"
-	consentDeny  = "Deny"
-)
-
-// requestConsent asks the user before the agent switches on a capability that
-// has a Consent prompt. Anything but an explicit Allow refuses, including no
-// attached user and a skipped question.
-func requestConsent(lc *loadContext, c Capability) error {
-	if c.Consent == "" {
-		return nil
-	}
-	if lc.askHandler == nil {
-		return fmt.Errorf("no user is attached to approve it; ask them to type /%s", c.Name)
-	}
-	answer, err := lc.askHandler(context.Background(), tools.AskQuestionRequest{
-		RequestID: utils.RandomID(),
-		Question:  c.Consent,
-		Options:   []string{consentAllow, consentDeny},
-	})
-	if err != nil {
-		return err
-	}
-	if answer.Text != consentAllow {
-		return fmt.Errorf("the user declined; do not ask again unless they request it")
-	}
-	return nil
 }
 
 func contains(list []string, name string) bool {
