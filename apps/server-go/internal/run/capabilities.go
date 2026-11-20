@@ -65,7 +65,7 @@ var Capabilities = []Capability{
 		Text:         cua.SkillText,
 		SlashCommand: true,
 		Split:        cua.SplitInvocation,
-		Tier:        tools.TierExec,
+		Tier:         tools.TierExec,
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := cua.NewLoader(s.cuaManager, c.sessionID).Load(registry)
 			return err
@@ -158,6 +158,27 @@ func (s *Service) activateInvoked(sessionID, text string) {
 			_ = s.sessions.AddCapability(sessionID, c.Name)
 		}
 	}
+}
+
+// enabledCapabilities lists the capabilities switched on for a session, in
+// table order so the result is deterministic.
+func (s *Service) enabledCapabilities(sessionID string) []Capability {
+	on, _ := s.sessions.Capabilities(sessionID)
+	var out []Capability
+	for _, c := range Capabilities {
+		if contains(on, c.Name) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func capabilityNames(list []Capability) []string {
+	names := make([]string, len(list))
+	for i, c := range list {
+		names[i] = c.Name
+	}
+	return names
 }
 
 // capabilitySetup is the references to append to setup for a session. An

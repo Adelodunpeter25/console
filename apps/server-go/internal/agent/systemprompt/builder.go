@@ -3,7 +3,7 @@
 //
 // The prompt has two parts. StableSystem holds what never changes within a
 // session and is sent as the system prompt: identity/SYSTEM.md,
-// approval-mode instructions, what skills are for, the
+// what skills are for, the
 // <critical> block, and any appended prompt. Setup holds the per-session
 // context sent as a leading user message: skills list, rules, slash
 // commands, repo context files (AGENTS.md, …), and workstation info
@@ -44,7 +44,6 @@ type BuildOptions struct {
 	Home         string
 	StopAt       string
 	Model        string
-	ApprovalMode ApprovalMode
 	CustomPrompt string
 	AppendPrompt string
 	Identity     string
@@ -212,14 +211,7 @@ func renderWorkstation(env EnvironmentInfo) string {
 	return strings.Join(out, "\n")
 }
 
-func renderCritical(mode ApprovalMode) string {
-	if mode == PlanMode {
-		return strings.Join([]string{
-			"<critical>",
-			"- Plan mode: discuss and ask questions; do not write files or implement features.",
-			"</critical>",
-		}, "\n")
-	}
+func renderCritical() string {
 	return strings.Join([]string{
 		"<critical>",
 		"- When tools or the repo can answer a question, use them instead of asking the user.",
@@ -242,7 +234,10 @@ func renderCommands(commands []SlashCommand) string {
 	return strings.Join(out, "\n")
 }
 
-func renderApprovalModeInstruction(mode ApprovalMode) string {
+// ModeNotice is the instruction block for a permission mode. It is sent as a
+// message at the tail of the conversation, never in the system prompt, so a
+// mode change does not rewrite the cached prefix.
+func ModeNotice(mode ApprovalMode) string {
 	if mode == "" {
 		return ""
 	}
@@ -253,7 +248,7 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 	case PlanMode:
 		return strings.Join([]string{
 			heading, tag,
-			"Plan mode is ACTIVE. Read-only by default:",
+			"Plan mode is ACTIVE. Read-only by default: discuss and ask questions; do not write files or implement features.",
 			"- You may read files, search the codebase, and ask clarifying questions to shape the design.",
 			"- Shell commands still run via $`cmd`, sandboxed read-only: reads (git log, git diff) work; anything that writes to disk fails. Don't run builds, tests, or dev servers.",
 			"- Plans live in chat. When the user asks for a plan file, save it with the writePlan builtin in code (it writes docs/plan/<name>.md and never overwrites an existing file); it is the only way to write a file in this mode.",
@@ -284,9 +279,8 @@ func BuildSystemPrompt(opts BuildOptions) Result {
 		}
 	}
 	add(&stable, section("identity", identity))
-	add(&stable, section("approval-mode", renderApprovalModeInstruction(opts.ApprovalMode)))
 	add(&stable, section("skills-guide", renderSkillsGuide(context.Skills)))
-	add(&stable, section("critical", renderCritical(opts.ApprovalMode)))
+	add(&stable, section("critical", renderCritical()))
 	add(&stable, section("append", opts.AppendPrompt))
 
 	add(&setup, section("skills", renderSkills(context.Skills)))

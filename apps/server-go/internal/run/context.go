@@ -50,9 +50,8 @@ func (s *Service) ContextUsage(ctx context.Context, sessionID string) (loop.Cont
 
 	model := s.resolveModel(ctx, header.Provider, header.ModelID)
 	prompt := s.prompts.get(sessionID, systemprompt.BuildOptions{
-		Cwd:          header.Cwd,
-		Model:        header.ModelID,
-		ApprovalMode: systemprompt.ApprovalMode(header.ApprovalMode),
+		Cwd:   header.Cwd,
+		Model: header.ModelID,
 	})
 	history, err := s.LoadHistory(sessionID)
 	if err != nil {

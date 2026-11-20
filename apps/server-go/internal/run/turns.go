@@ -421,9 +421,8 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// captures its "before" side, so repeated edits record the net change.
 	s.snapshots.drop(sessionID)
 	prompt := s.prompts.get(sessionID, systemprompt.BuildOptions{
-		Cwd:          header.Cwd,
-		Model:        modelID,
-		ApprovalMode: systemprompt.ApprovalMode(mode),
+		Cwd:   header.Cwd,
+		Model: modelID,
 	})
 
 	// The session cwd is the only root a run may write to. NewGuard returns
@@ -493,24 +492,30 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		return executor != nil && executor.IsPlanMode()
 	}))
 	usage := &loop.UsageTracker{}
-	setup := strings.TrimSpace(prompt.Setup + "\n\n" + codemode.SetupHint)
 	mcpManager := s.mcpManager()
-	// Capability references ride setup rather than the user message: setup is
-	// sent every turn but never persisted, so the chat history keeps exactly
-	// what the user typed.
-	if list := builtinSkillsSetup(string(mode)); list != "" {
-		setup = strings.TrimSpace(setup + "\n\n" + list)
-	}
-	for _, ref := range s.capabilitySetup(sessionID) {
-		setup = strings.TrimSpace(setup + "\n\n" + ref)
-	}
-	// $referenced chats resolve the same way: a named target in setup,
-	// never transcript content, and never for synthetic wake turns whose
-	// text the user did not write.
-	if !dto.Synthetic {
-		if refSetup := s.chatRefSetup(sessionID, dto.Text); refSetup != "" {
-			setup = strings.TrimSpace(setup + "\n\n" + refSetup)
+	// The setup text is frozen per session so the provider's cached prefix
+	// never changes between runs. It holds everything stable (rules, skills,
+	// workstation, built-in skills list, references of the capabilities that
+	// are on). What varies (mode, $chat refs, capabilities enabled
+	// mid-run, finished background work) rides in the request tail.
+	enabled := s.enabledCapabilities(sessionID)
+	frozenCaps := capabilityNames(enabled)
+	setup := s.prompts.frozenSetup(sessionID, frozenCaps, func() string {
+		text := strings.TrimSpace(prompt.Setup + "\n\n" + codemode.SetupHint)
+		if list := builtinSkillsSetup(string(permissions.FullAccess)); list != "" {
+			text = strings.TrimSpace(text + "\n\n" + list)
 		}
+		for _, c := range enabled {
+			text = strings.TrimSpace(text + "\n\n" + c.Text())
+		}
+		return text
+	})
+	// $referenced chats resolve to a named target for this run only, never
+	// transcript content, and never for synthetic wake turns whose text the
+	// user did not write.
+	var chatRefs string
+	if !dto.Synthetic {
+		chatRefs = s.chatRefSetup(sessionID, dto.Text)
 	}
 	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
 		Provider: provider,
@@ -627,7 +632,21 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	}
 	agent.SystemPrompt = prompt.StableSystem
 	agent.Setup = setup
-	agent.TurnContext = func() string { return s.backgroundContext(sessionID) }
+	agent.TurnContext = func() string {
+		parts := []string{systemprompt.ModeNotice(systemprompt.ApprovalMode(executor.Mode()))}
+		for _, c := range s.enabledCapabilities(sessionID) {
+			if !slices.Contains(frozenCaps, c.Name) {
+				parts = append(parts, c.Text())
+			}
+		}
+		if chatRefs != "" {
+			parts = append(parts, chatRefs)
+		}
+		if work := s.backgroundContext(sessionID); work != "" {
+			parts = append(parts, "<background-work>\n"+work+"\n</background-work>")
+		}
+		return strings.Join(nonEmpty(parts), "\n\n")
+	}
 	agent.SystemSections = systemSections(prompt.Sections)
 	agent.Model = modelID
 	agent.CacheRetention = loop.CacheShort
@@ -817,6 +836,16 @@ func (t *turnTranslator) translate(event loop.Event) {
 }
 
 // systemSections labels the built prompt's blocks for request breakdowns.
+func nonEmpty(in []string) []string {
+	out := in[:0:0]
+	for _, s := range in {
+		if strings.TrimSpace(s) != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func systemSections(sections []systemprompt.Section) []loop.NamedText {
 	out := make([]loop.NamedText, len(sections))
 	for i, section := range sections {

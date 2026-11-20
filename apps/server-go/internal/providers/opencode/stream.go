@@ -104,7 +104,7 @@ func (p *Provider) postJSON(ctx context.Context, path, conversationID string, bo
 }
 
 func (p *Provider) runChat(ctx context.Context, req loop.TurnRequest, events *stream.Stream[loop.Event]) error {
-	messages := ConvertChatMessages(req.Messages)
+	messages := ConvertChatMessages(loop.WithTail(req.Tail, req.Messages))
 	if strings.TrimSpace(req.SystemPrompt) != "" {
 		messages = append([]map[string]any{{"role": "system", "content": req.SystemPrompt}}, messages...)
 	}
@@ -188,7 +188,7 @@ func (p *Provider) runChat(ctx context.Context, req loop.TurnRequest, events *st
 func (p *Provider) runResponses(ctx context.Context, req loop.TurnRequest, events *stream.Stream[loop.Event]) error {
 	body := map[string]any{
 		"model":  req.Model,
-		"input":  ConvertResponsesMessages(req.Messages),
+		"input":  ConvertResponsesMessages(loop.WithTail(req.Tail, req.Messages)),
 		"stream": true,
 		"store":  false,
 	}

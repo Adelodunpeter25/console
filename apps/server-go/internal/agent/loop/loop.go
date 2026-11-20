@@ -31,7 +31,12 @@ type TurnRequest struct {
 	// Setup is the per-session context (rules, tree, workstation). When set,
 	// Messages already starts with it as a <setup> user message; the field
 	// lets providers find that message (e.g. for cache breakpoints).
-	Setup    string
+	Setup string
+	// Tail is per-request context (mode notice, finished background work,
+	// late capability references). It is not in Messages: each provider adds
+	// it after its cache breakpoint (WithTail), so the cached prefix never
+	// contains text that changes between requests.
+	Tail     string
 	Messages []any // UserMessage | AssistantMessage | ToolResultMessage
 	Tools    []tools.Definition
 	// Provider options (all optional, zero value = provider default).
@@ -190,10 +195,9 @@ type Agent struct {
 	// conversation on every turn. It is never persisted or compacted.
 	Setup string
 	// TurnContext is called immediately before every provider request. Its
-	// returned text is added to the non-persisted setup context, allowing
-	// detached work that finishes during a tool loop to arrive before the next
-	// safe request without interrupting a stream. The callback should return a
-	// claimed/deduplicated value so it is not repeated on later requests.
+	// text rides at the tail of the request, after the cached prefix, so
+	// changing it (mode, finished background work) never invalidates the
+	// cache. Never persisted.
 	TurnContext func() string
 	// ToolDefs, when set, supplies the provider tool list at the start of
 	// every turn (lazy tool groups can grow it mid-run). Nil keeps the
@@ -394,6 +398,22 @@ func WithSetup(setup string, history []any) []any {
 	return append(out, history...)
 }
 
+// WithTail appends the request tail as a final user message; an empty tail
+// is a no-op. Providers with implicit caching use it on Messages.
+func WithTail(tail string, messages []any) []any {
+	if strings.TrimSpace(tail) == "" {
+		return messages
+	}
+	out := make([]any, 0, len(messages)+1)
+	out = append(out, messages...)
+	return append(out, UserMessage{Role: RoleUser, Content: TailText(tail)})
+}
+
+// TailText wraps tail context for the model.
+func TailText(tail string) string {
+	return "<context>\n" + tail + "\n</context>"
+}
+
 // turnOnce streams a single attempt, persisting the assistant turn only on
 // success.
 func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, toolsList []tools.Definition, events *stream.Stream[Event]) (AssistantMessage, error) {
@@ -403,10 +423,9 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 	// replaces streamed content with it.
 	turnID := newTurnID()
 	setup := a.Setup
+	tail := ""
 	if a.TurnContext != nil {
-		if contextText := strings.TrimSpace(a.TurnContext()); contextText != "" {
-			setup = strings.TrimSpace(setup + "\n\n<background-work>\n" + contextText + "\n</background-work>")
-		}
+		tail = strings.TrimSpace(a.TurnContext())
 	}
 	if a.OnRequest != nil {
 		a.OnRequest(EstimateBreakdown(a.SystemSections, a.SystemPrompt, toolsList, history))
@@ -423,6 +442,7 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 			Model:          a.Model,
 			SystemPrompt:   a.SystemPrompt,
 			Setup:          setup,
+			Tail:           tail,
 			Messages:       WithSetup(setup, history),
 			Tools:          toolsList,
 			CacheRetention: a.CacheRetention,

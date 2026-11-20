@@ -58,14 +58,16 @@ func TestSystemPromptDiscoveryAndBuild(t *testing.T) {
 	}
 }
 
-func TestSystemPromptApprovalModeInstructions(t *testing.T) {
-	dir := t.TempDir()
-	result := systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{
-		Cwd: dir, Home: t.TempDir(),
-		ApprovalMode: systemprompt.PlanMode,
-	})
-	if !strings.Contains(result.SystemPrompt, "Plan mode is ACTIVE") {
-		t.Fatalf("expected plan-mode instructions:\n%s", result.SystemPrompt)
+func TestModeNoticeCarriesApprovalModeInstructions(t *testing.T) {
+	if got := systemprompt.ModeNotice(systemprompt.PlanMode); !strings.Contains(got, "Plan mode is ACTIVE") {
+		t.Fatalf("expected plan-mode instructions:\n%s", got)
+	}
+	if got := systemprompt.ModeNotice(systemprompt.FullAccess); !strings.Contains(got, "Full Access") {
+		t.Fatalf("expected full-access instructions:\n%s", got)
+	}
+	result := systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{Cwd: t.TempDir(), Home: t.TempDir()})
+	if strings.Contains(result.SystemPrompt, "Plan mode is ACTIVE") || strings.Contains(result.SystemPrompt, "Full Access") {
+		t.Fatalf("system prompt must be mode-neutral:\n%s", result.SystemPrompt)
 	}
 }
 
@@ -76,7 +78,7 @@ func TestSystemPromptStableSplitsFromSetup(t *testing.T) {
 		}
 		return systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{
 			Cwd: dir, Home: t.TempDir(),
-			Model: "m", ApprovalMode: systemprompt.FullAccess,
+			Model: "m",
 		})
 	}
 	dirA, dirB := t.TempDir(), t.TempDir()
@@ -91,7 +93,7 @@ func TestSystemPromptStableSplitsFromSetup(t *testing.T) {
 	if a.StableSystem != b.StableSystem {
 		t.Fatalf("stable system differs across sessions:\n%s\n---\n%s", a.StableSystem, b.StableSystem)
 	}
-	for _, want := range []string{"You are a coding agent.", "Full Access", "<critical>"} {
+	for _, want := range []string{"You are a coding agent.", "<critical>"} {
 		if !strings.Contains(a.StableSystem, want) {
 			t.Fatalf("stable system missing %q", want)
 		}

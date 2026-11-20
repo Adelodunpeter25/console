@@ -93,7 +93,7 @@ func (p *Provider) runTurn(ctx context.Context, req loop.TurnRequest, events *st
 		cascadeID = uuid.NewString()
 	}
 
-	prompts := buildPrompts(req.Messages, cascadeID)
+	prompts := buildPrompts(loop.WithTail(req.Tail, req.Messages), cascadeID)
 	routerPrompt := lastUserPrompt(prompts)
 
 	chatUID, meta := chatModelUID(req.Model, req.ThinkingLevel)

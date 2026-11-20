@@ -201,7 +201,7 @@ func runOne(parent context.Context, opts Options, commit string, task Task, run 
 // prompt builder and default tools, full-access mode, auto-answered asks.
 func buildAgent(opts Options, dir string, task Task) (*loop.Agent, []tools.Definition) {
 	prompt := systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{
-		Cwd: dir, Model: opts.Model, ApprovalMode: systemprompt.FullAccess,
+		Cwd: dir, Model: opts.Model,
 	})
 	ask := func(ctx context.Context, req tools.AskQuestionRequest) (tools.AskAnswer, error) {
 		return tools.AskAnswer{Text: "No preference. Use your best judgment and continue."}, nil

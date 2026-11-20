@@ -250,7 +250,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 	}
 
 	requireUserTerminator := IsClaudeModel(req.Model)
-	contents := ConvertMessages(req.Messages, ConvertMessagesOptions{RequireUserTerminator: requireUserTerminator})
+	contents := ConvertMessages(loop.WithTail(req.Tail, req.Messages), ConvertMessagesOptions{RequireUserTerminator: requireUserTerminator})
 	toolDefs := ConvertTools(req.Tools)
 	body := buildRequestBody(cred.ProjectID, req.Model, req.SystemPrompt, contents, toolDefs, p.session(req.ConversationID), req.ThinkingLevel)
 

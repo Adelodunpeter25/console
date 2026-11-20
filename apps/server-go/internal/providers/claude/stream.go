@@ -171,6 +171,20 @@ func BuildRequestBody(modelID, systemPrompt string, messages []any, toolDefs []t
 	return body
 }
 
+// AppendTail adds per-request context to the final user message, after its
+// cache breakpoint, so the cached prefix is unaffected by it.
+func AppendTail(body map[string]any, tail string) {
+	if strings.TrimSpace(tail) == "" {
+		return
+	}
+	msgs, ok := body["messages"].([]ClaudeMessage)
+	if !ok || len(msgs) == 0 {
+		return
+	}
+	last := &msgs[len(msgs)-1]
+	last.Content = append(last.Content, map[string]any{"type": "text", "text": loop.TailText(tail)})
+}
+
 // sseFrame is one named Anthropic SSE frame. Unlike the shared parser, the
 // event name (message_start, content_block_delta, ...) is significant.
 type sseFrame struct {
@@ -356,6 +370,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		return err
 	}
 	body := BuildRequestBody(req.Model, req.SystemPrompt, req.Messages, req.Tools, req.CacheRetention, req.ThinkingLevel)
+	AppendTail(body, req.Tail)
 	if userID := metadataUserID(req.ConversationID); userID != "" {
 		body["metadata"] = map[string]any{"user_id": userID}
 	}
