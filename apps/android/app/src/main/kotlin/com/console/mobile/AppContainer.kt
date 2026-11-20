@@ -416,6 +416,9 @@ object AppContainer {
         }
 
         automationsRepository.start()
+        if (!appStateHolder.state.value.backendUrl.isNullOrBlank()) {
+            backgroundScope.launch { authRepository.loadSttStatus() }
+        }
 
         notificationCoordinator = NotificationCoordinator(
             context = app,

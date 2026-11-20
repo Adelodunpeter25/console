@@ -108,6 +108,11 @@ fun Composer(
     // Speech-to-text dictation. Enabled only when the server has a
     // credential; the status loads at app start, never only from Providers.
     val authState by AppContainer.authStateHolder.state.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(authState.sttStatus) {
+        if (authState.sttStatus == null) {
+            AppContainer.authRepository.loadSttStatus()
+        }
+    }
     val dictationEnabled = authState.sttStatus?.configured == true
     var dictationRecording by remember(sessionId) { mutableStateOf(false) }
     var dictationTranscribing by remember(sessionId) { mutableStateOf(false) }
