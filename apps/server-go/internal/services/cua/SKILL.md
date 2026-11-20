@@ -1,7 +1,8 @@
 # Computer use
 
-You were invoked by a `/computer-use <task>` message. The task follows the
-command. If it is empty, ask what to drive before acting.
+Computer use is on for this session, either because the user typed
+`/computer-use <task>` or because they approved your request. If there is no
+task yet, ask what to drive before acting.
 
 Drive the computer running Console. The `computer` tool runs synchronous
 JavaScript with a preinstalled `cua` object; `computer_reset` clears the
@@ -88,6 +89,14 @@ driver advertises them. `health_report` and `check_permissions` are read-only
 diagnostics. For an explicitly requested trajectory, use
 `start_recording` → actions → `stop_recording`; verify the artifacts. Do not
 change driver configuration or permissions as hidden setup.
+
+## Linux
+
+Console finds a reachable X display itself: the `DISPLAY` already set, else a
+running desktop session, else a private headless Xvfb it starts and stops. If
+the tools report that no display is reachable, tell the user what is missing
+(a desktop session, or the Xvfb package). Do not edit `~/.console/env`, start
+X servers, or restart the daemon yourself.
 
 ## Rules
 
