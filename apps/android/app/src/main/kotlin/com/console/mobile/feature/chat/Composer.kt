@@ -321,6 +321,9 @@ fun Composer(
     LaunchedEffect(focusRequest) {
         if (focusRequest > 0) {
             wantsOpen = true
+            // The chip row is removed in the same state update that bumps this
+            // counter; request focus after that composition settles.
+            kotlinx.coroutines.android.awaitFrame()
             focusField()
         }
     }

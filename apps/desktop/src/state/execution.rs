@@ -408,11 +408,19 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.composer_for_pane(pane_id).update(cx, |input, cx| {
+        let composer = self.composer_for_pane(pane_id);
+        composer.update(cx, |input, cx| {
             input.set_content(prompt, cx);
-            window.focus(&input.focus_handle(cx), cx);
         });
         cx.notify();
+        // Menu item callbacks refresh the window after returning; focusing in
+        // that same frame gets lost. Defer with the window handle so the focus
+        // request runs after the refresh and can still reach the composer.
+        window.defer(cx, move |window, cx| {
+            composer.update(cx, |input, cx| {
+                window.focus(&input.focus_handle(cx), cx);
+            });
+        });
     }
 
     /// A chip click sends the suggestion as a normal prompt in that pane.
