@@ -695,7 +695,8 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		total := usage.Snapshot().Total()
 		slog.Info("run usage", "session", sessionID, "provider", providerID, "model", modelID,
 			"turns", total.Turns, "input", total.Input, "cacheRead", total.CacheRead,
-			"cacheWrite", total.CacheWrite, "output", total.Output, "coldMisses", total.ColdMisses)
+			"cacheWrite", total.CacheWrite, "output", total.Output, "coldMisses", total.ColdMisses,
+			"hitRate", hitRate(total))
 	}()
 	for {
 		event, err, ok := events.Next()
@@ -836,6 +837,15 @@ func (t *turnTranslator) translate(event loop.Event) {
 }
 
 // systemSections labels the built prompt's blocks for request breakdowns.
+// hitRate is the share of input tokens served from cache, as a percentage.
+func hitRate(u loop.RunUsage) string {
+	all := u.Input + u.CacheRead + u.CacheWrite
+	if all == 0 {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.1f%%", float64(u.CacheRead)/float64(all)*100)
+}
+
 func nonEmpty(in []string) []string {
 	out := in[:0:0]
 	for _, s := range in {

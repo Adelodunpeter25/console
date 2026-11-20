@@ -5,6 +5,7 @@ package loop
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -398,6 +399,8 @@ func WithSetup(setup string, history []any) []any {
 	return append(out, history...)
 }
 
+var prefixTracker PrefixTracker
+
 // WithTail appends the request tail as a final user message; an empty tail
 // is a no-op. Providers with implicit caching use it on Messages.
 func WithTail(tail string, messages []any) []any {
@@ -426,6 +429,11 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 	tail := ""
 	if a.TurnContext != nil {
 		tail = strings.TrimSpace(a.TurnContext())
+	}
+	if a.ConversationID != "" {
+		if changed := prefixTracker.Observe(a.ConversationID, a.SystemPrompt, setup, toolsList, history); changed != "" {
+			slog.Info("request prefix changed", "session", sessionID, "part", changed, "messages", len(history))
+		}
 	}
 	if a.OnRequest != nil {
 		a.OnRequest(EstimateBreakdown(a.SystemSections, a.SystemPrompt, toolsList, history))

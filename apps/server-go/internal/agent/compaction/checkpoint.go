@@ -19,6 +19,7 @@ type Checkpoint struct {
 	covered   int
 	signature string
 	prefix    []any
+	dropped   bool
 }
 
 // Apply returns the checkpointed prefix followed by the messages added since,
@@ -32,11 +33,22 @@ func (c *Checkpoint) Apply(history []any) ([]any, bool) {
 	}
 	if len(history) < c.covered || shape(history[:c.covered]) != c.signature {
 		c.prefix, c.covered, c.signature = nil, 0, ""
+		c.dropped = true
 		return nil, false
 	}
 	out := make([]any, 0, len(c.prefix)+len(history)-c.covered)
 	out = append(out, c.prefix...)
 	return append(out, history[c.covered:]...), true
+}
+
+// WasDropped reports, once, that the last Apply discarded a checkpoint
+// because history no longer matched it.
+func (c *Checkpoint) WasDropped() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	was := c.dropped
+	c.dropped = false
+	return was
 }
 
 // Set records that compacted replaces all of history.

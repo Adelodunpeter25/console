@@ -186,6 +186,9 @@ func (s *Service) compactionHooks(sessionID string, model types.Model, systemPro
 			if !reused {
 				working = history
 			}
+			if !reused && checkpoint.WasDropped() {
+				slog.Info("compaction checkpoint dropped: history no longer matches", "session", sessionID)
+			}
 			if !compaction.ShouldCompact(working, model.ContextWindow, options, systemPrompt, defs) {
 				return working
 			}
@@ -201,6 +204,9 @@ func (s *Service) compactionHooks(sessionID string, model types.Model, systemPro
 			// recompacting from scratch (which would move the cut every turn).
 			s.prompts.forget(sessionID)
 			checkpoint.Set(history, result.CompactedMessages)
+			slog.Info("compaction applied", "session", sessionID, "reused", reused,
+				"tokensBefore", result.TokensBefore, "tokensAfter", result.TokensAfter,
+				"messagesBefore", len(working), "messagesAfter", len(result.CompactedMessages))
 			return result.CompactedMessages
 		},
 		IsOverflow: compaction.IsContextOverflowError,
