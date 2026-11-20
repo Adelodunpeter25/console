@@ -6,6 +6,10 @@ package cua
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -31,6 +35,8 @@ type Manager struct {
 	// runtime only loses that session's variables, which the model rebuilds
 	// by re-observing.
 	js *jskernel.Cache[*JSRuntime]
+	// xvfb is the private headless display, when this manager had to start one.
+	xvfb *xvfb
 }
 
 // maxJSRuntimes caps live session kernels. Computer use is rare next to
@@ -67,7 +73,7 @@ func (m *Manager) Driver() (*Driver, error) {
 	m.mu.Unlock()
 
 	var driver *Driver
-	err := EnsureDisplay()
+	err := m.ensureDisplay()
 	if err == nil {
 		driver, err = Open(Options{})
 	}
@@ -217,11 +223,38 @@ func (m *Manager) Close() error {
 	m.mu.Lock()
 	driver := m.driver
 	m.driver = nil
+	display := m.xvfb
+	m.xvfb = nil
 	m.mu.Unlock()
-	if driver == nil {
-		return nil
+	var err error
+	if driver != nil {
+		err = driver.Shutdown()
 	}
-	return driver.Shutdown()
+	if display != nil {
+		display.Stop()
+	}
+	return err
+}
+
+// ensureDisplay finds a reachable display and, on a machine with none, starts
+// a private Xvfb that this manager owns until Close.
+func (m *Manager) ensureDisplay() error {
+	err := EnsureDisplay()
+	if !errors.Is(err, ErrNoDisplay) || runtime.GOOS != "linux" {
+		return err
+	}
+	bin, lookErr := exec.LookPath("Xvfb")
+	if lookErr != nil {
+		return ErrXvfbMissing
+	}
+	x, startErr := startXvfb(bin, xvfbStartTimeout)
+	if startErr != nil {
+		return fmt.Errorf("%w: %v", ErrNoDisplay, startErr)
+	}
+	m.mu.Lock()
+	m.xvfb = x
+	m.mu.Unlock()
+	return os.Setenv("DISPLAY", x.Display())
 }
 
 // EvalOnce runs code in a throwaway runtime: nothing persists afterwards.
