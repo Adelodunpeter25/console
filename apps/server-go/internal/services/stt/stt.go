@@ -37,8 +37,9 @@ var (
 	// ErrNotConfigured is returned before any network call so an unconfigured
 	// server reports the fixable problem instead of an opaque upstream 401.
 	ErrNotConfigured  = errors.New("speech-to-text is not configured; add a Cloudflare account ID and API token")
-	ErrEmptyAccountID = errors.New("a Cloudflare account ID is required")
-	ErrEmptyAPIToken  = errors.New("a Cloudflare API token is required")
+	ErrEmptyAccountID     = errors.New("a Cloudflare account ID is required")
+	ErrEmptyAPIToken      = errors.New("a Cloudflare API token is required")
+	ErrSwappedCredentials = errors.New("that looks like a Cloudflare API token in the account ID field — swap the account ID and API token")
 	ErrEmptyAudio     = errors.New("audio is required")
 	ErrAudioTooLarge  = fmt.Errorf("audio must be %d MB or smaller", MaxAudioBytes>>20)
 )
@@ -125,6 +126,9 @@ func Set(accountID, apiToken string) error {
 	}
 	if apiToken == "" {
 		return ErrEmptyAPIToken
+	}
+	if strings.HasPrefix(accountID, "cfat_") {
+		return ErrSwappedCredentials
 	}
 	return save(Stored{AccountID: accountID, APIToken: apiToken, UpdatedAt: time.Now().UTC()})
 }

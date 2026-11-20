@@ -38,7 +38,7 @@ func RegisterSttRoutes(app *fiber.App, client *stt.Client) {
 			return fail400(c, errors.New("Invalid request body."))
 		}
 		if err := stt.Set(req.AccountID, req.APIToken); err != nil {
-			if errors.Is(err, stt.ErrEmptyAccountID) || errors.Is(err, stt.ErrEmptyAPIToken) {
+			if errors.Is(err, stt.ErrEmptyAccountID) || errors.Is(err, stt.ErrEmptyAPIToken) || errors.Is(err, stt.ErrSwappedCredentials) {
 				return fail400(c, err)
 			}
 			return sttInternalError(c, err)

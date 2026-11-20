@@ -390,10 +390,11 @@ func TestSttConfigRejectsBlankFields(t *testing.T) {
 	for _, body := range []string{
 		`{"accountId":"","apiToken":"token"}`,
 		`{"accountId":"acct","apiToken":"   "}`,
+		`{"accountId":"cfat_exampletoken","apiToken":"e32ab932dec1b35e0df9c0ec56ab6c8f"}`,
 	} {
 		code, response := request(t, app, "PUT", "/api/stt/config", body, "application/json")
 		if code != http.StatusBadRequest {
-			t.Fatalf("blank field should be 400, got %d %s", code, response)
+			t.Fatalf("invalid field should be 400, got %d %s", code, response)
 		}
 	}
 }
