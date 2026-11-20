@@ -59,14 +59,14 @@ func TestSystemPromptDiscoveryAndBuild(t *testing.T) {
 }
 
 func TestModeNoticeCarriesApprovalModeInstructions(t *testing.T) {
-	if got := systemprompt.ModeNotice(systemprompt.PlanMode); !strings.Contains(got, "Plan mode is ACTIVE") {
+	if got := systemprompt.ModeNotice(systemprompt.PlanMode); !strings.Contains(got, "Plan mode") {
 		t.Fatalf("expected plan-mode instructions:\n%s", got)
 	}
 	if got := systemprompt.ModeNotice(systemprompt.FullAccess); !strings.Contains(got, "Full Access") {
 		t.Fatalf("expected full-access instructions:\n%s", got)
 	}
 	result := systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{Cwd: t.TempDir(), Home: t.TempDir()})
-	if strings.Contains(result.SystemPrompt, "Plan mode is ACTIVE") || strings.Contains(result.SystemPrompt, "Full Access") {
+	if strings.Contains(result.SystemPrompt, "Plan mode") || strings.Contains(result.SystemPrompt, "Full Access") {
 		t.Fatalf("system prompt must be mode-neutral:\n%s", result.SystemPrompt)
 	}
 }

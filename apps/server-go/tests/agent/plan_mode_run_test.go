@@ -80,10 +80,11 @@ func TestPlanModeNoticeNamesTheTool(t *testing.T) {
 	provider.mu.Lock()
 	defer provider.mu.Unlock()
 	req := provider.reqs[0]
-	if !strings.Contains(req.Tail, "writePlan") || !strings.Contains(req.Tail, "docs/plan") {
-		t.Fatalf("the plan-mode notice must tell the model about writePlan and where it writes:\n%s", req.Tail)
+	first, _ := req.Messages[len(req.Messages)-1].(loop.UserMessage)
+	if !strings.Contains(first.Content, "writePlan") || !strings.Contains(first.Content, "docs/plan") {
+		t.Fatalf("the plan-mode notice must tell the model about writePlan and where it writes:\n%s", first.Content)
 	}
-	if strings.Contains(req.SystemPrompt, "Plan mode is ACTIVE") {
+	if strings.Contains(req.SystemPrompt, "Plan mode") {
 		t.Fatalf("mode text must stay out of the cached system prompt:\n%s", req.SystemPrompt)
 	}
 }

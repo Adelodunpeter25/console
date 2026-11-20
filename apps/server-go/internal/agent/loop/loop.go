@@ -200,6 +200,10 @@ type Agent struct {
 	// changing it (mode, finished background work) never invalidates the
 	// cache. Never persisted.
 	TurnContext func() string
+	// ModeNotice, when set, supplies the instruction for a permission mode.
+	// It is attached to the user message where the mode starts or changes
+	// (see ApplyModeNotices), so it is seen once and stays in history.
+	ModeNotice func(mode string) string
 	// ToolDefs, when set, supplies the provider tool list at the start of
 	// every turn (lazy tool groups can grow it mid-run). Nil keeps the
 	// list passed to Run.
@@ -444,6 +448,7 @@ func TailText(tail string) string {
 // turnOnce streams a single attempt, persisting the assistant turn only on
 // success.
 func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, toolsList []tools.Definition, events *stream.Stream[Event]) (AssistantMessage, error) {
+	history = ApplyModeNotices(history, a.ModeNotice)
 	assistant := AssistantMessage{Role: RoleAssistant, ID: newMessageID(), Content: []any{}}
 	// Bracket every provider turn with stream markers so subscribers get
 	// per-turn triplets with the canonical assistant snapshot — the desktop

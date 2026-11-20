@@ -40,7 +40,17 @@ func TestModeChangeKeepsCachedPrefixIdentical(t *testing.T) {
 	if !reflect.DeepEqual(first.Messages, second.Messages[:len(first.Messages)]) {
 		t.Fatalf("earlier messages must be an unchanged prefix:\n%#v\n%#v", first.Messages, second.Messages)
 	}
-	if !strings.Contains(first.Tail, "Plan mode is ACTIVE") || !strings.Contains(second.Tail, "Full Access") {
-		t.Fatalf("each request's tail must carry its mode:\n%q\n%q", first.Tail, second.Tail)
+	lastUser := func(r loop.TurnRequest) string {
+		u, _ := r.Messages[len(r.Messages)-1].(loop.UserMessage)
+		return u.Content
+	}
+	if !strings.Contains(lastUser(first), "Plan mode") {
+		t.Fatalf("the first turn must carry the plan-mode notice:\n%s", lastUser(first))
+	}
+	if !strings.Contains(lastUser(second), "Full Access") {
+		t.Fatalf("the turn where the mode changes must carry the new notice:\n%s", lastUser(second))
+	}
+	if strings.Contains(first.Tail, "Plan mode") || strings.Contains(second.Tail, "Full Access") {
+		t.Fatal("the mode notice must not ride in the per-request tail")
 	}
 }

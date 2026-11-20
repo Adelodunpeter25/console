@@ -252,3 +252,43 @@ func messageJSON(v any) json.RawMessage {
 	}
 	return raw
 }
+
+// ApplyModeNotices returns history with mode instructions attached to the user
+// message where the mode starts or changes: the first message that records a
+// mode, and any later one whose mode differs from the message before it. The
+// result depends only on the history, so it is identical on every request and
+// the cached prefix never shifts. Messages without a recorded mode are left
+// alone. The stored messages are not modified.
+func ApplyModeNotices(history []any, notice func(mode string) string) []any {
+	if notice == nil {
+		return history
+	}
+	out := make([]any, len(history))
+	copy(out, history)
+	prev := ""
+	for i, message := range out {
+		var user UserMessage
+		switch u := message.(type) {
+		case UserMessage:
+			user = u
+		case *UserMessage:
+			if u == nil {
+				continue
+			}
+			user = *u
+		default:
+			continue
+		}
+		if user.ApprovalMode == "" || user.ApprovalMode == prev {
+			continue
+		}
+		prev = user.ApprovalMode
+		text := strings.TrimSpace(notice(user.ApprovalMode))
+		if text == "" {
+			continue
+		}
+		user.Content = TailText(text) + "\n\n" + user.Content
+		out[i] = user
+	}
+	return out
+}

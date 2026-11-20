@@ -632,8 +632,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	}
 	agent.SystemPrompt = prompt.StableSystem
 	agent.Setup = setup
+	agent.ModeNotice = func(m string) string {
+		return systemprompt.ModeNotice(systemprompt.ApprovalMode(m))
+	}
 	agent.TurnContext = func() string {
-		parts := []string{systemprompt.ModeNotice(systemprompt.ApprovalMode(executor.Mode()))}
+		var parts []string
 		for _, c := range s.enabledCapabilities(sessionID) {
 			if !slices.Contains(frozenCaps, c.Name) {
 				parts = append(parts, c.Text())

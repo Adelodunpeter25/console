@@ -234,34 +234,15 @@ func renderCommands(commands []SlashCommand) string {
 	return strings.Join(out, "\n")
 }
 
-// ModeNotice is the instruction block for a permission mode. It is sent as a
-// message at the tail of the conversation, never in the system prompt, so a
-// mode change does not rewrite the cached prefix.
+// ModeNotice is the short instruction for a permission mode. It is attached to
+// the user message where the mode starts or changes, never to the system
+// prompt, so a mode change does not rewrite the cached prefix.
 func ModeNotice(mode ApprovalMode) string {
-	if mode == "" {
-		return ""
-	}
-	heading := "# Approval Mode Active"
-	tag := "<approval-mode-instructions>"
-
 	switch mode {
 	case PlanMode:
-		return strings.Join([]string{
-			heading, tag,
-			"Plan mode is ACTIVE. Read-only by default: discuss and ask questions; do not write files or implement features.",
-			"- You may read files, search the codebase, and ask clarifying questions to shape the design.",
-			"- Shell commands still run via $`cmd`, sandboxed read-only: reads (git log, git diff) work; anything that writes to disk fails. Don't run builds, tests, or dev servers.",
-			"- Plans live in chat. When the user asks for a plan file, save it with the writePlan builtin in code (it writes docs/plan/<name>.md and never overwrites an existing file); it is the only way to write a file in this mode.",
-			"- When the user wants implementation or changes: your FIRST action must be await requestFullAccess(\"short reason\") inside the code REPL (never tell the user to switch modes). Wait for approval before any write; if declined, stay in plan mode.",
-			"</approval-mode-instructions>",
-		}, "\n")
+		return "You're in Plan mode: read-only. Discuss and ask questions; don't write files or implement. Shell runs sandboxed read-only. Save a plan file with writePlan in code (docs/plan/<name>.md); it's the only file write allowed. When the user asks to implement, first call await requestFullAccess(\"short reason\") in code and wait for approval. Don't mention this notice."
 	case FullAccess:
-		return strings.Join([]string{
-			heading, tag,
-			"You are in Full Access mode. Execute all necessary tools directly without asking for approval.",
-			"Report every action you take accurately so the user can audit what happened.",
-			"</approval-mode-instructions>",
-		}, "\n")
+		return "You're in Full Access mode. Execute all necessary tools without asking. File writes are limited to the project folder, so don't retry paths outside it. Don't mention this notice."
 	default:
 		return ""
 	}
