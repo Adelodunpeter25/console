@@ -3,8 +3,11 @@
 //! They are registered as *global* action handlers (`App::on_action` in
 //! `keybindings::init_handlers`), so they run regardless of keyboard focus.
 
-use console_core::{SessionHeader, SessionHeaderExt, WorkspaceNode, WorkspaceTabConfig};
-use console_ui::{IconName, MenuAlign, PaletteEntry, browser, toggle_dropdown, toggle_popover};
+use console_core::{
+    DeskRow, ProjectInfoExt, SessionHeader, SessionHeaderExt, desk_last_active_ms, desk_rows,
+};
+use console_ui::workspace::ops as workspace_ops;
+use console_ui::{IconName, MenuAlign, PaletteEntry, toggle_dropdown, toggle_popover};
 use gpui::{Context, Focusable as _, WeakEntity, Window};
 
 use super::ConsoleDesktopApp;
@@ -21,9 +24,9 @@ fn kbd(mac: &'static str, other: &'static str) -> &'static str {
 /// Static ⌘K entries shared by toggle and open paths. Lists commands
 /// (New Chat / New Terminal) plus one row per saved server.
 ///
-/// Chat and terminal *tab* switching lives behind ⌘⇧P — see
-/// [`tab_palette_entries`]. This palette is for creating and routing, not
-/// for jumping between tabs that are already open.
+/// Switching between open workspaces lives behind ⌘T — see
+/// [`workspace_palette_entries`]. This palette is for creating and routing, not
+/// for jumping between work that is already open.
 fn command_palette_entries(
     entity: WeakEntity<ConsoleDesktopApp>,
     environments: &[super::environments::Environment],
@@ -279,118 +282,45 @@ fn command_palette_entries(
     entries
 }
 
-/// ⌘⇧P entries: open tabs in three visual groups — browsers first, then
-/// terminals (both always the smaller groups), then chat tabs sorted by
-/// recently-updated. Labels are the workspace tab titles so search matches
-/// them. Each entry routes to that tab via
-/// [`ConsoleDesktopApp::activate_workspace_tab`].
-fn tab_palette_entries(
+/// ⌘T entries: one row per open workspace, named by the chat it was made for.
+/// The project (and the branch, for a worktree) sits on the right, where a tab
+/// list would show "current" or a time. Selecting a row switches to that
+/// workspace, restoring its panes and tabs as they were left.
+fn workspace_palette_entries(
     entity: WeakEntity<ConsoleDesktopApp>,
-    workspace_root: &WorkspaceNode,
-    focused_pane_id: Option<&str>,
+    rows: Vec<DeskRow>,
 ) -> Vec<PaletteEntry> {
-    // Collect every open tab in layout order, tagged with its pane id and the
-    // pane's index for the visible label suffix.
-    let leaves: Vec<&console_core::LeafPaneNode> = workspace_root.leaves();
-    let pane_count = leaves.len();
-    let mut scored: Vec<(i64, PaletteEntry)> = Vec::new();
-
-    for (pane_index, leaf) in leaves.iter().enumerate() {
-        let is_focused_pane = focused_pane_id.map_or(pane_index == 0, |id| id == leaf.id);
-        for tab in &leaf.tabs {
-            let is_current = is_focused_pane && leaf.active_tab_id.as_deref() == Some(&tab.id());
-            let (section, recency) = match tab {
-                WorkspaceTabConfig::Chat { .. } => {
-                    ("Chats", tab.last_active_at_ms().unwrap_or(i64::MIN))
-                }
-                WorkspaceTabConfig::Terminal { .. } => {
-                    ("Terminals", tab.last_active_at_ms().unwrap_or(i64::MIN))
-                }
-                WorkspaceTabConfig::Browser { .. } => {
-                    ("Browsers", tab.last_active_at_ms().unwrap_or(i64::MIN))
-                }
-                WorkspaceTabConfig::File { .. }
-                | WorkspaceTabConfig::Diff { .. }
-                | WorkspaceTabConfig::ChangesReview { .. }
-                | WorkspaceTabConfig::FileTree { .. }
-                | WorkspaceTabConfig::Device { .. }
-                | WorkspaceTabConfig::Settings { .. } => continue,
+    rows.into_iter()
+        .map(|row| {
+            let session_id = row.session_id.clone();
+            let entity = entity.clone();
+            let detail = match &row.branch {
+                Some(branch) => format!("{} · {branch}", row.project_name),
+                None => row.project_name.clone(),
             };
-            let entry = tab_palette_entry(
-                entity.clone(),
-                &leaf.id,
-                pane_index,
-                pane_count,
-                tab,
-                section,
-                is_current,
-            );
-            scored.push((recency, entry));
-        }
-    }
-
-    // Most recently active tab first across all sections, so hitting ⌘T
-    // and Enter immediately jumps to the previous tab.
-    scored.sort_by_key(|(recency, _)| std::cmp::Reverse(*recency));
-    scored.into_iter().map(|(_, entry)| entry).collect()
-}
-
-fn tab_palette_entry(
-    entity: WeakEntity<ConsoleDesktopApp>,
-    pane_id: &str,
-    pane_index: usize,
-    pane_count: usize,
-    tab: &WorkspaceTabConfig,
-    section: &'static str,
-    is_current: bool,
-) -> PaletteEntry {
-    let tab_id = tab.id();
-    let title = tab.title().to_string();
-    let pane_id_for_handler = pane_id.to_string();
-    let tab_id_for_handler = tab_id.clone();
-    let mut entry = PaletteEntry::new(format!("tab-{}", tab_id), title, move |_window, cx| {
-        if let Some(app) = entity.upgrade() {
-            app.update(cx, |this, cx| {
-                this.activate_workspace_tab(&pane_id_for_handler, &tab_id_for_handler, cx);
-            });
-        }
-    })
-    .section(section);
-
-    if pane_count > 1 {
-        entry = entry.subtitle(format!("Pane {}", pane_index + 1));
-    }
-
-    if is_current {
-        entry = entry.detail("current");
-    } else if let Some(last_active) = tab.last_active_at_ms() {
-        entry = entry.detail(console_ui::utils::format_time_ago(last_active));
-    }
-
-    // Use favicon for browser tabs, fallback to app icons for other tab types
-    match tab {
-        WorkspaceTabConfig::Browser { url, .. } => {
-            // Try to fetch favicon; fall back to globe icon if unavailable
-            if let Some(favicon) = browser::get_or_fetch_favicon(url) {
-                entry = entry.favicon(favicon);
+            let mut keywords = vec![row.project_name.clone()];
+            keywords.extend(row.branch.clone());
+            let entry = PaletteEntry::new(
+                format!("workspace-{}", row.session_id),
+                row.title.clone(),
+                move |_window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.select_and_open_session(session_id.clone(), cx);
+                        });
+                    }
+                },
+            )
+            .section("Workspaces")
+            .detail(detail)
+            .keywords(keywords);
+            if row.provider.is_empty() {
+                entry.icon(IconName::ChatRoundLine)
             } else {
-                entry = entry.icon(IconName::Globe);
+                entry.provider_icon(row.provider.clone())
             }
-        }
-        WorkspaceTabConfig::Chat { provider, .. } => match provider.as_deref() {
-            Some(p) if !p.is_empty() => {
-                entry = entry.provider_icon(p.to_string());
-            }
-            _ => {
-                entry = entry.icon(IconName::ChatRoundLine);
-            }
-        },
-        _ => {
-            entry = entry.icon(IconName::Terminal);
-        }
-    }
-
-    entry
+        })
+        .collect()
 }
 
 impl ConsoleDesktopApp {
@@ -533,26 +463,47 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// ⌘T — toggle the open-tab palette with sectioned tabs, recency sorting,
-    /// and last-active detail.
+    /// Every open workspace as a switcher row, most recently used first. A
+    /// workspace is open when it holds at least one tab: the one on screen plus
+    /// the ones parked in `project_workspace_roots`.
+    fn open_workspace_rows(&self) -> Vec<DeskRow> {
+        let mut desks: Vec<(Option<String>, i64)> = Vec::new();
+        if !workspace_ops::is_workspace_empty(&self.workspace_root) {
+            desks.push((
+                self.selected_project_id.clone(),
+                desk_last_active_ms(&self.workspace_root),
+            ));
+        }
+        for (key, root) in &self.project_workspace_roots {
+            if *key != self.selected_project_id && !workspace_ops::is_workspace_empty(root) {
+                desks.push((key.clone(), desk_last_active_ms(root)));
+            }
+        }
+        desk_rows(
+            &desks,
+            &self.sessions,
+            |session| self.workspace_key_for_header(session),
+            |session| {
+                self.projects
+                    .iter()
+                    .find(|project| project.matches_session(session))
+                    .map(|project| project.name.clone())
+                    .unwrap_or_else(|| "No Project".to_string())
+            },
+        )
+    }
+
+    /// ⌘T — toggle the workspace switcher.
     pub fn toggle_tab_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let entity = cx.entity().downgrade();
-        let workspace_root = self.workspace_root.clone();
-        let focused_pane_id = self.active_pane_id.clone();
+        let rows = self.open_workspace_rows();
         self.tab_palette.update(cx, |palette, cx| {
-            palette.set_placeholder("Switch open tab…", cx);
+            palette.set_placeholder("Switch workspace…", cx);
             palette.set_section_placeholders(
-                vec![
-                    ("Chats".into(), "Search open chats…".into()),
-                    ("Terminals".into(), "Search open terminals…".into()),
-                    ("Browsers".into(), "Search open browsers…".into()),
-                ],
+                vec![("Workspaces".into(), "Search workspaces…".into())],
                 cx,
             );
-            palette.set_entries(
-                tab_palette_entries(entity, &workspace_root, focused_pane_id.as_deref()),
-                cx,
-            );
+            palette.set_entries(workspace_palette_entries(entity, rows), cx);
             palette.toggle(window, cx);
         });
         cx.notify();

@@ -60,7 +60,7 @@ const ACTION_META: &[ActionMeta] = &[
     ActionMeta {
         action: "ToggleTabPalette",
         category: "Global & Window",
-        description: "Switch open chat or terminal tab",
+        description: "Switch workspace",
     },
     ActionMeta {
         action: "QuickOpenFile",
