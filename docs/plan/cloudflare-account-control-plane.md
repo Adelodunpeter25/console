@@ -15,12 +15,14 @@ Status: proposed plan. No implementation yet.
 - Existing device pairing is not preserved as the primary path. Re-pairing is acceptable.
 - A local fallback token is included so a machine can be used from localhost if the account service is unreachable.
 - Account-specific settings and future features live in the per-account Durable Object.
+- User-level skills are synced by account in v1. Project skills stay project-local.
+- The control plane is the source of truth for account skills; enrolled servers mirror them locally.
 
 ## 1. Goals
 
 Remove repeated pairing. One account owns many servers and many devices. Signing in on a new desktop or phone should list all servers on the account without entering each server host and pairing code.
 
-Keep user data off the control plane. The Worker only stores account identity, server registry, device registry, enrollment state, settings, and token metadata. Source code, chats, files, provider credentials, terminal sessions, and API keys stay on the user's servers.
+Keep user data off the control plane. The Worker only stores account identity, server registry, device registry, enrollment state, settings, account skills, and token metadata. Skills are prompt/workflow text, not secret storage; users must not put credentials in skills. Source code, chats, files, provider credentials, terminal sessions, and API keys stay on the user's servers.
 
 Give servers a way to verify app tokens without calling Cloudflare on every request.
 
@@ -31,6 +33,7 @@ Give servers a way to verify app tokens without calling Cloudflare on every requ
 - No organizations, teams, shared servers, roles, or invite flows. One account owns its own servers.
 - No billing, subscriptions, or entitlements, but the data model must leave space for them.
 - No end-to-end encrypted settings sync. Settings are account data stored by Console.
+- No end-to-end encrypted skill sync. Skill bodies are account data stored by Console; they are not a secret store.
 - No migration of existing paired devices. Old pairing can be removed or kept only as a hidden local escape path, not as the main flow.
 - No change to how agent runs, files, projects, or provider credentials are stored on the server.
 
@@ -89,6 +92,7 @@ Suggested layout:
           servers.ts
           devices.ts
           settings.ts
+          skills.ts
           keys.ts
           internal.ts
         validation/
@@ -98,6 +102,7 @@ Suggested layout:
         enrollment.test.ts
         tokens.test.ts
         account_do.test.ts
+        skills.test.ts
       wrangler.toml
       package.json
       tsconfig.json
@@ -201,6 +206,31 @@ Tables:
       updated_at INTEGER NOT NULL
     )
 
+    skills (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      name_key TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      deleted_at INTEGER
+    )
+
+    sync_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+
+    server_sync_state (
+      server_id TEXT PRIMARY KEY,
+      skills_revision INTEGER NOT NULL DEFAULT 0,
+      last_pushed_at INTEGER,
+      last_pulled_at INTEGER
+    )
+
 Rules:
 
 - password_hash uses PBKDF2-SHA256 via Cloudflare WebCrypto with a high iteration count and a 16-byte random salt.
@@ -209,6 +239,9 @@ Rules:
 - Email is normalized to lowercase and trimmed.
 - The unique index on email is enforced in the DO transaction.
 - token_version is the account-wide revocation knob. Bumping it invalidates all account tokens after servers receive the new expected version.
+- Skill names are normalized to a lowercase name_key. At most one active skill may use a name_key; deleted rows keep history.
+- Account skills use optimistic version checks. A write with a stale version returns a conflict instead of overwriting another device.
+- Every skill create, update, or delete increments the account skills_revision stored in sync_state.
 
 ### 6.2 Enrollment DO
 
@@ -292,6 +325,17 @@ Used by the dashboard web app.
 - GET /account/settings
 - PUT /account/settings
   - key/value settings, size-limited
+- GET /account/skills
+  - returns skill metadata without full bodies
+- POST /account/skills
+  - body: name, description?, content
+- GET /account/skills/:id
+  - returns one full skill body
+- PUT /account/skills/:id
+  - body: name?, description?, content?, expected_version
+  - stale version returns a conflict
+- DELETE /account/skills/:id
+  - soft-deletes the skill and increments skills_revision
 - POST /account/revoke-all-devices
   - revokes app sessions and bumps token_version
 - POST /account/tokens/refresh
@@ -334,9 +378,13 @@ These are called by the console CLI and server binary. They do not use browser c
   - returns the same enrollment result as the approved browser flow
 - POST /v1/servers/heartbeat
   - authenticated with server id plus server secret
-  - body: name?, node_id?, public_url?, version, token_version
-  - updates last heartbeat and connection info
-  - returns current token_version, revoked state, and any control-plane config the server should know
+  - body: name?, node_id?, public_url?, version, token_version, synced_skills_revision?
+  - updates last heartbeat, connection info, and the last skills revision the server confirmed
+  - returns current token_version, revoked state, skills_revision, skills_changed, and any control-plane config the server should know
+- GET /v1/sync/skills
+  - authenticated with server id plus server secret
+  - returns { revision, skills: [...] } for all active account skills
+  - full skill bodies are returned here; list routes for apps can return metadata only
 
 ### 7.5 App/device routes
 
@@ -357,6 +405,16 @@ Used by desktop and Android after email/password sign-in.
 - POST /v1/app/token
   - body: server_id
   - returns a short-lived server-scoped token for that server
+- GET /v1/app/skills
+  - returns account skill metadata for the signed-in app
+- GET /v1/app/skills/:id
+  - returns one full account skill
+- POST /v1/app/skills
+  - creates an account skill from the app
+- PUT /v1/app/skills/:id
+  - updates an account skill with expected_version
+- DELETE /v1/app/skills/:id
+  - soft-deletes an account skill
 - GET /v1/keys
   - public JWKS for server verification
 
@@ -423,7 +481,46 @@ Rules:
 
 This is not an account login. It is a machine-local admin escape path.
 
-## 9. Token design
+## 9. Sync: account skills
+
+Skills are specialized instructions the model can load on demand. Today skills are discovered from user config directories and project directories on each server. That makes first setup simple, but daily use painful: the same skill has to be copied to every machine and kept there by hand.
+
+This feature syncs user-level skills through the account. Project skills remain local to the repository.
+
+### 9.1 Source of truth
+
+- The Account DO is the source of truth for account skills.
+- A skill record stores name, description, full markdown body, version, and deleted_at.
+- The full skill body is stored in the DO. Skills are prompt/workflow text, not secret storage.
+- Every active skill has a unique normalized name. Project skills can still override an account skill with the same name when a run happens inside that project.
+- Deletes are soft so devices can remove their mirrored copy on the next sync.
+
+### 9.2 Editing and conflict rules
+
+- Skills can be created, edited, and deleted from the hosted dashboard and from signed-in desktop/Android apps.
+- Updates require expected_version. If another device changed the skill first, the write returns a conflict instead of silently overwriting it.
+- Skill names are normalized for uniqueness but the original display name is preserved.
+- Importing local skills is explicit: a CLI command pushes the current local user skill files into the account and reports conflicts instead of guessing.
+- v1 sync is one-way from the account to servers after an explicit import/edit. Servers do not silently push arbitrary local changes back to the account.
+
+### 9.3 Server mirror
+
+- Each enrolled server includes synced_skills_revision in its heartbeat.
+- When the control plane sees a newer skills_revision, heartbeat returns skills_changed.
+- The server then calls GET /v1/sync/skills and atomically writes the bundle to a local mirror under ~/.console/sync/skills/<name>/SKILL.md.
+- Skill discovery adds ~/.console/sync as a user-level skill root after the existing local user roots and before project roots.
+- Precedence is: closest project skills win, then account-synced skills, then local user skills of the same name.
+- Deleted account skills remove the mirrored file on the next sync.
+- The server keeps the last successful mirror on disk. If the control plane is unavailable, existing skills continue to work.
+
+### 9.4 CLI surface
+
+- console skills status: show account connection, current local revision, and remote revision.
+- console skills pull: fetch the account bundle into the local mirror immediately.
+- console skills push: import local user skills into the account; conflicts must be resolved explicitly.
+- console skills list: show account skill names, versions, and descriptions.
+
+## 10. Token design
 
 Use compact custom JWT-like strings signed with ES256.
 
@@ -465,7 +562,7 @@ Revocation behavior:
 - Revoke all devices: bump token_version once.
 - Because tokens are verified offline, revocation takes effect as soon as the server sees the new heartbeat response, or when the 15-minute token expires. This trade is intentional.
 
-## 10. Go server changes
+## 11. Go server changes
 
 New package: internal/cloudauth
 
@@ -485,12 +582,14 @@ Files:
     internal/cloudauth/token.go
     internal/cloudauth/local.go
     internal/cloudauth/keys.go
+    internal/cloudauth/skills.go
 
 CLI commands:
 
 - console enroll [--name NAME] [--code CODE]
 - console local-access [--rotate]
 - console account-status
+- console skills status|list|pull|push
 - console enroll --reset maybe later, only if needed
 
 Changes in existing files:
@@ -503,6 +602,7 @@ Changes in existing files:
 - internal/routes/device_auth.go: remove or retire old pairing routes as primary API. Keep only if needed for local debug during transition.
 - internal/serve/serve.go: start heartbeat goroutine after successful enrollment; do not block boot if unenrolled.
 - internal/db/schema.go: remove or ignore old auth tables for primary auth. Do not migrate old pairings.
+- internal/services/skills_service.go and internal/agent/systemprompt/skills.go: add ~/.console/sync as a user-level skill root after existing local user roots and before project roots, so account-synced skills override local user skills but project skills still win.
 
 Server startup behavior:
 
@@ -510,7 +610,7 @@ Server startup behavior:
 - If enrolled: server starts normal API, loads keys from disk, starts heartbeat.
 - If Cloudflare is unreachable: server uses cached keys and continues serving existing tokens.
 
-## 11. Desktop and Android changes
+## 12. Desktop and Android changes
 
 Desktop:
 
@@ -521,6 +621,7 @@ Desktop:
 - Fetch server list from control plane on sign-in and refresh.
 - For each selected server, obtain a server-scoped token and set it on HttpTransport.
 - Add local fallback detection: if a server is localhost and Cloudflare is unreachable, use local access token from disk or prompt for it.
+- Add account skills management: list, create, edit, delete, and show version conflicts.
 
 Android:
 
@@ -529,8 +630,9 @@ Android:
 - Server list comes from control plane.
 - Obtain server-scoped tokens before connecting.
 - No manual pairing code in the main path.
+- Add account skills management with the same version-conflict rules as desktop.
 
-## 12. Proto and client API changes
+## 13. Proto and client API changes
 
 Add proto/console/v1/account.proto for shared client types:
 
@@ -538,13 +640,15 @@ Add proto/console/v1/account.proto for shared client types:
 - ConsoleServer
 - ConsoleDevice
 - AccountSettings
+- AccountSkill
+- SkillBundle
 - SignInRequest/Response
 - ServerTokenRequest/Response
 - EnrollmentStatus maybe only CLI uses JSON
 
 Do not reuse provider AuthStatus types. Provider accounts remain separate and unchanged.
 
-## 13. Web dashboard
+## 14. Web dashboard
 
 Need at least a minimal hosted web UI for:
 
@@ -555,6 +659,7 @@ Need at least a minimal hosted web UI for:
 - approve/reject enrollment request
 - rename/revoke server/device
 - account settings editor
+- account skills editor with create, edit, delete, and conflict messages
 
 This can live inside apps/control-plane/web initially. It does not need to be a large SPA. Keep it server-rendered or a tiny client bundle.
 
@@ -566,7 +671,7 @@ The browser approval page must show:
 - approve/reject buttons
 - signed-in account email
 
-## 14. Security requirements
+## 15. Security requirements
 
 - Password hashing with PBKDF2-SHA256, per-user salt, and high iteration count.
 - Rate limit login, signup, enrollment start, and enrollment code redemption.
@@ -577,9 +682,10 @@ The browser approval page must show:
 - All secret-bearing responses set no-store headers.
 - Do not log request bodies for auth/enrollment routes.
 - Audit log entries for signup, login, enrollment approve, code creation, server revoke, device revoke.
+- Skill bodies are account data, not secret storage. Audit logs record create/update/delete events but never skill bodies.
 - Control plane stores no chat/file/provider secret data.
 
-## 15. Verification
+## 16. Verification
 
 Control plane:
 
@@ -594,11 +700,14 @@ Manual local checks:
 - start browser enrollment, approve, poll status
 - sign app in, list servers, request server token
 - verify token shape and signature with a local server
+- create a skill, pull it on a server, run an agent, and confirm the skill is available
+- edit the same skill from a second device with a stale version and confirm the conflict is reported
 
 Go:
 
     cd apps/server-go && go test ./tests/api/ -run Enrollment -v
     cd apps/server-go && go test ./tests/api/ -run CloudAuth -v
+    cd apps/server-go && go test ./tests/api/ -run SkillsSync -v
     cd apps/server-go && go vet ./...
 
 Desktop:
@@ -612,29 +721,29 @@ Android:
     cd apps/android && ./gradlew :app:assembleDebug
     cd apps/android && ./gradlew :app:testDebugUnitTest --tests "<relevant fixture test>"
 
-## 16. Implementation phases
+## 17. Implementation phases
 
 ### Phase 1: Control plane only
 
-Deliverable: Worker plus DOs plus minimal web pages. Can sign up, log in, create codes, approve requests, list servers/devices, issue tokens, serve keys. No Go/client integration yet.
+Deliverable: Worker plus DOs plus minimal web pages. Can sign up, log in, create codes, approve requests, list servers/devices, issue tokens, serve keys, and create/edit/delete account skills. No Go/client integration yet.
 
 ### Phase 2: Go server enrollment and verification
 
-Deliverable: console enroll works with both modes. Go server stores config, heartbeats, verifies Cloudflare-signed tokens, and has local fallback token.
+Deliverable: console enroll works with both modes. Go server stores config, heartbeats, verifies Cloudflare-signed tokens, syncs account skills into the local mirror, and has a local fallback token.
 
 ### Phase 3: Desktop account sign-in
 
-Deliverable: desktop can sign in with email/password, list servers, connect using server-scoped tokens.
+Deliverable: desktop can sign in with email/password, list servers, connect using server-scoped tokens, and manage account skills.
 
 ### Phase 4: Android account sign-in
 
-Deliverable: Android parity for sign-in, server list, and server-scoped tokens.
+Deliverable: Android parity for sign-in, server list, server-scoped tokens, and account skills management.
 
 ### Phase 5: Cleanup
 
 Remove old pairing as the default path. Update roadmap, README, install docs, and onboarding copy. Keep only the local fallback path.
 
-## 17. Open decisions to settle during implementation
+## 18. Open decisions to settle during implementation
 
 - Public hostnames: control-plane API domain and dashboard domain.
 - Password hashing uses PBKDF2-SHA256 via WebCrypto.
@@ -642,6 +751,6 @@ Remove old pairing as the default path. Update roadmap, README, install docs, an
 - Whether server token lifetime stays at 15 minutes.
 - Whether local fallback can read a token from disk automatically or must be pasted into the app once.
 
-## 18. Definition of done
+## 19. Definition of done
 
-A user can sign up with email/password on a fresh machine, enroll a server with either browser approval or a one-time code, sign into a second device with the same account, see the server automatically, connect to it without pairing, revoke a device or server from the dashboard, and still access a local server from localhost if the control plane is unavailable.
+A user can sign up with email/password on a fresh machine, enroll a server with either browser approval or a one-time code, sign into a second device with the same account, see the server automatically, connect to it without pairing, create and edit user skills that sync to every enrolled server, revoke a device or server from the dashboard, and still access a local server from localhost if the control plane is unavailable.
