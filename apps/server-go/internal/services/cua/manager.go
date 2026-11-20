@@ -5,6 +5,7 @@ package cua
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"sync"
 	"time"
@@ -65,7 +66,11 @@ func (m *Manager) Driver() (*Driver, error) {
 	ready := m.ready
 	m.mu.Unlock()
 
-	driver, err := Open(Options{})
+	var driver *Driver
+	err := EnsureDisplay()
+	if err == nil {
+		driver, err = Open(Options{})
+	}
 	if driver != nil {
 		if names, listErr := driverTools(driver); listErr == nil {
 			m.mu.Lock()
@@ -76,7 +81,13 @@ func (m *Manager) Driver() (*Driver, error) {
 
 	m.mu.Lock()
 	m.loading = false
-	m.driver, m.initErr = driver, err
+	m.driver = driver
+	// A missing display can appear later (a session starts, Xvfb comes up), so
+	// it is retried instead of cached like a missing library.
+	if !errors.Is(err, ErrNoDisplay) {
+		m.initErr = err
+	}
+	m.ready = make(chan struct{})
 	close(ready)
 	m.mu.Unlock()
 	return driver, err
