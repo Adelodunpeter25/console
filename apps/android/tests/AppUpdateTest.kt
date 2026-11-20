@@ -2,6 +2,7 @@ package com.console.mobile
 
 import com.console.mobile.core.update.UpdateManifest
 import com.console.mobile.core.update.UpdatePrompt
+import com.console.mobile.core.update.UpdateState
 import com.console.mobile.core.update.isNewerThan
 import com.console.mobile.core.update.parseUpdateManifest
 import org.junit.Assert.assertEquals
@@ -32,8 +33,8 @@ class AppUpdateTest {
         assertEquals(20, availablePrompt.manifest.versionCode)
 
         val apkFile = File("/tmp/test.apk")
-        val readyPrompt = UpdatePrompt.ReadyToInstall(manifest, apkFile)
-        assertEquals(apkFile, readyPrompt.apk)
-        assertEquals("1.0.5", readyPrompt.manifest.versionName)
+        val readyState = UpdateState.ReadyToInstall(manifest, apkFile)
+        assertEquals(apkFile, readyState.apk)
+        assertEquals("1.0.5", readyState.manifest.versionName)
     }
 }

@@ -26,19 +26,6 @@ fun UpdatePromptHost() {
                 onDismiss = { AppUpdateManager.dismissPrompt() },
             )
         }
-        is UpdatePrompt.ReadyToInstall -> {
-            ConfirmPrompt(
-                title = "Update Ready",
-                message = "Console ${item.manifest.versionName} has finished downloading. Would you like to update now?",
-                buttons = listOf(
-                    ConfirmButton(text = "Later", cancel = true, onPress = { AppUpdateManager.dismissPrompt() }),
-                    ConfirmButton(text = "Update", onPress = {
-                        AppUpdateManager.dismissPrompt()
-                        AppUpdateManager.installPendingUpdate()
-                    }),
-                ),
-                onDismiss = { AppUpdateManager.dismissPrompt() },
-            )
-        }
+
     }
 }

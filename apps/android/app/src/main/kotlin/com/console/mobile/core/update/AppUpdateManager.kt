@@ -33,7 +33,6 @@ sealed interface UpdateState {
 
 sealed interface UpdatePrompt {
     data class Available(val manifest: UpdateManifest) : UpdatePrompt
-    data class ReadyToInstall(val manifest: UpdateManifest, val apk: File) : UpdatePrompt
 }
 
 object AppUpdateManager {
@@ -113,7 +112,7 @@ object AppUpdateManager {
 
                 if (AppForegroundTracker.isForeground.value) {
                     cancelUpdateNotification(context)
-                    _prompt.value = UpdatePrompt.ReadyToInstall(manifest, apk)
+                    installPendingUpdate()
                 } else {
                     pendingInstallApk = apk
                     showDownloadCompleteNotification(context, manifest)
@@ -148,12 +147,7 @@ object AppUpdateManager {
         val context = AppContainer.appContext
         val apk = pendingInstallApk
         if (apk != null && apk.exists()) {
-            pendingInstallApk = null
-            cancelUpdateNotification(context)
-            val manifest = (_state.value as? UpdateState.ReadyToInstall)?.manifest
-                ?: (_state.value as? UpdateState.Available)?.manifest
-                ?: UpdateManifest(0, "")
-            _prompt.value = UpdatePrompt.ReadyToInstall(manifest, apk)
+            installPendingUpdate()
             return
         }
 
