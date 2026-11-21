@@ -173,9 +173,6 @@ pub struct TranscriptView {
     tool_activity_cache:
         RefCell<HashMap<usize, (u64, Option<Vec<tool_activity::RunActivityBlock>>)>>,
     tool_activity_cache_version: std::cell::Cell<u64>,
-    /// Recorded wake turns for this session (`backgroundWorkContinue`
-    /// frames). Used to rebuild `wake_boundaries` after history reloads.
-    wake_records: Vec<console_core::WakeRecord>,
     /// `(first_message_index, label, at)` for each wake boundary in
     /// `messages`, sorted by index. Rebuilt by `set_messages` and
     /// `prepend_older_messages`.
@@ -261,7 +258,6 @@ impl TranscriptView {
             session_cwd: None,
             tool_activity_cache: RefCell::new(HashMap::new()),
             tool_activity_cache_version: std::cell::Cell::new(0),
-            wake_records: Vec::new(),
             wake_boundaries: Vec::new(),
             has_more: false,
             next_cursor: None,

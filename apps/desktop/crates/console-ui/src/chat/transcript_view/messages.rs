@@ -48,7 +48,6 @@ impl TranscriptView {
         self.tool_calls_state.borrow_mut().clear();
         self.thinking_expanded.borrow_mut().clear();
         self.expanded_user_messages.borrow_mut().clear();
-        self.rebuild_run_boundaries();
         self.invalidate_activity_cache();
         self.has_more = has_more;
         self.next_cursor = next_cursor;
@@ -176,7 +175,6 @@ impl TranscriptView {
         self.invalidate_activity_cache();
         self.is_streaming = false;
         self.streaming_started_at = None;
-        self.rebuild_run_boundaries();
         // Keep following tail if the user was already at the tail or this is a
         // freshly loaded session; otherwise restore their previous scroll anchor
         // so settling never teleports an inspecting user back down or up.
@@ -234,7 +232,6 @@ impl TranscriptView {
 
         // Boundaries are keyed by message index; the prepend shifted every
         // index, so rebuild them from the (timestamp-stable) wake records.
-        self.rebuild_run_boundaries();
 
         // The activity cache is keyed by user index and would now point at
         // the wrong messages — invalidate it.
