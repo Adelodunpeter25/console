@@ -106,25 +106,7 @@ impl ConsoleDesktopApp {
                                 {
                                     return;
                                 }
-                                if !detail.wake_records.is_empty() {
-                                    let merged = super::sessions::merge_wake_records(
-                                        &detail.wake_records,
-                                        this.wake_records
-                                            .get(&session_id_for_task)
-                                            .map(Vec::as_slice)
-                                            .unwrap_or(&[]),
-                                    );
-                                    this.wake_records
-                                        .insert(session_id_for_task.clone(), merged);
-                                }
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
-                                    t.set_wake_records(
-                                        this.wake_records
-                                            .get(&session_id_for_task)
-                                            .cloned()
-                                            .unwrap_or_default(),
-                                        cx,
-                                    );
                                     t.prepend_messages(
                                         detail.messages,
                                         detail.has_more,

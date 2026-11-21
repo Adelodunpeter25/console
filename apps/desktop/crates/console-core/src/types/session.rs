@@ -9,7 +9,10 @@ pub struct SessionPageOptions {
     pub before: Option<i64>,
 }
 
-use super::agent::{AgentMessage, ImageAttachment, QueuedPrompt, TodoItem, WakeRecord};
+use super::agent::{
+    AgentMessage, AssistantContentPart, ImageAttachment, QueuedPrompt, TodoItem, ToolCall,
+    ToolResult,
+};
 use super::events::BackgroundWork;
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
@@ -67,36 +70,83 @@ pub struct SessionPrompt {
 pub struct SessionDetailResponse {
     #[serde(alias = "session")]
     pub header: SessionHeader,
-    /// Decoded from the canonical wire messages; unparseable rows are
-    /// skipped, matching the old untagged leniency for forward growth.
-    #[serde(deserialize_with = "deserialize_messages")]
+    /// Server-assembled turns flattened into transcript messages, with a
+    /// `RunBoundary` at each wake turn.
+    #[serde(default, alias = "turns", deserialize_with = "deserialize_turns")]
     pub messages: Vec<AgentMessage>,
-    /// Whether older messages exist before the oldest row in `messages`.
+    /// Whether older turns exist before the oldest turn in `messages`.
     #[serde(default)]
     pub has_more: bool,
     /// Rowid cursor for the next older batch; null when at the start of history.
     #[serde(default)]
     pub next_cursor: Option<i64>,
-    /// Persisted wake-turn markers extracted from synthetic user turns.
-    #[serde(default)]
-    pub wake_records: Vec<WakeRecord>,
 }
 
-fn deserialize_messages<'de, D>(deserializer: D) -> Result<Vec<AgentMessage>, D::Error>
+fn deserialize_turns<'de, D>(deserializer: D) -> Result<Vec<AgentMessage>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    // Rows are the canonical oneof shape; unparseable rows are skipped,
-    // matching the old untagged leniency for forward growth.
     let raw: Vec<serde_json::Value> = serde::Deserialize::deserialize(deserializer)?;
-    Ok(raw
+    let turns = raw
         .into_iter()
-        .filter_map(|value| {
-            serde_json::from_value::<console_proto::AgentMessage>(value)
-                .ok()
-                .and_then(AgentMessage::from_proto)
-        })
-        .collect())
+        .filter_map(|value| serde_json::from_value::<console_proto::TranscriptTurn>(value).ok())
+        .collect();
+    Ok(turns_to_messages(turns))
+}
+
+/// Flatten server-assembled turns into the message list the transcript
+/// renders. A wake turn becomes a `RunBoundary`; run events become assistant
+/// messages (text and thinking ride with the tool call that follows them,
+/// because the transcript only shows them inside a run that has one).
+pub fn turns_to_messages(turns: Vec<console_proto::TranscriptTurn>) -> Vec<AgentMessage> {
+    use console_proto::run_activity_event::Event;
+    let mut out = Vec::new();
+    for turn in turns {
+        let at = turn.created_at;
+        if let Some(label) = turn.wake_label {
+            let secs = if at > 10_000_000_000 { at / 1000 } else { at };
+            out.push(AgentMessage::RunBoundary {
+                label,
+                at: Some(secs),
+            });
+        } else if let Some(user) = turn.user_message.and_then(AgentMessage::from_proto) {
+            out.push(user);
+        }
+        if let Some(run) = turn.run {
+            let mut pending: Vec<AssistantContentPart> = Vec::new();
+            for event in run.events {
+                match event.event {
+                    Some(Event::Thinking(text)) => pending.push(AssistantContentPart::Thinking { text }),
+                    Some(Event::Text(text)) => pending.push(AssistantContentPart::Text {
+                        text,
+                        thought_signature: None,
+                    }),
+                    Some(Event::ToolCall(run_call)) => {
+                        let Some(call) = run_call.call.as_ref().map(ToolCall::from_proto) else {
+                            continue;
+                        };
+                        pending.push(AssistantContentPart::ToolCall { call });
+                        out.push(AgentMessage::Assistant {
+                            id: None,
+                            content: std::mem::take(&mut pending),
+                            stop_reason: None,
+                            created_at: Some(at),
+                            tok_per_sec: None,
+                        });
+                        if let Some(result) = run_call.result.as_ref() {
+                            out.push(AgentMessage::ToolResult {
+                                results: vec![ToolResult::from_proto(result)],
+                                created_at: Some(at),
+                            });
+                        }
+                    }
+                    None => {}
+                }
+            }
+        }
+        out.extend(turn.responses.into_iter().filter_map(AgentMessage::from_proto));
+    }
+    out
 }
 
 /// Everything a pane needs to paint a freshly opened chat in one round-trip.
@@ -121,18 +171,9 @@ impl SessionDetailResponse {
     pub fn from_proto_page(p: console_proto::SessionMessagesPage) -> Self {
         Self {
             header: p.header.unwrap_or_default(),
-            messages: p
-                .messages
-                .into_iter()
-                .filter_map(AgentMessage::from_proto)
-                .collect(),
+            messages: turns_to_messages(p.turns),
             has_more: p.has_more,
             next_cursor: p.next_cursor,
-            wake_records: p
-                .wake_records
-                .into_iter()
-                .map(WakeRecord::from_proto)
-                .collect(),
         }
     }
 }
@@ -145,18 +186,9 @@ impl SessionBootstrapResponse {
         Self {
             detail: SessionDetailResponse {
                 header: p.header.unwrap_or_default(),
-                messages: p
-                    .messages
-                    .into_iter()
-                    .filter_map(AgentMessage::from_proto)
-                    .collect(),
+                messages: turns_to_messages(p.turns),
                 has_more: p.has_more,
                 next_cursor: p.next_cursor,
-                wake_records: p
-                    .wake_records
-                    .into_iter()
-                    .map(WakeRecord::from_proto)
-                    .collect(),
             },
             changes: p.changes,
             todos: p.todos,

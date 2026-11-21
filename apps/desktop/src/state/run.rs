@@ -877,13 +877,6 @@ impl ConsoleDesktopApp {
                                         cx,
                                     );
                                     this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                        t.set_wake_records(
-                                            this.wake_records
-                                                .get(&session_id)
-                                                .cloned()
-                                                .unwrap_or_default(),
-                                            cx,
-                                        );
                                         if detail.messages.len() >= t.message_count() {
                                             t.set_messages(detail.messages, cx);
                                         } else {
@@ -1415,13 +1408,6 @@ impl ConsoleDesktopApp {
                                                 this.transcript_for_pane(&pane).update(
                                                     cx,
                                                     |t, cx| {
-                                                        t.set_wake_records(
-                                                            this.wake_records
-                                                                .get(&sid)
-                                                                .cloned()
-                                                                .unwrap_or_default(),
-                                                            cx,
-                                                        );
                                                         if detail.messages.len()
                                                             >= t.message_count()
                                                         {
@@ -1598,13 +1584,6 @@ impl ConsoleDesktopApp {
                                     cx,
                                 );
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                    t.set_wake_records(
-                                        this.wake_records
-                                            .get(&session_id)
-                                            .cloned()
-                                            .unwrap_or_default(),
-                                        cx,
-                                    );
                                     if detail.messages.len() >= t.message_count() {
                                         t.set_messages(detail.messages, cx);
                                     } else {

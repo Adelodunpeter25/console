@@ -288,16 +288,13 @@ pub struct WakeRecord {
 }
 
 impl WakeRecord {
-    pub fn from_proto(p: console_proto::WakeRecord) -> Self {
-        let at = if p.at > 10_000_000_000 {
-            p.at / 1000
+    pub fn new(message: String, at: i64) -> Self {
+        let at = if at > 10_000_000_000 {
+            at / 1000
         } else {
-            p.at
+            at
         };
-        Self {
-            message: p.message,
-            at,
-        }
+        Self { message, at }
     }
 }
 
