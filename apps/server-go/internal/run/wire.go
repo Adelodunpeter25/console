@@ -11,6 +11,7 @@ package run
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
@@ -268,7 +269,12 @@ func subagentEndToProto(v loop.SubagentEndInfo) *consolev1.SubagentEndEvent {
 func WireFrame(e loop.Event) (string, any, bool) {
 	switch e.Kind {
 	case loop.EventSessionStart:
-		return "sessionStart", map[string]any{"type": "sessionStart"}, false
+		frame := map[string]any{"type": "sessionStart"}
+		if !e.StartedAt.IsZero() {
+			frame["startedAt"] = e.StartedAt.UTC().Format(time.RFC3339Nano)
+			frame["elapsedMs"] = time.Since(e.StartedAt).Milliseconds()
+		}
+		return "sessionStart", frame, false
 	case loop.EventTurnStart:
 		frame := map[string]any{"type": "turnStart", "prompt": e.Text}
 		if e.Source != "" {

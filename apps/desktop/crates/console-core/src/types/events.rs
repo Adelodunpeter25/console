@@ -208,7 +208,12 @@ impl BackgroundWorkOutput {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum AgentSessionEvent {
-    SessionStart,
+    SessionStart {
+        #[serde(default, rename = "startedAt")]
+        started_at: Option<String>,
+        #[serde(default, rename = "elapsedMs")]
+        elapsed_ms: Option<i64>,
+    },
     TurnStart {
         prompt: String,
         #[serde(default)]

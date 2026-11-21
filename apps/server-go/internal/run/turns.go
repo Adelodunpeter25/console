@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/codemode"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
@@ -75,7 +76,8 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 	// Mark working once per run, not per turn: a drained staged prompt keeps
 	// the same run (and therefore the same status) across its turns.
 	s.setStatus(sessionID, "working")
-	hub.Broadcast(loop.Event{Kind: loop.EventSessionStart})
+	runStartedAt := time.Now()
+	hub.Broadcast(loop.Event{Kind: loop.EventSessionStart, StartedAt: runStartedAt})
 	var runErr error
 	for {
 		turnErr := s.runOneTurn(currentCtx, sessionID, runID, current, hub, &currentProvider, &currentProviderID, pins)

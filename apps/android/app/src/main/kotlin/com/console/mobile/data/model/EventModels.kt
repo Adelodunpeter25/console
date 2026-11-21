@@ -105,6 +105,10 @@ data class AgentSessionEvent(
     val type: String,
     val prompt: String? = null,
     val source: String? = null,
+    // sessionStart carries the server's run clock so the badge does not
+    // depend on this device's clock or on when it attached to the stream.
+    val startedAt: String? = null,
+    val elapsedMs: Long? = null,
     val turnId: String? = null,
     // Per-token delta: raw until consumed below; the payload is
     // console.v1.ModelStreamPart, decoded with Moshi in ChatEvents

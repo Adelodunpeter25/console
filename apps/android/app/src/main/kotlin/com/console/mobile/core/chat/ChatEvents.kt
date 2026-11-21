@@ -186,6 +186,16 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             }
             s.copy(activeToolCalls = emptyList())
         }
+        "sessionStart" -> {
+            val now = System.currentTimeMillis()
+            val serverStartedAt = event.elapsedMs?.let { now - it.coerceAtLeast(0) }
+                ?: event.startedAt?.let { value -> runCatching { java.time.Instant.parse(value).toEpochMilli() }.getOrNull() }
+                ?: return session
+            val withRun = if (session.turns.lastOrNull()?.run != null) session else ensureTailRun(session)
+            updateLatestRun(withRun) { run ->
+                if (run.status == RunStatus.Working) run.copy(startedAt = serverStartedAt) else run
+            }.copy(running = true)
+        }
         "turnStart" -> {
             val prompt = event.prompt
             val lastUser = session.turns.lastOrNull { it.userMessage != null }?.userMessage

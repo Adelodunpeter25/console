@@ -87,6 +87,32 @@ func TestWireFrameSessionApprovalModeUpdated(t *testing.T) {
 	}
 }
 
+func TestWireFrameSessionStartCarriesServerElapsed(t *testing.T) {
+	start := time.Now().Add(-2 * time.Second)
+	name, body, drop := run.WireFrame(loop.Event{
+		Kind:      loop.EventSessionStart,
+		StartedAt: start,
+	})
+	if drop || name != "sessionStart" {
+		t.Fatalf("sessionStart frame = %q drop=%v", name, drop)
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := envelope["startedAt"].(string); !ok {
+		t.Fatalf("startedAt = %#v", envelope["startedAt"])
+	}
+	elapsed, ok := envelope["elapsedMs"].(float64)
+	if !ok || elapsed < 1900 || elapsed > 6000 {
+		t.Fatalf("elapsedMs = %#v", envelope["elapsedMs"])
+	}
+}
+
 func TestBackgroundWorkOutputRouteReadsDetachedShell(t *testing.T) {
 	app := fiber.New()
 	runs := run.NewService(nil)

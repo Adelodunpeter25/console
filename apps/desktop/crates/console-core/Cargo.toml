@@ -113,3 +113,7 @@ path = "tests/types/visual_test.rs"
 [[test]]
 name = "background_shell_test"
 path = "tests/types/background_shell_test.rs"
+
+[[test]]
+name = "session_start_event_test"
+path = "tests/types/session_start_event_test.rs"

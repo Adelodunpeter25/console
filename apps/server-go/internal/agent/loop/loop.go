@@ -143,11 +143,14 @@ type Event struct {
 	// just started running", as opposed to it being cleared.
 	Drained bool `json:"drained,omitempty"`
 	// QueuedAll is the whole queue (next-to-run first) on EventQueueUpdated.
-	QueuedAll    []types.QueuedPrompt `json:"queuedPrompts,omitempty"`
-	Title        string               `json:"title,omitempty"`
-	ApprovalMode string               `json:"approvalMode,omitempty"`
-	Source       string               `json:"source,omitempty"`
-	Subagent     any                  `json:"subagent,omitempty"`
+	QueuedAll []types.QueuedPrompt `json:"queuedPrompts,omitempty"`
+	Title     string               `json:"title,omitempty"`
+	// StartedAt is when the run opened. It travels on EventSessionStart so
+	// clients can show elapsed time from the server's clock, not their own.
+	StartedAt    time.Time `json:"startedAt,omitempty"`
+	ApprovalMode string    `json:"approvalMode,omitempty"`
+	Source       string    `json:"source,omitempty"`
+	Subagent     any       `json:"subagent,omitempty"`
 	// Items/Action carry the session todo list for EventTodoUpdate.
 	Items  []types.TodoItem `json:"items,omitempty"`
 	Action string           `json:"action,omitempty"`

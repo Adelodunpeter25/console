@@ -914,7 +914,12 @@ impl ConsoleDesktopApp {
                             .as_deref()
                             == Some(run_session_id.as_str());
                         if server_run_may_be_active {
-                            this.set_session_running(&run_session_id, Some(run_started_at));
+                            let started_at = this
+                                .running_sessions
+                                .get(&run_session_id)
+                                .copied()
+                                .unwrap_or(run_started_at);
+                            this.set_session_running(&run_session_id, Some(started_at));
                             this.set_error_for_session(
                                 &run_session_id,
                                 "The server is still completing this run. Use Stop before sending another prompt.",
@@ -926,7 +931,7 @@ impl ConsoleDesktopApp {
                             // still working this run.
                             if pane_shows_run {
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                    t.resume_streaming(run_started_at, cx);
+                                    t.resume_streaming(started_at, cx);
                                 });
                             }
                         } else {
@@ -1285,18 +1290,29 @@ impl ConsoleDesktopApp {
                 }
                 self.refresh_file_tree(cx);
             }
-            AgentSessionEvent::SessionStart => {
+            AgentSessionEvent::SessionStart {
+                started_at: server_started_at,
+                elapsed_ms,
+            } => {
                 self.set_agent_notice_for_session(run_session_id, None);
                 self.clear_suggestions(run_session_id, cx);
                 // A chained queued turn re-announces sessionStart on the same
                 // stream. Re-engage streaming so the auto-sent prompt visibly
                 // keeps working even if queueUpdated(null) arrived out of
                 // order or with an empty local queue.
-                let started_at = self
-                    .running_sessions
-                    .get(run_session_id)
-                    .copied()
-                    .unwrap_or_else(|| chrono::Utc::now().timestamp());
+                let started_at = if let Some(elapsed_ms) = elapsed_ms.filter(|ms| *ms >= 0) {
+                    chrono::Utc::now().timestamp() - elapsed_ms / 1000
+                } else if let Some(value) = server_started_at
+                    .as_deref()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                {
+                    value.timestamp()
+                } else {
+                    self.running_sessions
+                        .get(run_session_id)
+                        .copied()
+                        .unwrap_or_else(|| chrono::Utc::now().timestamp())
+                };
                 self.set_session_running(run_session_id, Some(started_at));
                 if pane_shows_run {
                     self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
