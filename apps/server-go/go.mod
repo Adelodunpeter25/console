@@ -2,8 +2,11 @@ module github.com/Adelodunpeter25/console/apps/server-go
 
 go 1.26.1
 
+replace github.com/Adelodunpeter25/voxl-go => ../../../voxl-go
+
 require (
 	github.com/Adelodunpeter25/iroh-go v0.0.0-20261107173249-9605c02ec0fb
+	github.com/Adelodunpeter25/voxl-go v0.4.0
 	github.com/Adelodunpeter25/sim-go v0.0.0-20261113115339-d943d8632ca3
 	github.com/BurntSushi/toml v1.6.0
 	github.com/MoeForge/moejs v0.1.0
@@ -19,6 +22,7 @@ require (
 	golang.org/x/crypto v0.54.0
 	golang.org/x/image v0.40.0
 	golang.org/x/oauth2 v0.36.0
+	golang.org/x/sync v0.22.0
 	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.38.0
 )
@@ -31,7 +35,6 @@ require (
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect

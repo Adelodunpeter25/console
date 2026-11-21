@@ -37,6 +37,7 @@ import com.console.mobile.feature.browser.handOffToSystem
 import com.console.mobile.feature.browser.rememberBrowserState
 import com.console.mobile.feature.changes.ChangesScreen
 import com.console.mobile.feature.chat.ChatScreen
+import com.console.mobile.feature.computer.ComputerScreen
 import com.console.mobile.feature.devices.DevicesScreen
 import com.console.mobile.feature.chat.html.HtmlPreviewScreen
 import com.console.mobile.feature.files.FilesScreen
@@ -187,6 +188,7 @@ fun AppNavGraph() {
                                 com.console.mobile.data.store.MobileTab.Changes -> navController.navigate(RouteChanges) { launchSingleTop = true }
                                 com.console.mobile.data.store.MobileTab.Terminal -> navController.navigate(RouteTerminal) { launchSingleTop = true }
                                 com.console.mobile.data.store.MobileTab.Devices -> navController.navigate(RouteDevices) { launchSingleTop = true }
+                                com.console.mobile.data.store.MobileTab.Computer -> navController.navigate(RouteComputer) { launchSingleTop = true }
                                 else -> {}
                             }
                         },
@@ -273,6 +275,12 @@ fun AppNavGraph() {
             }
             composable<RouteDevices> {
                 DevicesScreen(onBack = {
+                    AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Chat)
+                    navController.navigate(RouteChat) { launchSingleTop = true }
+                })
+            }
+            composable<RouteComputer> {
+                ComputerScreen(onBack = {
                     AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Chat)
                     navController.navigate(RouteChat) { launchSingleTop = true }
                 })

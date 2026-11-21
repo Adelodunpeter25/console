@@ -13,6 +13,7 @@ import kotlinx.serialization.Serializable
 @Serializable object RouteTerminal
 @Serializable object RouteFiles
 @Serializable object RouteDevices
+@Serializable object RouteComputer
 @Serializable object RoutePorts
 @Serializable object RouteChanges
 @Serializable data class RouteBrowser(val url: String)

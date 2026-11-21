@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-enum class MobileTab { Home, Chat, Settings, Terminal, Files, Changes, Devices }
+enum class MobileTab { Home, Chat, Settings, Terminal, Files, Changes, Devices, Computer }
 
 data class AppState(
     val activeTab: MobileTab = MobileTab.Home,

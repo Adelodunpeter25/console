@@ -1,0 +1,236 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #0c0c0e; overflow: hidden; user-select: none; -webkit-user-select: none; }
+  #stage { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { flex: none; display: block; touch-action: none; -webkit-user-drag: none; cursor: crosshair; }
+  #status { display: none; position: absolute; left: 8px; bottom: 8px; font: 11px/1.4 -apple-system, system-ui, sans-serif; color: rgba(255,255,255,.9); background: rgba(180,30,30,.85); padding: 4px 8px; border-radius: 6px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="screen" tabindex="0"></canvas>
+  <div id="status"></div>
+</div>
+<script>
+(function () {
+  const statusEl = document.getElementById('status');
+  const canvas = document.getElementById('screen');
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  let ws = null, decoder = null;
+  let streamW = 1920, streamH = 1080;
+  let needKey = true;
+
+  function setStatus(msg) {
+    if (!msg) { statusEl.style.display = 'none'; return; }
+    statusEl.textContent = msg;
+    statusEl.style.display = 'block';
+  }
+
+  function resizeCanvas() {
+    const stage = document.getElementById('stage');
+    const stageW = stage.clientWidth;
+    const stageH = stage.clientHeight;
+    if (!stageW || !stageH || !streamW || !streamH) return;
+    const scale = Math.min(stageW / streamW, stageH / streamH);
+    canvas.style.width = (streamW * scale) + 'px';
+    canvas.style.height = (streamH * scale) + 'px';
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  function initDecoder() {
+    if (decoder && decoder.state !== 'closed') {
+      try { decoder.close(); } catch(e) {}
+    }
+    needKey = true;
+    decoder = new VideoDecoder({
+      output: (frame) => {
+        if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
+          canvas.width = frame.displayWidth;
+          canvas.height = frame.displayHeight;
+          streamW = frame.displayWidth;
+          streamH = frame.displayHeight;
+          resizeCanvas();
+        }
+        ctx.drawImage(frame, 0, 0);
+        frame.close();
+        setStatus(null);
+      },
+      error: (e) => {
+        console.error('decoder error', e);
+        needKey = true;
+      }
+    });
+
+    // Baseline/Main H.264
+    decoder.configure({
+      codec: 'avc1.420028',
+      optimizeForLatency: true
+    });
+  }
+
+  function connect() {
+    const loc = window.location;
+    const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+    const params = new URLSearchParams(loc.search);
+    const token = params.get('token') ? '?token=' + encodeURIComponent(params.get('token')) : '';
+    const wsUrl = proto + '//' + loc.host + '/api/computer/ws' + token;
+
+    setStatus('Connecting to remote desktop...');
+    initDecoder();
+
+    ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+      setStatus(null);
+      canvas.focus();
+    };
+
+    ws.onclose = () => {
+      setStatus('Disconnected. Reconnecting...');
+      setTimeout(connect, 1500);
+    };
+
+    ws.onerror = (e) => {
+      setStatus('Connection error');
+    };
+
+    ws.onmessage = (evt) => {
+      if (typeof evt.data === 'string') {
+        try {
+          const m = JSON.parse(evt.data);
+          if (m.type === 'resize' && m.width && m.height) {
+            streamW = m.width;
+            streamH = m.height;
+            resizeCanvas();
+          }
+        } catch(e) {}
+        return;
+      }
+
+      // Binary wire frame
+      const buf = evt.data;
+      if (buf.byteLength <= 16) return;
+      const view = new DataView(buf);
+      const tag = view.getUint8(0);
+      if (tag !== 0x01) return; // 0x01 is H.264 video
+
+      const flags = view.getUint8(1);
+      const isKey = (flags & 0x01) !== 0;
+
+      if (needKey && !isKey) return;
+      needKey = false;
+
+      const nal = new Uint8Array(buf, 16);
+      try {
+        decoder.decode(new EncodedVideoChunk({
+          type: isKey ? 'key' : 'delta',
+          timestamp: performance.now() * 1000,
+          data: nal
+        }));
+      } catch(err) {
+        console.warn('decode chunk failed', err);
+        needKey = true;
+      }
+    };
+  }
+
+  // Mouse & Keyboard input handling
+  function getCoords(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.max(0, Math.min(streamW, Math.round((e.clientX - rect.left) * (streamW / rect.width))));
+    const y = Math.max(0, Math.min(streamH, Math.round((e.clientY - rect.top) * (streamH / rect.height))));
+    return { x, y };
+  }
+
+  function sendInput(msg) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(msg));
+    }
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const { x, y } = getCoords(e);
+    let mask = 0;
+    if (e.buttons & 1) mask |= 1;
+    if (e.buttons & 4) mask |= 2;
+    if (e.buttons & 2) mask |= 4;
+    sendInput({ type: 'mouse', x, y, mask, wheel: 0 });
+  });
+
+  canvas.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    canvas.focus();
+    const { x, y } = getCoords(e);
+    let mask = 0;
+    if (e.buttons & 1) mask |= 1;
+    if (e.buttons & 4) mask |= 2;
+    if (e.buttons & 2) mask |= 4;
+    sendInput({ type: 'mouse', x, y, mask, wheel: 0 });
+  });
+
+  canvas.addEventListener('mouseup', (e) => {
+    e.preventDefault();
+    const { x, y } = getCoords(e);
+    let mask = 0;
+    if (e.buttons & 1) mask |= 1;
+    if (e.buttons & 4) mask |= 2;
+    if (e.buttons & 2) mask |= 4;
+    sendInput({ type: 'mouse', x, y, mask, wheel: 0 });
+  });
+
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const { x, y } = getCoords(e);
+    const wheel = e.deltaY < 0 ? -120 : 120;
+    sendInput({ type: 'mouse', x, y, mask: 0, wheel });
+  }, { passive: false });
+
+  // Map common DOM key codes to X11 keysyms
+  function toKeysym(e) {
+    if (e.key === 'Backspace') return 0xff08;
+    if (e.key === 'Tab') return 0xff09;
+    if (e.key === 'Enter') return 0xff0d;
+    if (e.key === 'Escape') return 0xff1b;
+    if (e.key === 'Delete') return 0xffff;
+    if (e.key === 'ArrowLeft') return 0xff51;
+    if (e.key === 'ArrowUp') return 0xff52;
+    if (e.key === 'ArrowRight') return 0xff53;
+    if (e.key === 'ArrowDown') return 0xff54;
+    if (e.key === 'Shift') return 0xffe1;
+    if (e.key === 'Control') return 0xffe3;
+    if (e.key === 'Alt') return 0xffe9;
+    if (e.key === 'Meta') return 0xffeb;
+    if (e.key.length === 1) return e.key.charCodeAt(0);
+    return 0;
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (document.activeElement !== canvas) return;
+    const keysym = toKeysym(e);
+    if (keysym) {
+      e.preventDefault();
+      sendInput({ type: 'key', keysym, down: true });
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if (document.activeElement !== canvas) return;
+    const keysym = toKeysym(e);
+    if (keysym) {
+      e.preventDefault();
+      sendInput({ type: 'key', keysym, down: false });
+    }
+  });
+
+  connect();
+})();
+</script>
+</body>
+</html>
