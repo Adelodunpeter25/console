@@ -79,7 +79,12 @@ private fun groupEvents(events: List<ActivityEvent>): List<RenderGroup> {
  * Collapsible "Worked for Xs" header + grouped tool/thinking/text events.
  */
 @Composable
-fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = null) {
+fun RunActivity(
+    activity: RunActivityState,
+    running: Boolean,
+    cwd: String? = null,
+    onExpandToolCall: (messageId: String, callId: String) -> Unit = { _, _ -> },
+) {
     var expanded by remember(activity.runId, running) { mutableStateOf(running) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(running) {
@@ -126,7 +131,7 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
                         if (g.calls.size == 1) {
                             val call = g.calls.first()
                             Box(modifier = Modifier.padding(vertical = 2.dp)) {
-                                ToolCallRow(call = call, result = byId[call.id], cwd = cwd)
+                                ToolCallRow(call = call, result = byId[call.id], cwd = cwd, onExpandToolCall = onExpandToolCall)
                             }
                         } else {
                             ToolGroupRow(
@@ -134,6 +139,7 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
                                 calls = g.calls,
                                 results = g.results,
                                 cwd = cwd,
+                                onExpandToolCall = onExpandToolCall,
                             )
                         }
                     }
@@ -149,6 +155,7 @@ fun ToolGroupRow(
     calls: List<ToolCall>,
     results: List<ToolResult>,
     cwd: String? = null,
+    onExpandToolCall: (messageId: String, callId: String) -> Unit = { _, _ -> },
 ) {
     var expanded by remember(calls.firstOrNull()?.id) { mutableStateOf(false) }
     val byId = results.associateBy { it.toolCallId }
@@ -227,7 +234,7 @@ fun ToolGroupRow(
             ) {
                 calls.forEach { call ->
                     Box(modifier = Modifier.padding(vertical = 2.dp)) {
-                        ToolCallRow(call = call, result = byId[call.id], cwd = cwd)
+                        ToolCallRow(call = call, result = byId[call.id], cwd = cwd, onExpandToolCall = onExpandToolCall)
                     }
                 }
             }

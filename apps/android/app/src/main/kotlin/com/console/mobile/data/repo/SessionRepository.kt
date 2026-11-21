@@ -197,7 +197,11 @@ class SessionRepository(
                 )
                 chats.update(created.id) { state ->
                     state.copy(
-                        messages = state.messages + optimisticUserMessage,
+                        turns = state.turns + com.console.mobile.core.chat.TranscriptTurn(
+                            id = com.console.mobile.core.chat.newMessageId(),
+                            createdAt = optimisticUserMessage.createdAt,
+                            userMessage = optimisticUserMessage,
+                        ),
                         input = "",
                         attachments = emptyList(),
                         draftUpdatedAt = null,
@@ -524,7 +528,7 @@ class SessionRepository(
 
     private fun applyDetail(sessionId: String, detail: SessionDetailResponse) {
         applyHeader(sessionId, detail.header)
-        chatRepo.loadMessages(sessionId, detail.messages, detail.wakeRecords)
+        chatRepo.loadTurns(sessionId, detail.turns)
         chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
     }
 
@@ -545,7 +549,7 @@ class SessionRepository(
         scope.launch {
             try {
                 val detail = withContext(Dispatchers.IO) { api.getSession(sessionId, limit, before) }
-                chatRepo.prependMessages(sessionId, detail.messages, detail.wakeRecords)
+                chatRepo.prependTurns(sessionId, detail.turns)
                 chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
             } catch (e: Exception) {
                 android.util.Log.w("SessionRepository", "loadOlder($sessionId, before=$before) failed", e)
@@ -587,7 +591,7 @@ class SessionRepository(
     suspend fun loadUntilUserMessages(sessionId: String, count: Int): Boolean {
         while (true) {
             val state = chats.get(sessionId)
-            if (state.messages.count { it is com.console.mobile.data.model.UserMessage } >= count) return true
+            if (state.turns.count { it.userMessage != null } >= count) return true
             val before = state.nextCursor
             if (!state.hasMoreMessages || before == null) return false
             // A scroll-triggered page may be in flight; wait for it, then re-check.
@@ -598,7 +602,7 @@ class SessionRepository(
             chatRepo.setLoadingOlder(sessionId, true)
             try {
                 val detail = withContext(Dispatchers.IO) { api.getSession(sessionId, OLDER_PAGE, before) }
-                chatRepo.prependMessages(sessionId, detail.messages, detail.wakeRecords)
+                chatRepo.prependTurns(sessionId, detail.turns)
                 chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
             } catch (e: Exception) {
                 android.util.Log.w("SessionRepository", "loadUntilUserMessages($sessionId, $count) failed", e)

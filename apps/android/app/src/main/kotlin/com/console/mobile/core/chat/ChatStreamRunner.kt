@@ -13,36 +13,40 @@ fun isAbortError(msg: String): Boolean {
 }
 
 fun finalizeSessionRun(session: ChatSessionState, hadError: Boolean, nowMs: Long = System.currentTimeMillis()): ChatSessionState {
-    val runs = session.runs.toMutableList()
-    if (runs.isNotEmpty()) {
-        val latest = runs.last()
-        runs[runs.lastIndex] = latest.copy(
-            status = if (hadError) RunStatus.Failed else RunStatus.Completed,
-            elapsedMs = if (latest.startedAt != null) nowMs - latest.startedAt else latest.elapsedMs,
+    val turns = session.turns.toMutableList()
+    val last = turns.lastOrNull()
+    val run = last?.run
+    if (last != null && run != null) {
+        turns[turns.lastIndex] = last.copy(
+            run = run.copy(
+                status = if (hadError) RunStatus.Failed else RunStatus.Completed,
+                elapsedMs = if (run.startedAt != null) nowMs - run.startedAt else run.elapsedMs,
+            )
         )
     }
     return commitStreamingBuffer(
-        session.copy(running = false, activeToolCalls = emptyList(), runs = runs),
+        session.copy(running = false, activeToolCalls = emptyList(), turns = turns),
     )
 }
 
 fun abortSessionRun(session: ChatSessionState, nowMs: Long = System.currentTimeMillis()): ChatSessionState {
-    val runs = session.runs.toMutableList()
-    if (runs.isNotEmpty()) {
-        val latest = runs.last()
-        if (latest.status == RunStatus.Working) {
-            runs[runs.lastIndex] = latest.copy(
+    val turns = session.turns.toMutableList()
+    val last = turns.lastOrNull()
+    val run = last?.run
+    if (last != null && run != null && run.status == RunStatus.Working) {
+        turns[turns.lastIndex] = last.copy(
+            run = run.copy(
                 status = RunStatus.Aborted,
-                elapsedMs = if (latest.startedAt != null) nowMs - latest.startedAt else latest.elapsedMs,
+                elapsedMs = if (run.startedAt != null) nowMs - run.startedAt else run.elapsedMs,
             )
-        }
+        )
     }
     return commitStreamingBuffer(
         session.copy(
             running = false,
             pendingQuestions = emptyList(),
             activeToolCalls = emptyList(),
-            runs = runs,
+            turns = turns,
         ),
     )
 }

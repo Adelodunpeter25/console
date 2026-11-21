@@ -5,16 +5,13 @@ import com.console.mobile.core.chat.PendingQuestion
 import com.console.mobile.core.chat.abortSessionRun
 import com.console.mobile.core.chat.applyChatEvent
 import com.console.mobile.core.chat.createChatSessionState
-import com.console.mobile.core.chat.ensureMessageIds
 import com.console.mobile.core.chat.finalizeSessionRun
 import com.console.mobile.core.chat.isAbortError
 import com.console.mobile.core.chat.newMessageId
-import com.console.mobile.core.chat.RunStatus
 import com.console.mobile.core.chat.toChatSnapshot
-import com.console.mobile.core.chat.reconstructRuns
-import com.console.mobile.core.chat.mergeLiveHistory
-import com.console.mobile.core.chat.prependOlderMessages
-import com.console.mobile.core.chat.withLiveRun
+import com.console.mobile.core.chat.RunActivityState
+import com.console.mobile.core.chat.RunStatus
+import com.console.mobile.core.chat.TranscriptTurn
 
 import com.console.mobile.core.util.mentionPaths
 import com.console.mobile.data.api.ConsoleApi
@@ -417,34 +414,25 @@ class ChatRepository(
         }
     }
 
-    fun loadMessages(
-        sessionId: String,
-        messages: List<AgentMessage>,
-        serverWakeRecords: List<com.console.mobile.core.chat.WakeRecord> = emptyList(),
-    ) {
-        if (messages.isEmpty()) return
-        val withIds = ensureMessageIds(messages)
+    fun loadTurns(sessionId: String, turns: List<TranscriptTurn>) {
+        if (turns.isEmpty()) return
         chats.update(sessionId) { current ->
-            val wakeRecords = mergeWakeRecords(serverWakeRecords, current.wakeRecords)
-            // The server's history is the source of truth even mid-run; the live
-            // stream only owns the in-flight buffers and the newest run's
-            // activity, which is re-paired with the latest prompt here.
             if (current.running) {
-                val merged = mergeLiveHistory(withIds, current.messages)
-                current.copy(
-                    messages = merged,
-                    wakeRecords = wakeRecords,
-                    runs = withLiveRun(merged, current.runs, wakeRecords = wakeRecords),
-                )
+                val serverIds = turns.mapTo(HashSet()) { it.id }
+                val localTail = current.turns.lastOrNull()?.takeIf { it.id !in serverIds && it.run?.status == RunStatus.Working }
+                val merged = if (localTail != null && turns.lastOrNull()?.run?.status != RunStatus.Working) {
+                    turns + localTail
+                } else {
+                    turns
+                }
+                current.copy(turns = merged)
             } else {
                 current.copy(
-                    messages = withIds,
+                    turns = turns,
                     streamingText = "",
                     streamingThinking = "",
                     activeToolCalls = emptyList(),
                     pendingQuestions = emptyList(),
-                    wakeRecords = wakeRecords,
-                    runs = reconstructRuns(withIds, wakeRecords),
                 )
             }
         }
@@ -458,36 +446,36 @@ class ChatRepository(
         chats.update(sessionId) { it.copy(loadingOlder = loading) }
     }
 
-    /**
-     * Prepend an older page. Runs are rebuilt from the whole list because
-     * [reconstructRuns] walks messages in order, so runs assembled from a
-     * partial tail would misattribute older tool calls. Existing message ids
-     * are already populated, so [ensureMessageIds] leaves them untouched and
-     * the LazyColumn keys stay stable across the prepend.
-     */
-    fun prependMessages(
-        sessionId: String,
-        older: List<AgentMessage>,
-        serverWakeRecords: List<com.console.mobile.core.chat.WakeRecord> = emptyList(),
-    ) {
+    fun prependTurns(sessionId: String, older: List<TranscriptTurn>) {
         if (older.isEmpty()) return
         chats.update(sessionId) { current ->
-            val wakeRecords = mergeWakeRecords(serverWakeRecords, current.wakeRecords)
-            prependOlderMessages(current.copy(wakeRecords = wakeRecords), older)
+            val seen = current.turns.mapTo(HashSet()) { it.id }
+            val fresh = older.filterNot { it.id in seen }
+            if (fresh.isEmpty()) current else current.copy(turns = fresh + current.turns)
         }
     }
 
-    private fun mergeWakeRecords(
-        server: List<com.console.mobile.core.chat.WakeRecord>,
-        local: List<com.console.mobile.core.chat.WakeRecord>,
-    ): List<com.console.mobile.core.chat.WakeRecord> {
-        if (server.isEmpty()) return local
-        val merged = server.toMutableList()
-        for (record in local) {
-            val dup = merged.any { kotlin.math.abs(it.at - record.at) <= 5_000L && it.message == record.message }
-            if (!dup) merged.add(record)
+    fun fetchToolResult(sessionId: String, messageId: String, callId: String) {
+        scope.launch {
+            try {
+                val full = withContext(Dispatchers.IO) { api.getToolResult(sessionId, messageId, callId) }
+                chats.update(sessionId) { current ->
+                    val updatedTurns = current.turns.map { turn ->
+                        val run = turn.run ?: return@map turn
+                        var changed = false
+                        val updatedEvents = run.events.map { ev ->
+                            if (ev is com.console.mobile.core.chat.ActivityEvent.ToolCallEvent && ev.call.id == callId) {
+                                changed = true
+                                ev.copy(result = full)
+                            } else ev
+                        }
+                        if (changed) turn.copy(run = run.copy(events = updatedEvents)) else turn
+                    }
+                    current.copy(turns = updatedTurns)
+                }
+            } catch (_: Exception) {
+            }
         }
-        return merged.sortedBy { it.at }
     }
 
     fun handleEvent(sessionId: String, event: AgentSessionEvent) {
@@ -565,13 +553,18 @@ class ChatRepository(
 
         if (attachments.isNotEmpty() && providerRepo?.supportsImages(view.sessionProvider, view.sessionModelId) == false) {
             chats.update(sessionId) { current ->
-                current.copy(
-                    messages = current.messages + AssistantMessage(
-                        id = newMessageId(),
-                        createdAt = System.currentTimeMillis(),
-                        content = listOf(TextPart("Error: The selected model '${view.sessionModelId}' does not support image attachments.")),
-                    ),
+                val errMsg = AssistantMessage(
+                    id = newMessageId(),
+                    createdAt = System.currentTimeMillis(),
+                    content = listOf(TextPart("Error: The selected model '${view.sessionModelId}' does not support image attachments.")),
                 )
+                val turns = current.turns.toMutableList()
+                if (turns.isEmpty()) {
+                    turns.add(TranscriptTurn(id = newMessageId(), createdAt = System.currentTimeMillis(), responses = listOf(errMsg)))
+                } else {
+                    turns[turns.lastIndex] = turns.last().let { it.copy(responses = it.responses + errMsg) }
+                }
+                current.copy(turns = turns)
             }
             return
         }
@@ -605,11 +598,6 @@ class ChatRepository(
                 activeToolCalls = emptyList(),
                 suggestions = emptyList(),
                 running = true,
-                runs = it.runs + com.console.mobile.core.chat.RunActivityState(
-                    runId = newMessageId(),
-                    startedAt = System.currentTimeMillis(),
-                    status = com.console.mobile.core.chat.RunStatus.Working,
-                ),
                 attachments = if (clearComposer) emptyList() else it.attachments,
             )
         }
@@ -836,16 +824,7 @@ class ChatRepository(
     fun attachServerRun(sessionId: String) {
         val current = chats.get(sessionId)
         if (current.running || controllers[sessionId]?.isActive == true) return
-        chats.update(sessionId) {
-            it.copy(
-                running = true,
-                runs = withLiveRun(
-                    it.messages,
-                    it.runs,
-                    wakeRecords = it.wakeRecords,
-                ),
-            )
-        }
+        chats.update(sessionId) { it.copy(running = true) }
         sessions.setStatus(sessionId, SessionStatus.Working)
         persistence?.setSuppress(true)
         try {
@@ -908,17 +887,31 @@ class ChatRepository(
 
     private fun onRunOpened(sessionId: String) {
         val pending = pendingRuns.remove(sessionId) ?: return
-        chats.update(sessionId) { it.copy(messages = it.messages + pending.message) }
+        val now = pending.message.createdAt ?: System.currentTimeMillis()
+        val turn = TranscriptTurn(
+            id = newMessageId(),
+            createdAt = now,
+            userMessage = pending.message,
+            run = RunActivityState(runId = newMessageId(), startedAt = now, status = RunStatus.Working),
+        )
+        chats.update(sessionId) { it.copy(turns = it.turns + turn) }
     }
 
     private fun markError(sessionId: String, msg: String) {
         chats.update(sessionId) { s ->
+            val errMsg = com.console.mobile.data.model.AssistantMessage(
+                id = newMessageId(),
+                createdAt = System.currentTimeMillis(),
+                content = listOf(com.console.mobile.data.model.TextPart("Error: $msg")),
+            )
+            val turns = s.turns.toMutableList()
+            if (turns.isEmpty()) {
+                turns.add(TranscriptTurn(id = newMessageId(), createdAt = System.currentTimeMillis(), responses = listOf(errMsg)))
+            } else {
+                turns[turns.lastIndex] = turns.last().let { it.copy(responses = it.responses + errMsg) }
+            }
             s.copy(
-                messages = s.messages + com.console.mobile.data.model.AssistantMessage(
-                    id = newMessageId(),
-                    createdAt = System.currentTimeMillis(),
-                    content = listOf(com.console.mobile.data.model.TextPart("Error: $msg")),
-                ),
+                turns = turns,
                 streamingText = "",
                 streamingThinking = "",
             )

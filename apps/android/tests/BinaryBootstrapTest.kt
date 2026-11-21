@@ -7,6 +7,7 @@ import console.v1.BackgroundWork as WireBackgroundWork
 import console.v1.SessionBootstrapResponse
 import console.v1.SessionHeader
 import console.v1.TodoItem
+import console.v1.TranscriptTurn
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -15,8 +16,12 @@ class BinaryBootstrapTest {
     fun decodesTheBinaryBootstrapEnvelope() {
         val wire = SessionBootstrapResponse(
             header_ = SessionHeader(id = "s1", title = "Demo"),
-            messages = listOf(
-                AgentMessage(message = AgentMessage.Message.User(AgentUserMessage(content = "Hello"))),
+            turns = listOf(
+                TranscriptTurn(
+                    id = "t1",
+                    created_at = 1000L,
+                    user_message = AgentMessage(message = AgentMessage.Message.User(AgentUserMessage(content = "Hello"))),
+                ),
             ),
             todos = listOf(TodoItem(id = 1, content = "task", status = "pending")),
             background_work = listOf(
@@ -35,9 +40,9 @@ class BinaryBootstrapTest {
         )
 
         assertEquals("s1", decoded.header_?.id)
-        assertEquals(1, decoded.messages.size)
-        val user = decoded.messages[0].message as AgentMessage.Message.User
-        assertEquals("Hello", user.value.content)
+        assertEquals(1, decoded.turns.size)
+        val turn = decoded.turns[0].toUi()
+        assertEquals("Hello", turn.userMessage?.content)
         assertEquals("task", decoded.todos[0].content)
         val work = decoded.background_work[0].toUi()
         assertEquals("w1", work.id)
@@ -49,8 +54,12 @@ class BinaryBootstrapTest {
     fun decodesBinaryHistoryPage() {
         val wire = console.v1.SessionMessagesPage(
             header_ = SessionHeader(id = "s2"),
-            messages = listOf(
-                AgentMessage(message = AgentMessage.Message.User(AgentUserMessage(content = "older"))),
+            turns = listOf(
+                TranscriptTurn(
+                    id = "t1",
+                    created_at = 1000L,
+                    user_message = AgentMessage(message = AgentMessage.Message.User(AgentUserMessage(content = "older"))),
+                ),
             ),
             has_more = true,
             next_cursor = 42L,
@@ -59,8 +68,8 @@ class BinaryBootstrapTest {
             console.v1.SessionMessagesPage.ADAPTER.encodeByteString(wire),
         )
         assertEquals("s2", decoded.header_?.id)
-        val user = decoded.messages[0].message as AgentMessage.Message.User
-        assertEquals("older", user.value.content)
+        val turn = decoded.turns[0].toUi()
+        assertEquals("older", turn.userMessage?.content)
         assertEquals(true, decoded.has_more)
         assertEquals(42L, decoded.next_cursor)
     }

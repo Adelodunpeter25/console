@@ -48,6 +48,7 @@ interface ConsoleApi {
     // sessions
     suspend fun getSessions(cwd: String? = null, projectId: String? = null, onlyDeleted: Boolean = false): List<SessionHeader>
     suspend fun getSession(id: String, limit: Int? = null, before: Long? = null): SessionDetailResponse
+    suspend fun getToolResult(sessionId: String, messageId: String, callId: String): com.console.mobile.data.model.ToolResult
     /** Header, first message page and every side panel in one request. */
     suspend fun getSessionBootstrap(id: String): com.console.mobile.data.model.SessionBootstrapResponse
     suspend fun getSessionPrompts(id: String): List<com.console.mobile.data.model.SessionPrompt>

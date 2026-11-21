@@ -26,7 +26,6 @@ import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.ChatSessionState
 import com.console.mobile.core.chat.createChatSessionState
 import com.console.mobile.core.chat.projectForSession
-import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.core.chat.runningBackgroundShells
 import com.console.mobile.core.util.changeSummary
 import com.console.mobile.data.model.SessionStatus
@@ -203,28 +202,16 @@ fun ChatScreen(
             }
     }
 
-    val messages = chat.messages
-    // Stable across input changes: capturing the draft here would hand every
-    // message bubble a new callback per keystroke and recompose the transcript.
+    val turns = chat.turns
     val onReply = remember(sessionId) {
         { quote: String -> AppContainer.chatRepository.appendQuote(sessionId, quote) }
     }
-    val displayMessages = remember(messages) { visibleMessages(messages) }
-    val runs = remember(messages, chat.runs, chat.wakeRecords) {
-        if (chat.runs.isNotEmpty()) chat.runs else reconstructRuns(messages, chat.wakeRecords)
-    }
-    val userRunMap = remember(displayMessages, runs) {
-        com.console.mobile.core.chat.buildUserRunMap(displayMessages, runs)
-    }
-    val assistantTurnChanges = remember(displayMessages, sessionChanges) {
-        buildAssistantTurnChangesMap(displayMessages, sessionChanges)
-    }
-    val latestUserIndex = remember(displayMessages) {
-        displayMessages.indexOfLast { it is com.console.mobile.data.model.UserMessage }
+    val turnChanges = remember(turns, sessionChanges) {
+        buildTurnChangesMap(turns, sessionChanges)
     }
     val isStreaming = chat.running && (chat.streamingText.isNotEmpty() || chat.streamingThinking.isNotEmpty() || chat.activeToolCalls.isNotEmpty())
     val hasPending = chat.pendingQuestions.isNotEmpty()
-    val hasMessages = messages.isNotEmpty()
+    val hasMessages = turns.isNotEmpty()
 
     val todos = chat.todoItems
     val (todoDone, todoTotal) = todoCounts(todos)
@@ -243,7 +230,7 @@ fun ChatScreen(
         }
     }
 
-    val chatTitle = remember(sessionId, messages, projectState.sessions) {
+    val chatTitle = remember(sessionId, turns, projectState.sessions) {
         val header = projectState.sessions.firstOrNull { it.id == sessionId }
         when {
             isNewChat -> "New chat"
@@ -265,11 +252,11 @@ fun ChatScreen(
     // and refetched only when a new prompt changes the newest user message.
     var promptsSheet by remember { mutableStateOf(false) }
     val promptList = AppContainer.sessionRepository.promptLists.collectAsStateWithLifecycle().value[sessionId]
-    val latestUserId = messages.lastOrNull { it is com.console.mobile.data.model.UserMessage }?.id
+    val latestUserId = turns.lastOrNull { it.userMessage != null }?.userMessage?.id
     LaunchedEffect(promptsSheet, sessionId, latestUserId) {
         if (promptsSheet) AppContainer.sessionRepository.ensurePrompts(sessionId, latestUserId)
     }
-    val latestDisplayMessages by rememberUpdatedState(displayMessages)
+    val latestTurns by rememberUpdatedState(turns)
 
     fun jumpToProjectTab(tab: MobileTab) {
         if (cwd != null) {
@@ -281,11 +268,11 @@ fun ChatScreen(
         onOpenTab(tab)
     }
 
-    val displaySize = displayMessages.size
+    val displaySize = turns.size
     val transcriptScroll = rememberChatTranscriptScroll(
         sessionId = sessionId,
         sessionReady = sessionDetailLoaded,
-        messagesLoaded = sessionDetailLoaded && chat.messages.isNotEmpty(),
+        messagesLoaded = sessionDetailLoaded && chat.turns.isNotEmpty(),
         displaySize = displaySize,
         hasMoreMessages = chat.hasMoreMessages,
         loadingOlder = chat.loadingOlder,
@@ -309,8 +296,8 @@ fun ChatScreen(
             if (!AppContainer.sessionRepository.loadUntilUserMessages(sessionId, fromEnd + 1)) return@launch
             // The loaded messages reach the list a frame or two later.
             repeat(10) { _ ->
-                val userIndexes = latestDisplayMessages.indices.filter {
-                    latestDisplayMessages[it] is com.console.mobile.data.model.UserMessage
+                val userIndexes = latestTurns.indices.filter {
+                    latestTurns[it].userMessage != null
                 }
                 val index = userIndexes.getOrNull(userIndexes.size - 1 - fromEnd) ?: -1
                 if (index >= 0 && userIndexes.size > fromEnd) {
@@ -329,12 +316,9 @@ fun ChatScreen(
             else -> {
                 ChatTranscript(
                     sessionId = sessionId,
-                    messages = displayMessages,
+                    turns = turns,
                     listState = transcriptScroll.listState,
-                    runs = runs,
-                    userRunMap = userRunMap,
-                    assistantTurnChanges = assistantTurnChanges,
-                    latestUserIndex = latestUserIndex,
+                    turnChanges = turnChanges,
                     running = chat.running,
                     isStreaming = isStreaming,
                     streamingText = chat.streamingText,
@@ -355,6 +339,9 @@ fun ChatScreen(
                     onOpenHtmlEditor = { path ->
                         AppContainer.appStateHolder.openFile(path, forceEditor = true)
                         onOpenTab(MobileTab.Files)
+                    },
+                    onExpandToolCall = { messageId, callId ->
+                        AppContainer.chatRepository.fetchToolResult(sessionId, messageId, callId)
                     },
                 )
                 ScrollThumb(

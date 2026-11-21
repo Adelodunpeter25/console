@@ -107,7 +107,8 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val sessionChangeAdapter by lazy { wireMoshi.adapter(SessionFileChange::class.java) }
     private val queuedPromptAdapter by lazy { wireMoshi.adapter(QueuedPrompt::class.java) }
     private val subagentAdapter by lazy { wireMoshi.adapter(SubagentInfo::class.java) }
-    private val messageMoshi by lazy { wireMoshi.adapter(console.v1.AgentMessage::class.java) }
+    private val turnMoshi by lazy { wireMoshi.adapter(console.v1.TranscriptTurn::class.java) }
+    private val toolResultMoshi by lazy { wireMoshi.adapter(console.v1.ToolResult::class.java) }
     private val todoAdapter by lazy { wireMoshi.adapter(TodoItem::class.java) }
     private val gitDiffAdapter by lazy { wireMoshi.adapter(GitDiffResponse::class.java) }
     private val gitStatusAdapter by lazy { wireMoshi.adapter(GitStatusSummary::class.java) }
@@ -169,38 +170,38 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             val page = console.v1.SessionMessagesPage.ADAPTER.decode(bytes.toByteString())
             return SessionDetailResponse(
                 header = page.header_ ?: throw ApiException("Failed to load session"),
-                messages = page.messages.mapNotNull { it.toUi() },
+                turns = page.turns.map { it.toUi() },
                 hasMore = page.has_more,
                 nextCursor = page.next_cursor,
-                wakeRecords = page.wake_records.map {
-                    com.console.mobile.core.chat.WakeRecord(message = it.message, at = it.at)
-                },
             )
         }
-        // JSON is the explicit opt-out; header and messages still decode
-        // through the shared schema, scalars read field by field.
         return decodeSessionDetail(http.unwrap(bytes.toString(Charsets.UTF_8), JsonObject.serializer(), "load session"))
+    }
+
+    override suspend fun getToolResult(sessionId: String, messageId: String, callId: String): com.console.mobile.data.model.ToolResult {
+        val (contentType, bytes) = http.getRaw(
+            "/api/sessions/${enc(sessionId)}/messages/${enc(messageId)}/results/${enc(callId)}",
+            "application/x-protobuf",
+        )
+        if (contentType.startsWith("application/x-protobuf")) {
+            return console.v1.ToolResult.ADAPTER.decode(bytes.toByteString()).toUi()
+        }
+        val obj = http.unwrap(bytes.toString(Charsets.UTF_8), JsonObject.serializer(), "load tool result")
+        return toolResultMoshi.fromJson(obj.toString())?.toUi()
+            ?: throw ApiException("Failed to decode tool result")
     }
 
     private fun decodeSessionDetail(obj: JsonObject): SessionDetailResponse {
         val header = obj["header"]?.let { sessionAdapter.fromJson(it.toString()) }
             ?: throw ApiException("Failed to load session")
-        // Rows are the canonical oneof shape; unparseable rows are skipped.
-        val messages = obj["messages"]?.jsonArray?.mapNotNull { item ->
-            runCatching { messageMoshi.fromJson(item.toString())?.toUi() }.getOrNull()
-        } ?: emptyList()
-        val wakeRecords = (obj["wakeRecords"] as? JsonArray)?.mapNotNull { item ->
-            val o = item as? JsonObject ?: return@mapNotNull null
-            val msg = o["message"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-            val at = o["at"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
-            com.console.mobile.core.chat.WakeRecord(message = msg, at = at)
+        val turns = obj["turns"]?.jsonArray?.mapNotNull { item ->
+            runCatching { turnMoshi.fromJson(item.toString())?.toUi() }.getOrNull()
         } ?: emptyList()
         return SessionDetailResponse(
             header = header,
-            messages = messages,
+            turns = turns,
             hasMore = obj["hasMore"]?.jsonPrimitive?.booleanOrNull ?: false,
             nextCursor = obj["nextCursor"]?.jsonPrimitive?.longOrNull,
-            wakeRecords = wakeRecords,
         )
     }
 
@@ -211,12 +212,9 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             return SessionBootstrapResponse(
                 detail = SessionDetailResponse(
                     header = wire.header_ ?: throw ApiException("Session bootstrap is missing its header"),
-                    messages = wire.messages.mapNotNull { it.toUi() },
+                    turns = wire.turns.map { it.toUi() },
                     hasMore = wire.has_more,
                     nextCursor = wire.next_cursor,
-                    wakeRecords = wire.wake_records.map {
-                        com.console.mobile.core.chat.WakeRecord(message = it.message, at = it.at)
-                    },
                 ),
                 changes = wire.changes,
                 todos = wire.todos,

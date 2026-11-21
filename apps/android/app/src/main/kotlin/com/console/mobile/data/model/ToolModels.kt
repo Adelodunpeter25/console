@@ -61,6 +61,10 @@ data class ToolResult(
     val visual: VisualArtifact? = null,
     /** Client-rendered HTML page artifact (see feature/chat/html). Never sent to a provider. */
     val html: HtmlArtifact? = null,
+    /** Length of a body the server left out of a history page; 0 when inline. */
+    val omittedSize: Int = 0,
+    /** Message holding the full body, used to fetch it on expand. */
+    val resultMessageId: String? = null,
 )
 
 /** A versioned visual spec riding on a tool result; the spec stays raw JSON until rendered. */

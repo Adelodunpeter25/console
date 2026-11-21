@@ -58,7 +58,12 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
  * gutter, subagent as markdown, everything else as monospace).
  */
 @Composable
-fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
+fun ToolCallRow(
+    call: ToolCall,
+    result: ToolResult?,
+    cwd: String?,
+    onExpandToolCall: (messageId: String, callId: String) -> Unit = { _, _ -> },
+) {
     var open by remember(call.id) { mutableStateOf(false) }
     val summary = toolCallSummary(call, cwd)
     val detail = result?.let { resultText(it).take(2000) }
@@ -72,7 +77,16 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
     val removed = diffs.sumOf { it.diff.removed }
     val filePath = remember(call.id, call.arguments) { argumentPath(call) ?: diffs.firstOrNull()?.path }
     Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.FieldRadius)).background(NewTheme.Card)) {
-        Row(modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable {
+                val next = !open
+                open = next
+                if (next && result != null && result.omittedSize > 0 && result.resultMessageId != null) {
+                    onExpandToolCall(result.resultMessageId, call.id)
+                }
+            }.padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             if (call.isFileTarget && filePath != null) {
                 // File rows carry the real file-type icon, like desktop.
                 FileIcon(filename = filePath, sizeDp = 16)

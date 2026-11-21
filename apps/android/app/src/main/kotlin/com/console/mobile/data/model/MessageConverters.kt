@@ -103,3 +103,50 @@ fun WireMessage.toUi(): AgentMessage? = when (val event = message) {
     )
     null -> null
 }
+
+private fun console.v1.RunStatus.toUi(): com.console.mobile.core.chat.RunStatus = when (this) {
+    console.v1.RunStatus.RUN_STATUS_WORKING -> com.console.mobile.core.chat.RunStatus.Working
+    console.v1.RunStatus.RUN_STATUS_ABORTED -> com.console.mobile.core.chat.RunStatus.Aborted
+    console.v1.RunStatus.RUN_STATUS_ERROR -> com.console.mobile.core.chat.RunStatus.Failed
+    else -> com.console.mobile.core.chat.RunStatus.Completed
+}
+
+internal fun console.v1.RunActivity.toUi(wakeLabel: String? = null): com.console.mobile.core.chat.RunActivityState =
+    com.console.mobile.core.chat.RunActivityState(
+        runId = run_id,
+        startedAt = started_at,
+        elapsedMs = elapsed_ms,
+        status = status.toUi(),
+        dividerLabel = wakeLabel,
+        events = events.mapNotNull { ev ->
+            when (val e = ev.event) {
+                is console.v1.RunActivityEvent.Event.Thinking ->
+                    com.console.mobile.core.chat.ActivityEvent.Thinking(ev.id, e.value)
+                is console.v1.RunActivityEvent.Event.Text ->
+                    com.console.mobile.core.chat.ActivityEvent.Text(ev.id, e.value)
+                is console.v1.RunActivityEvent.Event.ToolCall -> {
+                    val call = e.value.call?.toUi() ?: return@mapNotNull null
+                    val res = e.value.result?.toUi()?.let { r ->
+                        val size = e.value.result_size
+                        val msgId = e.value.result_message_id.takeIf { it.isNotEmpty() }
+                        if (size > 0 && msgId != null) r.copy(omittedSize = size, resultMessageId = msgId) else r
+                    }
+                    com.console.mobile.core.chat.ActivityEvent.ToolCallEvent(ev.id, call, res)
+                }
+                null -> null
+            }
+        },
+    )
+
+fun console.v1.TranscriptTurn.toUi(): com.console.mobile.core.chat.TranscriptTurn {
+    val user = user_message?.toUi() as? UserMessage
+    val resps = responses.mapNotNull { it.toUi() as? AssistantMessage }
+    return com.console.mobile.core.chat.TranscriptTurn(
+        id = id,
+        createdAt = created_at,
+        userMessage = user,
+        wakeLabel = wake_label,
+        run = run?.toUi(wake_label),
+        responses = resps,
+    )
+}

@@ -196,10 +196,9 @@ data class SessionPrompt(
 // in OkHttpConsoleApi.getSession (envelope + Moshi header + kotlinx messages).
 data class SessionDetailResponse(
     val header: console.v1.SessionHeader,
-    val messages: List<AgentMessage> = emptyList(),
+    val turns: List<com.console.mobile.core.chat.TranscriptTurn> = emptyList(),
     val hasMore: Boolean = false,
     val nextCursor: Long? = null,
-    val wakeRecords: List<com.console.mobile.core.chat.WakeRecord> = emptyList(),
 )
 
 // One-call chat open: `GET /api/sessions/:id/bootstrap`. Decoded manually in

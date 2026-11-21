@@ -88,7 +88,7 @@ fun buildGroupedProjectSections(
     // Drafts on 0-message chats group like any other session; a draft whose
     // chat has no server header yet gets an ephemeral one so the row survives.
     val draftEntries = draftSessions.filter { (id, s) ->
-        !isNewChatId(id) && s.messages.isEmpty() && isDraftSession(s)
+        !isNewChatId(id) && s.turns.isEmpty() && isDraftSession(s)
     }
     val draftUpdatedAt = draftEntries.mapValues { it.value.draftUpdatedAt }
 
