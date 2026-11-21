@@ -35,6 +35,9 @@ mod tool_activity;
 pub use tool_activity::{RunActivityBlock, compute_run_blocks, compute_run_blocks_with_boundaries};
 mod wake;
 
+type LoadToolResultHandler =
+    Rc<dyn Fn(String, String, &mut App) -> Task<Option<ToolResult>> + 'static>;
+
 type MarkdownViewCache = Rc<RefCell<HashMap<(usize, usize), Rc<RefCell<MarkdownView>>>>>;
 
 /// Most chat rows are short, while long Markdown rows are corrected after
@@ -188,6 +191,8 @@ pub struct TranscriptView {
     pub(crate) on_preview_image:
         Option<Rc<dyn Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static>>,
     on_view_subagent: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    load_tool_result: Option<LoadToolResultHandler>,
+    fetching_results: HashSet<String>,
     on_open_file_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     pub(crate) on_open_url_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     pub(crate) on_open_html_editor: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
@@ -264,6 +269,8 @@ impl TranscriptView {
             on_load_older: None,
             on_preview_image: None,
             on_view_subagent: None,
+            load_tool_result: None,
+            fetching_results: HashSet::new(),
             on_open_file_raw: None,
             on_open_url_raw: None,
             on_open_html_editor: None,

@@ -148,6 +148,11 @@ impl ConsoleDesktopApp {
                 entity.clone(),
                 pane_id_owned.clone(),
             );
+            super::super::transcript_wiring::wire_tool_result_for_pane(
+                transcript,
+                entity.clone(),
+                pane_id_owned.clone(),
+            );
             super::super::transcript_wiring::wire_fork_for_pane(
                 transcript,
                 entity.clone(),

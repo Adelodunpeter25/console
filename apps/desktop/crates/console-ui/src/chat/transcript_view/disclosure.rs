@@ -58,6 +58,46 @@ impl TranscriptView {
         cx.notify();
     }
 
+    /// Pull the body of a result the server left out of the history page, then
+    /// swap it into the message list.
+    fn fetch_omitted_result(&mut self, call_id: String, cx: &mut Context<Self>) {
+        let Some(load) = self.load_tool_result.clone() else {
+            return;
+        };
+        let Some(message_id) = self.messages.iter().find_map(|message| match message {
+            AgentMessage::ToolResult { results, .. } => results
+                .iter()
+                .find(|r| r.tool_call_id == call_id && r.omitted_size > 0)
+                .and_then(|r| r.result_message_id.clone()),
+            _ => None,
+        }) else {
+            return;
+        };
+        if !self.fetching_results.insert(call_id.clone()) {
+            return;
+        }
+        let task = load(message_id, call_id.clone(), cx);
+        cx.spawn(async move |this, cx| {
+            let full = task.await;
+            let _ = this.update(cx, |this, cx| {
+                this.fetching_results.remove(&call_id);
+                let Some(full) = full else { return };
+                for message in this.messages.iter_mut() {
+                    if let AgentMessage::ToolResult { results, .. } = message
+                        && let Some(slot) = results.iter_mut().find(|r| r.tool_call_id == call_id)
+                    {
+                        *slot = full;
+                        break;
+                    }
+                }
+                this.invalidate_activity_cache();
+                this.refresh_list();
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     pub(crate) fn apply_tool_calls_action(
         &mut self,
         action: ToolCallsAction,
@@ -77,7 +117,11 @@ impl TranscriptView {
             }
             ToolCallsAction::ToggleCall { call_id, expanded } => {
                 if expanded {
-                    state.expanded_calls.insert(call_id);
+                    state.expanded_calls.insert(call_id.clone());
+                    drop(state);
+                    self.fetch_omitted_result(call_id, cx);
+                    cx.notify();
+                    return;
                 } else {
                     state.expanded_calls.remove(&call_id);
                 }

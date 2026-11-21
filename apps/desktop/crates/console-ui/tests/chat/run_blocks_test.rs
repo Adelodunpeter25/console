@@ -52,6 +52,8 @@ fn tool_result(call_id: &str, created_at: i64) -> AgentMessage {
             is_error: Some(false),
             visual: None,
             html: None,
+            omitted_size: 0,
+            result_message_id: None,
         }],
         created_at: Some(created_at),
     }

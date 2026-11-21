@@ -415,6 +415,13 @@ pub struct ToolResult {
     /// Client-rendered HTML page artifact. Never sent to a model provider.
     #[serde(default)]
     pub html: Option<HtmlArtifact>,
+    /// Length of a body the server left out of a history page; 0 when the
+    /// content is inline.
+    #[serde(default)]
+    pub omitted_size: u32,
+    /// Message holding the full body, used to fetch it on expand.
+    #[serde(default)]
+    pub result_message_id: Option<String>,
 }
 
 /// A versioned visual spec riding on a tool result; the spec stays raw JSON
@@ -472,6 +479,8 @@ impl ToolResult {
             is_error: msg.is_error,
             visual: visual_from_proto(msg),
             html: html_from_proto(msg),
+            omitted_size: 0,
+            result_message_id: None,
         }
     }
 }

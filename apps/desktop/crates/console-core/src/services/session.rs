@@ -318,6 +318,42 @@ impl SessionService {
         }
     }
 
+    /// `GET /api/sessions/:id/messages/:messageId/results/:callId` — the full
+    /// body of a tool result that history pages leave out.
+    pub async fn get_tool_result(
+        &self,
+        id: &str,
+        message_id: &str,
+        call_id: &str,
+    ) -> Result<ToolResult> {
+        let url = self
+            .transport
+            .url(&format!(
+                "/api/sessions/{}/messages/{}/results/{}",
+                id,
+                urlencoding::encode(message_id),
+                urlencoding::encode(call_id)
+            ))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get tool result")?;
+        let body: ApiResponse<console_proto::ToolResult> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse tool result response")?;
+        match (body.success, body.data) {
+            (true, Some(data)) => Ok(ToolResult::from_proto(&data)),
+            (_, _) => Err(anyhow!(body.error.unwrap_or_else(|| "Failed to load tool result".into()))),
+        }
+    }
+
     /// `GET /api/sessions/:id/changes/diff` — cached unified diff text for a
     /// single file change, scoped to `(path, turn_index)`. Avoids any git
     /// subprocess call; the diff is served straight from the DB.

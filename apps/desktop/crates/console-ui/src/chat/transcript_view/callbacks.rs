@@ -40,6 +40,15 @@ impl TranscriptView {
         self.on_preview_image = Some(Rc::new(handler));
     }
 
+    /// Wire the loader for tool-result bodies that history pages omit. Called
+    /// with (message id, call id) when such a call is expanded.
+    pub fn set_load_tool_result(
+        &mut self,
+        handler: impl Fn(String, String, &mut App) -> gpui::Task<Option<ToolResult>> + 'static,
+    ) {
+        self.load_tool_result = Some(Rc::new(handler));
+    }
+
     pub fn set_on_view_subagent(
         &mut self,
         handler: impl Fn(String, &mut Window, &mut App) + 'static,

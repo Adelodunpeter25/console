@@ -225,10 +225,50 @@ fn wire_open_url(transcript: &mut TranscriptView, entity: WeakEntity<ConsoleDesk
     });
 }
 
+/// Fetch the body of a tool result that history pages omit.
+pub(crate) fn wire_tool_result_for_pane(
+    transcript: &mut TranscriptView,
+    entity: WeakEntity<ConsoleDesktopApp>,
+    pane_id: String,
+) {
+    transcript.set_load_tool_result(move |message_id, call_id, cx| {
+        let target = entity.upgrade().and_then(|app| {
+            let app = app.read(cx);
+            app.active_session_for_pane(&pane_id)
+                .map(|session_id| (app.client.clone(), session_id))
+        });
+        cx.spawn(async move |_cx| {
+            let (client, session_id) = target?;
+            client
+                .sessions
+                .get_tool_result(&session_id, &message_id, &call_id)
+                .await
+                .ok()
+        })
+    });
+}
+
 pub(crate) fn wire_view_subagent(
     transcript: &mut TranscriptView,
     entity: WeakEntity<ConsoleDesktopApp>,
 ) {
+    let tool_entity = entity.clone();
+    transcript.set_load_tool_result(move |message_id, call_id, cx| {
+        let target = tool_entity.upgrade().and_then(|app| {
+            let app = app.read(cx);
+            let pane_id = app.active_pane_id.clone().unwrap_or_else(|| "pane-main".to_string());
+            app.active_session_for_pane(&pane_id)
+                .map(|session_id| (app.client.clone(), session_id))
+        });
+        cx.spawn(async move |_cx| {
+            let (client, session_id) = target?;
+            client
+                .sessions
+                .get_tool_result(&session_id, &message_id, &call_id)
+                .await
+                .ok()
+        })
+    });
     transcript.set_on_view_subagent(move |_call_id, window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {

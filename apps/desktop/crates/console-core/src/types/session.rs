@@ -134,8 +134,13 @@ pub fn turns_to_messages(turns: Vec<console_proto::TranscriptTurn>) -> Vec<Agent
                             tok_per_sec: None,
                         });
                         if let Some(result) = run_call.result.as_ref() {
+                            let mut result = ToolResult::from_proto(result);
+                            result.omitted_size = run_call.result_size;
+                            if run_call.result_size > 0 && !run_call.result_message_id.is_empty() {
+                                result.result_message_id = Some(run_call.result_message_id.clone());
+                            }
                             out.push(AgentMessage::ToolResult {
-                                results: vec![ToolResult::from_proto(result)],
+                                results: vec![result],
                                 created_at: Some(at),
                             });
                         }
