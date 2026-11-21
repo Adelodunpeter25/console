@@ -118,6 +118,32 @@ func TestOpenTurnIsWorkingAndMissingResultStaysUnresolved(t *testing.T) {
 	}
 }
 
+func TestInactiveTurnMissingResultSynthesizesInterruptedError(t *testing.T) {
+	s, _ := partsStore(t)
+	h := partsSession(t, s)
+	if err := s.AppendMessages(h.ID, []types.AgentMessage{userMsg("u1", "go"), callMsg("a1", "c1")}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := s.LoadTurns(h.ID, 0, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := page.Turns[0].GetRun()
+	if len(run.GetEvents()) != 1 {
+		t.Fatalf("events = %d, want 1", len(run.GetEvents()))
+	}
+	tc := run.GetEvents()[0].GetToolCall()
+	if tc.GetResult() == nil {
+		t.Fatal("missing result must be synthesized for inactive turn")
+	}
+	if !tc.GetResult().GetIsError() {
+		t.Fatal("synthesized result must have is_error = true")
+	}
+	if !strings.Contains(string(tc.GetResult().GetContent()), "interrupted") {
+		t.Fatalf("result content = %s, want interrupted message", string(tc.GetResult().GetContent()))
+	}
+}
+
 func TestLargeResultIsOmittedAndFetchedOnDemand(t *testing.T) {
 	s, _ := partsStore(t)
 	h := partsSession(t, s)

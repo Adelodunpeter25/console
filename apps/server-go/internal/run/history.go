@@ -6,10 +6,15 @@ package run
 
 import (
 	"encoding/json"
+	"log/slog"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
+
+const interruptedToolText = "Tool execution was interrupted (server stopped or restarted)."
 
 func DecodeHistory(stored []json.RawMessage) []any {
 	out := make([]any, 0, len(stored))
@@ -46,7 +51,148 @@ func (s *Service) LoadHistory(sessionID string) ([]any, error) {
 			out = append(out, msg)
 		}
 	}
-	return out, nil
+	return s.healHistory(sessionID, out)
+}
+
+func (s *Service) healHistory(sessionID string, history []any) ([]any, error) {
+	healed, changed := HealHistoryMessages(history)
+	if !changed || s.sessions == nil || s.IsActive(sessionID) {
+		return healed, nil
+	}
+	msgs := make([]types.AgentMessage, 0, len(healed))
+	for _, m := range healed {
+		protoBytes, err := loop.ToProtoBytes(m)
+		if err != nil {
+			continue
+		}
+		role := ""
+		id := ""
+		switch msg := m.(type) {
+		case loop.UserMessage:
+			role = string(loop.RoleUser)
+		case *loop.UserMessage:
+			role = string(loop.RoleUser)
+		case loop.AssistantMessage:
+			role = string(loop.RoleAssistant)
+			id = msg.ID
+		case *loop.AssistantMessage:
+			role = string(loop.RoleAssistant)
+			id = msg.ID
+		case loop.ToolResultMessage:
+			role = string(loop.RoleToolResult)
+		case *loop.ToolResultMessage:
+			role = string(loop.RoleToolResult)
+		}
+		if id == "" {
+			id = "msg_" + randomHex(16)
+		}
+		msgs = append(msgs, types.AgentMessage{
+			ID:   id,
+			Role: role,
+			Data: protoBytes,
+		})
+	}
+	if err := s.sessions.ReplaceMessages(sessionID, msgs); err != nil {
+		slog.Warn("heal history: replace messages failed", "session", sessionID, "error", err)
+	}
+	return healed, nil
+}
+
+// HealHistoryMessages inspects decoded history and ensures every assistant message
+// that contains tool calls is immediately followed by a tool-result message covering
+// all of its calls. Any missing results are filled with interrupted error results.
+func HealHistoryMessages(history []any) ([]any, bool) {
+	out := make([]any, 0, len(history))
+	changed := false
+	for i := 0; i < len(history); i++ {
+		msg := history[i]
+		out = append(out, msg)
+
+		asst, ok := asAssistant(msg)
+		if !ok {
+			continue
+		}
+		calls := assistantToolCalls(asst)
+		if len(calls) == 0 {
+			continue
+		}
+
+		if i+1 < len(history) {
+			if toolRes, ok := asToolResult(history[i+1]); ok {
+				answered := map[string]bool{}
+				for _, r := range toolRes.Results {
+					answered[r.ToolCallID] = true
+				}
+				var missing []tools.ToolResult
+				for _, c := range calls {
+					if !answered[c.ID] {
+						missing = append(missing, tools.ToolResult{
+							ToolCallID: c.ID,
+							ToolName:   c.Name,
+							Content:    interruptedToolText,
+							IsError:    true,
+						})
+					}
+				}
+				if len(missing) > 0 {
+					changed = true
+					toolRes.Results = append(toolRes.Results, missing...)
+					history[i+1] = toolRes
+				}
+				continue
+			}
+		}
+
+		changed = true
+		resMsg := loop.ToolResultMessage{
+			Role:    loop.RoleToolResult,
+			Results: make([]tools.ToolResult, 0, len(calls)),
+		}
+		for _, c := range calls {
+			resMsg.Results = append(resMsg.Results, tools.ToolResult{
+				ToolCallID: c.ID,
+				ToolName:   c.Name,
+				Content:    interruptedToolText,
+				IsError:    true,
+			})
+		}
+		out = append(out, resMsg)
+	}
+	return out, changed
+}
+
+func asAssistant(msg any) (loop.AssistantMessage, bool) {
+	switch m := msg.(type) {
+	case loop.AssistantMessage:
+		return m, true
+	case *loop.AssistantMessage:
+		if m != nil {
+			return *m, true
+		}
+	}
+	return loop.AssistantMessage{}, false
+}
+
+func asToolResult(msg any) (loop.ToolResultMessage, bool) {
+	switch m := msg.(type) {
+	case loop.ToolResultMessage:
+		return m, true
+	case *loop.ToolResultMessage:
+		if m != nil {
+			return *m, true
+		}
+	}
+	return loop.ToolResultMessage{}, false
+}
+
+func assistantToolCalls(asst loop.AssistantMessage) []tools.ToolCall {
+	var calls []tools.ToolCall
+	for _, p := range asst.Content {
+		if tc, ok := p.(loop.ToolCallPart); ok {
+			calls = append(calls, tc.Call)
+		}
+	}
+	return calls
 }
 
 // decodeAssistantText extracts concatenated non-blank text parts from a

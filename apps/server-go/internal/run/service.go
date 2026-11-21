@@ -436,18 +436,27 @@ func (s *Service) Abort(sessionID string) bool {
 	return true
 }
 
-// AbortAll cancels every active run (server shutdown). Best-effort: it
-// signals cancellation and returns immediately without waiting for the
-// runs to settle.
+// AbortAll cancels every active run (server shutdown). It signals cancellation
+// and waits briefly for in-flight runs to settle and persist cancelled tool results.
 func (s *Service) AbortAll() {
 	s.mu.Lock()
 	ids := make([]string, 0, len(s.active))
-	for id := range s.active {
+	dones := make([]chan struct{}, 0, len(s.active))
+	for id, ar := range s.active {
 		ids = append(ids, id)
+		dones = append(dones, ar.done)
 	}
 	s.mu.Unlock()
 	for _, id := range ids {
 		s.Abort(id)
+	}
+	timeout := time.After(2 * time.Second)
+	for _, done := range dones {
+		select {
+		case <-done:
+		case <-timeout:
+			return
+		}
 	}
 }
 

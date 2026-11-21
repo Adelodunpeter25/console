@@ -170,7 +170,13 @@ func (s *Service) ToolResult(sessionID, messageID, callID string) (*consolev1.To
 		return nil, err
 	}
 	if len(rows) == 0 {
-		return nil, ErrToolResultNotFound
+		isErr := true
+		rawContent, _ := json.Marshal("Tool execution was interrupted (server stopped or restarted).")
+		return &consolev1.ToolResult{
+			ToolCallId: callID,
+			Content:    rawContent,
+			IsError:    &isErr,
+		}, nil
 	}
 	bodies := s.materialize(sessionID, projectIDFrom(header.ProjectID), conn, rows)
 	if bodies[0] == "" {
@@ -275,14 +281,33 @@ func AssembleTurns(rows []RowMessage, active bool) []*consolev1.TranscriptTurn {
 	}
 	finish()
 
+	var isWorkingTurn bool
 	if active && len(turns) > 0 {
 		run := turns[len(turns)-1].Run
 		run.Status = consolev1.RunStatus_RUN_STATUS_WORKING
 		run.ElapsedMs = 0
+		isWorkingTurn = true
 	}
-	for _, t := range turns {
+	for i, t := range turns {
 		if t.Run != nil && len(t.Run.Events) == 0 && t.Run.Status != consolev1.RunStatus_RUN_STATUS_WORKING {
 			t.Run = nil
+			continue
+		}
+		if t.Run != nil && (!isWorkingTurn || i < len(turns)-1) {
+			for _, ev := range t.Run.Events {
+				if tc := ev.GetToolCall(); tc != nil && tc.Result == nil {
+					isErr := true
+					rawContent, _ := json.Marshal("Tool execution was interrupted (server stopped or restarted).")
+					toolName := tc.Call.GetName()
+					tc.Result = &consolev1.ToolResult{
+						ToolCallId: tc.Call.GetId(),
+						ToolName:   &toolName,
+						Content:    rawContent,
+						IsError:    &isErr,
+					}
+					tc.ResultSize = uint32(len(rawContent))
+				}
+			}
 		}
 	}
 	return turns

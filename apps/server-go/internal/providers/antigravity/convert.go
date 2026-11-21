@@ -223,7 +223,36 @@ func ConvertMessages(messages []any, opts ConvertMessagesOptions) []GeminiConten
 		}
 	}
 
-	// 4. Sanitize function responses: every functionResponse needs a
+	// 4. Sanitize function calls: every functionCall in a model turn must have
+	// a matching functionResponse in the immediately following user turn.
+	for i := 0; i < len(merged)-1; i++ {
+		if merged[i].Role != "model" || merged[i+1].Role != "user" {
+			continue
+		}
+		hasResponse := map[string]bool{}
+		for _, part := range merged[i+1].Parts {
+			if fr, ok := part["functionResponse"].(map[string]any); ok {
+				if id, _ := fr["id"].(string); id != "" {
+					hasResponse[id] = true
+				}
+			}
+		}
+		var missingParts []map[string]any
+		for _, part := range merged[i].Parts {
+			if fc, ok := part["functionCall"].(map[string]any); ok {
+				id, _ := fc["id"].(string)
+				name, _ := fc["name"].(string)
+				if id != "" && !hasResponse[id] {
+					missingParts = append(missingParts, functionResponsePart(name, id, "Tool execution was interrupted."))
+				}
+			}
+		}
+		if len(missingParts) > 0 {
+			merged[i+1].Parts = append(missingParts, merged[i+1].Parts...)
+		}
+	}
+
+	// 5. Sanitize function responses: every functionResponse needs a
 	// matching functionCall in the immediately preceding model turn.
 	for i := range merged {
 		if merged[i].Role != "user" {

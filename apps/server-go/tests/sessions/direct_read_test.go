@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -101,6 +102,58 @@ func TestHeaderOnlyReadBypassesMessageRebuild(t *testing.T) {
 	}
 	if header == nil || header.ID != h.ID || header.Title != h.Title {
 		t.Fatalf("unexpected header: %+v", header)
+	}
+}
+
+func TestLoadHistoryHealsInterruptedToolCalls(t *testing.T) {
+	s, _ := partsStore(t)
+	h := partsSession(t, s)
+
+	// An assistant turn with a tool call, but NO tool result (simulating a crash or restart).
+	brokenMessages := []types.AgentMessage{
+		{
+			ID:   "u1",
+			Role: "user",
+			Data: []byte(`{"user":{"content":"do something"}}`),
+		},
+		{
+			ID:   "a1",
+			Role: "assistant",
+			Data: []byte(`{"assistant":{"id":"a1","content":[{"toolCall":{"id":"tc1","name":"bash","arguments":"` + enc(`{"command":"sleep 5"}`) + `"}}],"stopReason":"toolUse"}}`),
+		},
+	}
+	if err := s.AppendMessages(h.ID, brokenMessages); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	runSvc := run.NewService(s)
+	healedHistory, err := runSvc.LoadHistory(h.ID)
+	if err != nil {
+		t.Fatalf("LoadHistory: %v", err)
+	}
+
+	if len(healedHistory) != 3 {
+		t.Fatalf("expected 3 messages after healing, got %d: %+v", len(healedHistory), healedHistory)
+	}
+
+	toolRes, ok := healedHistory[2].(loop.ToolResultMessage)
+	if !ok {
+		t.Fatalf("expected loop.ToolResultMessage at index 2, got %T", healedHistory[2])
+	}
+	if len(toolRes.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(toolRes.Results))
+	}
+	if !toolRes.Results[0].IsError {
+		t.Errorf("expected is_error: true on healed result")
+	}
+
+	// Verify the database itself was healed (a second load finds the persisted results)
+	secondLoad, err := runSvc.LoadHistory(h.ID)
+	if err != nil {
+		t.Fatalf("second LoadHistory: %v", err)
+	}
+	if len(secondLoad) != 3 {
+		t.Fatalf("expected 3 messages persisted in db, got %d", len(secondLoad))
 	}
 }
 

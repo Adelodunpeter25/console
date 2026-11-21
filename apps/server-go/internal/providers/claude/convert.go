@@ -250,6 +250,39 @@ func ConvertMessages(messages []any, retention loop.CacheRetention) []ClaudeMess
 		}
 	}
 
+	// Sanitize tool uses: every tool_use in an assistant turn must have a
+	// matching tool_result in the immediately following user turn; missing results
+	// are synthesized as errors so Claude never rejects the request with 400.
+	for i := 0; i < len(merged)-1; i++ {
+		if merged[i].Role != "assistant" || merged[i+1].Role != "user" {
+			continue
+		}
+		hasResult := map[string]bool{}
+		for _, block := range merged[i+1].Content {
+			if block["type"] == "tool_result" {
+				if id, _ := block["tool_use_id"].(string); id != "" {
+					hasResult[id] = true
+				}
+			}
+		}
+		var missingResults []map[string]any
+		for _, block := range merged[i].Content {
+			if block["type"] == "tool_use" {
+				if id, _ := block["id"].(string); id != "" && !hasResult[id] {
+					missingResults = append(missingResults, map[string]any{
+						"type":        "tool_result",
+						"tool_use_id": id,
+						"content":     "Tool execution was interrupted.",
+						"is_error":    true,
+					})
+				}
+			}
+		}
+		if len(missingResults) > 0 {
+			merged[i+1].Content = append(missingResults, merged[i+1].Content...)
+		}
+	}
+
 	// Sanitize tool results: every tool_result needs a matching tool_use in
 	// the immediately preceding assistant turn; orphans become text.
 	for i := range merged {
