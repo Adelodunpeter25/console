@@ -33,6 +33,7 @@ data class ToolCall(
     val label: String? = null,
     val kindFlags: Int? = null,
     val icon: String? = null,
+    val summary: String? = null,
 ) {
     private fun flag(bit: Int) = kindFlags?.let { it and bit != 0 } ?: false
 

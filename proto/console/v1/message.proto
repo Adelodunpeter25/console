@@ -90,6 +90,9 @@ message ToolCall {
   optional string label = 5;
   optional uint32 kind_flags = 6;
   optional string icon = 7;
+  // Server-derived one-line detail from the call arguments: target path,
+  // command, memory query, script calls, etc. Absent in old sessions.
+  optional string summary = 8;
 }
 
 message ImagePart {

@@ -350,6 +350,43 @@ func ToolIconKey(name string) string {
 	}
 }
 
+// ToolCallSummary derives the one-line detail shown beside a tool's label.
+// It mirrors the argument summaries previously computed by clients so the
+// server is the single source of truth for tool-call presentation.
+func ToolCallSummary(name string, arguments json.RawMessage) string {
+	if len(arguments) == 0 { return "" }
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(arguments, &obj); err != nil { return "" }
+	str := func(keys ...string) string {
+		for _, k := range keys {
+			if raw, ok := obj[k]; ok {
+				var s string
+				if json.Unmarshal(raw, &s) == nil && s != "" { return s }
+			}
+		}
+		return ""
+	}
+	if s := str("path", "filePath", "targetFile", "absolutePath"); s != "" { return codeTruncate(s, 72) }
+	if name == "bashJob" || name == "bash_job" {
+		action := str("action"); if action == "" { action = "status" }
+		if id := str("jobId"); id != "" { return codeTruncate(action+" "+id, 72) }
+		return action
+	}
+	if name == "memory" {
+		op := str("op"); if op == "" { op = "memory" }
+		if q := str("query"); q != "" { return codeTruncate(op+" \""+q+"\"", 72) }
+		if c := str("content"); c != "" { return codeTruncate(op+" \""+codeTruncate(c, 60)+"\"", 72) }
+		return op
+	}
+	if name == "loadTools" { return codeTruncate(str("group"), 72) }
+	if name == "code" || name == "console" || name == "computer" {
+		if code := str("code"); code != "" { return codeScriptLabel(code) }
+	}
+	for _, k := range []string{"command", "pattern", "query", "url", "directory", "question"} {
+		if s := str(k); s != "" { return codeTruncate(s, 72) }
+	}
+	return ""
+}
 // ToolKindFlags packs the classification predicates into the wire bitmask.
 func ToolKindFlags(name string) uint32 {
 	var flags uint32

@@ -582,9 +582,12 @@ type ToolCall struct {
 	// write, 4 read, 8 file-target, 16 subagent), and the icon key from the
 	// server's activity-icon table. Absent in old stored sessions; clients
 	// fall back to their native tables there.
-	Label         *string `protobuf:"bytes,5,opt,name=label,proto3,oneof" json:"label,omitempty"`
-	KindFlags     *uint32 `protobuf:"varint,6,opt,name=kind_flags,json=kindFlags,proto3,oneof" json:"kind_flags,omitempty"`
-	Icon          *string `protobuf:"bytes,7,opt,name=icon,proto3,oneof" json:"icon,omitempty"`
+	Label     *string `protobuf:"bytes,5,opt,name=label,proto3,oneof" json:"label,omitempty"`
+	KindFlags *uint32 `protobuf:"varint,6,opt,name=kind_flags,json=kindFlags,proto3,oneof" json:"kind_flags,omitempty"`
+	Icon      *string `protobuf:"bytes,7,opt,name=icon,proto3,oneof" json:"icon,omitempty"`
+	// Server-derived one-line detail from the call arguments: target path,
+	// command, memory query, script calls, etc. Absent in old sessions.
+	Summary       *string `protobuf:"bytes,8,opt,name=summary,proto3,oneof" json:"summary,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -664,6 +667,13 @@ func (x *ToolCall) GetKindFlags() uint32 {
 func (x *ToolCall) GetIcon() string {
 	if x != nil && x.Icon != nil {
 		return *x.Icon
+	}
+	return ""
+}
+
+func (x *ToolCall) GetSummary() string {
+	if x != nil && x.Summary != nil {
+		return *x.Summary
 	}
 	return ""
 }
@@ -1684,7 +1694,7 @@ const file_console_v1_message_proto_rawDesc = "" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12!\n" +
 	"\tsignature\x18\x02 \x01(\tH\x00R\tsignature\x88\x01\x01B\f\n" +
 	"\n" +
-	"_signature\"\x8e\x02\n" +
+	"_signature\"\xb9\x02\n" +
 	"\bToolCall\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
@@ -1693,11 +1703,14 @@ const file_console_v1_message_proto_rawDesc = "" +
 	"\x05label\x18\x05 \x01(\tH\x01R\x05label\x88\x01\x01\x12\"\n" +
 	"\n" +
 	"kind_flags\x18\x06 \x01(\rH\x02R\tkindFlags\x88\x01\x01\x12\x17\n" +
-	"\x04icon\x18\a \x01(\tH\x03R\x04icon\x88\x01\x01B\x14\n" +
+	"\x04icon\x18\a \x01(\tH\x03R\x04icon\x88\x01\x01\x12\x1d\n" +
+	"\asummary\x18\b \x01(\tH\x04R\asummary\x88\x01\x01B\x14\n" +
 	"\x12_thought_signatureB\b\n" +
 	"\x06_labelB\r\n" +
 	"\v_kind_flagsB\a\n" +
-	"\x05_icon\"<\n" +
+	"\x05_iconB\n" +
+	"\n" +
+	"\b_summary\"<\n" +
 	"\tImagePart\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\tR\x04data\x12\x1b\n" +
 	"\tmime_type\x18\x02 \x01(\tR\bmimeType\"\xe6\x01\n" +

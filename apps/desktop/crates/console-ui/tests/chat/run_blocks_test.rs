@@ -47,6 +47,7 @@ fn tool_event(call_id: &str, with_result: bool) -> ActivityEvent {
             label: None,
             kind_flags: None,
             icon: None,
+            summary: None,
         },
         result: with_result.then(|| ToolResult {
             tool_call_id: call_id.to_string(),

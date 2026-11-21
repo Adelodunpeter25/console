@@ -337,6 +337,8 @@ pub struct ToolCall {
     pub kind_flags: Option<u32>,
     #[serde(default)]
     pub icon: Option<String>,
+    #[serde(default)]
+    pub summary: Option<String>,
 }
 
 // Kind flag bits matching the server's tools.ToolKindFlags
@@ -359,6 +361,7 @@ impl ToolCall {
             label: msg.label.clone(),
             kind_flags: msg.kind_flags,
             icon: msg.icon.clone(),
+            summary: msg.summary.clone(),
         }
     }
 

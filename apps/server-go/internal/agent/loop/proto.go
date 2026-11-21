@@ -199,7 +199,8 @@ func AssistantToProto(m AssistantMessage) *consolev1.AgentAssistantMessage {
 			label := tools.ToolCallLabel(p.Call.Name, p.Call.Arguments)
 			flags := tools.ToolKindFlags(p.Call.Name)
 			icon := tools.ToolIconKey(p.Call.Name)
-			call.Label, call.KindFlags, call.Icon = &label, &flags, &icon
+			summary := tools.ToolCallSummary(p.Call.Name, p.Call.Arguments)
+			call.Label, call.KindFlags, call.Icon, call.Summary = &label, &flags, &icon, &summary
 			out.Content = append(out.Content, &consolev1.AssistantContentPart{
 				Part: &consolev1.AssistantContentPart_ToolCall{ToolCall: call},
 			})

@@ -125,3 +125,18 @@ func TestWritePlanIsNotClassedAsAFileWrite(t *testing.T) {
 		t.Fatalf("writePlan flags = %d, want 0", flags)
 	}
 }
+
+func TestToolCallSummary(t *testing.T) {
+	cases := []struct{ name, args, want string }{
+		{"read_file", `{"path":"a.txt"}`, "a.txt"},
+		{"bash", `{"command":"git status"}`, "git status"},
+		{"memory", `{"op":"search","query":"foo"}`, "search \"foo\""},
+		{"code", `{"code":"console.sessions.list(); console.sessions.read({})"}`, "console.sessions.list, console.sessions.read"},
+		{"code", `{}`, ""},
+	}
+	for _, c := range cases {
+		if got := tools.ToolCallSummary(c.name, []byte(c.args)); got != c.want {
+			t.Errorf("ToolCallSummary(%q, %q) = %q, want %q", c.name, c.args, got, c.want)
+		}
+	}
+}
