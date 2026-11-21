@@ -1108,6 +1108,11 @@ impl ConsoleDesktopApp {
                                 .active_pane_id
                                 .clone()
                                 .unwrap_or_else(|| pane_id.clone());
+                            // The prompt and its images are in the transcript
+                            // now; the pane that opened the new chat must not
+                            // keep the card's staged images in its composer.
+                            this.clear_draft_for_session(Some(&new_session.id), cx);
+                            this.set_attachments_for_pane(&target_pane, Vec::new());
                             this.transcript_for_pane(&target_pane).update(cx, |t, cx| {
                                 t.push_message(optimistic_user_msg, cx);
                             });
@@ -1201,8 +1206,17 @@ impl ConsoleDesktopApp {
                 let Ok(detail) = client.sessions.get(&session_id, None).await else {
                     continue;
                 };
-                let state = detail.header.launch_state.clone();
+                let mut state = detail.header.launch_state.clone();
                 let launch_error = detail.header.launch_error.clone();
+                // A worktree on the header means provisioning is done even if
+                // the server's in-memory launch flag was never cleared (crash
+                // between attach and clear, or a restart). Drop the stale flag
+                // so the header applied below cannot re-show the banner.
+                let ready = detail.header.worktree.is_some() && state.as_deref() != Some("failed");
+                if ready {
+                    detail.header.launch_state = None;
+                    state = None;
+                }
                 let finished = cx.update(|cx| {
                     let Some(app) = entity.upgrade() else {
                         return true;
