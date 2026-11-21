@@ -182,16 +182,18 @@ internal fun rememberChatTranscriptScroll(
         }
     }
 
-    // Older-message pagination.
+    // Older-message pagination. Gate on messagesLoaded rather than displaySize > 0
+    // so a tail page filled entirely with hidden tool-call/result rows still
+    // pages older history until a visible message arrives.
     val atTop = scroll.listState.firstVisibleItemIndex <= 0
     val loadOlderNow = rememberUpdatedState(loadOlder)
-    LaunchedEffect(scroll, atTop, hasMoreMessages, loadingOlder, displaySize) {
+    LaunchedEffect(scroll, atTop, messagesLoaded, hasMoreMessages, loadingOlder, displaySize) {
         if (!atTop) {
             scroll.resetAutoLoad()
             return@LaunchedEffect
         }
-        if (scroll.autoLoadBlocked || !hasMoreMessages || loadingOlder || displaySize <= 0) return@LaunchedEffect
-        scroll.captureAnchor(displaySize)
+        if (scroll.autoLoadBlocked || !messagesLoaded || !hasMoreMessages || loadingOlder) return@LaunchedEffect
+        if (displaySize > 0) scroll.captureAnchor(displaySize)
         if (scroll.listState.canScrollForward) scroll.stopFollowing()
         if (!loadOlderNow.value()) scroll.blockAutoLoad()
     }
