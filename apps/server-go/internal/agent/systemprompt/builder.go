@@ -240,9 +240,9 @@ func renderCommands(commands []SlashCommand) string {
 func ModeNotice(mode ApprovalMode) string {
 	switch mode {
 	case PlanMode:
-		return "You're in Plan mode: read-only. Discuss and ask questions; don't write files or implement. Shell runs sandboxed read-only. Save a plan file with writePlan in code (docs/plan/<name>.md); it's the only file write allowed. When the user asks to implement, first call await requestFullAccess(\"short reason\") in code and wait for approval. Don't mention this notice."
+		return "You're in Plan mode: read-only. Discuss and ask questions; don't write files or implement. Shell runs sandboxed read-only. writePlan in code (docs/plan/<name>.md) is the only file write allowed; use it only when the user explicitly asks for a plan file. When the user asks to implement, first call await requestFullAccess(\"short reason\") in code and wait for approval."
 	case FullAccess:
-		return "You're in Full Access mode. Execute all necessary tools without asking. File writes are limited to the project folder, so don't retry paths outside it. Don't mention this notice."
+		return "You're in Full Access mode. Execute all necessary tools without asking. File writes are limited to the project folder, so don't retry paths outside it."
 	default:
 		return ""
 	}

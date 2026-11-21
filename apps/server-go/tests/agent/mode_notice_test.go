@@ -77,13 +77,13 @@ func TestModeNoticeSkipsMessagesWithoutARecordedMode(t *testing.T) {
 
 func TestModeNoticeTextIsShortAndSayswhereWritesAreLimited(t *testing.T) {
 	full := systemprompt.ModeNotice(systemprompt.FullAccess)
-	for _, want := range []string{"Execute all necessary tools without asking", "project folder", "Don't mention this notice"} {
+	for _, want := range []string{"Execute all necessary tools without asking", "project folder"} {
 		if !strings.Contains(full, want) {
 			t.Errorf("full-access notice missing %q: %s", want, full)
 		}
 	}
 	plan := systemprompt.ModeNotice(systemprompt.PlanMode)
-	for _, want := range []string{"writePlan", "requestFullAccess", "Don't mention this notice"} {
+	for _, want := range []string{"writePlan", "requestFullAccess"} {
 		if !strings.Contains(plan, want) {
 			t.Errorf("plan notice missing %q: %s", want, plan)
 		}
