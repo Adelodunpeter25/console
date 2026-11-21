@@ -987,6 +987,7 @@ impl ConsoleDesktopApp {
                                         label: preview.label.clone(),
                                         kind_flags: preview.kind_flags,
                                         icon: preview.icon.clone(),
+                                        summary: None,
                                     },
                                     cx,
                                 );
