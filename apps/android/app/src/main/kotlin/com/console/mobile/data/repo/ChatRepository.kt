@@ -183,11 +183,20 @@ class ChatRepository(
     fun applyBootstrap(sessionId: String, b: com.console.mobile.data.model.SessionBootstrapResponse) {
         setTodoItems(sessionId, b.todos)
         setSuggestions(sessionId, if (chats.get(sessionId).running) emptyList() else b.suggestions)
+        val bootstrapQuestions = b.pendingQuestions
+            .filter { it.request_id.isNotBlank() && it.question.isNotBlank() }
+            .map { PendingQuestion(it.toUi()) }
         chats.update(sessionId) {
+            val mergedQuestions = (it.pendingQuestions + bootstrapQuestions)
+                .distinctBy { q -> q.request.requestId }
             it.copy(
                 backgroundWork = if (it.backgroundWork == b.backgroundWork) it.backgroundWork else b.backgroundWork,
                 queuedPrompt = b.queuedPrompts.firstOrNull(),
+                pendingQuestions = if (bootstrapQuestions.isNotEmpty()) mergedQuestions else it.pendingQuestions,
             )
+        }
+        if (bootstrapQuestions.isNotEmpty()) {
+            sessions.setStatus(sessionId, SessionStatus.NeedsAttention)
         }
         b.draft?.let { adoptDraft(sessionId, it) }
     }
@@ -489,7 +498,23 @@ class ChatRepository(
             "askQuestion" -> {
                 val req = parseQuestion(event) ?: return
                 chats.update(sessionId) {
-                    it.copy(pendingQuestions = it.pendingQuestions + PendingQuestion(req))
+                    if (it.pendingQuestions.any { q -> q.request.requestId == req.requestId }) it
+                    else it.copy(pendingQuestions = it.pendingQuestions + PendingQuestion(req))
+                }
+                return
+            }
+            "questionResolved" -> {
+                val resolvedId = event.requestId?.takeIf { it.isNotBlank() } ?: return
+                var remainingEmpty = false
+                var stillRunning = false
+                chats.update(sessionId) {
+                    val next = it.pendingQuestions.filterNot { q -> q.request.requestId == resolvedId }
+                    remainingEmpty = next.isEmpty()
+                    stillRunning = it.running
+                    it.copy(pendingQuestions = next)
+                }
+                if (remainingEmpty && stillRunning) {
+                    sessions.setStatus(sessionId, SessionStatus.Working)
                 }
                 return
             }
@@ -913,20 +938,24 @@ class ChatRepository(
     private val wireMoshi: Moshi = Moshi.Builder().add(WireJsonAdapterFactory()).build()
     private val askAdapter = wireMoshi.adapter(console.v1.AskQuestionRequest::class.java)
 
+    private fun console.v1.AskQuestionRequest.toUi(): AskQuestionRequest = AskQuestionRequest(
+        requestId = request_id,
+        question = question,
+        options = options,
+        isMultiSelect = is_multi_select,
+        // The server always sets skippable, but the tool input defaults
+        // it to true, so default to true when the key is missing.
+        skippable = skippable ?: true,
+        batchId = batch_id,
+    )
+
     private fun parseQuestion(event: AgentSessionEvent): AskQuestionRequest? {
         val raw = event.request?.toString() ?: return null
-        val req = runCatching { askAdapter.fromJson(raw) }.getOrNull() ?: return null
+        val req = runCatching { askAdapter.fromJson(raw) }
+            .onFailure { android.util.Log.w("ChatRepository", "Failed to parse askQuestion payload", it) }
+            .getOrNull() ?: return null
         if (req.request_id.isBlank() || req.question.isBlank()) return null
-        return AskQuestionRequest(
-            requestId = req.request_id,
-            question = req.question,
-            options = req.options,
-            isMultiSelect = req.is_multi_select,
-            // The server always sets skippable, but the tool input defaults
-            // it to true, so default to true when the key is missing.
-            skippable = req.skippable ?: true,
-            batchId = req.batch_id,
-        )
+        return req.toUi()
     }
 
     private companion object {

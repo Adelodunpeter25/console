@@ -212,6 +212,7 @@ data class SessionBootstrapResponse(
     val queuedPrompts: List<console.v1.QueuedPrompt> = emptyList(),
     val backgroundWork: List<BackgroundWork> = emptyList(),
     val draft: console.v1.ChatDraft? = null,
+    val pendingQuestions: List<console.v1.AskQuestionRequest> = emptyList(),
 )
 
 // FsTreeEntry moved to the shared protobuf schema (console.v1 from

@@ -233,6 +233,10 @@ pub enum AgentSessionEvent {
     AskQuestion {
         request: console_proto::AskQuestionRequest,
     },
+    QuestionResolved {
+        #[serde(default, rename = "requestId", alias = "request_id")]
+        request_id: String,
+    },
     ToolExecutionResult {
         result: console_proto::ToolResult,
     },

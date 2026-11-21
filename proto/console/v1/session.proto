@@ -5,6 +5,7 @@ package console.v1;
 option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
 
 import "console/v1/draft.proto";
+import "console/v1/event.proto";
 import "console/v1/message.proto";
 
 // Sessions (Phase 3, first slice: todos). Session headers, messages, and
@@ -250,4 +251,5 @@ message SessionBootstrapResponse {
   repeated BackgroundWork background_work = 9;
   optional ChatDraft draft = 10;
   repeated WakeRecord wake_records = 11;
+  repeated AskQuestionRequest pending_questions = 12;
 }

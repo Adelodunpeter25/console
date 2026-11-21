@@ -224,6 +224,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
                 queuedPrompts = wire.queued_prompts,
                 backgroundWork = wire.background_work.map { it.toUi() },
                 draft = wire.draft,
+                pendingQuestions = wire.pending_questions,
             )
         }
         val raw = bytes.toString(Charsets.UTF_8)
@@ -240,6 +241,9 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
                 runCatching { ConsoleJson.decodeFromJsonElement(BackgroundWork.serializer(), it) }.getOrNull()
             },
             draft = obj["draft"]?.takeIf { it !is JsonNull }?.let { chatDraftAdapter.fromJson(it.toString()) },
+            pendingQuestions = list("pendingQuestions") {
+                wireMoshi.adapter(console.v1.AskQuestionRequest::class.java).fromJson(it.toString())
+            },
         )
     }
 

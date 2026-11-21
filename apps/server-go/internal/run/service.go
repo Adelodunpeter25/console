@@ -470,12 +470,18 @@ func (s *Service) resolveDecision(sessionID string) {
 	}
 }
 
+// PendingQuestions returns all currently unanswered ask-questions for a session.
+func (s *Service) PendingQuestions(sessionID string) []tools.AskQuestionRequest {
+	return s.decisions.PendingQuestionsForSession(sessionID)
+}
+
 // AnswerQuestion resolves a pending ask-question for a session.
 func (s *Service) AnswerQuestion(sessionID, requestID string, answer tools.AskAnswer) bool {
 	if !s.decisions.AnswerQuestion(sessionID, requestID, answer) {
 		return false
 	}
 	s.resolveDecision(sessionID)
+	s.Broadcast(sessionID, loop.Event{Kind: loop.EventQuestionResolved, Text: requestID})
 	return true
 }
 

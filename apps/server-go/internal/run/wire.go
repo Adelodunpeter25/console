@@ -155,7 +155,8 @@ func SnapshotToProto(snap loop.ContextSnapshot) *consolev1.ContextSnapshot {
 // askToProto converts a pending agent question. skippable is always set:
 // the old shape had no omitempty and clients tell explicit false apart
 // from absent.
-func askToProto(q tools.AskQuestionRequest) *consolev1.AskQuestionRequest {
+// AskToProto converts a pending agent question to its protobuf representation.
+func AskToProto(q tools.AskQuestionRequest) *consolev1.AskQuestionRequest {
 	skippable := q.Skippable
 	out := &consolev1.AskQuestionRequest{
 		RequestId: q.RequestID, Question: q.Question, Skippable: &skippable,
@@ -362,11 +363,13 @@ func WireFrame(e loop.Event) (string, any, bool) {
 		if e.Ask == nil {
 			return "", nil, true
 		}
-		raw, err := wireProtoMarshal.Marshal(askToProto(*e.Ask))
+		raw, err := wireProtoMarshal.Marshal(AskToProto(*e.Ask))
 		if err != nil {
 			return "", nil, true
 		}
 		return "askQuestion", map[string]any{"type": "askQuestion", "request": json.RawMessage(raw)}, false
+	case loop.EventQuestionResolved:
+		return "questionResolved", map[string]any{"type": "questionResolved", "requestId": e.Text}, false
 	case loop.EventBrowserAction:
 		if e.Browser == nil {
 			return "", nil, true

@@ -118,6 +118,7 @@ data class AgentSessionEvent(
     // decoded with Moshi in ChatEvents like todo items.
     val calls: List<JsonElement>? = null,
     val request: JsonElement? = null,
+    val requestId: String? = null,
     // contextUpdate payload: raw until consumed; console.v1.ContextSnapshot,
     // decoded with Moshi in ChatEvents.
     val context: JsonElement? = null,

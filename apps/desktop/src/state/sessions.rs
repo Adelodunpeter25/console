@@ -1779,6 +1779,12 @@ impl ConsoleDesktopApp {
                                 );
                                 this.set_queue_from_server(&session_id, bootstrap.queued_prompts);
                                 this.adopt_bootstrap_draft(bootstrap.draft, cx);
+                                if let Some(q) = bootstrap.pending_questions.first() {
+                                    this.set_pending_question_for_session(
+                                        &session_id,
+                                        Some(console_core::AskQuestionRequest::from_proto(q)),
+                                    );
+                                }
 
                                 cx.notify();
                             });

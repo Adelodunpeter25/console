@@ -107,6 +107,12 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
 
+		pending := runs.PendingQuestions(id)
+		pendingQuestions := make([]*consolev1.AskQuestionRequest, 0, len(pending))
+		for _, q := range pending {
+			pendingQuestions = append(pendingQuestions, run.AskToProto(q))
+		}
+
 		if wantsBinary(c) {
 			queued := make([]*consolev1.QueuedPrompt, 0, len(queue))
 			for i := range queue {
@@ -120,7 +126,7 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 				Header: header, Messages: messagesToProto(messages), HasMore: result.HasMore,
 				NextCursor: result.NextCursor, Changes: changeRows, Todos: todoItems,
 				Suggestions: suggestions, QueuedPrompts: queued, BackgroundWork: rows,
-				Draft: stored, WakeRecords: wakeRecords,
+				Draft: stored, WakeRecords: wakeRecords, PendingQuestions: pendingQuestions,
 			}
 			raw, err := proto.Marshal(body)
 			if err != nil {
@@ -165,18 +171,23 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
 		}
+		pendingData, err := marshalProtoList(pendingQuestions)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
-			"header":         json.RawMessage(headerRaw),
-			"messages":       messages,
-			"hasMore":        result.HasMore,
-			"nextCursor":     result.NextCursor,
-			"changes":        changesData,
-			"todos":          todosData,
-			"suggestions":    suggestions,
-			"queuedPrompts":  queuedPrompts,
-			"backgroundWork": work,
-			"draft":          draft,
-			"wakeRecords":    wakeData,
+			"header":           json.RawMessage(headerRaw),
+			"messages":         messages,
+			"hasMore":          result.HasMore,
+			"nextCursor":       result.NextCursor,
+			"changes":          changesData,
+			"todos":            todosData,
+			"suggestions":      suggestions,
+			"queuedPrompts":    queuedPrompts,
+			"backgroundWork":   work,
+			"draft":            draft,
+			"wakeRecords":      wakeData,
+			"pendingQuestions": pendingData,
 		}})
 	})
 }

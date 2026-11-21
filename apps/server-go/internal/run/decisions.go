@@ -23,6 +23,7 @@ type questionResult struct {
 
 type pendingQuestion struct {
 	sessionID string
+	req       tools.AskQuestionRequest
 	ch        chan questionResult
 }
 
@@ -77,7 +78,7 @@ func (d *Decisions) AskHandlerFor(sessionID string, hub *Hub) tools.AskHandler {
 	return func(ctx context.Context, req tools.AskQuestionRequest) (tools.AskAnswer, error) {
 		ch := make(chan questionResult, 1)
 		d.mu.Lock()
-		d.questions[req.RequestID] = pendingQuestion{sessionID: sessionID, ch: ch}
+		d.questions[req.RequestID] = pendingQuestion{sessionID: sessionID, req: req, ch: ch}
 		notify := d.Notify
 		d.mu.Unlock()
 		event := loop.Event{Kind: loop.EventAskQuestion, Ask: &req}
@@ -129,6 +130,19 @@ func (d *Decisions) BrowserHandlerFor(sessionID string, hub *Hub) tools.BrowserH
 			return tools.BrowserActionResult{}, fmt.Errorf("Browser action timed out waiting for desktop client.")
 		}
 	}
+}
+
+// PendingQuestionsForSession returns all currently unanswered questions for a session.
+func (d *Decisions) PendingQuestionsForSession(sessionID string) []tools.AskQuestionRequest {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var out []tools.AskQuestionRequest
+	for _, pending := range d.questions {
+		if pending.sessionID == sessionID {
+			out = append(out, pending.req)
+		}
+	}
+	return out
 }
 
 // AnswerQuestion resolves a pending question. Returns false when no such

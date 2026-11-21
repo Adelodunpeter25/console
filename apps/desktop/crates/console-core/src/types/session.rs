@@ -111,6 +111,8 @@ pub struct SessionBootstrapResponse {
     pub queued_prompts: Vec<QueuedPrompt>,
     pub background_work: Vec<BackgroundWork>,
     pub draft: Option<console_proto::ChatDraft>,
+    #[serde(default)]
+    pub pending_questions: Vec<console_proto::AskQuestionRequest>,
 }
 
 impl SessionDetailResponse {
@@ -166,6 +168,7 @@ impl SessionBootstrapResponse {
                 .map(BackgroundWork::from_proto)
                 .collect(),
             draft: p.draft,
+            pending_questions: p.pending_questions,
         }
     }
 }

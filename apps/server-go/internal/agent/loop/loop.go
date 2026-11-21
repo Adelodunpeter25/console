@@ -75,6 +75,8 @@ const (
 	EventUsage      EventKind = "usage"
 	// EventAskQuestion carries an AskQuestionRequest awaiting the answer route.
 	EventAskQuestion EventKind = "askQuestion"
+	// EventQuestionResolved announces that a pending question was answered.
+	EventQuestionResolved EventKind = "questionResolved"
 	// EventBrowserAction carries a BrowserActionRequest awaiting desktop client execution.
 	EventBrowserAction EventKind = "browserAction"
 	// EventQueueUpdated carries the queued prompts, next to run first.

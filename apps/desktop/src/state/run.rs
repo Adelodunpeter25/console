@@ -1017,6 +1017,17 @@ impl ConsoleDesktopApp {
                 self.clear_question_selected_for_session(run_session_id);
                 self.clear_question_inputs_for_session(run_session_id, cx);
             }
+            AgentSessionEvent::QuestionResolved { request_id } => {
+                if self
+                    .pending_questions
+                    .get(run_session_id)
+                    .is_some_and(|q| q.request_id == request_id)
+                {
+                    self.set_pending_question_for_session(run_session_id, None);
+                    self.clear_question_selected_for_session(run_session_id);
+                    self.clear_question_inputs_for_session(run_session_id, cx);
+                }
+            }
             AgentSessionEvent::BrowserAction { request } => {
                 self.handle_browser_action(
                     run_session_id,
