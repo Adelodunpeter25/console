@@ -188,7 +188,7 @@ func (s *Service) Steer(sessionID string, dto Prompt) (bool, error) {
 	// cancelActive cancels under the service lock — reading ar.cancel after
 	// unlocking would race execute()'s turn-boundary swap (turns.go) and
 	// could cancel the wrong (not-yet-started) turn's context instead.
-	if !s.cancelActive(sessionID, errRunSteered) {
+	if s.cancelActive(sessionID, errRunSteered) == nil {
 		// The run ended first: drop the prompt just staged, since the caller
 		// is told no run was steered and would otherwise send it again.
 		_, err := s.RemoveQueuedPrompt(sessionID, qp.ID)

@@ -124,6 +124,9 @@ type Service struct {
 	// WatchdogTimeout overrides defaultWatchdogTimeout. Zero uses the
 	// default; negative disables the watchdog (tests only).
 	WatchdogTimeout time.Duration
+	// AbortSettleTimeout overrides defaultAbortSettleTimeout. Zero uses the
+	// default; negative disables the post-abort force-settle (tests only).
+	AbortSettleTimeout time.Duration
 }
 
 func NewService(sessions *services.SessionService) *Service {
@@ -416,7 +419,8 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 // and its background bash jobs, but queued prompts survive: each starts as
 // its own run once the slot frees.
 func (s *Service) Abort(sessionID string) bool {
-	if !s.cancelActive(sessionID, errRunAborted) {
+	ar := s.cancelActive(sessionID, errRunAborted)
+	if ar == nil {
 		return false
 	}
 	// Stop is terminal, and the settled run goroutine can be slow to reach
@@ -432,6 +436,7 @@ func (s *Service) Abort(sessionID string) bool {
 	if work := s.BackgroundWorkManager(); work != nil {
 		work.CancelOwnedBy(sessionID)
 	}
+	s.armAbortSettle(sessionID, ar)
 	slog.Info("run aborted", "session", sessionID)
 	return true
 }
