@@ -55,6 +55,10 @@ func TestToolCallLabel(t *testing.T) {
 		{"code", `{"code":"await edit(\"config.json\", \"old\", \"new\")"}`, "edit(config.json)"},
 		{"code", `{"code":"const page = await browser.open({url: \"https://example.com\"})"}`, "browser.open"},
 		{"code", `{"code":"let sum = 0;\nfor (let i = 0; i < 10; i++) sum += i;"}`, "sum = 0;"},
+		{"code", `{"code":"const r = await fileRaw(\"a.rs\");\nconsole.log(r)"}`, "fileRaw(a.rs)"},
+		{"code", `{"code":"console.parts.list(); console.parts.list(); console.parts.read({})"}`, "console.parts.list, console.parts.read"},
+		{"code", `{"code":"const n = await fileRaw(\"x.rs\");\nfor (let i=0;i<3;i++) console.log(i)"}`, "fileRaw(x.rs)"},
+		{"code", `{"code":"// console.log()\nconst r = await fileRaw(\"y.rs\")"}`, "fileRaw(y.rs)"},
 		{"code", `{}`, "Code"},
 		{"read_file", `{"path":"a.txt"}`, "Read File"},
 	}
