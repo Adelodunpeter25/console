@@ -22,7 +22,7 @@ class ToolCallConversionTest {
         icon: String? = null,
     ) = console.v1.ToolCall(
         id = "c1", name = name, arguments = """{"command":"ls"}""".encodeUtf8(),
-        label = label, kind_flags = flags, icon = icon,
+        label = label, kind_flags = flags, icon = icon, summary = null,
     )
 
     @Test

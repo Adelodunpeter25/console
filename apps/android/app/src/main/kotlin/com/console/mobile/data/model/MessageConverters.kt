@@ -41,6 +41,7 @@ internal fun console.v1.ToolCall.toUi(): ToolCall = ToolCall(
     label = label,
     kindFlags = kind_flags,
     icon = icon,
+    summary = summary,
 )
 
 internal fun console.v1.ToolResult.toUi(): ToolResult = ToolResult(

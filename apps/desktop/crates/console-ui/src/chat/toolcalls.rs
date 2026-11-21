@@ -14,7 +14,6 @@ use console_core::{
     file_call_diffs,
 };
 use console_shared::tool::argument_path as shared_argument_path;
-use console_shared::tool::argument_summary as shared_argument_summary;
 use console_shared::tool::parse_read_file_output as shared_parse_read_file_output;
 use gpui::{
     AnyElement, App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window,
@@ -193,8 +192,8 @@ impl ToolCalls {
         call.display_label()
     }
 
-    fn argument_summary(&self, call: &ToolCall) -> Option<String> {
-        shared_argument_summary(&call.name, &call.arguments, self.cwd.as_deref())
+    fn argument_summary(call: &ToolCall) -> Option<String> {
+        call.summary.clone().filter(|value| !value.is_empty())
     }
 
     fn formatted_result(result: &ToolResult) -> String {
@@ -305,7 +304,7 @@ impl ToolCalls {
     ) -> AnyElement {
         let call_id = entry.call.id.clone();
         let open = self.state.borrow().expanded_calls.contains(&call_id);
-        let summary = self.argument_summary(&entry.call);
+        let summary = Self::argument_summary(&entry.call);
         let (status_icon, status_color) = Self::status_icon(&entry, &theme);
         let call_id_for_action = call_id.clone();
         let is_edit = entry.call.is_edit();

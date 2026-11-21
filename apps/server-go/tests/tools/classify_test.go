@@ -55,6 +55,10 @@ func TestToolCallLabel(t *testing.T) {
 		{"code", `{"code":"await edit(\"config.json\", \"old\", \"new\")"}`, "edit(config.json)"},
 		{"code", `{"code":"const page = await browser.open({url: \"https://example.com\"})"}`, "browser.open"},
 		{"code", `{"code":"let sum = 0;\nfor (let i = 0; i < 10; i++) sum += i;"}`, "sum = 0;"},
+		{"code", `{"code":"const r = await fileRaw(\"a.rs\");\nconsole.log(r)"}`, "fileRaw(a.rs)"},
+		{"code", `{"code":"console.parts.list(); console.parts.list(); console.parts.read({})"}`, "console.parts.list, console.parts.read"},
+		{"code", `{"code":"const n = await fileRaw(\"x.rs\");\nfor (let i=0;i<3;i++) console.log(i)"}`, "fileRaw(x.rs)"},
+		{"code", `{"code":"// console.log()\nconst r = await fileRaw(\"y.rs\")"}`, "fileRaw(y.rs)"},
 		{"code", `{}`, "Code"},
 		{"read_file", `{"path":"a.txt"}`, "Read File"},
 	}
@@ -119,5 +123,20 @@ func TestParseMCPToolName(t *testing.T) {
 func TestWritePlanIsNotClassedAsAFileWrite(t *testing.T) {
 	if flags := tools.ToolKindFlags("writePlan"); flags != 0 {
 		t.Fatalf("writePlan flags = %d, want 0", flags)
+	}
+}
+
+func TestToolCallSummary(t *testing.T) {
+	cases := []struct{ name, args, want string }{
+		{"read_file", `{"path":"a.txt"}`, "a.txt"},
+		{"bash", `{"command":"git status"}`, "git status"},
+		{"memory", `{"op":"search","query":"foo"}`, "search \"foo\""},
+		{"code", `{"code":"console.sessions.list(); console.sessions.read({})"}`, "console.sessions.list, console.sessions.read"},
+		{"code", `{}`, ""},
+	}
+	for _, c := range cases {
+		if got := tools.ToolCallSummary(c.name, []byte(c.args)); got != c.want {
+			t.Errorf("ToolCallSummary(%q, %q) = %q, want %q", c.name, c.args, got, c.want)
+		}
 	}
 }

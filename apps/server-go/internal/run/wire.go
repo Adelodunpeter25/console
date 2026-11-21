@@ -103,7 +103,8 @@ func toolCallToProto(c tools.ToolCall) *consolev1.ToolCall {
 	label := tools.ToolCallLabel(c.Name, c.Arguments)
 	flags := tools.ToolKindFlags(c.Name)
 	icon := tools.ToolIconKey(c.Name)
-	out.Label, out.KindFlags, out.Icon = &label, &flags, &icon
+	summary := tools.ToolCallSummary(c.Name, c.Arguments)
+	out.Label, out.KindFlags, out.Icon, out.Summary = &label, &flags, &icon, &summary
 	return out
 }
 

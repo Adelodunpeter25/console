@@ -33,7 +33,6 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.SharedNative
 import com.console.mobile.core.util.argumentPath
 import com.console.mobile.core.util.resultText
-import com.console.mobile.core.util.toolCallSummary
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
 import com.console.mobile.feature.chat.markdown.CustomMarkdown
@@ -65,7 +64,7 @@ fun ToolCallRow(
     onExpandToolCall: (messageId: String, callId: String) -> Unit = { _, _ -> },
 ) {
     var open by remember(call.id) { mutableStateOf(false) }
-    val summary = toolCallSummary(call, cwd)
+    val summary = call.summary?.takeIf { it.isNotEmpty() }
     val detail = result?.let { resultText(it).take(2000) }
     // Recomputed per call, not per frame: diffing a large write on every
     // recomposition would stall the transcript while a run streams. The diff
