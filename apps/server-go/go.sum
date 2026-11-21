@@ -2,8 +2,8 @@ github.com/Adelodunpeter25/iroh-go v0.0.0-20261107173249-9605c02ec0fb h1:irLhikT
 github.com/Adelodunpeter25/iroh-go v0.0.0-20261107173249-9605c02ec0fb/go.mod h1:+ul6B3sMRtSAgZrjqHXg6ZLdNWwhYstLT2MUF7Kh8Bc=
 github.com/Adelodunpeter25/sim-go v0.0.0-20261113115339-d943d8632ca3 h1:vkfV1M0bc3qA7LQNbOvHEb9BVM4mM2OtUhAbwepdzbA=
 github.com/Adelodunpeter25/sim-go v0.0.0-20261113115339-d943d8632ca3/go.mod h1:FDOXO4efJHkjCcl+arWTrk7DxTfXc3qNd6hSTPXeCf0=
-github.com/Adelodunpeter25/voxl-go v0.4.1-0.20261121093841-db055a0ef886 h1:echI/BUvX+qa3nJdATQFhS/U/0z0tIyWnA8wxP1EJ8s=
-github.com/Adelodunpeter25/voxl-go v0.4.1-0.20261121093841-db055a0ef886/go.mod h1:FNfXWv57Nfitqi9CPU5hgg0jrI5kjB3AwjgUhxOOonY=
+github.com/Adelodunpeter25/voxl-go v0.4.1-0.20261121122719-bf233246a93f h1:avEBX1m7M9SwncR2Uq4TjLAAP5UiA2X3cklBWzuiPwE=
+github.com/Adelodunpeter25/voxl-go v0.4.1-0.20261121122719-bf233246a93f/go.mod h1:FNfXWv57Nfitqi9CPU5hgg0jrI5kjB3AwjgUhxOOonY=
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/MoeForge/moego v0.1.0-alpha.1 h1:d+asBZu+2oKnBj1kzdvdANMStbIKw9BLCpknuWjiR28=

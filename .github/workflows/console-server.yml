@@ -77,6 +77,7 @@ jobs:
             cua-asset: libcua_driver_sdk-macos-x64.dylib
             voxl-triple: x86_64-apple-darwin
             voxl-asset: libvoxl-macos-x64.dylib
+            extld: -extldflags '-Wl,-rpath,@executable_path'
           - os-suffix: macos-arm64
             runner: macos-15
             goos: darwin
@@ -89,6 +90,7 @@ jobs:
             cua-asset: libcua_driver_sdk-macos-arm64.dylib
             voxl-triple: aarch64-apple-darwin
             voxl-asset: libvoxl-macos-arm64.dylib
+            extld: -extldflags '-Wl,-rpath,@executable_path'
           # windows-x64 only for now: the sidecars ship an arm64 Windows
           # build too, but the mingw cgo toolchain on the arm64 Windows
           # runner is not proven, so x64 ships first. The .exe suffix is
@@ -114,6 +116,8 @@ jobs:
           go-version: "1.26.10"
           cache-dependency-path: apps/server-go/go.sum
 
+      # libvoxl is linked with an rpath. cgo rejects "@executable_path" in
+      # #cgo LDFLAGS, so on macOS it is added here at the final link instead.
       # server-go uses cgo (fff + cua dlopen bindings). On Windows the
       # runner's preinstalled mingw-w64 gcc satisfies that; a matching host
       # keeps it a plain gcc link like the native unix runners.
@@ -123,7 +127,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1
         run: >
-          go -C apps/server-go build -trimpath -ldflags="-s -w"
+          go -C apps/server-go build -trimpath -ldflags="-s -w ${{ matrix.extld }}"
           -o ../../${{ matrix.bin }} ./cmd/console
 
       # Stage the native sidecars dlopened at runtime: fff (file search)
