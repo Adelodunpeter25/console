@@ -1,8 +1,9 @@
-//! Waku-style transcript surface backed by `console-core::AgentMessage`.
+//! Waku-style transcript surface backed by server-assembled `console-core::Turn`s.
 
 use console_core::types::SessionFileChange;
 use console_core::{
-    AgentMessage, AssistantContentPart, AssistantMessage, ImageAttachment, ToolResult,
+    ActivityEvent, AgentMessage, AssistantContentPart, AssistantMessage, ImageAttachment,
+    ToolCallEntry, ToolResult, Turn, TurnRun,
 };
 use gpui::{
     App, Context, FocusHandle, FollowMode, IntoElement, KeyDownEvent, ListAlignment, ListOffset,
@@ -16,7 +17,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::chat::change_chips::{ChangesSummary, TurnChanges};
-use crate::chat::{ActivityEvent, ToolCallEntry, ToolCallsAction, ToolCallsState};
+use crate::chat::{ToolCallsAction, ToolCallsState};
 use crate::markdown::file_links::{is_file_link, is_http_url};
 use crate::markdown::render::{self, LinkHandler, MarkdownView, TranscriptSelection};
 use crate::primitives::scrollbar::{self, ScrollbarState};
@@ -32,7 +33,7 @@ mod scroll;
 mod selection;
 mod streaming;
 mod tool_activity;
-pub use tool_activity::{RunActivityBlock, compute_run_blocks, compute_run_blocks_with_boundaries};
+pub use tool_activity::{RunActivityBlock, run_block_for_turn};
 mod wake;
 
 type LoadToolResultHandler =
@@ -51,53 +52,46 @@ pub(crate) struct AssistantPresentation {
     pub(crate) copy_content: SharedString,
 }
 
-/// The id of the message in `row`, when it has one.
-///
-/// Tool results carry no id of their own — they belong to the tool call
-/// above them.
-pub fn message_id_at(messages: &[AgentMessage], row: usize) -> Option<String> {
-    messages.get(row).and_then(|message| match message {
-        AgentMessage::User { id, .. } | AgentMessage::Assistant { id, .. } => id.clone(),
-        AgentMessage::ToolResult { .. } | AgentMessage::RunBoundary { .. } => None,
-    })
+/// The id of the turn in `row`, when the server has assigned one.
+pub fn message_id_at(turns: &[Turn], row: usize) -> Option<String> {
+    turns
+        .get(row)
+        .map(|turn| turn.id.clone())
+        .filter(|id| !id.is_empty())
 }
 
-/// The row holding the message with `id`, if it is in `messages`.
+/// The row holding the turn with `id`, if it is loaded.
 ///
 /// This is what makes a scroll anchor survive a reload: a row index counts
 /// rows in the window that happens to be loaded, and the window moves as
-/// older pages are prepended. The id names the message itself.
-pub fn row_for_message_id(messages: &[AgentMessage], id: &str) -> Option<usize> {
-    messages.iter().position(|message| match message {
-        AgentMessage::User { id: message_id, .. }
-        | AgentMessage::Assistant { id: message_id, .. } => message_id.as_deref() == Some(id),
-        AgentMessage::ToolResult { .. } | AgentMessage::RunBoundary { .. } => false,
-    })
+/// older pages are prepended. The id names the turn itself.
+pub fn row_for_message_id(turns: &[Turn], id: &str) -> Option<usize> {
+    turns.iter().position(|turn| turn.id == id)
 }
 
-/// Resolve an anchor to a row of `messages`.
+/// Resolve an anchor to a row of `turns`.
 ///
-/// A message id that is not loaded cannot be resolved: the fetch window
-/// moved on. The row index is only a fallback for messages that have no id
-/// at all — an optimistic user message, before the server has assigned one.
+/// A turn id that is not loaded cannot be resolved: the fetch window moved
+/// on. The row index is only a fallback for turns that have no id at all, an
+/// optimistic prompt before the server has assigned one.
 pub fn resolve_anchor_row(
-    messages: &[AgentMessage],
+    turns: &[Turn],
     message_id: Option<&str>,
     row_index: usize,
 ) -> Option<usize> {
     match message_id {
-        Some(id) => row_for_message_id(messages, id),
-        None => Some(row_index.min(messages.len().saturating_sub(1))),
+        Some(id) => row_for_message_id(turns, id),
+        None => Some(row_index.min(turns.len().saturating_sub(1))),
     }
 }
 
 /// The row an anchor points at, given the row at the top of the viewport.
 ///
-/// Clamped to the last message: while a run streams the list carries a
-/// trailing "Working…" row that is not a message, and an index pointing at
-/// it would point past the end once that row is gone.
-pub fn anchor_row(message_count: usize, top_row: usize) -> usize {
-    top_row.min(message_count.saturating_sub(1))
+/// Clamped to the last turn: while a run streams the list carries a trailing
+/// "Working…" row that is not a turn, and an index pointing at it would point
+/// past the end once that row is gone.
+pub fn anchor_row(turn_count: usize, top_row: usize) -> usize {
+    top_row.min(turn_count.saturating_sub(1))
 }
 
 /// Where a transcript was left, in logical list terms.
@@ -122,7 +116,15 @@ pub enum ScrollTarget {
 }
 
 pub struct TranscriptView {
-    pub messages: Vec<AgentMessage>,
+    pub turns: Vec<Turn>,
+    /// The assistant message still streaming into the last turn. It moves into
+    /// the turn's run (when it holds a tool call) or its responses once the
+    /// stream finalizes it.
+    pub(crate) live: Vec<AssistantContentPart>,
+    /// Results that arrived before their tool call settled into a run.
+    pub(crate) pending_results: HashMap<String, ToolResult>,
+    /// Gives optimistic turns a run id the server has not assigned yet.
+    pub(crate) live_counter: u64,
     /// Persistent Markdown state keyed by message index and content-part
     /// index. The parser and flattened text cache inside each view survive
     /// transcript row rebuilds, which is especially important while a stream
@@ -168,15 +170,6 @@ pub struct TranscriptView {
     pub(crate) thinking_expanded: Rc<RefCell<HashSet<String>>>,
     /// The active session's working directory, for relative tool paths.
     pub(crate) session_cwd: Option<String>,
-    /// Cache for run activity derived from messages. Keyed by user_index,
-    /// invalidated when messages or streaming state changes.
-    tool_activity_cache:
-        RefCell<HashMap<usize, (u64, Option<Vec<tool_activity::RunActivityBlock>>)>>,
-    tool_activity_cache_version: std::cell::Cell<u64>,
-    /// `(first_message_index, label, at)` for each wake boundary in
-    /// `messages`, sorted by index. Rebuilt by `set_messages` and
-    /// `prepend_older_messages`.
-    wake_boundaries: Vec<(usize, String, Option<i64>)>,
     /// Pagination for incremental loading: whether older messages exist and cursor.
     has_more: bool,
     next_cursor: Option<i64>,
@@ -232,7 +225,10 @@ impl TranscriptView {
         let list_state = ListState::new(0, ListAlignment::Top, px(ESTIMATED_TRANSCRIPT_ROW_HEIGHT));
         list_state.set_follow_mode(FollowMode::Tail);
         Self {
-            messages: Vec::new(),
+            turns: Vec::new(),
+            live: Vec::new(),
+            pending_results: HashMap::new(),
+            live_counter: 0,
             markdown_cache: Rc::new(RefCell::new(HashMap::new())),
             presentation_cache: RefCell::new(HashMap::new()),
             content_revisions: Vec::new(),
@@ -256,9 +252,6 @@ impl TranscriptView {
             tool_calls_state: Rc::new(RefCell::new(ToolCallsState::default())),
             thinking_expanded: Rc::new(RefCell::new(HashSet::new())),
             session_cwd: None,
-            tool_activity_cache: RefCell::new(HashMap::new()),
-            tool_activity_cache_version: std::cell::Cell::new(0),
-            wake_boundaries: Vec::new(),
             has_more: false,
             next_cursor: None,
             loading_older: false,
@@ -282,12 +275,11 @@ impl TranscriptView {
         }
     }
 
-    /// Copy server-assigned ids onto this transcript's user messages that
-    /// still lack one (the optimistic prompt of a live run). Pairs user
-    /// messages from the tail, since the canonical page always ends at the
-    /// same latest message. Per-turn file changes are keyed by that id.
-    pub fn adopt_user_message_ids(&mut self, canonical: &[AgentMessage], cx: &mut Context<Self>) {
-        if crate::chat::turn_changes::adopt_user_ids(&mut self.messages, canonical) {
+    /// Copy server-assigned ids onto this transcript's optimistic user turns.
+    /// Pairs user turns from the tail, since the canonical page always ends at
+    /// the same latest turn. Per-turn file changes are keyed by that id.
+    pub fn adopt_user_message_ids(&mut self, canonical: &[Turn], cx: &mut Context<Self>) {
+        if crate::chat::turn_changes::adopt_user_ids(&mut self.turns, canonical) {
             cx.notify();
         }
     }
@@ -300,8 +292,6 @@ impl TranscriptView {
     /// show paths relative to it. Called when a session loads into the pane.
     pub fn set_session_cwd(&mut self, cwd: Option<String>) -> &mut Self {
         self.session_cwd = cwd.filter(|cwd| !cwd.is_empty());
-        // Summaries are derived per render, not cached.
-        self.tool_activity_cache.borrow_mut().clear();
         self
     }
 }
@@ -313,20 +303,11 @@ impl Render for TranscriptView {
         let entity = cx.entity().downgrade();
         let is_streaming = self.is_streaming;
 
-        // Auto-load older when scrolled near top (covers wheel, scrollbar, touch).
-        // Hidden tool-transport rows have zero height, so the first visible
-        // row can be at item_ix > 1 even when visually at the top. We find the
-        // index of the first non-hidden message so that pages beginning with
-        // long runs of tool transport rows (which take zero height) correctly
-        // trigger older message pagination when the user scrolls near the top.
-        if self.has_more && !self.loading_older && !self.messages.is_empty() {
+        // Auto-load older when scrolled near the top (covers wheel, scrollbar,
+        // touch).
+        if self.has_more && !self.loading_older && !self.turns.is_empty() {
             let top = self.list_state.logical_scroll_top();
-            let first_visible_ix = self
-                .messages
-                .iter()
-                .position(|m| !crate::chat::row::is_hidden_tool_transport(m))
-                .unwrap_or(0);
-            if top.item_ix <= first_visible_ix.saturating_add(5) {
+            if top.item_ix <= 5 {
                 self.loading_older = true;
                 if let Some(handler) = self.on_load_older.clone() {
                     let window_handle = _window.window_handle();
@@ -421,7 +402,7 @@ impl Render for TranscriptView {
             .child(crate::chat::cite_overlay::cite_origin_probe(
                 cite_origin.clone(),
             ))
-            .child(if self.messages.is_empty() && !is_streaming {
+            .child(if self.turns.is_empty() && !is_streaming {
                 crate::chat::row::empty_state(theme).into_any_element()
             } else {
                 div()

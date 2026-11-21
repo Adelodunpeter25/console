@@ -4,19 +4,15 @@ impl TranscriptView {
     pub fn begin_streaming(&mut self, cx: &mut Context<Self>) {
         self.is_streaming = true;
         self.streaming_started_at = Some(chrono::Utc::now().timestamp());
-        self.invalidate_latest_activity_cache();
         self.refresh_list();
         cx.notify();
     }
 
-    /// Re-engage the trailing "Working for Ns" row after `set_messages` reset
-    /// it. Used when switching back to a chat whose run is still active: the
-    /// started_at is the run's real start time (from `running_sessions`) so the
-    /// elapsed counter continues seamlessly instead of restarting from zero.
+    /// Re-engage the trailing "Working for Ns" row after `set_turns` reset
+    /// it. Used when switching back to a chat whose run is still active.
     pub fn resume_streaming(&mut self, started_at: i64, cx: &mut Context<Self>) {
         self.is_streaming = true;
         self.streaming_started_at = Some(started_at);
-        self.invalidate_latest_activity_cache();
         self.refresh_list();
         cx.notify();
     }
@@ -24,87 +20,91 @@ impl TranscriptView {
     pub fn finish_streaming(&mut self, cx: &mut Context<Self>) {
         self.is_streaming = false;
         self.streaming_started_at = None;
-        self.invalidate_latest_activity_cache();
+        self.live.clear();
+        if let Some(last) = self.turns.last_mut()
+            && let Some(run) = last.run.as_mut()
+        {
+            run.working = false;
+        }
         self.refresh_list();
         self.remeasure_active_run_owner();
         cx.notify();
     }
 
-    pub fn append_assistant_text(&mut self, text: &str, _cx: &mut Context<Self>) {
-        if let Some(AgentMessage::Assistant { content, .. }) = self.messages.last_mut() {
-            if let Some(existing) = content.iter_mut().find_map(|part| match part {
-                AssistantContentPart::Text { text, .. } => Some(text),
-                _ => None,
-            }) {
-                existing.push_str(text);
-            } else {
-                content.push(AssistantContentPart::Text {
-                    text: text.to_string(),
-                    thought_signature: None,
-                });
-            }
-            self.bump_last_content_revision();
-            self.invalidate_latest_activity_cache();
-        } else {
-            self.messages.push(AgentMessage::Assistant {
-                id: None,
-                content: vec![AssistantContentPart::Text {
-                    text: text.to_string(),
-                    thought_signature: None,
-                }],
-                stop_reason: None,
+    fn ensure_tail_run(&mut self) -> &mut TurnRun {
+        if self.turns.is_empty() {
+            self.turns.push(Turn {
+                id: String::new(),
                 created_at: Some(chrono::Utc::now().timestamp()),
-                tok_per_sec: None,
+                user: None,
+                wake_label: None,
+                run: None,
+                responses: Vec::new(),
             });
             self.content_revisions.push(0);
-            self.invalidate_latest_activity_cache();
         }
+        let started_at = self.streaming_started_at;
+        let counter = &mut self.live_counter;
+        let turn = self.turns.last_mut().expect("turns non-empty");
+        turn.run.get_or_insert_with(|| {
+            let run_id = if turn.id.is_empty() {
+                *counter += 1;
+                format!("live-{}", *counter)
+            } else {
+                turn.id.clone()
+            };
+            TurnRun {
+                run_id,
+                started_at: started_at.or(turn.created_at),
+                elapsed_ms: 0,
+                working: true,
+                events: Vec::new(),
+            }
+        })
+    }
+
+    pub fn append_assistant_text(&mut self, text: &str, _cx: &mut Context<Self>) {
+        if let Some(existing) = self.live.iter_mut().find_map(|part| match part {
+            AssistantContentPart::Text { text, .. } => Some(text),
+            _ => None,
+        }) {
+            existing.push_str(text);
+        } else {
+            self.live.push(AssistantContentPart::Text {
+                text: text.to_string(),
+                thought_signature: None,
+            });
+        }
+        self.bump_last_content_revision();
     }
 
     pub fn append_assistant_thinking(&mut self, text: &str, _cx: &mut Context<Self>) {
-        if let Some(AgentMessage::Assistant { content, .. }) = self.messages.last_mut() {
-            if let Some(existing) = content.iter_mut().find_map(|part| match part {
-                AssistantContentPart::Thinking { text } => Some(text),
-                _ => None,
-            }) {
-                existing.push_str(text);
-            } else {
-                let text_pos = content
-                    .iter()
-                    .position(|p| matches!(p, AssistantContentPart::Text { .. }));
-                let part = AssistantContentPart::Thinking {
-                    text: text.to_string(),
-                };
-                if let Some(pos) = text_pos {
-                    content.insert(pos, part);
-                } else {
-                    content.push(part);
-                }
-            }
-            self.bump_last_content_revision();
-            self.invalidate_latest_activity_cache();
+        if let Some(existing) = self.live.iter_mut().find_map(|part| match part {
+            AssistantContentPart::Thinking { text } => Some(text),
+            _ => None,
+        }) {
+            existing.push_str(text);
         } else {
-            self.messages.push(AgentMessage::Assistant {
-                id: None,
-                content: vec![AssistantContentPart::Thinking {
-                    text: text.to_string(),
-                }],
-                stop_reason: None,
-                created_at: Some(chrono::Utc::now().timestamp()),
-                tok_per_sec: None,
-            });
-            self.content_revisions.push(0);
-            self.invalidate_latest_activity_cache();
+            let text_pos = self
+                .live
+                .iter()
+                .position(|p| matches!(p, AssistantContentPart::Text { .. }));
+            let part = AssistantContentPart::Thinking {
+                text: text.to_string(),
+            };
+            if let Some(pos) = text_pos {
+                self.live.insert(pos, part);
+            } else {
+                self.live.push(part);
+            }
         }
+        self.bump_last_content_revision();
     }
 
     /// Flush the latest coalesced stream state into the list and publish one
-    /// transcript repaint. Text deltas update the message buffer immediately,
-    /// but this is called only once per stream cadence window.
+    /// transcript repaint.
     pub fn flush_stream_render(&mut self, cx: &mut Context<Self>) {
-        if let Some(message_index) = self.messages.len().checked_sub(1) {
-            self.remeasure_message(message_index);
-        }
+        self.remeasure_active_run_owner();
         self.refresh_list();
         cx.notify();
     }
@@ -114,40 +114,69 @@ impl TranscriptView {
         message: AssistantMessage,
         cx: &mut Context<Self>,
     ) {
-        if let Some(AgentMessage::Assistant {
-            id,
-            content,
-            stop_reason,
-            created_at,
-            tok_per_sec,
-        }) = self.messages.last_mut()
-        {
-            if message.id.is_some() {
-                *id = message.id;
+        self.live.clear();
+        let has_tool_call = message
+            .content
+            .iter()
+            .any(|part| matches!(part, AssistantContentPart::ToolCall { .. }));
+        if has_tool_call {
+            let mut pending_results = std::mem::take(&mut self.pending_results);
+            let run = self.ensure_tail_run();
+            for part in message.content {
+                match part {
+                    AssistantContentPart::Thinking { text } if !text.trim().is_empty() => {
+                        let id = format!("{}-thinking-{}", run.run_id, run.events.len());
+                        run.events.push(ActivityEvent::Thinking { id, text });
+                    }
+                    AssistantContentPart::Text { text, .. } if !text.trim().is_empty() => {
+                        let id = format!("{}-text-{}", run.run_id, run.events.len());
+                        run.events.push(ActivityEvent::Text { id, text });
+                    }
+                    AssistantContentPart::ToolCall { call } => {
+                        if let Some(ActivityEvent::ToolCall(entry)) =
+                            run.events.iter_mut().find(|event| {
+                                matches!(event, ActivityEvent::ToolCall(e) if e.call.id == call.id)
+                            })
+                        {
+                            entry.call = call;
+                        } else {
+                            let result = pending_results.remove(&call.id);
+                            run.events
+                                .push(ActivityEvent::ToolCall(Box::new(ToolCallEntry {
+                                    call,
+                                    result,
+                                })));
+                        }
+                    }
+                    _ => {}
+                }
             }
-            *content = message.content;
-            *stop_reason = message.stop_reason;
-            if message.created_at.is_some() {
-                *created_at = message.created_at;
-            }
-            *tok_per_sec = message.tok_per_sec;
-            self.bump_last_content_revision();
-            self.invalidate_latest_activity_cache();
+            self.pending_results = pending_results;
         } else {
-            self.messages.push(AgentMessage::Assistant {
+            if self.turns.is_empty() {
+                self.turns.push(Turn {
+                    id: String::new(),
+                    created_at: Some(chrono::Utc::now().timestamp()),
+                    user: None,
+                    wake_label: None,
+                    run: None,
+                    responses: Vec::new(),
+                });
+                self.content_revisions.push(0);
+            }
+            let turn = self.turns.last_mut().expect("turns non-empty");
+            let msg = AgentMessage::Assistant {
                 id: message.id,
                 content: message.content,
                 stop_reason: message.stop_reason,
-                created_at: message.created_at,
+                created_at: message.created_at.or_else(|| Some(chrono::Utc::now().timestamp())),
                 tok_per_sec: message.tok_per_sec,
-            });
-            self.content_revisions.push(0);
-            self.invalidate_latest_activity_cache();
+            };
+            turn.responses.push(msg);
         }
+        self.bump_last_content_revision();
         self.refresh_list();
-        if let Some(message_index) = self.messages.len().checked_sub(1) {
-            self.remeasure_message(message_index);
-        }
+        self.remeasure_active_run_owner();
         cx.notify();
     }
 
@@ -156,31 +185,17 @@ impl TranscriptView {
         call: console_core::ToolCall,
         cx: &mut Context<Self>,
     ) {
-        if let Some(AgentMessage::Assistant { content, .. }) = self.messages.last_mut() {
-            if let Some(AssistantContentPart::ToolCall { call: existing }) = content.iter_mut().find(|part| {
+        if let Some(AssistantContentPart::ToolCall { call: existing }) =
+            self.live.iter_mut().find(|part| {
                 matches!(part, AssistantContentPart::ToolCall { call: existing } if existing.id == call.id)
-            }) {
-                *existing = call;
-            } else {
-                content.push(AssistantContentPart::ToolCall { call });
-            }
-            self.bump_last_content_revision();
-            self.invalidate_latest_activity_cache();
+            })
+        {
+            *existing = call;
         } else {
-            self.messages.push(AgentMessage::Assistant {
-                id: None,
-                content: vec![AssistantContentPart::ToolCall { call }],
-                stop_reason: None,
-                created_at: Some(chrono::Utc::now().timestamp()),
-                tok_per_sec: None,
-            });
-            self.content_revisions.push(0);
-            self.invalidate_latest_activity_cache();
+            self.live.push(AssistantContentPart::ToolCall { call });
         }
+        self.bump_last_content_revision();
         self.refresh_list();
-        if let Some(message_index) = self.messages.len().checked_sub(1) {
-            self.remeasure_message(message_index);
-        }
         self.remeasure_active_run_owner();
         cx.notify();
     }
@@ -193,65 +208,59 @@ impl TranscriptView {
         if calls.is_empty() {
             return;
         }
+        let mut pending_results = std::mem::take(&mut self.pending_results);
+        let run = self.ensure_tail_run();
         for call in calls {
-            if let Some(AgentMessage::Assistant { content, .. }) = self.messages.last_mut() {
-                if let Some(AssistantContentPart::ToolCall { call: existing }) =
-                    content.iter_mut().find(|part| {
-                        matches!(part, AssistantContentPart::ToolCall { call: existing } if existing.id == call.id)
-                    })
-                {
-                    *existing = call;
-                } else {
-                    content.push(AssistantContentPart::ToolCall { call });
-                }
+            if let Some(ActivityEvent::ToolCall(entry)) = run.events.iter_mut().find(|event| {
+                matches!(event, ActivityEvent::ToolCall(e) if e.call.id == call.id)
+            }) {
+                entry.call = call;
             } else {
-                self.messages.push(AgentMessage::Assistant {
-                    id: None,
-                    content: vec![AssistantContentPart::ToolCall { call }],
-                    stop_reason: None,
-                    created_at: Some(chrono::Utc::now().timestamp()),
-                    tok_per_sec: None,
-                });
-                self.content_revisions.push(0);
+                let result = pending_results.remove(&call.id);
+                run.events
+                    .push(ActivityEvent::ToolCall(Box::new(ToolCallEntry {
+                        call,
+                        result,
+                    })));
             }
         }
-        // Coalesce to one revision bump / cache invalidation / remeasure
+        self.pending_results = pending_results;
         self.bump_last_content_revision();
-        self.invalidate_latest_activity_cache();
         self.refresh_list();
-        if let Some(message_index) = self.messages.len().checked_sub(1) {
-            self.remeasure_message(message_index);
-        }
         self.remeasure_active_run_owner();
         cx.notify();
     }
 
     pub fn append_tool_results(&mut self, results: Vec<ToolResult>, cx: &mut Context<Self>) {
-        let existing_ids = self
-            .messages
-            .iter()
-            .filter_map(|message| match message {
-                AgentMessage::ToolResult { results, .. } => Some(results),
-                _ => None,
-            })
-            .flatten()
-            .map(|result| result.tool_call_id.as_str())
-            .collect::<std::collections::HashSet<_>>();
-        let results = results
-            .into_iter()
-            .filter(|result| !existing_ids.contains(result.tool_call_id.as_str()))
-            .collect::<Vec<_>>();
         if results.is_empty() {
             return;
         }
-        self.messages.push(AgentMessage::ToolResult {
-            results,
-            created_at: Some(chrono::Utc::now().timestamp()),
-        });
-        self.content_revisions.push(0);
-        self.invalidate_latest_activity_cache();
-        self.refresh_list();
-        self.remeasure_active_run_owner();
-        cx.notify();
+        let mut changed = false;
+        for result in results {
+            let mut attached = false;
+            if let Some(turn) = self.turns.last_mut()
+                && let Some(run) = turn.run.as_mut()
+                && let Some(ActivityEvent::ToolCall(entry)) = run.events.iter_mut().find(|event| {
+                    matches!(event, ActivityEvent::ToolCall(e) if e.call.id == result.tool_call_id)
+                })
+            {
+                if entry.result.is_none() {
+                    entry.result = Some(result.clone());
+                    changed = true;
+                }
+                attached = true;
+            }
+            if !attached {
+                self.pending_results
+                    .entry(result.tool_call_id.clone())
+                    .or_insert(result);
+            }
+        }
+        if changed {
+            self.bump_last_content_revision();
+            self.refresh_list();
+            self.remeasure_active_run_owner();
+            cx.notify();
+        }
     }
 }

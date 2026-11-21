@@ -9,22 +9,22 @@ impl TranscriptView {
     /// list carries a trailing "Working…" row that is not a message, and an
     /// index pointing at it would point past the end once that row is gone.
     pub fn scroll_anchor(&self) -> Option<TranscriptScrollAnchor> {
-        if self.messages.is_empty() {
+        if self.turns.is_empty() {
             return None;
         }
         let top = self.list_state.logical_scroll_top();
-        let row_index = anchor_row(self.messages.len(), top.item_ix);
+        let row_index = anchor_row(self.turns.len(), top.item_ix);
         Some(TranscriptScrollAnchor {
             row_index,
             offset_in_row: f32::from(top.offset_in_item),
             at_tail: self.list_state.is_following_tail(),
-            message_id: message_id_at(&self.messages, row_index),
+            message_id: message_id_at(&self.turns, row_index),
         })
     }
 
     /// The row holding the message with `id`, if it is loaded.
     pub fn row_for_message_id(&self, id: &str) -> Option<usize> {
-        row_for_message_id(&self.messages, id)
+        row_for_message_id(&self.turns, id)
     }
 
     /// Restore a logical row anchor after a session's message list is installed.
@@ -80,7 +80,7 @@ impl TranscriptView {
         message_id: Option<&str>,
         row_index: usize,
     ) -> Option<usize> {
-        resolve_anchor_row(&self.messages, message_id, row_index)
+        resolve_anchor_row(&self.turns, message_id, row_index)
     }
 
     pub(super) fn apply_scroll_anchor(&self, row_index: usize, offset_in_row: f32, at_tail: bool) {
@@ -120,7 +120,7 @@ impl TranscriptView {
 
         let start_offset = self.list_state.logical_scroll_top();
         let target_item_ix = match target {
-            ScrollTarget::Bottom => self.messages.len(),
+            ScrollTarget::Bottom => self.turns.len(),
             ScrollTarget::Prompt(row) => row,
         };
 

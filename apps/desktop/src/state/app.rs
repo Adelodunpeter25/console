@@ -21,17 +21,17 @@ use std::rc::Rc;
 /// with the full paths of any file mentions it carried, so recalling an
 /// older prompt from history can rebuild its mention chips, plus the id of
 /// the user message it became so the app can re-stage its image attachments.
-pub(crate) fn user_prompt_history(messages: &[AgentMessage]) -> Vec<PromptHistoryEntry> {
-    messages
+pub(crate) fn user_prompt_history(turns: &[console_core::Turn]) -> Vec<PromptHistoryEntry> {
+    turns
         .iter()
-        .filter_map(|message| match message {
-            AgentMessage::User {
+        .filter_map(|turn| match turn.user.as_ref() {
+            Some(AgentMessage::User {
                 id,
                 content,
                 context_files,
                 source: None,
                 ..
-            } => Some(PromptHistoryEntry::new(
+            }) => Some(PromptHistoryEntry::new(
                 content.clone(),
                 context_files.clone().unwrap_or_default(),
                 id.clone(),

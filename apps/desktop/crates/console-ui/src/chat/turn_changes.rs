@@ -1,7 +1,7 @@
 //! Grouping and lookup of per-turn file changes and diffs across a session transcript.
 
-use console_core::AgentMessage;
 use console_core::types::SessionFileChange;
+use console_core::{AgentMessage, Turn};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -36,71 +36,69 @@ pub fn group_turn_changes(changes: &[SessionFileChange]) -> HashMap<String, Rc<T
         .collect()
 }
 
-/// File changes of the turn a settled assistant message closes. Only the
-/// turn's last visible assistant message carries them: a turn is one user
-/// message and everything the agent did until the next one.
-pub fn turn_changes_for_assistant(
-    messages: &[AgentMessage],
+/// File changes of the turn a settled assistant response closes. Only the
+/// last turn with responses before the next user turn carries them.
+pub fn turn_changes_for_turn(
+    turns: &[Turn],
     turn_changes: &HashMap<String, Rc<TurnChanges>>,
-    index: usize,
-    is_hidden: impl Fn(&AgentMessage) -> bool,
+    turn_index: usize,
 ) -> Option<Rc<TurnChanges>> {
     if turn_changes.is_empty() {
         return None;
     }
-    let Some(AgentMessage::Assistant { .. }) = messages.get(index) else {
-        return None;
-    };
-    if is_hidden(&messages[index]) {
+    let turn = turns.get(turn_index)?;
+    if turn.responses.is_empty() {
         return None;
     }
-    let closes_turn = messages[index + 1..]
+    let closes_user_turn = turns[turn_index + 1..]
         .iter()
-        .take_while(|message| !matches!(message, AgentMessage::User { .. }))
-        .all(|message| !matches!(message, AgentMessage::Assistant { .. }) || is_hidden(message));
-    if !closes_turn {
+        .take_while(|next| next.user.is_none())
+        .all(|next| next.responses.is_empty());
+    if !closes_user_turn {
         return None;
     }
-    let user_id = messages[..index]
+    let user_id = turns[..=turn_index]
         .iter()
         .rev()
-        .find_map(|message| match message {
-            AgentMessage::User { id, .. } => Some(id.clone()),
+        .find_map(|t| match t.user.as_ref() {
+            Some(AgentMessage::User { id, .. }) => id.clone(),
             _ => None,
-        })
-        .flatten();
-    turn_changes.get(&user_id?).cloned()
+        })?;
+    turn_changes.get(&user_id).cloned()
 }
 
-/// Indices of messages whose rows carry turn file change chips.
+/// Indices of turns whose rows carry turn file change chips.
 pub fn rows_with_turn_changes(
-    messages: &[AgentMessage],
+    turns: &[Turn],
     turn_changes: &HashMap<String, Rc<TurnChanges>>,
-    is_hidden: impl Fn(&AgentMessage) -> bool,
 ) -> Vec<usize> {
-    (0..messages.len())
-        .filter(|&index| {
-            turn_changes_for_assistant(messages, turn_changes, index, &is_hidden).is_some()
-        })
+    (0..turns.len())
+        .filter(|&index| turn_changes_for_turn(turns, turn_changes, index).is_some())
         .collect()
 }
 
-/// Copy server-assigned ids onto transcript user messages that still lack one.
-pub fn adopt_user_ids(messages: &mut [AgentMessage], canonical: &[AgentMessage]) -> bool {
-    let mut canonical_ids = canonical.iter().rev().filter_map(|message| match message {
-        AgentMessage::User { id, .. } => Some(id.clone()),
-        _ => None,
+/// Copy server-assigned ids onto optimistic user turns that still lack one.
+pub fn adopt_user_ids(turns: &mut [Turn], canonical: &[Turn]) -> bool {
+    let mut canonical_ids = canonical.iter().rev().filter_map(|turn| {
+        let Some(AgentMessage::User { id, .. }) = turn.user.as_ref() else {
+            return None;
+        };
+        Some((turn.id.clone(), id.clone()))
     });
     let mut changed = false;
-    for message in messages.iter_mut().rev() {
-        let AgentMessage::User { id, .. } = message else {
+    for turn in turns.iter_mut().rev() {
+        let Some(AgentMessage::User { id, .. }) = turn.user.as_mut() else {
             continue;
         };
-        let Some(canonical_id) = canonical_ids.next() else {
+        let Some((canonical_turn_id, canonical_user_id)) = canonical_ids.next() else {
             break;
         };
-        if id.is_none() && canonical_id.is_some() {
-            *id = canonical_id;
+        if turn.id.is_empty() && !canonical_turn_id.is_empty() {
+            turn.id = canonical_turn_id;
+            changed = true;
+        }
+        if id.is_none() && canonical_user_id.is_some() {
+            *id = canonical_user_id;
             changed = true;
         }
     }

@@ -1014,7 +1014,7 @@ impl ConsoleDesktopApp {
         }
         self.sync_workspace_webviews(cx);
         self.transcript_for_pane(&target_pane).update(cx, |t, cx| {
-            t.set_messages(Vec::new(), cx);
+            t.set_turns(Vec::new(), cx);
             t.clear_session_changes(cx);
         });
         // Adopt the card's selections for this pane so the run
@@ -1225,10 +1225,10 @@ impl ConsoleDesktopApp {
                             this.apply_session_header_for_pane(&pane_id, &detail.header, cx);
                             if this.active_session_for_pane(&pane_id).as_deref()
                                 == Some(session_id.as_str())
-                                && !detail.messages.is_empty()
+                                && !detail.turns.is_empty()
                             {
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
-                                    t.set_messages(detail.messages, cx);
+                                    t.set_turns(detail.turns, cx);
                                 });
                             }
                             this.attach_session_run_for_pane(

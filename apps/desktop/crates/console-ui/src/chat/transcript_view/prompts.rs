@@ -6,7 +6,6 @@ impl TranscriptView {
         prompts: Vec<console_core::SessionPrompt>,
         cx: &mut Context<Self>,
     ) {
-        // Open at the newest prompts, which are the ones most likely wanted.
         if let Some(last) = prompts.len().checked_sub(1) {
             self.prompts_scroll
                 .scroll_to_item_strict(last, ScrollStrategy::Bottom);
@@ -27,15 +26,14 @@ impl TranscriptView {
     }
 
     /// Scroll so the user prompt `from_end` prompts back from the newest (0 =
-    /// newest) is at the top of the viewport. Counting from the end needs no
-    /// message id, which prompts sent this session do not have yet. Returns
-    /// false when that prompt is not loaded.
+    /// newest) is at the top of the viewport. Returns false when that prompt
+    /// is not loaded.
     pub fn jump_to_prompt(&mut self, from_end: usize, cx: &mut Context<Self>) -> bool {
         let user_rows: Vec<usize> = self
-            .messages
+            .turns
             .iter()
             .enumerate()
-            .filter(|(_, message)| matches!(message, AgentMessage::User { .. }))
+            .filter(|(_, turn)| turn.user.is_some())
             .map(|(row, _)| row)
             .collect();
         let Some(row) = user_rows
@@ -49,17 +47,13 @@ impl TranscriptView {
         true
     }
 
-    /// When the newest user prompt was sent, in unix seconds. A run attached
-    /// after a restart has no live start time; this is the closest persisted one.
+    /// When the newest user prompt was sent, in unix seconds.
     pub fn latest_user_prompt_at(&self) -> Option<i64> {
-        self.messages
-            .iter()
-            .rev()
-            .find_map(|message| match message {
-                AgentMessage::User { created_at, .. } => {
-                    created_at.and_then(crate::utils::time::normalize_unix_timestamp)
-                }
-                _ => None,
-            })
+        self.turns.iter().rev().find_map(|turn| match turn.user.as_ref() {
+            Some(AgentMessage::User { created_at, .. }) => {
+                created_at.and_then(crate::utils::time::normalize_unix_timestamp)
+            }
+            _ => None,
+        })
     }
 }

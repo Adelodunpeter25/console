@@ -14,7 +14,7 @@ fn decodes_bootstrap_fields_through_flatten() {
     let value: SessionBootstrapResponse =
         serde_json::from_str(&payload("[]")).expect("bootstrap payload");
     assert_eq!(value.detail.header.id, "s1");
-    assert!(value.detail.messages.is_empty());
+    assert!(value.detail.turns.is_empty());
     assert!(value.changes.is_empty());
     assert!(value.todos.is_empty());
     assert!(value.suggestions.is_empty());
@@ -28,7 +28,7 @@ fn flatten_keeps_the_custom_message_decoder() {
     let turns = r#"[{"id":"t1","createdAt":"1700000000000","userMessage":{"user":{"content":"Hello","contextFiles":["/a.ts"],"attachments":[{"data":"QUJD","mimeType":"image/png"}]}}}]"#;
     let value: SessionBootstrapResponse =
         serde_json::from_str(&payload(turns)).expect("bootstrap payload with a user message");
-    assert_eq!(value.detail.messages.len(), 1);
+    assert_eq!(value.detail.turns.len(), 1);
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn decodes_binary_bootstrap_envelope() {
         .expect("encode/decode round trip");
     let value = SessionBootstrapResponse::from_proto(decoded);
     assert_eq!(value.detail.header.id, "s1");
-    assert_eq!(value.detail.messages.len(), 1);
+    assert_eq!(value.detail.turns.len(), 1);
     assert_eq!(value.todos[0].content, "task");
     assert_eq!(value.background_work[0].id, "w1");
 }
@@ -102,7 +102,7 @@ fn decodes_binary_history_page() {
         .expect("encode/decode round trip");
     let page = SessionDetailResponse::from_proto_page(decoded);
     assert_eq!(page.header.id, "s1");
-    assert_eq!(page.messages.len(), 1);
+    assert_eq!(page.turns.len(), 1);
     assert!(page.has_more);
     assert_eq!(page.next_cursor, Some(42));
 }

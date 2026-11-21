@@ -83,7 +83,7 @@ impl ConsoleDesktopApp {
                 self.selected_session_id = None;
                 self.restore_draft_for_pane(pane_id, None, cx);
                 transcript.update(cx, |t, cx| {
-                    t.set_messages(Vec::new(), cx);
+                    t.set_turns(Vec::new(), cx);
                     t.clear_session_changes(cx);
                 });
             }
@@ -602,7 +602,7 @@ impl ConsoleDesktopApp {
                 state.selected_project_id = Some(key);
             }
             let transcript_has_messages =
-                self.transcript_for_pane(pane_id).read(cx).message_count() > 0;
+                self.transcript_for_pane(pane_id).read(cx).turn_count() > 0;
             let already_loaded = self
                 .workspace_pane_states
                 .get(pane_id)
@@ -631,7 +631,7 @@ impl ConsoleDesktopApp {
                     self.save_transcript_scroll_position_for_pane(pane_id, prev_sid, cx);
                 }
                 self.transcript_for_pane(pane_id).update(cx, |t, cx| {
-                    t.set_messages(Vec::new(), cx);
+                    t.set_turns(Vec::new(), cx);
                     t.clear_session_changes(cx);
                 });
             }
@@ -803,7 +803,7 @@ impl ConsoleDesktopApp {
                     self.load_session_messages_for_pane(next_pane_id, session_id, cx);
                 } else {
                     transcript.update(cx, |transcript, cx| {
-                        transcript.set_messages(Vec::new(), cx);
+                        transcript.set_turns(Vec::new(), cx);
                     });
                 }
             }
@@ -912,7 +912,7 @@ impl ConsoleDesktopApp {
             if let Some(source_session_id) = self.active_session_for_pane(&source_pane_id) {
                 let source_transcript = self.transcript_for_pane(&source_pane_id);
                 source_transcript.update(cx, |transcript, cx| {
-                    transcript.set_messages(Vec::new(), cx);
+                    transcript.set_turns(Vec::new(), cx);
                 });
                 self.load_session_messages_for_pane(source_pane_id, source_session_id, cx);
             } else if self
@@ -923,7 +923,7 @@ impl ConsoleDesktopApp {
             {
                 self.transcript_for_pane(&source_pane_id)
                     .update(cx, |transcript, cx| {
-                        transcript.set_messages(Vec::new(), cx);
+                        transcript.set_turns(Vec::new(), cx);
                     });
             }
         }
@@ -935,7 +935,7 @@ impl ConsoleDesktopApp {
             self.restore_draft_for_pane(&target_pane_id, Some(&session_id), cx);
             self.transcript_for_pane(&target_pane_id)
                 .update(cx, |transcript, cx| {
-                    transcript.set_messages(Vec::new(), cx);
+                    transcript.set_turns(Vec::new(), cx);
                 });
             self.load_session_messages_for_pane(target_pane_id, session_id, cx);
         }
@@ -983,7 +983,7 @@ impl ConsoleDesktopApp {
             if let Some(source_session_id) = self.active_session_for_pane(&source_pane_id) {
                 let source_transcript = self.transcript_for_pane(&source_pane_id);
                 source_transcript.update(cx, |transcript, cx| {
-                    transcript.set_messages(Vec::new(), cx);
+                    transcript.set_turns(Vec::new(), cx);
                 });
                 self.load_session_messages_for_pane(source_pane_id, source_session_id, cx);
             } else if self
@@ -994,7 +994,7 @@ impl ConsoleDesktopApp {
             {
                 self.transcript_for_pane(&source_pane_id)
                     .update(cx, |transcript, cx| {
-                        transcript.set_messages(Vec::new(), cx);
+                        transcript.set_turns(Vec::new(), cx);
                     });
             }
         }
@@ -1007,7 +1007,7 @@ impl ConsoleDesktopApp {
             self.restore_draft_for_pane(&new_pane_id, Some(&session_id), cx);
             self.transcript_for_pane(&new_pane_id)
                 .update(cx, |transcript, cx| {
-                    transcript.set_messages(Vec::new(), cx);
+                    transcript.set_turns(Vec::new(), cx);
                 });
             self.load_session_messages_for_pane(new_pane_id, session_id, cx);
         }

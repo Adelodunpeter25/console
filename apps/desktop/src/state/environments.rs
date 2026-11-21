@@ -366,7 +366,7 @@ impl ConsoleDesktopApp {
                         this.wake_boundary_pushed_at.clear();
                         this.stream_render_pending.clear();
                         this.transcript_view
-                            .update(cx, |t, cx| t.set_messages(Vec::new(), cx));
+                            .update(cx, |t, cx| t.set_turns(Vec::new(), cx));
                         this.composer_input.update(cx, |input, cx| input.clear(cx));
 
                         this.usage_reports = None;

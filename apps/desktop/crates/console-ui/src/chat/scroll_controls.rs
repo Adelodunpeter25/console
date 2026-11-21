@@ -82,7 +82,7 @@ impl TranscriptView {
         theme: Theme,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let has_prompts = !self.messages.is_empty();
+        let has_prompts = !self.turns.is_empty();
         let show_down = !self.list_state.is_following_tail();
         if (!has_prompts && !show_down) || !(self.hovered || self.prompts_open) {
             return div().into_any_element();

@@ -478,7 +478,7 @@ impl ConsoleDesktopApp {
                 input.set_prompt_history(Vec::new(), cx);
             });
             transcript.update(cx, |t, cx| {
-                t.set_messages(Vec::new(), cx);
+                t.set_turns(Vec::new(), cx);
             });
             if let Some(next_id) = self.selected_session_id.clone() {
                 self.load_session_messages_for_pane(pane_id, next_id, cx);
@@ -1293,7 +1293,7 @@ impl ConsoleDesktopApp {
             .unwrap_or_else(|| active_pane_id.clone());
         self.restore_draft_for_pane(&restore_pane, Some(&id), cx);
         self.active_transcript_view().update(cx, |t, cx| {
-            t.set_messages(Vec::new(), cx);
+            t.set_turns(Vec::new(), cx);
             t.clear_session_changes(cx);
         });
         self.load_session_messages(id, cx);
@@ -1669,14 +1669,14 @@ impl ConsoleDesktopApp {
 
                                 composer.update(cx, |input, cx| {
                                     input.set_prompt_history(
-                                        user_prompt_history(&detail.messages),
+                                        user_prompt_history(&detail.turns),
                                         cx,
                                     );
                                 });
                                 let app_entity_for_older = entity.clone();
                                 transcript.update(cx, |t, cx| {
                                     t.set_session_changes(Rc::new(bootstrap.changes), cx);
-                                    t.set_messages(detail.messages, cx);
+                                    t.set_turns(detail.turns, cx);
                                     t.set_pagination(detail.has_more, detail.next_cursor);
                                     // Wire Load older handler for this pane/session
                                     let pane_for_older = pane_id.clone();

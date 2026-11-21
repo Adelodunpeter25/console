@@ -867,7 +867,7 @@ impl ConsoleDesktopApp {
                                     this.apply_session_header_for_pane(&run_pane_id, &detail.header, cx);
                                     this.composer_for_pane(&run_pane_id).update(cx, |input, cx| {
                                         input.set_prompt_history(
-                                            user_prompt_history(&detail.messages),
+                                            user_prompt_history(&detail.turns),
                                             cx,
                                         );
                                     });
@@ -877,10 +877,10 @@ impl ConsoleDesktopApp {
                                         cx,
                                     );
                                     this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                        if detail.messages.len() >= t.message_count() {
-                                            t.set_messages(detail.messages, cx);
+                                        if detail.turns.len() >= t.turn_count() {
+                                            t.set_turns(detail.turns, cx);
                                         } else {
-                                            t.adopt_user_message_ids(&detail.messages, cx);
+                                            t.adopt_user_message_ids(&detail.turns, cx);
                                         }
                                     });
                                     this.refresh_turn_changes_for_pane(&run_pane_id, &session_id, cx);
@@ -1408,10 +1408,10 @@ impl ConsoleDesktopApp {
                                                 this.transcript_for_pane(&pane).update(
                                                     cx,
                                                     |t, cx| {
-                                                        if detail.messages.len()
-                                                            >= t.message_count()
+                                                        if detail.turns.len()
+                                                            >= t.turn_count()
                                                         {
-                                                            t.set_messages(detail.messages, cx);
+                                                            t.set_turns(detail.turns, cx);
                                                             t.resume_streaming(started_at, cx);
                                                         }
                                                     },
@@ -1584,10 +1584,10 @@ impl ConsoleDesktopApp {
                                     cx,
                                 );
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                    if detail.messages.len() >= t.message_count() {
-                                        t.set_messages(detail.messages, cx);
+                                    if detail.turns.len() >= t.turn_count() {
+                                        t.set_turns(detail.turns, cx);
                                     } else {
-                                        t.adopt_user_message_ids(&detail.messages, cx);
+                                        t.adopt_user_message_ids(&detail.turns, cx);
                                     }
                                     t.finish_streaming(cx);
                                 });

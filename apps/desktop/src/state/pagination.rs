@@ -107,8 +107,8 @@ impl ConsoleDesktopApp {
                                     return;
                                 }
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
-                                    t.prepend_messages(
-                                        detail.messages,
+                                    t.prepend_turns(
+                                        detail.turns,
                                         detail.has_more,
                                         detail.next_cursor,
                                         cx,
@@ -232,8 +232,8 @@ impl ConsoleDesktopApp {
                         };
                         let transcript = this.transcript_for_pane(&pane_id);
                         transcript.update(cx, |t, cx| {
-                            t.prepend_messages(
-                                detail.messages,
+                            t.prepend_turns(
+                                detail.turns,
                                 state.has_more,
                                 state.next_cursor,
                                 cx,

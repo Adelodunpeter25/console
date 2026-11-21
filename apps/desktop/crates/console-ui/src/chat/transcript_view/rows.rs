@@ -1,7 +1,7 @@
 use super::*;
 
 impl TranscriptView {
-    /// Re-anchor the list after the message set changed: keep following the
+    /// Re-anchor the list after the turn set changed: keep following the
     /// tail when the user is already following it (streaming, new prompts),
     /// otherwise leave the scroll position alone.
     pub(super) fn refresh_list(&self) {
@@ -25,129 +25,61 @@ impl TranscriptView {
     }
 
     /// Invalidate only the row whose content changed. GPUI can retain the
-    /// measured heights and virtualization state for every other message.
-    pub(super) fn remeasure_message(&self, message_index: usize) {
-        if message_index < self.list_state.item_count() {
+    /// measured heights and virtualization state for every other turn.
+    pub(super) fn remeasure_turn(&self, turn_index: usize) {
+        if turn_index < self.list_state.item_count() {
             self.list_state
-                .remeasure_items(message_index..message_index + 1);
+                .remeasure_items(turn_index..turn_index + 1);
         }
     }
 
-    /// Remeasure the row that owns the active run block (the latest wake
-    /// boundary if one follows the latest user message, otherwise the user row).
     pub(super) fn remeasure_active_run_owner(&self) {
-        let Some(user_index) = self
-            .messages
-            .iter()
-            .rposition(|message| matches!(message, AgentMessage::User { .. }))
-        else {
-            return;
-        };
-        let latest_run_boundary = self
-            .messages
-            .iter()
-            .rposition(|message| matches!(message, AgentMessage::RunBoundary { .. }))
-            .filter(|&idx| idx > user_index);
-        let latest_wake_boundary = self
-            .wake_boundaries
-            .iter()
-            .map(|(idx, _, _)| *idx)
-            .filter(|&idx| idx > user_index)
-            .max();
-        let owner = latest_run_boundary
-            .into_iter()
-            .chain(latest_wake_boundary)
-            .max()
-            .unwrap_or(user_index);
-        self.remeasure_message(owner);
-    }
-
-    pub(super) fn invalidate_activity_cache(&self) {
-        self.tool_activity_cache_version
-            .set(self.tool_activity_cache_version.get().wrapping_add(1));
-        self.tool_activity_cache.borrow_mut().clear();
-    }
-
-    /// Drop only the newest user's cached run timeline. Stream deltas,
-    /// tool-call upserts/results, and streaming-flag changes can only alter
-    /// the run after the last user message, so earlier users' cached
-    /// timelines stay valid. Deliberately does NOT bump the cache version:
-    /// surviving entries must keep matching it to remain hits.
-    pub(super) fn invalidate_latest_activity_cache(&self) {
-        let latest_user = self
-            .messages
-            .iter()
-            .rposition(|message| matches!(message, AgentMessage::User { .. }));
-        if let Some(user_index) = latest_user {
-            self.tool_activity_cache.borrow_mut().remove(&user_index);
+        if let Some(last) = self.turns.len().checked_sub(1) {
+            self.remeasure_turn(last);
         }
     }
 
-    /// List rows: the messages plus, while a run is streaming, the trailing
-    /// "Working…" indicator — a row like in Waku, so it sits directly below
-    /// whatever has streamed in instead of floating at the bottom edge.
+    /// List rows: one row per turn plus, while a run is streaming without
+    /// tool activity in the tail turn, the trailing "Working…" indicator.
     pub(super) fn row_count(&self) -> usize {
-        // Cheap check: does the active segment (after the latest user message
-        // or wake boundary) contain any tool call?
         let has_active_tool_activity = self
-            .messages
-            .iter()
-            .rposition(|message| matches!(message, AgentMessage::User { .. }))
-            .is_some_and(|user_index| {
-                let latest_run_boundary = self
-                    .messages
+            .turns
+            .last()
+            .and_then(|turn| turn.run.as_ref())
+            .is_some_and(|run| {
+                run.events
                     .iter()
-                    .rposition(|message| matches!(message, AgentMessage::RunBoundary { .. }))
-                    .filter(|&idx| idx > user_index)
-                    .map(|idx| idx + 1);
-                let latest_wake_boundary = self
-                    .wake_boundaries
-                    .iter()
-                    .map(|(idx, _, _)| *idx)
-                    .filter(|&idx| idx > user_index)
-                    .max();
-                let segment_start = (user_index + 1)
-                    .max(latest_run_boundary.unwrap_or(0))
-                    .max(latest_wake_boundary.unwrap_or(0));
-                self.messages
-                    .iter()
-                    .skip(segment_start)
-                    .any(|message| match message {
-                        AgentMessage::Assistant { content, .. } => content
-                            .iter()
-                            .any(|part| matches!(part, AssistantContentPart::ToolCall { .. })),
-                        AgentMessage::User { .. }
-                        | AgentMessage::RunBoundary { .. }
-                        | AgentMessage::ToolResult { .. } => false,
-                    })
+                    .any(|event| matches!(event, ActivityEvent::ToolCall(_)))
             });
-        self.messages.len() + usize::from(self.is_streaming && !has_active_tool_activity)
+        self.turns.len() + usize::from(self.is_streaming && !has_active_tool_activity)
     }
 
     pub(crate) fn markdown_view_for(
         &self,
-        message_index: usize,
-        part_index: usize,
+        turn_index: usize,
+        slot: usize,
     ) -> Rc<RefCell<MarkdownView>> {
         self.markdown_cache
             .borrow_mut()
-            .entry((message_index, part_index))
+            .entry((turn_index, slot))
             .or_insert_with(|| Rc::new(RefCell::new(MarkdownView::new())))
             .clone()
     }
 
     pub(crate) fn assistant_presentation(
         &self,
-        message_index: usize,
+        turn_index: usize,
+        response_index: usize,
         content: &[AssistantContentPart],
     ) -> AssistantPresentation {
+        let key = turn_index * 1024 + response_index;
         let revision = self
             .content_revisions
-            .get(message_index)
+            .get(turn_index)
             .copied()
             .unwrap_or_default();
         let mut cache = self.presentation_cache.borrow_mut();
-        if let Some((cached_revision, presentation)) = cache.get(&message_index)
+        if let Some((cached_revision, presentation)) = cache.get(&key)
             && *cached_revision == revision
         {
             return presentation.clone();
@@ -167,7 +99,7 @@ impl TranscriptView {
             content_parts,
             copy_content: SharedString::from(copy_content),
         };
-        cache.insert(message_index, (revision, presentation.clone()));
+        cache.insert(key, (revision, presentation.clone()));
         presentation
     }
 }

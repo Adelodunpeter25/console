@@ -64,12 +64,15 @@ impl TranscriptView {
         let Some(load) = self.load_tool_result.clone() else {
             return;
         };
-        let Some(message_id) = self.messages.iter().find_map(|message| match message {
-            AgentMessage::ToolResult { results, .. } => results
-                .iter()
-                .find(|r| r.tool_call_id == call_id && r.omitted_size > 0)
-                .and_then(|r| r.result_message_id.clone()),
-            _ => None,
+        let Some(message_id) = self.turns.iter().find_map(|turn| {
+            turn.run.as_ref()?.events.iter().find_map(|event| match event {
+                ActivityEvent::ToolCall(entry) if entry.call.id == call_id => entry
+                    .result
+                    .as_ref()
+                    .filter(|r| r.omitted_size > 0)
+                    .and_then(|r| r.result_message_id.clone()),
+                _ => None,
+            })
         }) else {
             return;
         };
@@ -82,15 +85,16 @@ impl TranscriptView {
             let _ = this.update(cx, |this, cx| {
                 this.fetching_results.remove(&call_id);
                 let Some(full) = full else { return };
-                for message in this.messages.iter_mut() {
-                    if let AgentMessage::ToolResult { results, .. } = message
-                        && let Some(slot) = results.iter_mut().find(|r| r.tool_call_id == call_id)
+                for turn in this.turns.iter_mut() {
+                    if let Some(run) = turn.run.as_mut()
+                        && let Some(ActivityEvent::ToolCall(entry)) = run.events.iter_mut().find(|event| {
+                            matches!(event, ActivityEvent::ToolCall(e) if e.call.id == call_id)
+                        })
                     {
-                        *slot = full;
+                        entry.result = Some(full);
                         break;
                     }
                 }
-                this.invalidate_activity_cache();
                 this.refresh_list();
                 cx.notify();
             });
