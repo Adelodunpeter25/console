@@ -38,6 +38,13 @@ const bootstrapScript = `
     };
     globalThis.readFile = globalThis.file;
 
+    // fileRaw(path): exact file bytes, no header or line numbers. Use this (not
+    // file()) for read-modify-write.
+    globalThis.fileRaw = async function(path, opts) {
+        return await globalThis.file(path, Object.assign({}, opts || {}, { raw: true }));
+    };
+    globalThis.readRaw = globalThis.fileRaw;
+
     globalThis.write = async function(path, content) {
         return await bridge.call({ tool: "writeFile", input: { path: String(path), content: String(content) } });
     };

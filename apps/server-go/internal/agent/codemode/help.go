@@ -29,7 +29,8 @@ var builtinCatalog = []builtinDoc{
 	{name: "bashJob", group: "shell", signature: "bashJob(action, [jobId], [opts])", doc: "Manage background jobs started with $({background:true}). action is output (peek at partial output; opts {cursor, limit}), kill, or list. Returns text."},
 
 	// Files
-	{name: "file", group: "files", signature: "file(path, [startLine], [endLine]) | file(path, {startLine, endLine})", doc: "Read a file's text. Default cap is 300 lines, so pass a 1-based inclusive range to page through larger files. Relative to the process CWD or absolute. Aliases: readFile."},
+	{name: "file", group: "files", signature: "file(path, [startLine], [endLine]) | file(path, {startLine, endLine})", doc: "Read a file FOR DISPLAY: the result has a 'File:/Showing:/Size:' header and 'N: ' line-number prefixes, so NEVER pass it to write()/edit(); use fileRaw() for that. Default cap is 300 lines, so pass a 1-based inclusive range to page through larger files. Relative to the process CWD or absolute. Aliases: readFile."},
+	{name: "fileRaw", group: "files", signature: "fileRaw(path, [{startLine, endLine}])", doc: "Read a file's exact bytes: no header, no line numbers, no JSON parsing. The only safe read for read-modify-write (await write(p, (await fileRaw(p)).replace(...))). Errors instead of truncating when the file is over 512KB. Aliases: readRaw."},
 	{name: "write", group: "files", signature: "write(path, content)", doc: "Write/overwrite a file, creating parent directories. Aliases: writeFile."},
 	{name: "edit", group: "files", signature: "edit(path, oldStr, newStr)", doc: "Exact string replacement in a file; throws if oldStr is missing or not unique. Aliases: editFile."},
 	{name: "glob", group: "files", signature: "glob(pattern, [root]) | glob(pattern, {root, maxResults})", doc: "Find file paths matching a glob pattern. Default 200 results; raise maxResults for more."},

@@ -29,6 +29,7 @@ type readFileInput struct {
 	Path      string `json:"path" jsonschema:"required,description=Absolute path to the file to read"`
 	StartLine int    `json:"startLine,omitempty" jsonschema:"description=1-based start line (inclusive)"`
 	EndLine   int    `json:"endLine,omitempty" jsonschema:"description=1-based end line (inclusive)"`
+	Raw       bool   `json:"raw,omitempty" jsonschema:"description=Return the exact file bytes with no header or line numbers, for read-modify-write. Reads the whole file (errors instead of truncating when it is too large)."`
 }
 
 // readMaxBytes/readMaxLines are the read tool's safety ceilings. The capped
@@ -160,6 +161,26 @@ func readFileExecute(ctx context.Context, in readFileInput, opts ReadFileOptions
 	if len(data) > readMaxBytes {
 		data = data[:readMaxBytes]
 		byteCapped = true
+	}
+	if in.Raw {
+		if byteCapped {
+			return nil, NewToolError("Cannot read %s raw: file is over the %d byte limit; read a line range instead, or use a shell command.", in.Path, readMaxBytes)
+		}
+		if in.StartLine == 0 && in.EndLine == 0 {
+			return textResult(string(data)), nil
+		}
+		rawLines := strings.Split(string(data), "\n")
+		from, to := in.StartLine, in.EndLine
+		if from < 1 {
+			from = 1
+		}
+		if to < 1 || to > len(rawLines) {
+			to = len(rawLines)
+		}
+		if from > to {
+			return textResult(""), nil
+		}
+		return textResult(strings.Join(rawLines[from-1:to], "\n")), nil
 	}
 	if len(data) == 0 {
 		return textResult(fmt.Sprintf("File is empty: %s", in.Path)), nil

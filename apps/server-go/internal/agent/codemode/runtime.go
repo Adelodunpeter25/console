@@ -293,7 +293,14 @@ func (r *Runtime) dispatchCall(ctx context.Context, args map[string]any) (*jsker
 		IsError:  false,
 	})
 
-	unwrapped := unwrapContent(res.Content)
+	var unwrapped any
+	if raw, _ := input["raw"].(bool); raw && toolName == "readFile" {
+		// A raw read must come back byte-for-byte; auto-parsing JSON text
+		// would reformat package.json and friends.
+		unwrapped = formatContentString(res.Content)
+	} else {
+		unwrapped = unwrapContent(res.Content)
+	}
 	raw, marshalErr := json.Marshal(unwrapped)
 	if marshalErr != nil {
 		return nil, fmt.Errorf("marshal tool output: %w", marshalErr)
