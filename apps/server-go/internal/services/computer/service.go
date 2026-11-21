@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-
-	"github.com/Adelodunpeter25/voxl-go"
 )
 
 // FrameHandler receives raw wire frames (16-byte header + H.264) to stream to viewers.
@@ -18,7 +16,7 @@ type FrameHandler func(kind uint32, data []byte)
 type Service struct {
 	mu          sync.Mutex
 	displayMgr  *displayManager
-	session     *voxl.Session
+	session     *voxlSession
 	subscribers map[uint64]FrameHandler
 	nextSubID   uint64
 	running     bool
@@ -57,7 +55,7 @@ func (s *Service) Subscribe(ctx context.Context, handler FrameHandler) (func(), 
 			return nil, fmt.Errorf("computer: failed to prepare display: %w", err)
 		}
 
-		sess, err := voxl.NewSession(voxl.Config{
+		sess, err := newVoxlSession(voxlConfig{
 			Display:      display,
 			Preset:       "ultrafast",
 			FPS:          60,

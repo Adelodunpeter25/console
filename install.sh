@@ -61,8 +61,8 @@ fi
 curl -fSL "${BASE_URL}/${LIB_ASSET}" -o "${PREFIX}/${LIB_FILE}"
 chmod 644 "${PREFIX}/${LIB_FILE}"
 
-# voxl desktop-streaming library (libvoxl): linked into the server with an
-# rpath of the binary's own directory, so the server will not start without it.
+# voxl desktop-streaming library (libvoxl): dlopened at runtime. Best-effort —
+# the server runs without it; the Computer streaming tab just stays unavailable.
 if [ "$os" = "linux" ]; then
   VOXL_FILE="libvoxl.so"
   VOXL_ASSET="libvoxl-${SUFFIX}.so"
@@ -70,8 +70,12 @@ else
   VOXL_FILE="libvoxl.dylib"
   VOXL_ASSET="libvoxl-${SUFFIX}.dylib"
 fi
-curl -fSL "${BASE_URL}/${VOXL_ASSET}" -o "${PREFIX}/${VOXL_FILE}"
-chmod 644 "${PREFIX}/${VOXL_FILE}"
+if curl -fsSL "${BASE_URL}/${VOXL_ASSET}" -o "${PREFIX}/${VOXL_FILE}"; then
+  chmod 644 "${PREFIX}/${VOXL_FILE}"
+else
+  echo "NOTE: voxl streaming library not installed (${VOXL_ASSET} unavailable); Computer tab will be disabled." >&2
+  rm -f "${PREFIX}/${VOXL_FILE}"
+fi
 
 # cua native sidecar (libcua_driver_sdk): backs the computer-use capability.
 # Best-effort — the server runs without it, /computer-use just stays

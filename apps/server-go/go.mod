@@ -5,7 +5,6 @@ go 1.26.1
 require (
 	github.com/Adelodunpeter25/iroh-go v0.0.0-20261107173249-9605c02ec0fb
 	github.com/Adelodunpeter25/sim-go v0.0.0-20261113115339-d943d8632ca3
-	github.com/Adelodunpeter25/voxl-go v0.4.1-0.20261121122719-bf233246a93f
 	github.com/BurntSushi/toml v1.6.0
 	github.com/MoeForge/moejs v0.1.0
 	github.com/creack/pty v1.1.24

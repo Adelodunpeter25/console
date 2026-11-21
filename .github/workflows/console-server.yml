@@ -77,7 +77,6 @@ jobs:
             cua-asset: libcua_driver_sdk-macos-x64.dylib
             voxl-triple: x86_64-apple-darwin
             voxl-asset: libvoxl-macos-x64.dylib
-            extld: -extldflags '-Wl,-rpath,@executable_path'
           - os-suffix: macos-arm64
             runner: macos-15
             goos: darwin
@@ -90,7 +89,6 @@ jobs:
             cua-asset: libcua_driver_sdk-macos-arm64.dylib
             voxl-triple: aarch64-apple-darwin
             voxl-asset: libvoxl-macos-arm64.dylib
-            extld: -extldflags '-Wl,-rpath,@executable_path'
           # windows-x64 only for now: the sidecars ship an arm64 Windows
           # build too, but the mingw cgo toolchain on the arm64 Windows
           # runner is not proven, so x64 ships first. The .exe suffix is
@@ -116,9 +114,7 @@ jobs:
           go-version: "1.26.10"
           cache-dependency-path: apps/server-go/go.sum
 
-      # libvoxl is linked with an rpath. cgo rejects "@executable_path" in
-      # #cgo LDFLAGS, so on macOS it is added here at the final link instead.
-      # server-go uses cgo (fff + cua dlopen bindings). On Windows the
+      # server-go uses cgo (fff + cua + voxl dlopen bindings). On Windows the
       # runner's preinstalled mingw-w64 gcc satisfies that; a matching host
       # keeps it a plain gcc link like the native unix runners.
       - name: Build console binary
@@ -127,7 +123,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1
         run: >
-          go -C apps/server-go build -trimpath -ldflags="-s -w ${{ matrix.extld }}"
+          go -C apps/server-go build -trimpath -ldflags="-s -w"
           -o ../../${{ matrix.bin }} ./cmd/console
 
       # Stage the native sidecars dlopened at runtime: fff (file search)
@@ -153,14 +149,13 @@ jobs:
           mv "$cua_tmp/package/${{ matrix.cua-lib }}" "${{ matrix.cua-asset }}"
           rm -rf "$cua_tmp"
 
-      # libvoxl (desktop streaming) is linked, not dlopened: the binary's
-      # rpath is $ORIGIN / @executable_path, so it must ship beside it.
-      # Windows has no libvoxl build; the computer service is a stub there.
+      # libvoxl (desktop streaming) is dlopened at runtime from beside the
+      # binary. Windows has no libvoxl build; the computer service is a stub there.
       - name: Stage voxl library
         if: matrix.voxl-triple != ''
         shell: bash
         run: |
-          voxl_dir="$(go -C apps/server-go list -m -f '{{.Dir}}' github.com/Adelodunpeter25/voxl-go)"
+          voxl_dir="$(go -C apps/server-go mod download -json github.com/Adelodunpeter25/voxl-go@v0.4.1-0.20261121122719-bf233246a93f | python3 -c 'import sys,json; print(json.load(sys.stdin)["Dir"])')"
           src="$(ls "$voxl_dir"/libs/${{ matrix.voxl-triple }}/libvoxl.*)"
           cp "$src" "${{ matrix.voxl-asset }}"
 

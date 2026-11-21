@@ -30,8 +30,7 @@ type upgradeTarget struct {
 	libAsset string
 	cuaPath  string
 	cuaAsset string
-	// libvoxl is linked (rpath), so the binary will not start without it.
-	// Empty on Windows, which has no build.
+	// libvoxl is dlopened at runtime (best-effort). Empty on Windows, which has no build.
 	voxlPath  string
 	voxlAsset string
 }
@@ -195,7 +194,7 @@ func UpgradeDaemon() error {
 	}
 	if target.voxlPath != "" {
 		if err := downloadTo(upgradeBaseURL+"/"+target.voxlAsset, target.voxlPath, 0o644); err != nil {
-			return err
+			fmt.Printf("NOTE: voxl streaming library not updated (%v); Computer tab may be unavailable.\n", err)
 		}
 	}
 	fmt.Println("Binary swapped.")
