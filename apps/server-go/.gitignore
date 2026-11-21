@@ -1,6 +1,11 @@
-third_party/fff/libfff_c.so
-third_party/fff/libfff_c.dylib
-# Cua Driver SDK (trycua/cua releases; ~20MB per platform, never committed).
-# Provided at install time under third_party/cua/ (host library directly,
-# release staging per platform subdir) or via CUA_DRIVER_LIB_PATH.
-third_party/cua/
+File: /Users/adelodunpeter/Developer/Projects/console/apps/server-go/.gitignore
+Showing: all 7 lines
+Size: 294 bytes
+1: third_party/fff/libfff_c.so
+2: third_party/fff/libfff_c.dylib
+3: # Cua Driver SDK (trycua/cua releases; ~20MB per platform, never committed).
+4: # Provided at install time under third_party/cua/ (host library directly,
+5: # release staging per platform subdir) or via CUA_DRIVER_LIB_PATH.
+6: third_party/cua/
+7:
+third_party/voxl/

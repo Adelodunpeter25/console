@@ -84,6 +84,9 @@ install: build-server
 		cp apps/server-go/third_party/fff/libfff_c.* "$(INSTALL_DIR)/" && \
 		cp apps/server-go/third_party/cua/*driver_sdk.* "$(INSTALL_DIR)/" || \
 		echo "NOTE: sidecar fetch failed; file search and computer-use may be unavailable (rerun scripts/fetch-fff-lib.sh and fetch-cua-lib.sh)." >&2
+	@bash apps/server-go/scripts/fetch-voxl-lib.sh && \
+		cp apps/server-go/third_party/voxl/libvoxl.* "$(INSTALL_DIR)/" || \
+		echo "NOTE: voxl fetch failed; Computer streaming tab may be unavailable (rerun scripts/fetch-voxl-lib.sh)." >&2
 	@was_running=0; \
 	if [ -x "$(INSTALL_DIR)/console" ] && "$(INSTALL_DIR)/console" status | grep -q "is running"; then \
 		was_running=1; \
