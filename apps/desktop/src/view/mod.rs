@@ -226,6 +226,9 @@ impl Render for ConsoleDesktopApp {
                 })
                 | Some(console_core::WorkspaceTabConfig::Device {
                     title, project_id, ..
+                })
+                | Some(console_core::WorkspaceTabConfig::Computer {
+                    title, project_id, ..
                 }) => {
                     let folder = project_id
                         .as_deref()

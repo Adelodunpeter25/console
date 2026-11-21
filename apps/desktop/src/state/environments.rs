@@ -482,6 +482,9 @@ impl ConsoleDesktopApp {
                         .detach();
                         // Point the device viewer at the new backend origin so
                         // stream/screenshot URLs follow the active server.
+                        if let Some(ref computer) = this.computer_view {
+                            computer.update(cx, |view, cx| view.connect(cx));
+                        }
                         if let Some(ref device) = this.device_view {
                             let url = url.clone();
                             let token = crate::persistence::server_auth_token(&url);

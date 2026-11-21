@@ -39,7 +39,8 @@ func bearer(c *fiber.Ctx) string {
 // deviceStreamPath reports whether path is `/api/devices/<id>/stream`, the
 // websocket a player page opens on the device's behalf.
 func deviceStreamPath(path string) bool {
-	return strings.HasPrefix(path, "/api/devices/") && strings.HasSuffix(path, "/stream")
+	return (strings.HasPrefix(path, "/api/devices/") && strings.HasSuffix(path, "/stream")) ||
+		path == "/api/computer/ws"
 }
 
 // mediaFilePath reports whether path is the media endpoint, the one ordinary
@@ -60,7 +61,7 @@ func RequireDeviceToken(manager authManager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// The player page is inert HTML with no data or secrets, and a webview
 		// navigation cannot carry an Authorization header.
-		if c.Method() == fiber.MethodGet && c.Path() == "/api/devices/player" {
+		if c.Method() == fiber.MethodGet && (c.Path() == "/api/devices/player" || c.Path() == "/api/computer/player") {
 			return c.Next()
 		}
 		credential := bearer(c)

@@ -373,6 +373,7 @@ fun ChatScreen(
             onOpenScripts = { scriptsSheet = true },
             scriptsAvailable = scriptProject != null,
             onOpenDevices = { jumpToProjectTab(MobileTab.Devices) },
+            onOpenComputer = { jumpToProjectTab(MobileTab.Computer) },
             onOpenTerminal = { jumpToProjectTab(MobileTab.Terminal) },
             modifier = Modifier.align(Alignment.TopCenter),
         )

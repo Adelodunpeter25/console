@@ -511,6 +511,17 @@ impl ConsoleDesktopApp {
                     device.update(cx, |view, cx| view.close(cx));
                 }
             }
+            WorkspaceTabConfig::Computer { .. } => {
+                let still_open = self
+                    .workspace_root
+                    .leaves()
+                    .iter()
+                    .flat_map(|leaf| leaf.tabs.iter())
+                    .any(|open_tab| matches!(open_tab, WorkspaceTabConfig::Computer { .. }));
+                if !still_open && let Some(view) = self.computer_view.take() {
+                    view.update(cx, |view, cx| view.close(cx));
+                }
+            }
             WorkspaceTabConfig::FileTree { .. } => {
                 let tab_id = tab.id();
                 let still_referenced = self

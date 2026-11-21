@@ -673,6 +673,7 @@ impl ConsoleDesktopApp {
             project_script_stream_seq: 0,
             active_project_shortcuts: std::collections::HashMap::new(),
             device_view: None,
+            computer_view: None,
             forwarded_ports_by_project: std::collections::HashMap::new(),
             ports_menu_handle: console_ui::ContextMenuHandle::new(cx),
             menubar_file_menu: console_ui::ContextMenuHandle::new(cx),

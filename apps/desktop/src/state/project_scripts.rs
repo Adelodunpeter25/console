@@ -95,7 +95,8 @@ impl ConsoleDesktopApp {
             | console_core::WorkspaceTabConfig::Browser { project_id, .. }
             | console_core::WorkspaceTabConfig::ChangesReview { project_id, .. }
             | console_core::WorkspaceTabConfig::FileTree { project_id, .. }
-            | console_core::WorkspaceTabConfig::Device { project_id, .. } => project_id.clone(),
+            | console_core::WorkspaceTabConfig::Device { project_id, .. }
+            | console_core::WorkspaceTabConfig::Computer { project_id, .. } => project_id.clone(),
         };
         from_tab.or_else(|| self.pane_workspace_key(pane_id))
     }

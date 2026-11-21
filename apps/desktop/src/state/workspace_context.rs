@@ -85,7 +85,8 @@ impl ConsoleDesktopApp {
             | Some(console_core::WorkspaceTabConfig::Terminal { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Browser { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::FileTree { project_id, .. })
-            | Some(console_core::WorkspaceTabConfig::Device { project_id, .. }) => {
+            | Some(console_core::WorkspaceTabConfig::Device { project_id, .. })
+            | Some(console_core::WorkspaceTabConfig::Computer { project_id, .. }) => {
                 // When focused on a tab in the workspace (Diff, Terminal, File), retain the pane's
                 // active session and its cwd so the changes inspector doesn't clear out.
                 let session_id = self.active_session_for_pane(pane_id);

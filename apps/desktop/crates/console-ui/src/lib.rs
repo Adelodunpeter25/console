@@ -7,6 +7,7 @@
 pub mod browser;
 pub mod chat;
 pub mod common;
+pub mod computer;
 pub mod devices;
 pub mod inspector;
 pub mod layout;
@@ -24,6 +25,7 @@ pub mod workspace;
 pub use browser::*;
 pub use chat::*;
 pub use common::*;
+pub use computer::*;
 pub use devices::*;
 pub use inspector::*;
 pub use layout::*;

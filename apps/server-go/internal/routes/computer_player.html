@@ -20,11 +20,21 @@
   const statusEl = document.getElementById('status');
   const canvas = document.getElementById('screen');
   const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
-  let ws = null, decoder = null;
+  let ws = null, decoder = null, retry = null;
   let streamW = 1920, streamH = 1080;
-  let needKey = true;
+  let needKey = true, currentUrl = null;
 
-  function setStatus(msg) {
+  function postStatus(s) {
+    if (window.AndroidBridge && window.AndroidBridge.postMessage) {
+      try { window.AndroidBridge.postMessage(JSON.stringify({ type: 'status', status: s })); } catch(e) {}
+    }
+    if (window.ipc && window.ipc.postMessage) {
+      try { window.ipc.postMessage(JSON.stringify({ type: 'status', status: s })); } catch(e) {}
+    }
+  }
+
+  function setStatus(msg, state) {
+    if (state) postStatus(state);
     if (!msg) { statusEl.style.display = 'none'; return; }
     statusEl.textContent = msg;
     statusEl.style.display = 'block';
@@ -57,7 +67,7 @@
         }
         ctx.drawImage(frame, 0, 0);
         frame.close();
-        setStatus(null);
+        setStatus(null, 'streaming');
       },
       error: (e) => {
         console.error('decoder error', e);
@@ -65,38 +75,59 @@
       }
     });
 
-    // Baseline/Main H.264
     decoder.configure({
       codec: 'avc1.420028',
       optimizeForLatency: true
     });
   }
 
-  function connect() {
-    const loc = window.location;
-    const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
-    const params = new URLSearchParams(loc.search);
-    const token = params.get('token') ? '?token=' + encodeURIComponent(params.get('token')) : '';
-    const wsUrl = proto + '//' + loc.host + '/api/computer/ws' + token;
+  function stop() {
+    if (retry) { clearTimeout(retry); retry = null; }
+    currentUrl = null;
+    if (ws) {
+      try { ws.onclose = null; ws.close(); } catch(e) {}
+      ws = null;
+    }
+    if (decoder && decoder.state !== 'closed') {
+      try { decoder.close(); } catch(e) {}
+      decoder = null;
+    }
+    setStatus(null, 'idle');
+  }
 
-    setStatus('Connecting to remote desktop...');
+  function start(cfg) {
+    if (typeof cfg === 'string') {
+      try { cfg = JSON.parse(cfg); } catch(e) {}
+    }
+    const url = cfg && cfg.streamUrl;
+    if (!url) return;
+    stop();
+    currentUrl = url;
+    connect(url);
+  }
+
+  function connect(wsUrl) {
+    if (!wsUrl) return;
+    setStatus('Connecting to remote desktop...', 'connecting');
     initDecoder();
 
     ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
 
     ws.onopen = () => {
-      setStatus(null);
+      setStatus(null, 'waiting for video');
       canvas.focus();
     };
 
     ws.onclose = () => {
-      setStatus('Disconnected. Reconnecting...');
-      setTimeout(connect, 1500);
+      setStatus('Disconnected. Reconnecting...', 'disconnected');
+      if (currentUrl === wsUrl) {
+        retry = setTimeout(() => connect(wsUrl), 1500);
+      }
     };
 
-    ws.onerror = (e) => {
-      setStatus('Connection error');
+    ws.onerror = () => {
+      setStatus('Connection error', 'error');
     };
 
     ws.onmessage = (evt) => {
@@ -112,12 +143,11 @@
         return;
       }
 
-      // Binary wire frame
       const buf = evt.data;
       if (buf.byteLength <= 16) return;
       const view = new DataView(buf);
       const tag = view.getUint8(0);
-      if (tag !== 0x01) return; // 0x01 is H.264 video
+      if (tag !== 0x01) return;
 
       const flags = view.getUint8(1);
       const isKey = (flags & 0x01) !== 0;
@@ -133,17 +163,16 @@
           data: nal
         }));
       } catch(err) {
-        console.warn('decode chunk failed', err);
         needKey = true;
       }
     };
   }
 
-  // Mouse & Keyboard input handling
-  function getCoords(e) {
+  function getCoords(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
-    const x = Math.max(0, Math.min(streamW, Math.round((e.clientX - rect.left) * (streamW / rect.width))));
-    const y = Math.max(0, Math.min(streamH, Math.round((e.clientY - rect.top) * (streamH / rect.height))));
+    if (!rect.width || !rect.height) return { x: 0, y: 0 };
+    const x = Math.max(0, Math.min(streamW, Math.round((clientX - rect.left) * (streamW / rect.width))));
+    const y = Math.max(0, Math.min(streamH, Math.round((clientY - rect.top) * (streamH / rect.height))));
     return { x, y };
   }
 
@@ -154,7 +183,7 @@
   }
 
   canvas.addEventListener('mousemove', (e) => {
-    const { x, y } = getCoords(e);
+    const { x, y } = getCoords(e.clientX, e.clientY);
     let mask = 0;
     if (e.buttons & 1) mask |= 1;
     if (e.buttons & 4) mask |= 2;
@@ -165,7 +194,7 @@
   canvas.addEventListener('mousedown', (e) => {
     e.preventDefault();
     canvas.focus();
-    const { x, y } = getCoords(e);
+    const { x, y } = getCoords(e.clientX, e.clientY);
     let mask = 0;
     if (e.buttons & 1) mask |= 1;
     if (e.buttons & 4) mask |= 2;
@@ -175,7 +204,7 @@
 
   canvas.addEventListener('mouseup', (e) => {
     e.preventDefault();
-    const { x, y } = getCoords(e);
+    const { x, y } = getCoords(e.clientX, e.clientY);
     let mask = 0;
     if (e.buttons & 1) mask |= 1;
     if (e.buttons & 4) mask |= 2;
@@ -183,16 +212,43 @@
     sendInput({ type: 'mouse', x, y, mask, wheel: 0 });
   });
 
+  // Touch support for mobile
+  canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+      e.preventDefault();
+      const t = e.touches[0];
+      const { x, y } = getCoords(t.clientX, t.clientY);
+      sendInput({ type: 'mouse', x, y, mask: 1, wheel: 0 });
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 1) {
+      e.preventDefault();
+      const t = e.touches[0];
+      const { x, y } = getCoords(t.clientX, t.clientY);
+      sendInput({ type: 'mouse', x, y, mask: 1, wheel: 0 });
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', (e) => {
+    if (e.changedTouches.length === 1) {
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      const { x, y } = getCoords(t.clientX, t.clientY);
+      sendInput({ type: 'mouse', x, y, mask: 0, wheel: 0 });
+    }
+  }, { passive: false });
+
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    const { x, y } = getCoords(e);
+    const { x, y } = getCoords(e.clientX, e.clientY);
     const wheel = e.deltaY < 0 ? -120 : 120;
     sendInput({ type: 'mouse', x, y, mask: 0, wheel });
   }, { passive: false });
 
-  // Map common DOM key codes to X11 keysyms
   function toKeysym(e) {
     if (e.key === 'Backspace') return 0xff08;
     if (e.key === 'Tab') return 0xff09;
@@ -229,7 +285,20 @@
     }
   });
 
-  connect();
+  window.__consoleComputer = {
+    start,
+    stop,
+    sendKey: (keysym, down) => sendInput({ type: 'key', keysym, down }),
+  };
+
+  // Auto-connect if loaded directly from server with ?token= or same-origin
+  if (window.location.protocol === 'http:' || (window.location.protocol === 'https:' && window.location.host !== 'appassets.androidplatform.net')) {
+    const loc = window.location;
+    const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+    const params = new URLSearchParams(loc.search);
+    const token = params.get('token') ? '?token=' + encodeURIComponent(params.get('token')) : '';
+    start({ streamUrl: proto + '//' + loc.host + '/api/computer/ws' + token });
+  }
 })();
 </script>
 </body>

@@ -100,6 +100,12 @@ pub(crate) fn new_tab_menu_items(
         }
         if cfg!(target_os = "macos") {
             items.push(row(
+                "Computer",
+                IconName::Terminal,
+                None,
+                Rc::new(|this, _, cx| this.open_computer_tab(cx)),
+            ));
+            items.push(row(
                 "Devices",
                 IconName::Smartphone,
                 None,

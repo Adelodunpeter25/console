@@ -103,6 +103,22 @@ class DeviceRepository(
         return "$wsBase/api/devices/$encId/stream?platform=$encPlat&max_size=720&bitrate=3000000$token"
     }
 
+    /** WebSocket URL for the host desktop stream; the token rides the query like [getStreamUrl]. */
+    fun getComputerStreamUrl(): String {
+        val base = apiClient.baseUrl.trimEnd('/')
+        val wsBase = if (base.startsWith("https://", ignoreCase = true)) {
+            "wss://" + base.substring(8)
+        } else if (base.startsWith("http://", ignoreCase = true)) {
+            "ws://" + base.substring(7)
+        } else {
+            base
+        }
+        val token = apiClient.authToken?.takeIf { it.isNotBlank() }
+            ?.let { "?token=" + URLEncoder.encode(it, "UTF-8") }
+            .orEmpty()
+        return "$wsBase/api/computer/ws$token"
+    }
+
     val serverBaseUrl: String
         get() = apiClient.baseUrl.trimEnd('/')
 }

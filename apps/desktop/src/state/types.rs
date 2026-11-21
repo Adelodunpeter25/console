@@ -296,6 +296,7 @@ pub struct ConsoleDesktopApp {
     /// via `shortcut_conflict` on the row's view model instead.
     pub active_project_shortcuts: std::collections::HashMap<String, String>,
     pub device_view: Option<gpui::Entity<console_ui::DeviceViewer>>,
+    pub computer_view: Option<gpui::Entity<console_ui::ComputerViewer>>,
     pub forwarded_ports_by_project:
         std::collections::HashMap<String, Rc<Vec<console_core::ForwardedPort>>>,
     pub ports_menu_handle: console_ui::ContextMenuHandle,

@@ -184,6 +184,7 @@ impl ConsoleDesktopApp {
             });
         }
         self.sync_device_webview(cx);
+        self.sync_computer_webview(cx);
     }
 
     /// A click into a page focuses the pane that holds its tab.

@@ -248,4 +248,13 @@ val copyDevicePlayer by tasks.registering(Copy::class) {
     rename { "player.html" }
 }
 
-tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(copyDevicePlayer) }
+val copyComputerPlayer by tasks.registering(Copy::class) {
+    from(rootProject.file("../server-go/internal/routes/computer_player.html"))
+    into(layout.buildDirectory.dir("generated/devicePlayer/computer"))
+    rename { "player.html" }
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn(copyDevicePlayer)
+    dependsOn(copyComputerPlayer)
+}

@@ -61,6 +61,18 @@ fi
 curl -fSL "${BASE_URL}/${LIB_ASSET}" -o "${PREFIX}/${LIB_FILE}"
 chmod 644 "${PREFIX}/${LIB_FILE}"
 
+# voxl desktop-streaming library (libvoxl): linked into the server with an
+# rpath of the binary's own directory, so the server will not start without it.
+if [ "$os" = "linux" ]; then
+  VOXL_FILE="libvoxl.so"
+  VOXL_ASSET="libvoxl-${SUFFIX}.so"
+else
+  VOXL_FILE="libvoxl.dylib"
+  VOXL_ASSET="libvoxl-${SUFFIX}.dylib"
+fi
+curl -fSL "${BASE_URL}/${VOXL_ASSET}" -o "${PREFIX}/${VOXL_FILE}"
+chmod 644 "${PREFIX}/${VOXL_FILE}"
+
 # cua native sidecar (libcua_driver_sdk): backs the computer-use capability.
 # Best-effort — the server runs without it, /computer-use just stays
 # unavailable until scripts/fetch-cua-lib.sh provides the library.

@@ -30,6 +30,10 @@ type upgradeTarget struct {
 	libAsset string
 	cuaPath  string
 	cuaAsset string
+	// libvoxl is linked (rpath), so the binary will not start without it.
+	// Empty on Windows, which has no build.
+	voxlPath  string
+	voxlAsset string
 }
 
 func resolveUpgradeTarget() (upgradeTarget, error) {
@@ -82,6 +86,20 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 		cuaFile = "libcua_driver_sdk.dylib"
 	}
 
+	voxlAsset, voxlFile := "", ""
+	switch osName {
+	case "linux":
+		voxlAsset, voxlFile = "libvoxl-"+suffix+".so", "libvoxl.so"
+	case "macos":
+		voxlAsset, voxlFile = "libvoxl-"+suffix+".dylib", "libvoxl.dylib"
+	}
+	voxlAt := func(dir string) string {
+		if voxlFile == "" {
+			return ""
+		}
+		return filepath.Join(dir, voxlFile)
+	}
+
 	// A Go binary is always compiled, so the binary swaps itself in place —
 	// unless running under `go run` (temp exe), where we target the install
 	// dir (overridable via CONSOLE_INSTALL_DIR).
@@ -91,6 +109,7 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 			suffix: suffix, binPath: exe, binAsset: binAsset,
 			libPath: filepath.Join(dir, libFile), libAsset: libAsset,
 			cuaPath: filepath.Join(dir, cuaFile), cuaAsset: cuaAsset,
+			voxlPath: voxlAt(dir), voxlAsset: voxlAsset,
 		}, nil
 	}
 	prefix := os.Getenv("CONSOLE_INSTALL_DIR")
@@ -102,6 +121,7 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 		suffix: suffix, binPath: filepath.Join(prefix, binName), binAsset: binAsset,
 		libPath: filepath.Join(prefix, libFile), libAsset: libAsset,
 		cuaPath: filepath.Join(prefix, cuaFile), cuaAsset: cuaAsset,
+		voxlPath: voxlAt(prefix), voxlAsset: voxlAsset,
 	}, nil
 }
 
@@ -172,6 +192,11 @@ func UpgradeDaemon() error {
 	}
 	if err := downloadTo(upgradeBaseURL+"/"+target.cuaAsset, target.cuaPath, 0o644); err != nil {
 		return err
+	}
+	if target.voxlPath != "" {
+		if err := downloadTo(upgradeBaseURL+"/"+target.voxlAsset, target.voxlPath, 0o644); err != nil {
+			return err
+		}
 	}
 	fmt.Println("Binary swapped.")
 

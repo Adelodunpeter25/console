@@ -15,6 +15,7 @@ import com.console.mobile.ui.components.common.new.OverflowMenuItem
 import com.console.mobile.ui.components.common.new.PageHeader
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.BrandGit
+import io.github.lyxnx.compose.ui.tablericons.outline.DeviceDesktop
 import io.github.lyxnx.compose.ui.tablericons.outline.DeviceMobile
 import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
 import io.github.lyxnx.compose.ui.tablericons.outline.Folder
@@ -33,6 +34,7 @@ internal fun ChatHeader(
     onOpenScripts: () -> Unit,
     scriptsAvailable: Boolean,
     onOpenDevices: () -> Unit,
+    onOpenComputer: () -> Unit,
     onOpenTerminal: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -79,6 +81,14 @@ internal fun ChatHeader(
                         onClick = {
                             overflowMenu = false
                             onOpenDevices()
+                        },
+                    )
+                    OverflowMenuItem(
+                        label = "Open computer",
+                        icon = TablerIcons.Outline.DeviceDesktop,
+                        onClick = {
+                            overflowMenu = false
+                            onOpenComputer()
                         },
                     )
                     OverflowMenuItem(
