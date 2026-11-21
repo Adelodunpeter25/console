@@ -26,6 +26,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 // mockLaunchProvider completes one turn with a text event — enough for the
@@ -204,5 +205,64 @@ func TestWorktreeRetryWithoutLaunchIs404(t *testing.T) {
 	code, _ := worktreeLaunchPost(t, app, "/api/sessions/ghost/with-worktree/retry", "")
 	if code != 404 {
 		t.Fatalf("want 404, got %d", code)
+	}
+}
+
+// A crash between worktree attach and registry clear must not leave the
+// header reporting "provisioning" forever. The worktree itself is durable
+// proof that provisioning finished, so the header omits launch_state.
+func TestProvisioningLaunchWithWorktreeReportsReady(t *testing.T) {
+	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(manager.Close)
+	t.Setenv("CONSOLE_WORKTREES_DIR", t.TempDir())
+	sessions := services.NewSessionService(manager)
+	runSvc := run.NewService(sessions)
+	app := fiber.New()
+	routes.RegisterSessionRoutes(app, sessions, runSvc)
+	routes.RegisterWorktreeLaunchRoutes(app, sessions, runSvc)
+
+	repo := launchRepo(t)
+	header, err := sessions.Create(types.CreateSessionOptions{Title: "t", Cwd: repo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate the crash window: the launch is still registered as
+	// provisioning, but the worktree was already attached.
+	services.WorktreeLaunches.Start(header.ID, types.CreateWorktreeSpec{}, services.LaunchPrompt{Text: "hello"})
+	t.Cleanup(func() { services.WorktreeLaunches.Clear(header.ID) })
+	if _, err := sessions.AttachWorktree(header.ID, &types.CreateWorktreeSpec{}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/sessions/"+header.ID, nil)
+	req.Header.Set("Accept", "application/json")
+	resp, err := app.Test(req, 30000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		t.Fatalf("get session: %d %s", resp.StatusCode, raw)
+	}
+	var envelope struct {
+		Data struct {
+			Header json.RawMessage `json:"header"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		t.Fatalf("envelope: %s", raw)
+	}
+	got := &consolev1.SessionHeader{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(envelope.Data.Header, got); err != nil {
+		t.Fatalf("header: %s", envelope.Data.Header)
+	}
+	if got.GetLaunchState() != "" {
+		t.Fatalf("launchState = %q, want empty for session with worktree", got.GetLaunchState())
+	}
+	if got.Worktree == nil {
+		t.Fatal("worktree missing from header")
 	}
 }

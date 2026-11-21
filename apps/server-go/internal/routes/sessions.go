@@ -103,9 +103,12 @@ func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {
 	}
 	out.Unread = h.Unread
 	// Worktree launch state lives in the in-memory registry, not the session
-	// row, so it rides along on every header serialization. Absent entry =
-	// no launch pending or failed.
-	if launch := services.WorktreeLaunches.Get(h.ID); launch != nil {
+	// row, so it rides along on every header serialization. A session that
+	// already owns a worktree is past provisioning regardless of what the
+	// registry says: a crash between attach and clear (or a restart) must
+	// never leave a "Creating worktree…" banner on a ready chat.
+	if launch := services.WorktreeLaunches.Get(h.ID); launch != nil &&
+		(h.Worktree == nil || launch.State != services.LaunchProvisioning) {
 		state := launch.State
 		out.LaunchState = &state
 		if launch.Error != "" {

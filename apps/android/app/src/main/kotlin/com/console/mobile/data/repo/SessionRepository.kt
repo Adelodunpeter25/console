@@ -209,6 +209,10 @@ class SessionRepository(
                 }
                 discardNewChat(draftId)
                 chats.remove(draftId)
+                // The worktree prompt runs server-side, so no local startRun
+                // will clear the cached draft. Drop it here or the image comes
+                // back in the next new chat's composer.
+                persistence?.removeSession(draftId)
                 persistence?.saveNewChatOptions(null)
             }
             watchWorktreeLaunch(created.id)
@@ -263,6 +267,13 @@ class SessionRepository(
                     withContext(Dispatchers.IO) { api.getSession(sessionId, 1, null) }
                 } catch (_: Exception) {
                     return@repeat
+                }
+                // A worktree on the header means provisioning is done even if
+                // the server's in-memory launch flag was never cleared (crash
+                // between attach and clear, or a restart).
+                if (detail.header.worktree != null && detail.header.launch_state != "failed") {
+                    loadDetail(sessionId)
+                    return@launch
                 }
                 when (detail.header.launch_state) {
                     null -> {
