@@ -1203,7 +1203,7 @@ impl ConsoleDesktopApp {
             // the attach — the session itself stays usable via refresh.
             for _ in 0..300 {
                 tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-                let Ok(detail) = client.sessions.get(&session_id, None).await else {
+                let Ok(mut detail) = client.sessions.get(&session_id, None).await else {
                     continue;
                 };
                 let mut state = detail.header.launch_state.clone();
