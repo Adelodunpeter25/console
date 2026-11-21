@@ -163,3 +163,51 @@ message AgentMessage {
   optional string id = 4;
   optional int64 created_at = 5;
 }
+enum RunStatus {
+  RUN_STATUS_UNSPECIFIED = 0;
+  RUN_STATUS_WORKING = 1;
+  RUN_STATUS_COMPLETED = 2;
+  RUN_STATUS_ABORTED = 3;
+  RUN_STATUS_ERROR = 4;
+}
+
+// A tool call inside a run. The result's content is omitted from history
+// pages (visual/html artifacts stay, since the transcript renders them);
+// result_size is the omitted content length so clients can show a size and
+// fetch the body on expand.
+message RunToolCall {
+  ToolCall call = 1;
+  optional ToolResult result = 2;
+  uint32 result_size = 3;
+  // Row id of the tool-result message holding the full content.
+  string result_message_id = 4;
+}
+
+message RunActivityEvent {
+  string id = 1;
+  oneof event {
+    string thinking = 2;
+    string text = 3;
+    RunToolCall tool_call = 4;
+  }
+}
+
+message RunActivity {
+  string run_id = 1;
+  int64 started_at = 2;
+  int64 elapsed_ms = 3;
+  RunStatus status = 4;
+  repeated RunActivityEvent events = 5;
+}
+
+// One user-visible turn, assembled by the server: the prompt (or a wake
+// divider), the activity between, and the final assistant messages. id is
+// the first row's id and stays stable across pages.
+message TranscriptTurn {
+  string id = 1;
+  int64 created_at = 2;
+  optional AgentMessage user_message = 3;
+  optional string wake_label = 4;
+  optional RunActivity run = 5;
+  repeated AgentMessage responses = 6;
+}

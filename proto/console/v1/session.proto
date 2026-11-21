@@ -201,19 +201,15 @@ message SubagentEndEvent {
 
 // Binary counterpart of GET /api/sessions/:id — one page of history plus the
 // refreshed header. Served by default; `Accept: application/json` keeps the
-// old mixed envelope. Messages are real proto messages, so tool arguments and
+// old mixed envelope. Turns are real proto messages, so tool arguments and
 // results cross as raw bytes instead of base64.
-message WakeRecord {
-  string message = 1;
-  int64 at = 2;
-}
-
 message SessionMessagesPage {
+  reserved 2, 5;
+  reserved "messages", "wake_records";
   SessionHeader header = 1;
-  repeated AgentMessage messages = 2;
   bool has_more = 3;
   optional int64 next_cursor = 4;
-  repeated WakeRecord wake_records = 5;
+  repeated TranscriptTurn turns = 6;
 }
 
 // Detached work listed on a reopened chat. Same rows the JSON bootstrap
@@ -240,8 +236,9 @@ message BackgroundWork {
 // Served when the client sends `Accept: application/x-protobuf`; the JSON
 // envelope remains the default for clients that do not opt in.
 message SessionBootstrapResponse {
+  reserved 2, 11;
+  reserved "messages", "wake_records";
   SessionHeader header = 1;
-  repeated AgentMessage messages = 2;
   bool has_more = 3;
   optional int64 next_cursor = 4;
   repeated SessionFileChange changes = 5;
@@ -250,6 +247,6 @@ message SessionBootstrapResponse {
   repeated QueuedPrompt queued_prompts = 8;
   repeated BackgroundWork background_work = 9;
   optional ChatDraft draft = 10;
-  repeated WakeRecord wake_records = 11;
   repeated AskQuestionRequest pending_questions = 12;
+  repeated TranscriptTurn turns = 13;
 }

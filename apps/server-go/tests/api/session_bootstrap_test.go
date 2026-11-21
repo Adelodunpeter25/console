@@ -55,7 +55,7 @@ func TestSessionBootstrapRoute(t *testing.T) {
 		t.Fatalf("success false: %s", raw)
 	}
 	for _, key := range []string{
-		"header", "messages", "hasMore", "nextCursor", "changes",
+		"header", "turns", "hasMore", "nextCursor", "changes",
 		"todos", "suggestions", "queuedPrompts", "backgroundWork", "draft",
 	} {
 		if _, ok := envelope.Data[key]; !ok {
@@ -63,7 +63,7 @@ func TestSessionBootstrapRoute(t *testing.T) {
 		}
 	}
 	for _, key := range []string{
-		"messages", "changes", "todos", "suggestions", "queuedPrompts", "backgroundWork",
+		"turns", "changes", "todos", "suggestions", "queuedPrompts", "backgroundWork",
 	} {
 		var items []json.RawMessage
 		if err := json.Unmarshal(envelope.Data[key], &items); err != nil {
@@ -108,7 +108,7 @@ func TestSessionBootstrapBinary(t *testing.T) {
 	if body.Header == nil || body.Header.Id != header.ID {
 		t.Fatalf("header = %v, want id %s", body.Header, header.ID)
 	}
-	if len(body.Messages) != 0 || len(body.Todos) != 0 || body.Draft != nil {
+	if len(body.Turns) != 0 || len(body.Todos) != 0 || body.Draft != nil {
 		t.Fatalf("empty session returned unexpected payload: %v", &body)
 	}
 }

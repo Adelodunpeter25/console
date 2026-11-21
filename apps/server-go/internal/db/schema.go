@@ -248,6 +248,9 @@ func InitSessionDB(db *sql.DB, path string) error {
 
 		CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
 
+		-- Turn pagination walks user rows backwards to find turn boundaries.
+		CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(role) WHERE role = 'user';
+
 		CREATE TABLE IF NOT EXISTS session_file_changes (
 			path TEXT NOT NULL,
 			turn_index INTEGER NOT NULL DEFAULT 0,

@@ -235,14 +235,14 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		return sendSessionHeader(c, header)
 	})
 
-	// GET /api/sessions/:id — header plus a page of message history.
+	// GET /api/sessions/:id — header plus a page of whole transcript turns.
 	h.Get("/:id", func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		limit, before, ok := parsePageParams(c)
 		if !ok {
 			return sessionError(c, fiber.StatusBadRequest, "'limit' and 'before' must be non-negative integers.")
 		}
-		result, err := sessions.Load(id, limit, before)
+		result, err := sessions.LoadTurns(id, limit, before, runs.IsActive(id))
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
@@ -258,13 +258,11 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 				result.Header.Unread = session.IsUnread(result.Header)
 			}
 		}
-		wakeRecords := extractWakeRecords(result.Messages)
 		page := &consolev1.SessionMessagesPage{
-			Header:      sessionHeaderToProto(result.Header),
-			Messages:    messagesToProto(visibleMessages(result.Messages)),
-			HasMore:     result.HasMore,
-			NextCursor:  result.NextCursor,
-			WakeRecords: wakeRecords,
+			Header:     sessionHeaderToProto(result.Header),
+			Turns:      result.Turns,
+			HasMore:    result.HasMore,
+			NextCursor: result.NextCursor,
 		}
 		if wantsBinary(c) {
 			raw, err := proto.Marshal(page)
@@ -275,21 +273,44 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 			return c.Send(raw)
 		}
 
-		// JSON keeps the old mixed envelope: proto header plus the raw
-		// message page, hasMore flag, and numeric-or-null cursor.
+		// JSON: proto header and turns, hasMore flag, numeric-or-null cursor.
 		headerRaw, err := protoMarshal.Marshal(page.Header)
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
 		}
-		wakeData, err := marshalProtoList(wakeRecords)
+		turnsData, err := marshalProtoList(page.Turns)
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
 		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
 			"hasMore": result.HasMore, "header": json.RawMessage(headerRaw),
-			"messages": visibleMessages(result.Messages), "nextCursor": result.NextCursor,
-			"wakeRecords": wakeData,
+			"turns": turnsData, "nextCursor": result.NextCursor,
 		}})
+	})
+
+	// GET /api/sessions/:id/messages/:messageId/results/:callId — the full
+	// body of a tool result that history pages leave out.
+	h.Get("/:id/messages/:messageId/results/:callId", func(c *fiber.Ctx) error {
+		res, err := sessions.ToolResult(c.Params("id"), c.Params("messageId"), c.Params("callId"))
+		if errors.Is(err, session.ErrToolResultNotFound) {
+			return sessionError(c, fiber.StatusNotFound, "Tool result not found.")
+		}
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		if wantsBinary(c) {
+			raw, err := proto.Marshal(res)
+			if err != nil {
+				return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+			}
+			c.Set("Content-Type", protoContentType)
+			return c.Send(raw)
+		}
+		raw, err := protoMarshal.Marshal(res)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
 	// PATCH /api/sessions/:id — update title, model/provider, approval mode,
@@ -745,10 +766,10 @@ func sessionError(c *fiber.Ctx, code int, message string) error {
 	return c.Status(code).JSON(fiber.Map{"success": false, "error": message})
 }
 
-// parsePageParams reads get-session pagination: default limit 50,
-// limit non-negative (0 returns just header, no messages), before positive when present.
+// parsePageParams reads get-session pagination in turns: default limit 20,
+// limit non-negative (0 returns every turn), before positive when present.
 func parsePageParams(c *fiber.Ctx) (limit, before int64, ok bool) {
-	limit = 50
+	limit = 20
 	if raw := c.Query("limit"); raw != "" {
 		v, err := strconv.Atoi(raw)
 		if err != nil || v < 0 {

@@ -54,11 +54,11 @@ func TestSessionDetailBinary(t *testing.T) {
 	if page.Header == nil || page.Header.Id != header.ID {
 		t.Fatalf("header = %v, want id %s", page.Header, header.ID)
 	}
-	if len(page.Messages) != 1 {
-		t.Fatalf("got %d messages, want 1", len(page.Messages))
+	if len(page.Turns) != 1 {
+		t.Fatalf("got %d turns, want 1", len(page.Turns))
 	}
-	user := page.Messages[0].GetUser()
+	user := page.Turns[0].GetUserMessage().GetUser()
 	if user == nil || user.Content != "Hello" {
-		t.Fatalf("message = %v, want user content Hello", page.Messages[0])
+		t.Fatalf("turn = %v, want user content Hello", page.Turns[0])
 	}
 }

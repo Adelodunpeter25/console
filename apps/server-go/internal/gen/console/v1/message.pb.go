@@ -21,6 +21,61 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type RunStatus int32
+
+const (
+	RunStatus_RUN_STATUS_UNSPECIFIED RunStatus = 0
+	RunStatus_RUN_STATUS_WORKING     RunStatus = 1
+	RunStatus_RUN_STATUS_COMPLETED   RunStatus = 2
+	RunStatus_RUN_STATUS_ABORTED     RunStatus = 3
+	RunStatus_RUN_STATUS_ERROR       RunStatus = 4
+)
+
+// Enum value maps for RunStatus.
+var (
+	RunStatus_name = map[int32]string{
+		0: "RUN_STATUS_UNSPECIFIED",
+		1: "RUN_STATUS_WORKING",
+		2: "RUN_STATUS_COMPLETED",
+		3: "RUN_STATUS_ABORTED",
+		4: "RUN_STATUS_ERROR",
+	}
+	RunStatus_value = map[string]int32{
+		"RUN_STATUS_UNSPECIFIED": 0,
+		"RUN_STATUS_WORKING":     1,
+		"RUN_STATUS_COMPLETED":   2,
+		"RUN_STATUS_ABORTED":     3,
+		"RUN_STATUS_ERROR":       4,
+	}
+)
+
+func (x RunStatus) Enum() *RunStatus {
+	p := new(RunStatus)
+	*p = x
+	return p
+}
+
+func (x RunStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RunStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_console_v1_message_proto_enumTypes[0].Descriptor()
+}
+
+func (RunStatus) Type() protoreflect.EnumType {
+	return &file_console_v1_message_proto_enumTypes[0]
+}
+
+func (x RunStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RunStatus.Descriptor instead.
+func (RunStatus) EnumDescriptor() ([]byte, []int) {
+	return file_console_v1_message_proto_rawDescGZIP(), []int{0}
+}
+
 // Conversation messages (Phase 3, core slice). The agent loop owns provider
 // logic on its own structs; this schema is the storage + client contract,
 // converted at the loop boundary (ToProto/FromProto in agent/loop).
@@ -1223,6 +1278,348 @@ func (*AgentMessage_Assistant) isAgentMessage_Message() {}
 
 func (*AgentMessage_ToolResult) isAgentMessage_Message() {}
 
+// A tool call inside a run. The result's content is omitted from history
+// pages (visual/html artifacts stay, since the transcript renders them);
+// result_size is the omitted content length so clients can show a size and
+// fetch the body on expand.
+type RunToolCall struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Call       *ToolCall              `protobuf:"bytes,1,opt,name=call,proto3" json:"call,omitempty"`
+	Result     *ToolResult            `protobuf:"bytes,2,opt,name=result,proto3,oneof" json:"result,omitempty"`
+	ResultSize uint32                 `protobuf:"varint,3,opt,name=result_size,json=resultSize,proto3" json:"result_size,omitempty"`
+	// Row id of the tool-result message holding the full content.
+	ResultMessageId string `protobuf:"bytes,4,opt,name=result_message_id,json=resultMessageId,proto3" json:"result_message_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RunToolCall) Reset() {
+	*x = RunToolCall{}
+	mi := &file_console_v1_message_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunToolCall) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunToolCall) ProtoMessage() {}
+
+func (x *RunToolCall) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_message_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunToolCall.ProtoReflect.Descriptor instead.
+func (*RunToolCall) Descriptor() ([]byte, []int) {
+	return file_console_v1_message_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *RunToolCall) GetCall() *ToolCall {
+	if x != nil {
+		return x.Call
+	}
+	return nil
+}
+
+func (x *RunToolCall) GetResult() *ToolResult {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+func (x *RunToolCall) GetResultSize() uint32 {
+	if x != nil {
+		return x.ResultSize
+	}
+	return 0
+}
+
+func (x *RunToolCall) GetResultMessageId() string {
+	if x != nil {
+		return x.ResultMessageId
+	}
+	return ""
+}
+
+type RunActivityEvent struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Types that are valid to be assigned to Event:
+	//
+	//	*RunActivityEvent_Thinking
+	//	*RunActivityEvent_Text
+	//	*RunActivityEvent_ToolCall
+	Event         isRunActivityEvent_Event `protobuf_oneof:"event"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunActivityEvent) Reset() {
+	*x = RunActivityEvent{}
+	mi := &file_console_v1_message_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunActivityEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunActivityEvent) ProtoMessage() {}
+
+func (x *RunActivityEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_message_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunActivityEvent.ProtoReflect.Descriptor instead.
+func (*RunActivityEvent) Descriptor() ([]byte, []int) {
+	return file_console_v1_message_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *RunActivityEvent) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *RunActivityEvent) GetEvent() isRunActivityEvent_Event {
+	if x != nil {
+		return x.Event
+	}
+	return nil
+}
+
+func (x *RunActivityEvent) GetThinking() string {
+	if x != nil {
+		if x, ok := x.Event.(*RunActivityEvent_Thinking); ok {
+			return x.Thinking
+		}
+	}
+	return ""
+}
+
+func (x *RunActivityEvent) GetText() string {
+	if x != nil {
+		if x, ok := x.Event.(*RunActivityEvent_Text); ok {
+			return x.Text
+		}
+	}
+	return ""
+}
+
+func (x *RunActivityEvent) GetToolCall() *RunToolCall {
+	if x != nil {
+		if x, ok := x.Event.(*RunActivityEvent_ToolCall); ok {
+			return x.ToolCall
+		}
+	}
+	return nil
+}
+
+type isRunActivityEvent_Event interface {
+	isRunActivityEvent_Event()
+}
+
+type RunActivityEvent_Thinking struct {
+	Thinking string `protobuf:"bytes,2,opt,name=thinking,proto3,oneof"`
+}
+
+type RunActivityEvent_Text struct {
+	Text string `protobuf:"bytes,3,opt,name=text,proto3,oneof"`
+}
+
+type RunActivityEvent_ToolCall struct {
+	ToolCall *RunToolCall `protobuf:"bytes,4,opt,name=tool_call,json=toolCall,proto3,oneof"`
+}
+
+func (*RunActivityEvent_Thinking) isRunActivityEvent_Event() {}
+
+func (*RunActivityEvent_Text) isRunActivityEvent_Event() {}
+
+func (*RunActivityEvent_ToolCall) isRunActivityEvent_Event() {}
+
+type RunActivity struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	StartedAt     int64                  `protobuf:"varint,2,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	ElapsedMs     int64                  `protobuf:"varint,3,opt,name=elapsed_ms,json=elapsedMs,proto3" json:"elapsed_ms,omitempty"`
+	Status        RunStatus              `protobuf:"varint,4,opt,name=status,proto3,enum=console.v1.RunStatus" json:"status,omitempty"`
+	Events        []*RunActivityEvent    `protobuf:"bytes,5,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunActivity) Reset() {
+	*x = RunActivity{}
+	mi := &file_console_v1_message_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunActivity) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunActivity) ProtoMessage() {}
+
+func (x *RunActivity) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_message_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunActivity.ProtoReflect.Descriptor instead.
+func (*RunActivity) Descriptor() ([]byte, []int) {
+	return file_console_v1_message_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *RunActivity) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *RunActivity) GetStartedAt() int64 {
+	if x != nil {
+		return x.StartedAt
+	}
+	return 0
+}
+
+func (x *RunActivity) GetElapsedMs() int64 {
+	if x != nil {
+		return x.ElapsedMs
+	}
+	return 0
+}
+
+func (x *RunActivity) GetStatus() RunStatus {
+	if x != nil {
+		return x.Status
+	}
+	return RunStatus_RUN_STATUS_UNSPECIFIED
+}
+
+func (x *RunActivity) GetEvents() []*RunActivityEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+// One user-visible turn, assembled by the server: the prompt (or a wake
+// divider), the activity between, and the final assistant messages. id is
+// the first row's id and stays stable across pages.
+type TranscriptTurn struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,2,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UserMessage   *AgentMessage          `protobuf:"bytes,3,opt,name=user_message,json=userMessage,proto3,oneof" json:"user_message,omitempty"`
+	WakeLabel     *string                `protobuf:"bytes,4,opt,name=wake_label,json=wakeLabel,proto3,oneof" json:"wake_label,omitempty"`
+	Run           *RunActivity           `protobuf:"bytes,5,opt,name=run,proto3,oneof" json:"run,omitempty"`
+	Responses     []*AgentMessage        `protobuf:"bytes,6,rep,name=responses,proto3" json:"responses,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TranscriptTurn) Reset() {
+	*x = TranscriptTurn{}
+	mi := &file_console_v1_message_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TranscriptTurn) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TranscriptTurn) ProtoMessage() {}
+
+func (x *TranscriptTurn) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_message_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TranscriptTurn.ProtoReflect.Descriptor instead.
+func (*TranscriptTurn) Descriptor() ([]byte, []int) {
+	return file_console_v1_message_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *TranscriptTurn) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *TranscriptTurn) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *TranscriptTurn) GetUserMessage() *AgentMessage {
+	if x != nil {
+		return x.UserMessage
+	}
+	return nil
+}
+
+func (x *TranscriptTurn) GetWakeLabel() string {
+	if x != nil && x.WakeLabel != nil {
+		return *x.WakeLabel
+	}
+	return ""
+}
+
+func (x *TranscriptTurn) GetRun() *RunActivity {
+	if x != nil {
+		return x.Run
+	}
+	return nil
+}
+
+func (x *TranscriptTurn) GetResponses() []*AgentMessage {
+	if x != nil {
+		return x.Responses
+	}
+	return nil
+}
+
 var File_console_v1_message_proto protoreflect.FileDescriptor
 
 const file_console_v1_message_proto_rawDesc = "" +
@@ -1353,7 +1750,46 @@ const file_console_v1_message_proto_rawDesc = "" +
 	"created_at\x18\x05 \x01(\x03H\x02R\tcreatedAt\x88\x01\x01B\t\n" +
 	"\amessageB\x05\n" +
 	"\x03_idB\r\n" +
-	"\v_created_atBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
+	"\v_created_at\"\xc4\x01\n" +
+	"\vRunToolCall\x12(\n" +
+	"\x04call\x18\x01 \x01(\v2\x14.console.v1.ToolCallR\x04call\x123\n" +
+	"\x06result\x18\x02 \x01(\v2\x16.console.v1.ToolResultH\x00R\x06result\x88\x01\x01\x12\x1f\n" +
+	"\vresult_size\x18\x03 \x01(\rR\n" +
+	"resultSize\x12*\n" +
+	"\x11result_message_id\x18\x04 \x01(\tR\x0fresultMessageIdB\t\n" +
+	"\a_result\"\x97\x01\n" +
+	"\x10RunActivityEvent\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
+	"\bthinking\x18\x02 \x01(\tH\x00R\bthinking\x12\x14\n" +
+	"\x04text\x18\x03 \x01(\tH\x00R\x04text\x126\n" +
+	"\ttool_call\x18\x04 \x01(\v2\x17.console.v1.RunToolCallH\x00R\btoolCallB\a\n" +
+	"\x05event\"\xc7\x01\n" +
+	"\vRunActivity\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\x02 \x01(\x03R\tstartedAt\x12\x1d\n" +
+	"\n" +
+	"elapsed_ms\x18\x03 \x01(\x03R\telapsedMs\x12-\n" +
+	"\x06status\x18\x04 \x01(\x0e2\x15.console.v1.RunStatusR\x06status\x124\n" +
+	"\x06events\x18\x05 \x03(\v2\x1c.console.v1.RunActivityEventR\x06events\"\xb5\x02\n" +
+	"\x0eTranscriptTurn\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x02 \x01(\x03R\tcreatedAt\x12@\n" +
+	"\fuser_message\x18\x03 \x01(\v2\x18.console.v1.AgentMessageH\x00R\vuserMessage\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"wake_label\x18\x04 \x01(\tH\x01R\twakeLabel\x88\x01\x01\x12.\n" +
+	"\x03run\x18\x05 \x01(\v2\x17.console.v1.RunActivityH\x02R\x03run\x88\x01\x01\x126\n" +
+	"\tresponses\x18\x06 \x03(\v2\x18.console.v1.AgentMessageR\tresponsesB\x0f\n" +
+	"\r_user_messageB\r\n" +
+	"\v_wake_labelB\x06\n" +
+	"\x04_run*\x87\x01\n" +
+	"\tRunStatus\x12\x1a\n" +
+	"\x16RUN_STATUS_UNSPECIFIED\x10\x00\x12\x16\n" +
+	"\x12RUN_STATUS_WORKING\x10\x01\x12\x18\n" +
+	"\x14RUN_STATUS_COMPLETED\x10\x02\x12\x16\n" +
+	"\x12RUN_STATUS_ABORTED\x10\x03\x12\x14\n" +
+	"\x10RUN_STATUS_ERROR\x10\x04BUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
 
 var (
 	file_console_v1_message_proto_rawDescOnce sync.Once
@@ -1367,46 +1803,60 @@ func file_console_v1_message_proto_rawDescGZIP() []byte {
 	return file_console_v1_message_proto_rawDescData
 }
 
-var file_console_v1_message_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_console_v1_message_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_console_v1_message_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_console_v1_message_proto_goTypes = []any{
-	(*ImageAttachment)(nil),        // 0: console.v1.ImageAttachment
-	(*BrowserAnnotationRect)(nil),  // 1: console.v1.BrowserAnnotationRect
-	(*BrowserAnnotation)(nil),      // 2: console.v1.BrowserAnnotation
-	(*AgentUserMessage)(nil),       // 3: console.v1.AgentUserMessage
-	(*TextPart)(nil),               // 4: console.v1.TextPart
-	(*ThinkingPart)(nil),           // 5: console.v1.ThinkingPart
-	(*ToolCall)(nil),               // 6: console.v1.ToolCall
-	(*ImagePart)(nil),              // 7: console.v1.ImagePart
-	(*AssistantContentPart)(nil),   // 8: console.v1.AssistantContentPart
-	(*AgentAssistantMessage)(nil),  // 9: console.v1.AgentAssistantMessage
-	(*VisualPart)(nil),             // 10: console.v1.VisualPart
-	(*HtmlPart)(nil),               // 11: console.v1.HtmlPart
-	(*ToolResult)(nil),             // 12: console.v1.ToolResult
-	(*AgentToolResultMessage)(nil), // 13: console.v1.AgentToolResultMessage
-	(*AgentMessage)(nil),           // 14: console.v1.AgentMessage
-	nil,                            // 15: console.v1.BrowserAnnotation.ComputedStylesEntry
+	(RunStatus)(0),                 // 0: console.v1.RunStatus
+	(*ImageAttachment)(nil),        // 1: console.v1.ImageAttachment
+	(*BrowserAnnotationRect)(nil),  // 2: console.v1.BrowserAnnotationRect
+	(*BrowserAnnotation)(nil),      // 3: console.v1.BrowserAnnotation
+	(*AgentUserMessage)(nil),       // 4: console.v1.AgentUserMessage
+	(*TextPart)(nil),               // 5: console.v1.TextPart
+	(*ThinkingPart)(nil),           // 6: console.v1.ThinkingPart
+	(*ToolCall)(nil),               // 7: console.v1.ToolCall
+	(*ImagePart)(nil),              // 8: console.v1.ImagePart
+	(*AssistantContentPart)(nil),   // 9: console.v1.AssistantContentPart
+	(*AgentAssistantMessage)(nil),  // 10: console.v1.AgentAssistantMessage
+	(*VisualPart)(nil),             // 11: console.v1.VisualPart
+	(*HtmlPart)(nil),               // 12: console.v1.HtmlPart
+	(*ToolResult)(nil),             // 13: console.v1.ToolResult
+	(*AgentToolResultMessage)(nil), // 14: console.v1.AgentToolResultMessage
+	(*AgentMessage)(nil),           // 15: console.v1.AgentMessage
+	(*RunToolCall)(nil),            // 16: console.v1.RunToolCall
+	(*RunActivityEvent)(nil),       // 17: console.v1.RunActivityEvent
+	(*RunActivity)(nil),            // 18: console.v1.RunActivity
+	(*TranscriptTurn)(nil),         // 19: console.v1.TranscriptTurn
+	nil,                            // 20: console.v1.BrowserAnnotation.ComputedStylesEntry
 }
 var file_console_v1_message_proto_depIdxs = []int32{
-	1,  // 0: console.v1.BrowserAnnotation.dimensions:type_name -> console.v1.BrowserAnnotationRect
-	15, // 1: console.v1.BrowserAnnotation.computed_styles:type_name -> console.v1.BrowserAnnotation.ComputedStylesEntry
-	0,  // 2: console.v1.AgentUserMessage.attachments:type_name -> console.v1.ImageAttachment
-	2,  // 3: console.v1.AgentUserMessage.annotations:type_name -> console.v1.BrowserAnnotation
-	4,  // 4: console.v1.AssistantContentPart.text:type_name -> console.v1.TextPart
-	5,  // 5: console.v1.AssistantContentPart.thinking:type_name -> console.v1.ThinkingPart
-	6,  // 6: console.v1.AssistantContentPart.tool_call:type_name -> console.v1.ToolCall
-	7,  // 7: console.v1.AssistantContentPart.image:type_name -> console.v1.ImagePart
-	8,  // 8: console.v1.AgentAssistantMessage.content:type_name -> console.v1.AssistantContentPart
-	10, // 9: console.v1.ToolResult.visual:type_name -> console.v1.VisualPart
-	11, // 10: console.v1.ToolResult.html:type_name -> console.v1.HtmlPart
-	12, // 11: console.v1.AgentToolResultMessage.results:type_name -> console.v1.ToolResult
-	3,  // 12: console.v1.AgentMessage.user:type_name -> console.v1.AgentUserMessage
-	9,  // 13: console.v1.AgentMessage.assistant:type_name -> console.v1.AgentAssistantMessage
-	13, // 14: console.v1.AgentMessage.tool_result:type_name -> console.v1.AgentToolResultMessage
-	15, // [15:15] is the sub-list for method output_type
-	15, // [15:15] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	2,  // 0: console.v1.BrowserAnnotation.dimensions:type_name -> console.v1.BrowserAnnotationRect
+	20, // 1: console.v1.BrowserAnnotation.computed_styles:type_name -> console.v1.BrowserAnnotation.ComputedStylesEntry
+	1,  // 2: console.v1.AgentUserMessage.attachments:type_name -> console.v1.ImageAttachment
+	3,  // 3: console.v1.AgentUserMessage.annotations:type_name -> console.v1.BrowserAnnotation
+	5,  // 4: console.v1.AssistantContentPart.text:type_name -> console.v1.TextPart
+	6,  // 5: console.v1.AssistantContentPart.thinking:type_name -> console.v1.ThinkingPart
+	7,  // 6: console.v1.AssistantContentPart.tool_call:type_name -> console.v1.ToolCall
+	8,  // 7: console.v1.AssistantContentPart.image:type_name -> console.v1.ImagePart
+	9,  // 8: console.v1.AgentAssistantMessage.content:type_name -> console.v1.AssistantContentPart
+	11, // 9: console.v1.ToolResult.visual:type_name -> console.v1.VisualPart
+	12, // 10: console.v1.ToolResult.html:type_name -> console.v1.HtmlPart
+	13, // 11: console.v1.AgentToolResultMessage.results:type_name -> console.v1.ToolResult
+	4,  // 12: console.v1.AgentMessage.user:type_name -> console.v1.AgentUserMessage
+	10, // 13: console.v1.AgentMessage.assistant:type_name -> console.v1.AgentAssistantMessage
+	14, // 14: console.v1.AgentMessage.tool_result:type_name -> console.v1.AgentToolResultMessage
+	7,  // 15: console.v1.RunToolCall.call:type_name -> console.v1.ToolCall
+	13, // 16: console.v1.RunToolCall.result:type_name -> console.v1.ToolResult
+	16, // 17: console.v1.RunActivityEvent.tool_call:type_name -> console.v1.RunToolCall
+	0,  // 18: console.v1.RunActivity.status:type_name -> console.v1.RunStatus
+	17, // 19: console.v1.RunActivity.events:type_name -> console.v1.RunActivityEvent
+	15, // 20: console.v1.TranscriptTurn.user_message:type_name -> console.v1.AgentMessage
+	18, // 21: console.v1.TranscriptTurn.run:type_name -> console.v1.RunActivity
+	15, // 22: console.v1.TranscriptTurn.responses:type_name -> console.v1.AgentMessage
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_message_proto_init() }
@@ -1433,18 +1883,26 @@ func file_console_v1_message_proto_init() {
 		(*AgentMessage_Assistant)(nil),
 		(*AgentMessage_ToolResult)(nil),
 	}
+	file_console_v1_message_proto_msgTypes[15].OneofWrappers = []any{}
+	file_console_v1_message_proto_msgTypes[16].OneofWrappers = []any{
+		(*RunActivityEvent_Thinking)(nil),
+		(*RunActivityEvent_Text)(nil),
+		(*RunActivityEvent_ToolCall)(nil),
+	}
+	file_console_v1_message_proto_msgTypes[18].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_message_proto_rawDesc), len(file_console_v1_message_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   16,
+			NumEnums:      1,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_console_v1_message_proto_goTypes,
 		DependencyIndexes: file_console_v1_message_proto_depIdxs,
+		EnumInfos:         file_console_v1_message_proto_enumTypes,
 		MessageInfos:      file_console_v1_message_proto_msgTypes,
 	}.Build()
 	File_console_v1_message_proto = out.File

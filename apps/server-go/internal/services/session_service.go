@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
@@ -194,6 +195,19 @@ func (s *SessionService) Load(sessionID string, limit int64, before int64) (*typ
 		fssvc.PrewarmFff(loaded.Header.Cwd)
 	}
 	return loaded, err
+}
+
+// LoadTurns is the turn-paged read behind the transcript endpoints.
+func (s *SessionService) LoadTurns(sessionID string, limit int64, before int64, active bool) (*session.LoadedTurns, error) {
+	loaded, err := s.inner.LoadTurns(sessionID, limit, before, active)
+	if err == nil && loaded != nil && loaded.Header.Cwd != "" {
+		fssvc.PrewarmFff(loaded.Header.Cwd)
+	}
+	return loaded, err
+}
+
+func (s *SessionService) ToolResult(sessionID, messageID, callID string) (*consolev1.ToolResult, error) {
+	return s.inner.ToolResult(sessionID, messageID, callID)
 }
 
 func (s *SessionService) ListPrompts(sessionID string) ([]session.PromptEntry, error) {

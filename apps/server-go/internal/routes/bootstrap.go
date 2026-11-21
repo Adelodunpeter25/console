@@ -51,7 +51,7 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 	app.Get("/api/sessions/:id/bootstrap", func(c *fiber.Ctx) error {
 		id := c.Params("id")
 
-		result, err := sessions.Load(id, 50, 0)
+		result, err := sessions.LoadTurns(id, 20, 0, runs.IsActive(id))
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
@@ -67,8 +67,6 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 			}
 		}
 		header := sessionHeaderToProto(result.Header)
-		messages := visibleMessages(result.Messages)
-		wakeRecords := extractWakeRecords(result.Messages)
 
 		changes, err := sessions.GetSessionFileChanges(id, -1)
 		if err != nil {
@@ -123,10 +121,10 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 				rows = append(rows, backgroundWorkToProto(w))
 			}
 			body := &consolev1.SessionBootstrapResponse{
-				Header: header, Messages: messagesToProto(messages), HasMore: result.HasMore,
+				Header: header, Turns: result.Turns, HasMore: result.HasMore,
 				NextCursor: result.NextCursor, Changes: changeRows, Todos: todoItems,
 				Suggestions: suggestions, QueuedPrompts: queued, BackgroundWork: rows,
-				Draft: stored, WakeRecords: wakeRecords, PendingQuestions: pendingQuestions,
+				Draft: stored, PendingQuestions: pendingQuestions,
 			}
 			raw, err := proto.Marshal(body)
 			if err != nil {
@@ -167,7 +165,7 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 			draft = raw
 		}
 
-		wakeData, err := marshalProtoList(wakeRecords)
+		turnsData, err := marshalProtoList(result.Turns)
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
 		}
@@ -177,7 +175,7 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
 			"header":           json.RawMessage(headerRaw),
-			"messages":         messages,
+			"turns":            turnsData,
 			"hasMore":          result.HasMore,
 			"nextCursor":       result.NextCursor,
 			"changes":          changesData,
@@ -186,7 +184,6 @@ func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, 
 			"queuedPrompts":    queuedPrompts,
 			"backgroundWork":   work,
 			"draft":            draft,
-			"wakeRecords":      wakeData,
 			"pendingQuestions": pendingData,
 		}})
 	})

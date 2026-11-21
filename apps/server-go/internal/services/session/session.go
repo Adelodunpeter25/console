@@ -331,27 +331,37 @@ func (s *Service) LoadIncludingDeleted(sessionID string, limit int64, before int
 	return s.load(sessionID, limit, before, true)
 }
 
-func (s *Service) load(sessionID string, limit int64, before int64, includeDeleted bool) (*types.LoadedSession, error) {
+// openForRead resolves a session's header and opens its database. A nil
+// header means the session is unknown (or trashed, unless includeDeleted).
+func (s *Service) openForRead(sessionID string, includeDeleted bool) (*types.SessionHeader, *sql.DB, error) {
 	rows, err := s.manager.Global().Query(`
 		SELECT `+sessionColumns+`
 		FROM sessions WHERE id = ?`, sessionID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	headers, err := scanSessionRows(rows)
 	rows.Close()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(headers) == 0 || (!includeDeleted && headers[0].DeletedAt != nil) {
-		return nil, nil
+		return nil, nil, nil
 	}
-
 	conn, err := s.manager.Session(sessionID, projectIDFrom(headers[0].ProjectID))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	s.ensureContentDropped(sessionID, projectIDFrom(headers[0].ProjectID), conn)
+	return &headers[0], conn, nil
+}
+
+func (s *Service) load(sessionID string, limit int64, before int64, includeDeleted bool) (*types.LoadedSession, error) {
+	header, conn, err := s.openForRead(sessionID, includeDeleted)
+	if err != nil || header == nil {
+		return nil, err
+	}
+	headers := []types.SessionHeader{*header}
 
 	// The content column exists only while the stage-6 migration is pending or
 	// its audit refused the drop; a literal keeps one query shape for both.
