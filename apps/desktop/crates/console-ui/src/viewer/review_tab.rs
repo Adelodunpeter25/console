@@ -462,7 +462,7 @@ fn render_review_entry(
                 .h(px(height))
                 .overflow_hidden()
                 .when(is_vertically_scrollable, |box_el| {
-                    box_el.on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                    box_el.on_scroll(|_, _, cx| cx.stop_propagation())
                 })
                 .child(DiffViewer::new(diff.view));
             el.child(diff_box).when(show_toggle, |el| {

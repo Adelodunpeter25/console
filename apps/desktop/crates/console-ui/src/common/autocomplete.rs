@@ -484,7 +484,7 @@ impl RenderOnce for AutocompleteView {
             .shadow_xl()
             .overflow_y_scroll()
             .track_scroll(&scroll)
-            .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+            .on_scroll(|_, _, cx| cx.stop_propagation())
             .p(px(4.0))
             .flex()
             .flex_col()

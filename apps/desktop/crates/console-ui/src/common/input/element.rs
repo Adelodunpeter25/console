@@ -244,14 +244,6 @@ pub(crate) struct PrepaintState {
     pub(crate) cursor: Option<PaintQuad>,
 }
 
-impl IntoElement for InputElement {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
-        self
-    }
-}
-
 impl Element for InputElement {
     type RequestLayoutState = InputLayoutState;
     type PrepaintState = PrepaintState;

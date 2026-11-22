@@ -18,10 +18,9 @@ use gpui::{
     KeyBinding, ParentElement, Render, SharedString, Styled, Window, div, prelude::FluentBuilder,
     px, uniform_list,
 };
-use gpui_component::input::{Input, InputEvent, InputState};
-
 use crate::IconName;
 use crate::Theme;
+use crate::input::{ComposerEvent, ComposerInput};
 use crate::primitives::{app_icon, base_name, file_type_icon};
 
 /// Debounce for typed queries.
@@ -32,6 +31,7 @@ const SEARCH_DEBOUNCE_MS: u64 = 150;
 const ROW_HEIGHT_PX: f32 = 26.0;
 
 const CONTEXT: &str = "GlobalSearchPanel";
+const FIELD_CONTEXT: &str = "GlobalSearchPanel > ComposerInput";
 
 gpui::actions!(
     global_search_panel,
@@ -39,7 +39,7 @@ gpui::actions!(
 );
 
 pub(crate) fn init(cx: &mut App) {
-    let context: Option<&str> = Some(CONTEXT);
+    let context: Option<&str> = Some(FIELD_CONTEXT);
     cx.bind_keys([
         KeyBinding::new("escape", Cancel, context),
         KeyBinding::new("enter", ConfirmMatch, context),
@@ -82,7 +82,7 @@ enum SearchRow {
 
 pub struct GlobalSearchPanel {
     client: ConsoleClient,
-    query_input: Entity<InputState>,
+    query_input: Entity<ComposerInput>,
     focus_handle: FocusHandle,
     open: bool,
     root: Option<String>,
@@ -101,7 +101,11 @@ pub struct GlobalSearchPanel {
 impl GlobalSearchPanel {
     pub fn new(client: ConsoleClient, window: &mut Window, cx: &mut Context<Self>) -> Self {
         init(cx);
-        let query_input = cx.new(|cx| InputState::new(window, cx));
+        let query_input = cx.new(|cx| {
+            ComposerInput::new(window, cx)
+                .search_field()
+                .placeholder("Search in files…")
+        });
         let subscription = cx.subscribe_in(&query_input, window, Self::on_query_input_event);
         Self {
             client,
@@ -143,8 +147,7 @@ impl GlobalSearchPanel {
         self.has_searched = false;
         self.loading = false;
         self.search_generation += 1;
-        self.query_input
-            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.query_input.update(cx, |input, cx| input.clear(cx));
         window.focus(&self.query_input.focus_handle(cx), cx);
         cx.notify();
     }
@@ -160,15 +163,15 @@ impl GlobalSearchPanel {
 
     fn on_query_input_event(
         &mut self,
-        _input: &Entity<InputState>,
-        event: &InputEvent,
+        _input: &Entity<ComposerInput>,
+        event: &ComposerEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !matches!(event, InputEvent::Change) {
+        if !matches!(event, ComposerEvent::Edited) {
             return;
         }
-        let query = self.query_input.read(cx).value().to_string();
+        let query = self.query_input.read(cx).content().to_string();
         self.schedule_search(query, window, cx);
     }
 
@@ -522,14 +525,19 @@ impl Render for GlobalSearchPanel {
                         div()
                             .flex_none()
                             .px(px(12.0))
+                            .py(px(8.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
                             .border_b_1()
                             .border_color(theme.border)
-                            .child(
-                                Input::new(&self.query_input)
-                                    .prefix(app_icon(IconName::Search, 14.0, theme.text_tertiary))
-                                    .appearance(false)
-                                    .p_0(),
-                            ),
+                            .text_size(px(14.0))
+                            .child(div().flex_none().child(app_icon(
+                                IconName::Search,
+                                14.0,
+                                theme.text_tertiary,
+                            )))
+                            .child(div().flex_1().min_w_0().child(self.query_input.clone())),
                     )
                     .when_some(header_text, |el, text| {
                         el.child(

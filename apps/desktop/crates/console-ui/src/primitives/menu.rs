@@ -683,14 +683,6 @@ impl Element for FloatingSurface {
     }
 }
 
-impl IntoElement for FloatingSurface {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
-        self
-    }
-}
-
 /// A dropdown menu anchored under its trigger, toggled by a left click.
 ///
 /// Unlike a context menu it aligns to the trigger rather than the pointer, so

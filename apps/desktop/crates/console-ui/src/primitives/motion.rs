@@ -9,6 +9,7 @@
 //! with no loader mounted schedules nothing at all. Every loader shares one
 //! epoch, keeping multi-instance loaders phase-locked.
 
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use gpui::{
@@ -36,25 +37,16 @@ struct Lease {
     stride: u32,
 }
 
+static PULSE_EPOCH: LazyLock<Instant> = LazyLock::new(Instant::now);
+
+#[derive(Default)]
 struct PulseClock {
-    epoch: Instant,
     leases: Vec<(EntityId, Lease)>,
     ticks: u64,
     running: bool,
 }
 
 impl Global for PulseClock {}
-
-impl Default for PulseClock {
-    fn default() -> Self {
-        Self {
-            epoch: Instant::now(),
-            leases: Vec::with_capacity(4),
-            ticks: 0,
-            running: false,
-        }
-    }
-}
 
 /// Keep `view` re-rendering at [`PULSE_TICK`] until the lease lapses. A caller
 /// that stops leasing stops being notified, and the clock parks once no
@@ -133,9 +125,10 @@ fn pulse_phase(period: Duration, stride: u32, view: EntityId, cx: &mut App) -> f
     if cx.reduce_motion() {
         return 0.0;
     }
-    let clock = cx.default_global::<PulseClock>();
-    let phase = (clock.epoch.elapsed().as_secs_f32() / period.as_secs_f32()).fract();
-    pulse_lease_with_stride(view, stride, cx);
+    let phase = (PULSE_EPOCH.elapsed().as_secs_f32() / period.as_secs_f32()).fract();
+    // Defer lease renewal out of render so gpui-fast does not treat a global
+    // write during request_layout as dirtying every view on the next frame.
+    cx.defer(move |cx| pulse_lease_with_stride(view, stride, cx));
     phase
 }
 

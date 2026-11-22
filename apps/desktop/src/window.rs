@@ -202,7 +202,7 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
                 });
                 false
             });
-            cx.new(|cx| gpui_component::Root::new(app_view, window, cx))
+            app_view
         });
 
         match result {

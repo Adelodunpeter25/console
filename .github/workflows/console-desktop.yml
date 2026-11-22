@@ -50,7 +50,7 @@ jobs:
         with:
           # Must match rust-toolchain.toml (source of truth); explicit here
           # so the runner doesn't fetch latest stable first.
-          toolchain: 1.97.1
+          toolchain: 1.98.1
           targets: ${{ matrix.rust-target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -102,7 +102,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.97.1
+          toolchain: 1.98.1
           targets: x86_64-pc-windows-msvc
 
       - uses: Swatinem/rust-cache@v2

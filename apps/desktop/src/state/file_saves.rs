@@ -244,27 +244,18 @@ impl ConsoleDesktopApp {
         started
     }
 
-    /// Surface a failed API save through the app's existing notification
-    /// stack. The buffer stays dirty; nothing is retried automatically.
+    /// Surface a failed API save through the app's error banner. The buffer
+    /// stays dirty; nothing is retried automatically.
     fn report_file_save_failure(
         &mut self,
         path: &str,
         err: &console_core::FsSaveError,
         cx: &mut Context<Self>,
     ) {
-        use gpui_component::notification::Notification;
         let name = std::path::Path::new(path)
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.to_string());
-        let note = Notification::error(err.to_string()).title(format!("Could not save {name}"));
-        let Some(handle) = cx.active_window() else {
-            log::error!("Failed to save {}: {err}", path);
-            return;
-        };
-        let _ = handle.update(cx, |_, window, cx| {
-            use gpui_component::WindowExt;
-            window.push_notification(note, cx);
-        });
+        self.set_error(format!("Could not save {name}: {err}"), cx);
     }
 }

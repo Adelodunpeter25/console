@@ -4,7 +4,7 @@ use console_core::types::terminal::{TerminalSize, TerminalSpawnParams, TerminalS
 use gpui::{
     App, Bounds, Context, ElementInputHandler, EntityInputHandler, ExternalPaths, FocusHandle,
     Focusable, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, ParentElement, Pixels, Render, ScrollWheelEvent, SharedString, Styled,
+    MouseUpEvent, ParentElement, Pixels, Render, ScrollEvent, SharedString, Styled,
     UTF16Selection, Window, div, prelude::*, px,
 };
 use std::cell::RefCell;
@@ -751,8 +751,8 @@ impl Render for TerminalView {
                     }
                 },
             )
-            .on_scroll_wheel(
-                cx.listener(move |this, event: &ScrollWheelEvent, _window, cx| {
+            .on_scroll(
+                cx.listener(move |this, event: &ScrollEvent, _window, cx| {
                     let delta = match event.delta {
                         gpui::ScrollDelta::Lines(lines) => lines.y.round() as i32,
                         gpui::ScrollDelta::Pixels(pixels) => {

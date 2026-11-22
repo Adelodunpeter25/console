@@ -226,7 +226,7 @@ impl ConsoleDesktopApp {
                 .open_window(options, |window, cx| {
                     let view = cx.new(|cx| NewProjectDialog::new(app_entity, window, cx));
                     *dialog_ref.borrow_mut() = Some(view.downgrade());
-                    cx.new(|cx| gpui_component::Root::new(view, window, cx))
+                    view
                 })
                 .ok();
 
@@ -347,7 +347,7 @@ impl ConsoleDesktopApp {
                         browser.open(start_path.clone(), cx);
                         browser
                     });
-                    cx.new(|cx| gpui_component::Root::new(view, window, cx))
+                    view
                 })
                 .ok();
 

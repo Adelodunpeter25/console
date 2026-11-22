@@ -202,7 +202,7 @@ impl TranscriptView {
                     .max_w_full()
                     .h(px(visible_rows.max(1) as f32 * PROMPT_ROW_HEIGHT + 8.0))
                     .occlude()
-                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                    .on_scroll(|_, _, cx| cx.stop_propagation())
                     .p(px(4.0))
                     .rounded(px(12.0))
                     .border_1()

@@ -151,14 +151,6 @@ impl InlineFileMentionText {
     }
 }
 
-impl IntoElement for InlineFileMentionText {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
-        self
-    }
-}
-
 impl Element for InlineFileMentionText {
     type RequestLayoutState = InlineFileMentionLayout;
     type PrepaintState = ();

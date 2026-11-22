@@ -9,7 +9,7 @@ use crate::primitives::file_type_icon;
 use crate::theme::Theme;
 use gpui::{
     AnyElement, App, DispatchPhase, Entity, IntoElement, ParentElement, RenderOnce,
-    ScrollWheelEvent, Styled, Window, canvas, div, px,
+    ScrollEvent, Styled, Window, canvas, div, px,
 };
 use std::rc::Rc;
 
@@ -55,7 +55,7 @@ pub fn scroll_watch(on_scroll: impl Fn(&mut Window, &mut App) + 'static) -> impl
         |_, _, _| (),
         move |bounds, _, window, _cx| {
             let on_scroll = on_scroll.clone();
-            window.on_mouse_event(move |event: &ScrollWheelEvent, phase, window, cx| {
+            window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
                 if phase == DispatchPhase::Capture && bounds.contains(&event.position) {
                     on_scroll(window, cx);
                 }
