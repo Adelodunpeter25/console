@@ -24,6 +24,8 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        console_ui::chat::set_html_overlay_open(self.any_palette_open(cx));
+
         // No chat tab open in this pane — show the centered empty state
         // (no transcript, no composer, no footer) instead of chat chrome.
         if active_tab.is_none() {

@@ -46,6 +46,15 @@ struct CardState {
     url_loading: bool,
 }
 
+static OVERLAY_OPEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Tells inline pages whether a GPUI overlay (command palette, quick open, ...)
+/// is open. A native webview paints above everything GPUI draws, so while one
+/// is open the pages hide instead of covering it.
+pub fn set_html_overlay_open(open: bool) {
+    OVERLAY_OPEN.store(open, std::sync::atomic::Ordering::Relaxed);
+}
+
 static CARDS: LazyLock<Mutex<HashMap<String, CardState>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -394,8 +403,12 @@ impl RenderOnce for HtmlCard {
                             .child(
                                 canvas(
                                     move |bounds, window, _| {
-                                        let visible = window.content_mask().bounds;
-                                        host.sync_bounds_clipped(bounds, visible);
+                                        if OVERLAY_OPEN.load(std::sync::atomic::Ordering::Relaxed) {
+                                            host.set_visible(false);
+                                        } else {
+                                            let visible = window.content_mask().bounds;
+                                            host.sync_bounds_clipped(bounds, visible);
+                                        }
                                         window.insert_hitbox(bounds, HitboxBehavior::Normal)
                                     },
                                     move |_, _hitbox, _window, _| {},

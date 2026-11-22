@@ -17,7 +17,7 @@ pub mod working_indicator;
 
 pub use change_chips::ChangesSummary;
 pub use console_core::{ActivityEvent, ToolCallEntry};
-pub use html::{HtmlCard, resolve_html_url, set_html_render_client};
+pub use html::{HtmlCard, resolve_html_url, set_html_overlay_open, set_html_render_client};
 pub use image::{
     ChatImage, ImagePreviewHandler, set_workspace_image_client, set_workspace_image_preview,
     workspace_chat_image,
