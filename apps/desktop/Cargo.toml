@@ -38,8 +38,8 @@ console-ui = { path = "crates/console-ui" }
 # Editor & Syntax
 # Pinned to e99991d: editable editor with IME input and atomic file saving.
 # Update together with the zed gpui rev in Cargo.lock — see the gpui note above.
-syntax = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "e8a917d001109d0438611857d62fc9ab5c36841a" }
-editor-ui = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "e8a917d001109d0438611857d62fc9ab5c36841a" }
+syntax = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "8c1507c6df592db09b36052c81d7b00fe5352348" }
+editor-ui = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "8c1507c6df592db09b36052c81d7b00fe5352348" }
 
 # Serialization & Networking
 serde = { version = "1.0", features = ["derive"] }
