@@ -116,6 +116,25 @@ fun AppNavGraph() {
         navController.navigate(RouteChat) { launchSingleTop = true }
     }
 
+    // Keep activeTab in sync with the visible destination (including system Back
+    // and notification taps) so foreground notification suppression is accurate.
+    LaunchedEffect(backStackEntry) {
+        val route = backStackEntry?.destination?.route ?: return@LaunchedEffect
+        val tab = when {
+            route.contains("RouteChat", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Chat
+            route.contains("RouteHome", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Home
+            route.contains("RouteFiles", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Files
+            route.contains("RouteChanges", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Changes
+            route.contains("RouteTerminal", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Terminal
+            route.contains("RouteDevices", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Devices
+            route.contains("RouteComputer", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Computer
+            else -> null
+        }
+        if (tab != null && appState.activeTab != tab) {
+            AppContainer.appStateHolder.setActiveTab(tab)
+        }
+    }
+
     // Keep nav in sync when Home opens a chat / subagent details programmatically.
     LaunchedEffect(appState.activeTab, appState.selectedSessionId) {
         if (appState.activeTab == com.console.mobile.data.store.MobileTab.Chat && !appState.selectedSessionId.isNullOrBlank()) {
