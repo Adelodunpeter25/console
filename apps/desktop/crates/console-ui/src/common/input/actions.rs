@@ -1,4 +1,24 @@
-use gpui::{App, KeyBinding, actions};
+use gpui::{Action, App, KeyBinding, KeyBindingContextPredicate, actions};
+
+/// Build a [`KeyBinding`] that resolves `secondary-` against the host OS.
+pub fn key_binding(
+    keystrokes: &str,
+    action: impl Action,
+    context: Option<&str>,
+    cx: &App,
+) -> KeyBinding {
+    let context_predicate =
+        context.map(|c| KeyBindingContextPredicate::parse(c).unwrap().into());
+    KeyBinding::load(
+        keystrokes,
+        Box::new(action),
+        context_predicate,
+        false,
+        None,
+        cx,
+    )
+    .unwrap()
+}
 
 actions!(
     composer,
@@ -63,20 +83,20 @@ pub fn init_input_keybindings(cx: &mut App) {
             Some("ComposerInput"),
         ),
         KeyBinding::new("alt-shift-right", SelectToNextWord, Some("ComposerInput")),
-        KeyBinding::new("secondary-a", SelectAll, Some("ComposerInput")),
-        KeyBinding::new("secondary-v", Paste, Some("ComposerInput")),
-        KeyBinding::new("secondary-c", Copy, Some("ComposerInput")),
-        KeyBinding::new("secondary-x", Cut, Some("ComposerInput")),
+        key_binding("secondary-a", SelectAll, Some("ComposerInput"), cx),
+        key_binding("secondary-v", Paste, Some("ComposerInput"), cx),
+        key_binding("secondary-c", Copy, Some("ComposerInput"), cx),
+        key_binding("secondary-x", Cut, Some("ComposerInput"), cx),
         // Global fallback: answers Cmd+C whenever a deeper binding (the
         // composer) propagated because it had nothing to copy.
-        KeyBinding::new("secondary-c", CopySelection, None),
-        KeyBinding::new("secondary-z", Undo, Some("ComposerInput")),
-        KeyBinding::new("secondary-shift-z", Redo, Some("ComposerInput")),
+        key_binding("secondary-c", CopySelection, None, cx),
+        key_binding("secondary-z", Undo, Some("ComposerInput"), cx),
+        key_binding("secondary-shift-z", Redo, Some("ComposerInput"), cx),
         KeyBinding::new("enter", Enter, Some("ComposerInput")),
         KeyBinding::new("shift-enter", Newline, Some("ComposerInput")),
         // While a turn is running, Enter queues a follow-up; the platform's
         // primary modifier + Enter injects it when the provider supports it.
-        KeyBinding::new("secondary-enter", SubmitSteer, Some("ComposerInput")),
+        key_binding("secondary-enter", SubmitSteer, Some("ComposerInput"), cx),
     ]);
 
     #[cfg(target_os = "macos")]

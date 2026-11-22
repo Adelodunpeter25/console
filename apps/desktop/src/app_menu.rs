@@ -198,12 +198,12 @@ pub fn init(cx: &mut App) {
     // cmd-q — the standard macOS quit shortcut. Binding it here also gives
     // the "Quit" menu item its ⌘Q key equivalent (GPUI menu items derive
     // their displayed keystroke from the keymap).
-    cx.bind_keys([KeyBinding::new("secondary-q", Quit, None)]);
+    cx.bind_keys([console_ui::key_binding("secondary-q", Quit, None, cx)]);
     // Standard app/window keystrokes; each also labels its menu item.
     cx.bind_keys([
-        KeyBinding::new("secondary-h", HideApp, None),
-        KeyBinding::new("alt-secondary-h", HideOthers, None),
-        KeyBinding::new("secondary-m", Minimize, None),
+        console_ui::key_binding("secondary-h", HideApp, None, cx),
+        console_ui::key_binding("alt-secondary-h", HideOthers, None, cx),
+        console_ui::key_binding("secondary-m", Minimize, None, cx),
         KeyBinding::new("ctrl-shift-tab", ShowPreviousTab, None),
         KeyBinding::new("ctrl-tab", ShowNextTab, None),
     ]);

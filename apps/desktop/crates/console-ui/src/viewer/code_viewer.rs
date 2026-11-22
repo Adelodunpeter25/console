@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use gpui::{
     App, ClipboardItem, DispatchPhase, ElementId, Entity, FocusHandle, Font, FontWeight, Hsla,
-    InteractiveElement, IntoElement, KeyBinding, ListState, MouseButton, MouseMoveEvent,
+    InteractiveElement, IntoElement, ListState, MouseButton, MouseMoveEvent,
     MouseUpEvent, ParentElement, RenderOnce, StatefulInteractiveElement, Styled, StyledText,
     TextRun, Window, actions, canvas, div, list, prelude::*, px,
 };
@@ -39,8 +39,18 @@ pub const CODE_VIEWER_CONTEXT: &str = "CodeViewer";
 /// composer's global fallback.
 pub fn init_code_viewer_keybindings(cx: &mut App) {
     cx.bind_keys([
-        KeyBinding::new("secondary-c", CopySelection, Some(CODE_VIEWER_CONTEXT)),
-        KeyBinding::new("secondary-a", SelectAll, Some(CODE_VIEWER_CONTEXT)),
+        crate::common::input::actions::key_binding(
+            "secondary-c",
+            CopySelection,
+            Some(CODE_VIEWER_CONTEXT),
+            cx,
+        ),
+        crate::common::input::actions::key_binding(
+            "secondary-a",
+            SelectAll,
+            Some(CODE_VIEWER_CONTEXT),
+            cx,
+        ),
     ]);
 }
 

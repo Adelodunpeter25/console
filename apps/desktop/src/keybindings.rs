@@ -102,38 +102,38 @@ pub fn init(cx: &mut App) {
         // case-sensitively, and macOS reports an uppercase "N" while
         // Shift is held. (No separate cmd-* bindings — "cmd" parses to
         // the same platform modifier as "secondary".)
-        KeyBinding::new("secondary-shift-n", NewWindow, None),
-        KeyBinding::new("secondary-shift-N", NewWindow, None),
-        KeyBinding::new("secondary-shift-t", NewTerminal, None),
-        KeyBinding::new("secondary-shift-T", NewTerminal, None),
+        console_ui::key_binding("secondary-shift-n", NewWindow, None, cx),
+        console_ui::key_binding("secondary-shift-N", NewWindow, None, cx),
+        console_ui::key_binding("secondary-shift-t", NewTerminal, None, cx),
+        console_ui::key_binding("secondary-shift-T", NewTerminal, None, cx),
         // Browser tabs are deferred on Windows.
         #[cfg(not(target_os = "windows"))]
-        KeyBinding::new("secondary-shift-b", NewBrowser, None),
+        console_ui::key_binding("secondary-shift-b", NewBrowser, None, cx),
         #[cfg(not(target_os = "windows"))]
-        KeyBinding::new("secondary-shift-B", NewBrowser, None),
-        KeyBinding::new("secondary-w", CloseTab, None),
-        KeyBinding::new("secondary-n", NewChat, None),
+        console_ui::key_binding("secondary-shift-B", NewBrowser, None, cx),
+        console_ui::key_binding("secondary-w", CloseTab, None, cx),
+        console_ui::key_binding("secondary-n", NewChat, None, cx),
         // ⇧⌘S files the chat away. Both letter spellings are bound for the
         // reason spelled out above: macOS reports an uppercase "S" while
         // Shift is held.
-        KeyBinding::new("secondary-shift-s", SettleSession, None),
-        KeyBinding::new("secondary-shift-S", SettleSession, None),
-        KeyBinding::new("secondary-shift-p", PinSession, None),
-        KeyBinding::new("secondary-shift-P", PinSession, None),
-        KeyBinding::new("secondary-shift-d", DeleteSession, None),
-        KeyBinding::new("secondary-shift-D", DeleteSession, None),
+        console_ui::key_binding("secondary-shift-s", SettleSession, None, cx),
+        console_ui::key_binding("secondary-shift-S", SettleSession, None, cx),
+        console_ui::key_binding("secondary-shift-p", PinSession, None, cx),
+        console_ui::key_binding("secondary-shift-P", PinSession, None, cx),
+        console_ui::key_binding("secondary-shift-d", DeleteSession, None, cx),
+        console_ui::key_binding("secondary-shift-D", DeleteSession, None, cx),
         // cmd-o / cmd-p — same as Zed; our File menu owns the key equivalents
         // so AppKit routes them to us instead of the system Open/Print handlers.
-        KeyBinding::new("secondary-o", AddProject, None),
-        KeyBinding::new("secondary-p", QuickOpenFile, None),
-        KeyBinding::new("secondary-f", FocusSidebarSearch, None),
-        KeyBinding::new("secondary-k", ToggleCommandPalette, None),
-        KeyBinding::new("secondary-t", ToggleTabPalette, None),
-        KeyBinding::new("secondary-shift-f", ToggleGlobalSearch, None),
-        KeyBinding::new("secondary-shift-F", ToggleGlobalSearch, None),
-        KeyBinding::new("secondary-l", FocusComposer, None),
-        KeyBinding::new("secondary-/", ToggleModelPicker, None),
-        KeyBinding::new("secondary-.", ToggleThinkingPicker, None),
+        console_ui::key_binding("secondary-o", AddProject, None, cx),
+        console_ui::key_binding("secondary-p", QuickOpenFile, None, cx),
+        console_ui::key_binding("secondary-f", FocusSidebarSearch, None, cx),
+        console_ui::key_binding("secondary-k", ToggleCommandPalette, None, cx),
+        console_ui::key_binding("secondary-t", ToggleTabPalette, None, cx),
+        console_ui::key_binding("secondary-shift-f", ToggleGlobalSearch, None, cx),
+        console_ui::key_binding("secondary-shift-F", ToggleGlobalSearch, None, cx),
+        console_ui::key_binding("secondary-l", FocusComposer, None, cx),
+        console_ui::key_binding("secondary-/", ToggleModelPicker, None, cx),
+        console_ui::key_binding("secondary-.", ToggleThinkingPicker, None, cx),
         // Plain `/` refocuses the open picker's search box. Scoped to the
         // menu context so it can only fire while a menu/popover card is
         // open — everywhere else `/` types normally. `ConsoleMenu` matches
@@ -144,17 +144,17 @@ pub fn init(cx: &mut App) {
         // Shift+Tab cycles approval mode, but only while the composer holds
         // focus — elsewhere Shift+Tab is focus-previous as usual.
         KeyBinding::new("shift-tab", CycleApprovalMode, Some("ComposerInput")),
-        KeyBinding::new("secondary-,", OpenSettings, None),
-        KeyBinding::new("secondary-b", ToggleLeftSidebar, None),
-        KeyBinding::new("secondary-1", SwitchSession1, None),
-        KeyBinding::new("secondary-2", SwitchSession2, None),
-        KeyBinding::new("secondary-3", SwitchSession3, None),
-        KeyBinding::new("secondary-4", SwitchSession4, None),
-        KeyBinding::new("secondary-5", SwitchSession5, None),
-        KeyBinding::new("secondary-6", SwitchSession6, None),
-        KeyBinding::new("secondary-7", SwitchSession7, None),
-        KeyBinding::new("secondary-8", SwitchSession8, None),
-        KeyBinding::new("secondary-9", SwitchSession9, None),
+        console_ui::key_binding("secondary-,", OpenSettings, None, cx),
+        console_ui::key_binding("secondary-b", ToggleLeftSidebar, None, cx),
+        console_ui::key_binding("secondary-1", SwitchSession1, None, cx),
+        console_ui::key_binding("secondary-2", SwitchSession2, None, cx),
+        console_ui::key_binding("secondary-3", SwitchSession3, None, cx),
+        console_ui::key_binding("secondary-4", SwitchSession4, None, cx),
+        console_ui::key_binding("secondary-5", SwitchSession5, None, cx),
+        console_ui::key_binding("secondary-6", SwitchSession6, None, cx),
+        console_ui::key_binding("secondary-7", SwitchSession7, None, cx),
+        console_ui::key_binding("secondary-8", SwitchSession8, None, cx),
+        console_ui::key_binding("secondary-9", SwitchSession9, None, cx),
         // Option+1–9 (Alt elsewhere): switch tabs within the active workspace
         // pane. `alt` is the Option modifier in GPUI keystroke strings. These
         // intentionally shadow the focused terminal's own key handling —
