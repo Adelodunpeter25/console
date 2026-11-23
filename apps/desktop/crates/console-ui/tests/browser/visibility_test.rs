@@ -1,4 +1,4 @@
-use console_ui::browser::view::should_show_native as show;
+use console_ui::browser::should_show_native as show;
 
 // should_show_native(surface_visible, has_page, has_error)
 

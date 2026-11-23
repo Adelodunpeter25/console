@@ -26,4 +26,4 @@ pub use actions::{
 pub use address::*;
 pub use host::*;
 pub use inspector::*;
-pub use view::{BrowserView, ScriptOutcome};
+pub use view::{BrowserView, ScriptOutcome, should_show_native};
