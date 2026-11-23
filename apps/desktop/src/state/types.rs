@@ -350,10 +350,9 @@ pub struct ConsoleDesktopApp {
     /// with a resolved scope, so no per-file follow-up fetch is needed.
     pub(crate) changes_review_data:
         std::collections::HashMap<String, Rc<[console_core::types::SessionFileChange]>>,
-    /// Paths collapsed in a given review tab (local UI state, not persisted).
-    /// A file starts collapsed iff it was already reviewed when the tab's
-    /// data was fetched; toggling reviewed flips membership here too.
-    pub(crate) changes_review_collapsed:
+    /// Paths expanded in a given review tab (local UI state, not persisted).
+    /// Every file starts collapsed by default.
+    pub(crate) changes_review_expanded:
         std::collections::HashMap<String, std::collections::HashSet<String>>,
     /// Tree contents and expanded folders for each open Files tab, keyed by tab id.
     pub(crate) file_tree_data: std::collections::HashMap<String, Rc<[console_ui::FileTreeNode]>>,

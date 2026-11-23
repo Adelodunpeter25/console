@@ -864,14 +864,11 @@ impl ConsoleDesktopApp {
             .get(&tab_id)
             .cloned()
             .unwrap_or_else(|| Rc::from([]));
-        let collapsed = self
-            .changes_review_collapsed
+        let expanded = self
+            .changes_review_expanded
             .get(&tab_id)
             .cloned()
-            .unwrap_or_else(|| {
-                // Default: every file starts collapsed until the user expands it.
-                changes.iter().map(|c| c.path.clone()).collect()
-            });
+            .unwrap_or_default();
 
         let entity = cx.entity().downgrade();
         let tab_id_for_collapse = tab_id.clone();
@@ -883,7 +880,7 @@ impl ConsoleDesktopApp {
                 move |path: String, _window: &mut Window, cx: &mut gpui::App| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            this.toggle_changes_review_collapsed(&tab_id, &path, cx);
+                            this.toggle_changes_review_expanded(&tab_id, &path, cx);
                         });
                     }
                 },
@@ -936,7 +933,7 @@ impl ConsoleDesktopApp {
                 .iter()
                 .map(|path| {
                     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                    collapsed.contains(path).hash(&mut hasher);
+                    expanded.contains(path).hash(&mut hasher);
                     for c in comments.iter().filter(|c| &c.path == path) {
                         c.id.hash(&mut hasher);
                         (c.state as u8).hash(&mut hasher);
@@ -980,7 +977,7 @@ impl ConsoleDesktopApp {
         console_ui::ReviewTab::new(
             scope,
             changes,
-            collapsed,
+            expanded,
             on_toggle_collapsed,
             on_comment_target,
             sync_comments,

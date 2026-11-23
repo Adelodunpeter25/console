@@ -41,7 +41,7 @@ pub type ReviewSyncCommentsHandler =
 pub struct ReviewTab {
     scope: ChangesScope,
     changes: Rc<[SessionFileChange]>,
-    collapsed: std::collections::HashSet<String>,
+    expanded: std::collections::HashSet<String>,
     on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_comment_target: ReviewCommentTargetHandler,
     sync_comments: ReviewSyncCommentsHandler,
@@ -52,7 +52,7 @@ impl ReviewTab {
     pub fn new(
         scope: ChangesScope,
         changes: Rc<[SessionFileChange]>,
-        collapsed: std::collections::HashSet<String>,
+        expanded: std::collections::HashSet<String>,
         on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_comment_target: ReviewCommentTargetHandler,
         sync_comments: ReviewSyncCommentsHandler,
@@ -60,7 +60,7 @@ impl ReviewTab {
         Self {
             scope,
             changes,
-            collapsed,
+            expanded,
             on_toggle_collapsed,
             on_comment_target,
             sync_comments,
@@ -150,7 +150,7 @@ impl RenderOnce for ReviewTab {
                     .into_any_element()
             } else if let Some(list_state) = self.list_state {
                 let scoped = Rc::new(scoped);
-                let collapsed = Rc::new(self.collapsed);
+                let expanded = Rc::new(self.expanded);
                 let on_toggle_collapsed = on_toggle_collapsed.clone();
                 let on_comment_target = on_comment_target.clone();
                 let sync_comments = sync_comments.clone();
@@ -164,7 +164,7 @@ impl RenderOnce for ReviewTab {
                     .child(
                         list(list_state, move |ix, window, cx| {
                             let entry = &scoped[ix];
-                            let is_collapsed = collapsed.contains(&entry.path);
+                            let is_collapsed = !expanded.contains(&entry.path);
                             render_review_entry(
                                 ix,
                                 entry,
@@ -191,7 +191,7 @@ impl RenderOnce for ReviewTab {
                             .flex()
                             .flex_col()
                             .children(scoped.iter().enumerate().map(|(ix, entry)| {
-                                let is_collapsed = self.collapsed.contains(&entry.path);
+                                let is_collapsed = !self.expanded.contains(&entry.path);
                                 render_review_entry(
                                     ix,
                                     entry,

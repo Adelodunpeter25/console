@@ -40,8 +40,7 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// Fetch the full (all-turns) change list for a review tab and seed its
-    /// initial collapsed set (reviewed files start collapsed).
+    /// Fetch the full (all-turns) change list for a review tab.
     pub(crate) fn fetch_changes_review_data(
         &mut self,
         tab_id: &str,
@@ -56,13 +55,6 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                let collapsed: std::collections::HashSet<String> = changes
-                                    .iter()
-                                    .filter(|c| c.reviewed)
-                                    .map(|c| c.path.clone())
-                                    .collect();
-                                this.changes_review_collapsed
-                                    .insert(tab_id.clone(), collapsed);
                                 this.changes_review_data
                                     .insert(tab_id.clone(), std::rc::Rc::from(changes));
                                 cx.notify();
@@ -79,14 +71,14 @@ impl ConsoleDesktopApp {
     }
 
     /// Toggle a file's local expand/collapse state within a review tab.
-    pub fn toggle_changes_review_collapsed(
+    pub fn toggle_changes_review_expanded(
         &mut self,
         tab_id: &str,
         path: &str,
         cx: &mut Context<Self>,
     ) {
         let set = self
-            .changes_review_collapsed
+            .changes_review_expanded
             .entry(tab_id.to_string())
             .or_default();
         if !set.remove(path) {

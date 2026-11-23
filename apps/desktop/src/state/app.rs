@@ -623,7 +623,7 @@ impl ConsoleDesktopApp {
             file_tree_data: std::collections::HashMap::new(),
             file_tree_expanded: std::collections::HashMap::new(),
             file_tree_scrolls: std::collections::HashMap::new(),
-            changes_review_collapsed: std::collections::HashMap::new(),
+            changes_review_expanded: std::collections::HashMap::new(),
             file_tree_selected_path: None,
             session_subagents: std::collections::HashMap::new(),
             session_background_work: std::collections::HashMap::new(),

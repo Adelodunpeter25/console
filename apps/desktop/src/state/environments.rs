@@ -422,7 +422,7 @@ impl ConsoleDesktopApp {
                         }
                         this.open_diff_contents.clear();
                         this.changes_review_data.clear();
-                        this.changes_review_collapsed.clear();
+                        this.changes_review_expanded.clear();
                         this.file_tree_scrolls.clear();
                         this.file_tree_nodes = std::rc::Rc::from([]);
                         this.working_changes = std::rc::Rc::from([]);
