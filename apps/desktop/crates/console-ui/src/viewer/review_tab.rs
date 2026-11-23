@@ -15,23 +15,13 @@ use crate::primitives::icons::{IconName, app_icon};
 use crate::primitives::{base_name, file_type_icon};
 use crate::theme::Theme;
 use crate::utils::short_parent_dir;
-use crate::viewer::diff_viewer::{DiffViewer, EditorDiff, build_editor_diff_capped_sized};
+use crate::viewer::diff_viewer::{DiffViewer, EditorDiff, build_editor_diff_sized};
 
 /// Code size and row height of a file's diff in this view.
 const REVIEW_FONT_SIZE: f32 = 11.0;
 const REVIEW_LINE_HEIGHT: f32 = 18.0;
 /// Height of a collapsed file row.
 const REVIEW_ROW_HEIGHT: f32 = 34.0;
-
-/// Longest a file's diff grows inside the review tab before it scrolls
-/// internally. The editor diff view lays out every row it is given room for,
-/// so an unbounded height would render a huge diff's rows all at once.
-const REVIEW_DIFF_MAX_HEIGHT: f32 = 800.0;
-
-/// Initial diff lines to load before offering a clickable "Show N more lines"
-/// toggle. Keeps tree-sitter highlighting and widest-line scans bounded on
-/// initial open for huge files without permanently truncating them.
-const REVIEW_DIFF_PREVIEW_LINES: usize = 1000;
 
 pub type ReviewCommentTargetHandler = Rc<dyn Fn(String, DiffCommentTarget) + 'static>;
 pub type ReviewSyncCommentsHandler =
@@ -212,10 +202,10 @@ impl RenderOnce for ReviewTab {
 
 #[allow(clippy::too_many_arguments)]
 fn render_review_entry(
-    ix: usize,
+    _ix: usize,
     entry: &SessionFileChange,
     is_collapsed: bool,
-    list_state: Option<&ListState>,
+    _list_state: Option<&ListState>,
     on_toggle_collapsed: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_comment_target: &ReviewCommentTargetHandler,
     sync_comments: &ReviewSyncCommentsHandler,
@@ -238,7 +228,7 @@ fn render_review_entry(
 
     // One cached editor diff view per file. The key carries the row's update
     // time and diff length, so a changed diff builds a fresh view.
-    let diff_info: Option<(EditorDiff, usize)> = if is_collapsed {
+    let editor_diff: Option<EditorDiff> = if is_collapsed {
         None
     } else {
         entry
@@ -256,11 +246,10 @@ fn render_review_entry(
                 let comment_handler = on_comment_target.clone();
                 let state =
                     window.use_keyed_state(gpui::ElementId::Name(key.into()), cx, |_, cx| {
-                        let (diff, total) = build_editor_diff_capped_sized(
+                        let diff = build_editor_diff_sized(
                             text,
                             &entry.path,
                             &theme,
-                            REVIEW_DIFF_PREVIEW_LINES,
                             REVIEW_FONT_SIZE,
                             REVIEW_LINE_HEIGHT,
                             cx,
@@ -270,7 +259,7 @@ fn render_review_entry(
                                 comment_handler(comment_path.clone(), target);
                             });
                         });
-                        (diff, total)
+                        diff
                     });
                 state.read(cx).clone()
             })
@@ -384,54 +373,20 @@ fn render_review_entry(
                         ),
                 ),
         )
-        .when_some(diff_info, |el, (diff, total_lines)| {
+        .when_some(editor_diff, |el, diff| {
             let overlay_rows = sync_comments(entry.path.clone(), &diff.view, window, cx);
-            let raw_height =
+            let height =
                 (diff.line_count + overlay_rows as usize) as f32 * REVIEW_LINE_HEIGHT + 8.0;
-            let is_vertically_scrollable = raw_height > REVIEW_DIFF_MAX_HEIGHT;
-            let height = raw_height.min(REVIEW_DIFF_MAX_HEIGHT);
-            let remaining = total_lines.saturating_sub(diff.line_count);
-            let show_toggle = remaining > 0;
-            let diff_box = div()
-                .id(gpui::ElementId::Name(
-                    format!("review-diff-box-{}", entry.path).into(),
-                ))
-                .w_full()
-                .h(px(height))
-                .overflow_hidden()
-                .when(is_vertically_scrollable, |box_el| {
-                    box_el.on_scroll(|_, _, cx| cx.stop_propagation())
-                })
-                .child(DiffViewer::new(diff.view));
-            el.child(diff_box).when(show_toggle, |el| {
-                let list_state = list_state.cloned();
-                el.child(
-                    div()
-                        .id(gpui::ElementId::Name(
-                            format!("review-diff-more-{}", entry.path).into(),
-                        ))
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .gap(px(4.0))
-                        .py(px(8.0))
-                        .cursor_pointer()
-                        .hover(|s| s.bg(theme.overlay))
-                        .on_click(move |_, _window, _cx| {
-                            if let Some(list_state) = &list_state {
-                                list_state.splice(ix..ix + 1, 1);
-                            }
-                        })
-                        .child(app_icon(IconName::ChevronDown, 12.0, theme.text_secondary))
-                        .child(
-                            div()
-                                .text_size(px(12.0))
-                                .text_color(theme.text_secondary)
-                                .child(format!("Show {remaining} more lines")),
-                        ),
-                )
-            })
+            el.child(
+                div()
+                    .id(gpui::ElementId::Name(
+                        format!("review-diff-box-{}", entry.path).into(),
+                    ))
+                    .w_full()
+                    .h(px(height))
+                    .overflow_hidden()
+                    .child(DiffViewer::new(diff.view)),
+            )
         })
         .into_any_element()
 }

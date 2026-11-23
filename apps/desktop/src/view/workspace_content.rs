@@ -254,7 +254,7 @@ impl ConsoleDesktopApp {
                             return Self::file_loading_content_panel(&theme);
                         };
                         let file_viewer =
-                            self.file_editor_viewer(pane_id, &path, &content, &theme, cx);
+                            self.file_editor_viewer(pane_id, &path, &content, &theme, window, cx);
                         let header = console_ui::svg_source_header(
                             theme,
                             Some(Rc::new(Self::svg_mode_toggled(path, cx))),
@@ -286,7 +286,8 @@ impl ConsoleDesktopApp {
                     let Some(content) = self.ensure_text_file_state(&path, cx) else {
                         return Self::file_loading_content_panel(&theme);
                     };
-                    let file_viewer = self.file_editor_viewer(pane_id, &path, &content, &theme, cx);
+                    let file_viewer =
+                        self.file_editor_viewer(pane_id, &path, &content, &theme, window, cx);
                     return div()
                         .size_full()
                         .flex()
@@ -493,10 +494,7 @@ impl ConsoleDesktopApp {
                     return Self::file_loading_content_panel(&theme);
                 };
 
-                let comment_cards = self.file_comment_cards(pane_id, &path, window, cx);
-                let viewer = self
-                    .file_editor_viewer(pane_id, &path, &content, &theme, cx)
-                    .comments(comment_cards);
+                let viewer = self.file_editor_viewer(pane_id, &path, &content, &theme, window, cx);
                 // No composer here: with one chat per desk the chat pane is
                 // always beside the file, and that is where prompts — and the
                 // staged comments collected from every pane — are sent from.
@@ -728,10 +726,14 @@ impl ConsoleDesktopApp {
         path: &str,
         content: &str,
         theme: &Theme,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> console_ui::FileViewer {
         let editor_view = self.get_or_build_editor_view(path, content, theme, cx);
-        console_ui::FileViewer::new(editor_view).path(self.comment_display_path(pane_id, path))
+        let comment_cards = self.file_comment_cards(pane_id, path, window, cx);
+        console_ui::FileViewer::new(editor_view)
+            .path(self.comment_display_path(pane_id, path))
+            .comments(comment_cards)
     }
 
     /// Diff tab: full-page DiffViewer.
