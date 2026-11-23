@@ -1027,7 +1027,6 @@ impl RenderOnce for MenuCard {
             .flex_col()
             .on_key_down({
                 let handle = self.handle.clone();
-                let focusable = focusable;
                 let items = self.items.clone();
                 move |event: &KeyDownEvent, window, cx| {
                     on_menu_key(&handle, &focusable, &items, event, window, cx);

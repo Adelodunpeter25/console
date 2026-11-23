@@ -1006,8 +1006,6 @@ impl Render for TerminalView {
                                         }
                                     },
                                     {
-                                        let snapshot = snapshot;
-                                        let paint_cache = paint_cache;
                                         let view_for_canvas = view_handle;
                                         let focus_for_canvas = self.focus.clone();
                                         move |bounds, (cols, rows, cell_w, cell_h), window, cx| {

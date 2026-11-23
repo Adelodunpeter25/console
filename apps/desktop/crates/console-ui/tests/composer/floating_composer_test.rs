@@ -122,9 +122,11 @@ fn project_menu_section_renders_no_project_row() {
         updated_at: 0,
     }]);
 
-    let on_select: Rc<dyn Fn(String, &mut gpui::Window, &mut gpui::App)> = Rc::new(|_, _, _| {});
-    let on_new: Rc<dyn Fn(&mut gpui::Window, &mut gpui::App)> = Rc::new(|_, _| {});
-    let on_none: Rc<dyn Fn(&mut gpui::Window, &mut gpui::App)> = Rc::new(|_, _| {});
+    type SelectCb = Rc<dyn Fn(String, &mut gpui::Window, &mut gpui::App)>;
+    type ActionCb = Rc<dyn Fn(&mut gpui::Window, &mut gpui::App)>;
+    let on_select: SelectCb = Rc::new(|_, _, _| {});
+    let on_new: ActionCb = Rc::new(|_, _| {});
+    let on_none: ActionCb = Rc::new(|_, _| {});
 
     let items = project_menu_section(
         projects,
@@ -227,7 +229,8 @@ fn branch_menu_section_offers_no_remote_branches() {
     let is_selected: Rc<dyn Fn(&GitBranchInfo) -> bool> = Rc::new(|info: &GitBranchInfo| {
         BranchChoice::FromBranch(info.name.clone()) == BranchChoice::FromBranch("main".into())
     });
-    let on_select: Rc<dyn Fn(String, &mut gpui::Window, &mut gpui::App)> = Rc::new(|_, _, _| {});
+    type SelectCb = Rc<dyn Fn(String, &mut gpui::Window, &mut gpui::App)>;
+    let on_select: SelectCb = Rc::new(|_, _, _| {});
 
     let items = branch_menu_section(branches, &is_selected, &on_select, true, &[], None);
     let labels: Vec<&str> = items

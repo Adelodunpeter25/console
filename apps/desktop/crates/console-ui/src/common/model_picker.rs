@@ -689,17 +689,11 @@ impl RenderOnce for ModelRolePicker {
             );
 
         let panel = {
-            let providers = providers;
-            let models_by_provider = models_by_provider;
-            let active_tab = active_tab;
-            let search = search;
             let on_tab = on_tab.clone();
             let on_select = on_select.clone();
             let on_clear = on_clear.clone();
             let on_favorite = on_favorite.clone();
-            let favorites = favorites;
             let selected_model = selected;
-            let query = query;
 
             move |handle: &ContextMenuHandle, _window: &mut Window, _cx: &mut App| {
                 let close_handle = handle.clone();

@@ -439,8 +439,6 @@ impl ConsoleDesktopApp {
                                                 .cursor_pointer()
                                                 .hover(|s| s.opacity(0.9))
                                                 .on_click({
-                                                    let open_path = open_path;
-                                                    let entity = entity;
                                                     move |_, _window, cx| {
                                                         if let Some(app) = entity.upgrade() {
                                                             app.update(cx, |this, cx| {

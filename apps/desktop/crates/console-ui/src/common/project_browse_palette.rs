@@ -177,9 +177,9 @@ fn build_breadcrumbs(current_path: &str) -> Vec<PaletteBreadcrumb> {
         .filter(|s| !s.is_empty())
         .collect();
     for seg in segments {
-        if accum.is_empty() && current_path.starts_with('/') {
-            accum.push('/');
-        } else if !accum.is_empty() && !accum.ends_with('/') {
+        if (accum.is_empty() && current_path.starts_with('/'))
+            || (!accum.is_empty() && !accum.ends_with('/'))
+        {
             accum.push('/');
         }
         accum.push_str(seg);

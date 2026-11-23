@@ -221,13 +221,10 @@ impl ComputerViewer {
         let window_focus_changed = window_focus != self.last_window_focus;
         let viewer_focused = self.focus_handle.is_focused(window);
 
-        if natively_focused && window_focus_changed && window_focus.is_some() && !viewer_focused {
-            self.reclaim_native_keyboard(cx);
-        } else if !natively_focused
-            && window_focus_changed
+        if window_focus_changed
             && window_focus.is_some()
             && !viewer_focused
-            && self.was_natively_focused
+            && (natively_focused || self.was_natively_focused)
         {
             self.reclaim_native_keyboard(cx);
         } else if native_became_focused && !window_focus_changed && !viewer_focused {

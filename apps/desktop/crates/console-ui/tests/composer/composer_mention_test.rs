@@ -44,7 +44,7 @@ fn test_mention_creation_and_separator_outside_range() {
 
 #[test]
 fn test_mention_atomic_backspace_range_matching() {
-    let mentions = vec![ComposerMention {
+    let mentions = [ComposerMention {
         range: 6..16, // "roadmap.md"
         path: "roadmap.md".to_string(),
         label: "roadmap.md".to_string(),
@@ -68,7 +68,7 @@ fn test_mention_atomic_backspace_range_matching() {
 
 #[test]
 fn test_mention_atomic_delete_range_matching() {
-    let mentions = vec![ComposerMention {
+    let mentions = [ComposerMention {
         range: 6..16, // "roadmap.md"
         path: "roadmap.md".to_string(),
         label: "roadmap.md".to_string(),

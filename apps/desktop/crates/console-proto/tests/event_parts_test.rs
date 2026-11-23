@@ -67,7 +67,6 @@ fn serializes_flat_oneof() {
     // Scalars sit directly under part (no wrapper level).
     let raw = serde_json::to_string(&ModelStreamPart {
         part: Some(PartKind::Text("hi".into())),
-        ..Default::default()
     })
     .expect("encode part");
     assert_eq!(raw, r#"{"text":"hi"}"#, "unexpected encoding: {raw}");
