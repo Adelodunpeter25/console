@@ -243,11 +243,10 @@ impl ToolCalls {
     /// clock (slow stride — the transcript is expensive to rebuild) so a
     /// running call reads as live, not stuck. Done/error stay static icons.
     fn status_element(icon: IconName, color: gpui::Hsla, pending: bool) -> AnyElement {
-        let svg = app_icon(icon, 13.0, color);
         if pending {
-            motion::spin_slow(svg)
+            motion::spin_slow(icon, 13.0, color)
         } else {
-            svg.into_any_element()
+            app_icon(icon, 13.0, color).into_any_element()
         }
     }
 

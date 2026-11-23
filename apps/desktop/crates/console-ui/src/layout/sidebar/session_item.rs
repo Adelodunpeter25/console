@@ -201,11 +201,11 @@ impl RenderOnce for SidebarSessionItem {
             sidebar::RowStatus::Running => status_slot()
                 .id(status_id())
                 .tooltip(Tooltip::text("Running"))
-                .child(motion::spin_slow(app_icon(
+                .child(motion::spin_slow(
                     IconName::LoaderCircle,
                     15.0,
                     theme.accent,
-                )))
+                ))
                 .into_any_element(),
             sidebar::RowStatus::NeedsAttention => status_slot()
                 .id(status_id())

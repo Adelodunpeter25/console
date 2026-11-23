@@ -71,10 +71,8 @@ pub fn copy_button_with_action(
 ) -> impl IntoElement {
     let content = content.into();
     let copied_generation = cx
-        .default_global::<CopyFeedback>()
-        .generations
-        .get(&id)
-        .copied();
+        .try_global::<CopyFeedback>()
+        .and_then(|feedback| feedback.generations.get(&id).copied());
     let copied = copied_generation.is_some();
     let animation_key = format!(
         "copy-feedback-{id}-{copied}-{}",

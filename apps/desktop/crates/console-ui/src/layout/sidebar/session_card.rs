@@ -360,11 +360,11 @@ pub fn render_session_card_content(
                                 .child(app_icon(icon, 14.0, status_color))
                                 .into_any_element(),
                             CardStatusMark::Spinner => status_mark_slot()
-                                .child(motion::spin_slow(app_icon(
+                                .child(motion::spin_slow(
                                     IconName::LoaderCircle,
                                     14.0,
                                     status_color,
-                                )))
+                                ))
                                 .into_any_element(),
                             CardStatusMark::Dot => div()
                                 .size(px(7.0))

@@ -100,11 +100,11 @@ pub fn mic_button(
             .id(format!("{id_prefix}-mic-transcribing"))
             .p(px(5.0))
             .rounded(px(6.0))
-            .child(crate::primitives::motion::spin(app_icon(
+            .child(crate::primitives::motion::spin(
                 IconName::LoaderCircle,
                 13.0,
                 theme.text_tertiary,
-            )))
+            ))
             .into_any_element(),
         MicPhase::Idle => div()
             .id(format!("{id_prefix}-mic"))

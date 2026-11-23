@@ -44,6 +44,7 @@ use gpui::{
     ListState, MouseButton, ParentElement, RenderOnce, SpringAnimation, SpringConfig,
     StatefulInteractiveElement, Styled, Window, div, list, prelude::FluentBuilder, px,
 };
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -69,33 +70,39 @@ struct RowFades {
     generation: u64,
 }
 
-impl gpui::Global for RowFades {}
+thread_local! {
+    static ROW_FADES: RefCell<RowFades> = RefCell::new(RowFades::default());
+    static SIDEBAR_SCROLL_TRACKER: RefCell<SidebarScrollTracker> =
+        RefCell::new(SidebarScrollTracker::default());
+}
 
 /// Record this render's session ids and return the rows still fading in,
 /// keyed by id with a per-appearance generation (animation state is keyed by
 /// element id, so a replay needs a new one).
-fn fading_rows(current: HashSet<String>, cx: &mut App) -> Rc<HashMap<String, u64>> {
-    let fades = cx.default_global::<RowFades>();
-    let now = Instant::now();
-    fades
-        .fresh
-        .retain(|_, (since, _)| now.duration_since(*since) < ROW_FADE * 2);
-    // First paint and workspace-wide reloads have nothing to compare against.
-    if !fades.seen.is_empty() {
-        for id in current.difference(&fades.seen) {
-            fades.generation += 1;
-            let generation = fades.generation;
-            fades.fresh.insert(id.clone(), (now, generation));
-        }
-    }
-    fades.seen = current;
-    Rc::new(
+fn fading_rows(current: HashSet<String>) -> Rc<HashMap<String, u64>> {
+    ROW_FADES.with(|cell| {
+        let fades = &mut *cell.borrow_mut();
+        let now = Instant::now();
         fades
             .fresh
-            .iter()
-            .map(|(id, (_, generation))| (id.clone(), *generation))
-            .collect(),
-    )
+            .retain(|_, (since, _)| now.duration_since(*since) < ROW_FADE * 2);
+        // First paint and workspace-wide reloads have nothing to compare against.
+        if !fades.seen.is_empty() {
+            for id in current.difference(&fades.seen) {
+                fades.generation += 1;
+                let generation = fades.generation;
+                fades.fresh.insert(id.clone(), (now, generation));
+            }
+        }
+        fades.seen = current;
+        Rc::new(
+            fades
+                .fresh
+                .iter()
+                .map(|(id, (_, generation))| (id.clone(), *generation))
+                .collect(),
+        )
+    })
 }
 
 /// Collapsed-project key for sessions without a known project.
@@ -156,7 +163,7 @@ struct SidebarScrollTracker {
     row_keys: Vec<SidebarRowKey>,
 }
 
-impl gpui::Global for SidebarScrollTracker {}
+
 
 /// Determine the target scroll offset after the sidebar row structure has changed
 /// (such as expanding or collapsing project sections). Anchors to the previous top-visible
@@ -546,8 +553,9 @@ impl RenderOnce for SidebarView {
         let list_rows = Rc::new(list_rows);
         let current_row_keys: Vec<SidebarRowKey> =
             list_rows.iter().map(|row| row.key(&sessions)).collect();
-        let tracker = cx.default_global::<SidebarScrollTracker>();
-        let previous_row_keys = std::mem::replace(&mut tracker.row_keys, current_row_keys.clone());
+        let previous_row_keys = SIDEBAR_SCROLL_TRACKER.with(|cell| {
+            std::mem::replace(&mut cell.borrow_mut().row_keys, current_row_keys.clone())
+        });
 
         let sidebar_list_state = self.sidebar_list_state;
         if sidebar_list_state.item_count() != list_rows.len() {
@@ -569,7 +577,6 @@ impl RenderOnce for SidebarView {
                     _ => None,
                 })
                 .collect(),
-            cx,
         );
         let list_sessions = sessions;
         let list_projects = projects;

@@ -668,11 +668,9 @@ impl ConsoleDesktopApp {
             .text_color(theme.text_tertiary)
             .text_size(px(13.0))
             .child(console_ui::primitives::motion::spin_slow(
-                console_ui::app_icon(
-                    console_ui::IconName::LoaderCircle,
-                    16.0,
-                    theme.text_tertiary,
-                ),
+                console_ui::IconName::LoaderCircle,
+                16.0,
+                theme.text_tertiary,
             ))
             .child(label.to_owned())
             .into_any_element()

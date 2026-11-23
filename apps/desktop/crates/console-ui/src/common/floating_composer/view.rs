@@ -850,11 +850,11 @@ impl FloatingComposerView {
                             // Spinner replaces nothing — it sits just before
                             // Create, which reads as the in-flight action.
                             .when(submitting, |el| {
-                                el.child(crate::primitives::motion::spin(app_icon(
+                                el.child(crate::primitives::motion::spin(
                                     IconName::LoaderCircle,
                                     13.0,
                                     theme.text_secondary,
-                                )))
+                                ))
                             })
                             .child(create_button),
                     ),

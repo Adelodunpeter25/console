@@ -949,11 +949,11 @@ impl RenderOnce for ComposerView {
                                             .items_center()
                                             .justify_center()
                                             .bg(theme.overlay_strong)
-                                            .child(crate::primitives::motion::spin(app_icon(
+                                            .child(crate::primitives::motion::spin(
                                                 IconName::LoaderCircle,
                                                 14.0,
                                                 theme.text_secondary,
-                                            ))),
+                                            )),
                                         ComposerRunState::Running => {
                                             let on_abort = self.on_abort.clone();
                                             let on_queue = self.on_queue.clone();
