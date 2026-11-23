@@ -9,13 +9,13 @@ use std::pin::Pin;
 #[derive(Clone, Debug)]
 pub enum AutomationStreamEvent {
     Snapshot(Vec<Automation>),
-    Event(AutomationEvent),
+    Event(Box<AutomationEvent>),
 }
 
 #[derive(Clone, Debug)]
 pub enum WebhookStreamEvent {
     Snapshot(Vec<WebhookSubscription>),
-    Event(WebhookEvent),
+    Event(Box<WebhookEvent>),
 }
 
 #[derive(Clone)]
@@ -188,7 +188,7 @@ impl AutomationService {
                     Ok(event) if event.event == "automation" => {
                         serde_json::from_str::<AutomationEvent>(&event.data)
                             .ok()
-                            .map(|ev| Ok(AutomationStreamEvent::Event(ev)))
+                            .map(|ev| Ok(AutomationStreamEvent::Event(Box::new(ev))))
                     }
                     _ => None,
                 }
@@ -302,7 +302,7 @@ impl WebhookService {
                     Ok(event) if event.event == "webhook" => {
                         serde_json::from_str::<WebhookEvent>(&event.data)
                             .ok()
-                            .map(|ev| Ok(WebhookStreamEvent::Event(ev)))
+                            .map(|ev| Ok(WebhookStreamEvent::Event(Box::new(ev))))
                     }
                     _ => None,
                 }

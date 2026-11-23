@@ -30,7 +30,7 @@ impl ConsoleDesktopApp {
                                                 this.automations = list;
                                             }
                                             AutomationStreamEvent::Event(ev) => {
-                                                this.apply_automation_event(ev);
+                                                this.apply_automation_event(*ev);
                                             }
                                         }
                                         cx.notify();
@@ -65,7 +65,7 @@ impl ConsoleDesktopApp {
                                                 this.webhooks = list;
                                             }
                                             WebhookStreamEvent::Event(ev) => {
-                                                this.apply_webhook_event(ev);
+                                                this.apply_webhook_event(*ev);
                                             }
                                         }
                                         cx.notify();
