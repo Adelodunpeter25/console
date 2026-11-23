@@ -270,7 +270,7 @@ impl ConsoleDesktopApp {
         workspaces_map.insert(
             cur_wid.clone(),
             persistence::PersistedWorkspace {
-                id: cur_wid.clone(),
+                id: cur_wid,
                 project_id: self.selected_project_id.clone(),
                 cwd: cur_cwd,
                 name: cur_proj.map(|p| p.name.clone()),

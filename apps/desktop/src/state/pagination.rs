@@ -64,7 +64,6 @@ impl ConsoleDesktopApp {
     pub fn load_older_messages_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
         let Some(session_id) = self
             .active_session_for_pane(&pane_id)
-            .map(|s| s.to_string())
         else {
             return;
         };
@@ -88,7 +87,7 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        let session_id_for_task = session_id.clone();
+        let session_id_for_task = session_id;
         cx.spawn(async move |_, cx| {
             match client
                 .sessions
@@ -149,7 +148,6 @@ impl ConsoleDesktopApp {
     pub fn load_prompts_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
         let Some(session_id) = self
             .active_session_for_pane(&pane_id)
-            .map(|s| s.to_string())
         else {
             return;
         };
@@ -186,7 +184,6 @@ impl ConsoleDesktopApp {
     ) {
         let Some(session_id) = self
             .active_session_for_pane(&pane_id)
-            .map(|s| s.to_string())
         else {
             return;
         };

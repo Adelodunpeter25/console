@@ -80,7 +80,7 @@ impl ConsoleDesktopApp {
         let project_id = self.active_project_id_or_global();
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        let pid_clone = project_id.clone();
+        let pid_clone = project_id;
         cx.spawn(async move |_, cx| {
             let pid_opt = if pid_clone == "global" {
                 None
@@ -123,7 +123,7 @@ impl ConsoleDesktopApp {
         let project_id = self.active_project_id_or_global();
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        let pid_clone = project_id.clone();
+        let pid_clone = project_id;
         cx.spawn(async move |_, cx| {
             let pid_opt = if pid_clone == "global" {
                 None

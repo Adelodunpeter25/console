@@ -51,7 +51,7 @@ impl ConsoleDesktopApp {
             if !self.terminals.contains_key(terminal_id) {
                 let Some(cwd) = self
                     .selected_project_for_pane(pane_id)
-                    .map(|project| project.path.clone())
+                    .map(|project| project.path)
                 else {
                     let theme = Theme::current(cx);
                     return div()
@@ -410,7 +410,7 @@ impl ConsoleDesktopApp {
                                         .text_size(px(14.0))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .text_color(theme.text)
-                                        .child(file_name.clone()),
+                                        .child(file_name),
                                 )
                                 .child(
                                     div()
@@ -418,7 +418,7 @@ impl ConsoleDesktopApp {
                                         .gap(px(16.0))
                                         .text_size(px(12.0))
                                         .text_color(theme.text_secondary)
-                                        .child(details.mime_label.clone())
+                                        .child(details.mime_label)
                                         .child(size_label),
                                 )
                                 .child(
@@ -439,8 +439,8 @@ impl ConsoleDesktopApp {
                                                 .cursor_pointer()
                                                 .hover(|s| s.opacity(0.9))
                                                 .on_click({
-                                                    let open_path = open_path.clone();
-                                                    let entity = entity.clone();
+                                                    let open_path = open_path;
+                                                    let entity = entity;
                                                     move |_, _window, cx| {
                                                         if let Some(app) = entity.upgrade() {
                                                             app.update(cx, |this, cx| {
@@ -856,7 +856,7 @@ impl ConsoleDesktopApp {
         if !self.changes_review_data.contains_key(&tab_id) {
             self.changes_review_data
                 .insert(tab_id.clone(), Rc::new(Vec::new()));
-            self.fetch_changes_review_data(&tab_id, session_id.clone(), cx);
+            self.fetch_changes_review_data(&tab_id, session_id, cx);
         }
         let changes = self
             .changes_review_data
@@ -923,8 +923,8 @@ impl ConsoleDesktopApp {
         let comment_selections: Rc<
             dyn Fn(String, &mut Window, &mut gpui::App) -> Vec<editor_ui::DiffCommentTarget>,
         > = {
-            let entity = entity.clone();
-            let pane_id = pane_id_for_review.clone();
+            let entity = entity;
+            let pane_id = pane_id_for_review;
             Rc::new(
                 move |path: String, window: &mut Window, cx: &mut gpui::App| {
                     let pane_id = pane_id.clone();
@@ -1351,7 +1351,7 @@ impl ConsoleDesktopApp {
                 }
             },
             {
-                let entity = entity.clone();
+                let entity = entity;
                 move |_w, cx| {
                     if let Some(app) = entity.upgrade() {
                         let pane_id = new_worktree_pane_id.clone();
@@ -1581,7 +1581,7 @@ impl ConsoleDesktopApp {
             },
             {
                 let entity = entity.clone();
-                let search = pane_model_search.clone();
+                let search = pane_model_search;
                 let pane_id = pane_id.to_string();
                 move |tab: PickerTab, _window, cx| {
                     if let Some(app) = entity.upgrade() {
@@ -1609,7 +1609,7 @@ impl ConsoleDesktopApp {
         );
 
         let composer = ComposerView::new(
-            pane_composer.clone(),
+            pane_composer,
             {
                 let entity = entity.clone();
                 let pane_id = pane_id.to_string();
@@ -1656,7 +1656,7 @@ impl ConsoleDesktopApp {
                 }
             },
             {
-                let client = client.clone();
+                let client = client;
                 let entity = entity.clone();
                 let pane_id = pane_id.to_string();
                 move |_w, cx| {
@@ -1854,7 +1854,7 @@ impl ConsoleDesktopApp {
             }
         })
         .on_drop_files({
-            let entity = entity.clone();
+            let entity = entity;
             let pane_id = pane_id.to_string();
             move |paths, window, cx| {
                 if let Some(app) = entity.upgrade() {

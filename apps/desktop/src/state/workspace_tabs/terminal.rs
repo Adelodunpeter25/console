@@ -25,7 +25,7 @@ impl ConsoleDesktopApp {
         let pane_id = pane_id.to_string();
         let Some(cwd) = self
             .selected_project_for_pane(&pane_id)
-            .map(|project| project.path.clone())
+            .map(|project| project.path)
         else {
             self.set_project_required_error("Select a project before opening a terminal.", cx);
             return;

@@ -97,7 +97,7 @@ impl ConsoleDesktopApp {
                                 .unwrap_or_else(|| "pane-main".to_string());
                             let root = this
                                 .selected_project_for_pane(&source_pane)
-                                .map(|project| project.path.clone());
+                                .map(|project| project.path);
                             let Some(root) = root else { return };
                             let absolute = console_ui::utils::join_path_lexical(&root, rel_path);
                             let target_pane = this.target_subtab_pane_id();
@@ -122,7 +122,7 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         let client_clone = self.client.clone();
-        let target_for_bootstrap = target.clone();
+        let target_for_bootstrap = target;
 
         cx.spawn(async move |entity, cx| {
             // 1. Fetch the session list for the sidebar.
@@ -324,7 +324,7 @@ impl ConsoleDesktopApp {
                                 }
                                 let path = this
                                     .selected_project_for_pane(&active_id)
-                                    .map(|project| project.path.clone());
+                                    .map(|project| project.path);
                                 cx.notify();
                                 path.map(|p| (active_id, p))
                             })

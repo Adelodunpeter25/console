@@ -171,13 +171,13 @@ impl ConsoleDesktopApp {
                 state.branch_loaded = false;
                 state.branch_is_git_repository = false;
             }
-            self.selected_project_id = Some(project_id.clone());
+            self.selected_project_id = Some(project_id);
             // Same-folder change: keep the tab's stored project in step.
             if let Some(tid) = active_tab_id {
                 console_ui::workspace::ops::set_tab_project(
                     &mut self.workspace_root,
                     &tid,
-                    new_workspace_id.clone(),
+                    new_workspace_id,
                 );
             }
             self.persist_workspaces();
@@ -214,8 +214,8 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        let pane_id_for_result = effective_pane.clone();
-        let project_id_for_dto = project.id.clone();
+        let pane_id_for_result = effective_pane;
+        let project_id_for_dto = project.id;
         cx.spawn(async move |_entity, cx| {
             if let Some(session_id) = session_id {
                 match client
@@ -376,7 +376,7 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        let pane_for_confirm = effective_pane.clone();
+        let pane_for_confirm = effective_pane;
         cx.spawn(async move |_entity, cx| {
             match client
                 .sessions
@@ -503,7 +503,7 @@ impl ConsoleDesktopApp {
             .filter(|cwd| !cwd.is_empty());
         let Some(path) = session_cwd.or_else(|| {
             self.selected_project_for_pane(&pane_id)
-                .map(|project| project.path.clone())
+                .map(|project| project.path)
         }) else {
             return;
         };
@@ -569,7 +569,7 @@ impl ConsoleDesktopApp {
 
         let Some(path) = self
             .selected_project_for_pane(&pane_id)
-            .map(|project| project.path.clone())
+            .map(|project| project.path)
         else {
             return;
         };

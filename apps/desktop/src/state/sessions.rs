@@ -667,7 +667,7 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
         let sid = session_id.clone();
-        let pid = pane_id.clone();
+        let pid = pane_id;
         cx.spawn(
             async move |_entity, cx| match client.sessions.update(&sid, payload).await {
                 Ok(header) => {
@@ -751,8 +751,8 @@ impl ConsoleDesktopApp {
         self.clear_question_selected_for_session(&session_id);
         self.clear_question_inputs_for_session(&session_id, cx);
         self.clear_error_for_session(&session_id, cx);
-        if let Some(ans_str) = answer.as_str() {
-            if ans_str == "Approve" && question.question.contains("Full Access") {
+        if let Some(ans_str) = answer.as_str()
+            && ans_str == "Approve" && question.question.contains("Full Access") {
                 let pane_ids: Vec<String> = self.workspace_pane_states.keys().cloned().collect();
                 for pane_id in pane_ids {
                     if self.active_session_for_pane(&pane_id).as_deref() == Some(&session_id) {
@@ -763,7 +763,6 @@ impl ConsoleDesktopApp {
                     }
                 }
             }
-        }
         cx.notify();
 
         let client = self.client.clone();
@@ -990,7 +989,7 @@ impl ConsoleDesktopApp {
             return;
         };
 
-        self.reload_branches_for_pane(pane_id.to_string(), project.path.clone(), cx);
+        self.reload_branches_for_pane(pane_id.to_string(), project.path, cx);
         cx.notify();
     }
 
@@ -1246,8 +1245,7 @@ impl ConsoleDesktopApp {
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
         let prev_sid = self
-            .active_session_for_pane(&active_pane_id)
-            .map(|s| s.to_string());
+            .active_session_for_pane(&active_pane_id);
 
         // The chat this pane is showing keeps its position: the new one
         // replaces its transcript.

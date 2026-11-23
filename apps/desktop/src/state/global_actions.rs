@@ -317,7 +317,7 @@ fn workspace_palette_entries(
             if row.provider.is_empty() {
                 entry.icon(IconName::ChatRoundLine)
             } else {
-                entry.provider_icon(row.provider.clone())
+                entry.provider_icon(row.provider)
             }
         })
         .collect()
@@ -424,7 +424,7 @@ impl ConsoleDesktopApp {
             .unwrap_or_else(|| "pane-main".to_string());
         let root = self
             .selected_project_for_pane(&pane_id)
-            .map(|project| project.path.clone());
+            .map(|project| project.path);
         self.quick_open_palette
             .update(cx, |palette, cx| palette.open(root, window, cx));
         cx.notify();
@@ -446,7 +446,7 @@ impl ConsoleDesktopApp {
             .unwrap_or_else(|| "pane-main".to_string());
         let root = self
             .selected_project_for_pane(&pane_id)
-            .map(|project| project.path.clone());
+            .map(|project| project.path);
         if root.is_none() {
             return;
         }

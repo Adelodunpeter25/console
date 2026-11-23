@@ -21,7 +21,7 @@ impl ConsoleDesktopApp {
         let cwd = self.transcript_for_pane(pane_id).read(cx).session_cwd();
         let project_path = self
             .selected_project_for_pane(pane_id)
-            .map(|project| project.path.clone());
+            .map(|project| project.path);
         let resolved = links::resolve_file_link(&link, cwd.as_deref(), project_path.as_deref());
 
         // A bare name (`file_tree.rs`) only resolves when the file sits in the
@@ -43,7 +43,7 @@ impl ConsoleDesktopApp {
             return;
         }
         let name = links::strip_line_suffix(link.trim()).to_owned();
-        let root = project_path.clone().or_else(|| cwd.clone());
+        let root = project_path.or_else(|| cwd.clone());
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
             let found = client
@@ -609,7 +609,7 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         let client = self.client.clone();
-        let file_path = path.clone();
+        let file_path = path;
         let session_change_diff = diff_override.filter(|d| !d.trim().is_empty());
         // Resolve against the pane's own chat checkout, not the globally
         // last-selected session. `selected_session_id` points at whichever
@@ -622,7 +622,7 @@ impl ConsoleDesktopApp {
             .session_cwd()
             .or_else(|| {
                 self.selected_project_for_pane(pane_id)
-                    .map(|project| project.path.clone())
+                    .map(|project| project.path)
             });
         let change_session = turn_index.zip(self.active_session_for_pane(pane_id));
 

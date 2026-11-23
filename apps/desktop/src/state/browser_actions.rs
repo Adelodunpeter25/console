@@ -259,7 +259,7 @@ impl ConsoleDesktopApp {
                                             bv.run_driver_script(&rid, &request)
                                         });
                                         let header = format_tab_header(&view, &id, None, None, cx);
-                                        (view.clone(), rid, header)
+                                        (view, rid, header)
                                     })
                                 })
                                 .ok()

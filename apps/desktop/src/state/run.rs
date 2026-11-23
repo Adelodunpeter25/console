@@ -125,7 +125,7 @@ impl ConsoleDesktopApp {
             context_files: if context_files.is_empty() {
                 None
             } else {
-                Some(context_files.clone())
+                Some(context_files)
             },
             model_id: self
                 .pane_selected_model(&pane_id)
@@ -140,12 +140,12 @@ impl ConsoleDesktopApp {
             attachments: if attachments.is_empty() {
                 None
             } else {
-                Some(attachments.clone())
+                Some(attachments)
             },
             annotations: if annotations.is_empty() {
                 None
             } else {
-                Some(annotations.clone())
+                Some(annotations)
             },
         };
         let queued_item = console_core::QueuedPrompt {
@@ -249,7 +249,7 @@ impl ConsoleDesktopApp {
             console_core::queued_attachments_from_proto(&queued.attachments).unwrap_or_default();
         let annotations =
             console_core::queued_annotations_from_proto(&queued.annotations).unwrap_or_default();
-        let context_files = queued.context_files.clone();
+        let context_files = queued.context_files;
         self.composer_for_pane(&pane_id).update(cx, |input, cx| {
             input.set_content_with_context_files(prompt.clone(), context_files, cx)
         });
@@ -300,7 +300,7 @@ impl ConsoleDesktopApp {
         };
         cx.notify();
         self.delete_server_queued_prompt(&session_id, &prompt_id, cx);
-        self.active_pane_id = Some(pane_id.clone());
+        self.active_pane_id = Some(pane_id);
         self.selected_session_id = Some(session_id.clone());
         self.start_prompt_run(
             PromptStart {
@@ -368,7 +368,7 @@ impl ConsoleDesktopApp {
         };
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        let queued_id = queued.id.clone();
+        let queued_id = queued.id;
         cx.spawn(async move |_, cx| {
             // The server still holds this card; take it out first, or it would
             // run again after the steered prompt.
@@ -433,7 +433,6 @@ impl ConsoleDesktopApp {
         let annotations = (*self.annotations_for_pane(&pane_id)).clone();
         let Some(session_id) = self
             .active_session_for_pane(&pane_id)
-            .map(|s| s.to_string())
         else {
             return;
         };
@@ -582,8 +581,7 @@ impl ConsoleDesktopApp {
             .unwrap_or_else(|| "pane-main".to_string());
         self.clear_error_for_pane(&run_pane_id, cx);
         let active_session = self
-            .active_session_for_pane(&run_pane_id)
-            .map(|s| s.to_string());
+            .active_session_for_pane(&run_pane_id);
         if !keep_draft {
             self.clear_draft_for_session(active_session.as_deref(), cx);
             if let Some(ref sid) = active_session {
@@ -639,7 +637,7 @@ impl ConsoleDesktopApp {
         let session_project_id = self.pane_real_project_id(&run_pane_id);
         let session_cwd = self
             .selected_project_for_pane(&run_pane_id)
-            .map(|project| project.path.clone());
+            .map(|project| project.path);
         let client = self.client.clone();
         let transport = self.transport;
 
@@ -1082,7 +1080,7 @@ impl ConsoleDesktopApp {
                     role,
                     prompt,
                     model: _,
-                } = event.clone();
+                } = event;
                 // Wire optionals are absent when the server omits them; the
                 // session rows below use plain strings.
                 let parent_tool_call_id = parent_tool_call_id.unwrap_or_default();
@@ -1121,7 +1119,7 @@ impl ConsoleDesktopApp {
                     args,
                     status,
                     error,
-                } = event.clone();
+                } = event;
                 let tool_call_id = tool_call_id.unwrap_or_default();
                 let tool_name = tool_name.unwrap_or_default();
                 if let Some(list) = self.session_subagents.get_mut(run_session_id) {
@@ -1162,7 +1160,7 @@ impl ConsoleDesktopApp {
                     summary,
                     error,
                     total_turns,
-                } = event.clone();
+                } = event;
                 if let Some(list) = self.session_subagents.get_mut(run_session_id) {
                     let list_mut = Rc::make_mut(list);
                     if let Some(subagent) =

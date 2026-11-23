@@ -217,7 +217,7 @@ impl ConsoleDesktopApp {
             ..Default::default()
         };
 
-        let entity = cx.entity().clone();
+        let entity = cx.entity();
         let app_entity = cx.entity().downgrade();
 
         cx.defer(move |cx| {
@@ -295,7 +295,7 @@ impl ConsoleDesktopApp {
             ..Default::default()
         };
 
-        let this_entity = cx.entity().clone();
+        let this_entity = cx.entity();
 
         cx.defer(move |cx| {
             let handle = cx
@@ -343,13 +343,13 @@ impl ConsoleDesktopApp {
                         })
                     };
 
-                    let view = cx.new(|cx| {
+                    
+                    cx.new(|cx| {
                         let mut browser =
                             FileBrowser::new(client.clone(), on_choose, on_cancel, window, cx);
                         browser.open(start_path.clone(), cx);
                         browser
-                    });
-                    view
+                    })
                 })
                 .ok();
 

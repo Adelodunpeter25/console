@@ -111,7 +111,7 @@ impl SettingsWindow {
 
         let vision_for_load = model_vision_input.clone();
         let smol_for_load = model_smol_input.clone();
-        let client_for_load = client.clone();
+        let client_for_load = client;
         cx.spawn(async move |_, cx| {
             if let Ok(settings) = client_for_load.settings.get().await {
                 cx.update(|cx| {
@@ -171,9 +171,8 @@ impl SettingsWindow {
         // the user pastes one line and the two fields fill themselves.
         {
             let code_input = new_env_code_input.clone();
-            let url_input = new_env_url_input.clone();
             subscriptions.push(cx.subscribe(
-                &url_input,
+                &new_env_url_input,
                 move |_this, input, event: &console_ui::input::ComposerEvent, cx| match event {
                     console_ui::input::ComposerEvent::Edited
                     | console_ui::input::ComposerEvent::Focus => {
@@ -542,7 +541,7 @@ impl Render for SettingsWindow {
         let app = app_entity.read(cx);
 
         let on_select_tab: Rc<dyn Fn(SettingsTab, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let app_handle = self.app.clone();
             Rc::new(move |tab: SettingsTab, _w: &mut Window, cx: &mut App| {
                 if tab == SettingsTab::Usage
@@ -610,7 +609,7 @@ impl Render for SettingsWindow {
         };
 
         let on_probe_new: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let url_input = self.new_env_url_input.clone();
             Rc::new(move |_w: &mut Window, cx: &mut App| {
                 let url = url_input.read(cx).content().trim().to_string();
@@ -641,7 +640,7 @@ impl Render for SettingsWindow {
 
         let on_save_new: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let app_handle = self.app.clone();
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let name_input = self.new_env_name_input.clone();
             let url_input = self.new_env_url_input.clone();
             let code_input = self.new_env_code_input.clone();
@@ -714,7 +713,7 @@ impl Render for SettingsWindow {
         // one-time code to show in it.
         let on_pair_device: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let app_handle = self.app.clone();
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             Rc::new(move |_w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     this.pair_modal_open = true;
@@ -923,7 +922,7 @@ impl Render for SettingsWindow {
                 };
 
                 let on_toggle_add: Rc<dyn Fn(bool, &mut Window, &mut App) + 'static> = {
-                    let entity = cx.entity().clone();
+                    let entity = cx.entity();
                     let name_input = self.new_env_name_input.clone();
                     let url_input = self.new_env_url_input.clone();
                     let code_input = self.new_env_code_input.clone();
@@ -951,7 +950,7 @@ impl Render for SettingsWindow {
                 };
 
                 let on_edit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-                    let entity = cx.entity().clone();
+                    let entity = cx.entity();
                     let app_handle = self.app.clone();
                     let name_input = self.new_env_name_input.clone();
                     let url_input = self.new_env_url_input.clone();
@@ -1374,7 +1373,7 @@ impl Render for SettingsWindow {
         };
 
         let on_modal_close: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             Rc::new(move |_w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     this.is_adding_env = false;
@@ -1453,7 +1452,7 @@ impl Render for SettingsWindow {
             this_device,
             error: pairing_error,
             on_close: {
-                let entity = cx.entity().clone();
+                let entity = cx.entity();
                 Rc::new(move |_w: &mut Window, cx: &mut App| {
                     entity.update(cx, |this, cx| {
                         this.pair_modal_open = false;

@@ -128,7 +128,7 @@ struct McpModalCallbacks {
 impl McpTabState {
     fn modal_callbacks(&self, cx: &mut Context<SettingsWindow>) -> McpModalCallbacks {
         let on_open_add: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let name_input = self.name_input.clone();
             let url_input = self.url_input.clone();
             let command_input = self.command_input.clone();
@@ -160,7 +160,7 @@ impl McpTabState {
         };
 
         let on_open_edit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let name_input = self.name_input.clone();
             let url_input = self.url_input.clone();
             let command_input = self.command_input.clone();
@@ -205,7 +205,7 @@ impl McpTabState {
         };
 
         let on_close_modal: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             Rc::new(move |_w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     this.mcp.is_modal_open = false;
@@ -216,7 +216,7 @@ impl McpTabState {
         };
 
         let on_select_transport: Rc<dyn Fn(McpTransportType, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             Rc::new(move |transport, _w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     this.mcp.selected_transport = transport;
@@ -226,7 +226,7 @@ impl McpTabState {
         };
 
         let on_select_auth: Rc<dyn Fn(McpAuthType, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             Rc::new(move |auth, _w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     this.mcp.selected_auth = auth;
@@ -236,7 +236,7 @@ impl McpTabState {
         };
 
         let on_save: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let app_handle = self.app.clone();
             let name_input = self.name_input.clone();
             let url_input = self.url_input.clone();
@@ -300,7 +300,7 @@ impl McpTabState {
                 };
 
                 let server = McpServerConfig {
-                    id: id.clone(),
+                    id,
                     name,
                     transport: transport.clone(),
                     url: if transport == McpTransportType::Http {
@@ -388,7 +388,7 @@ impl McpTabState {
         let modal = self.modal_callbacks(cx);
 
         let on_delete: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let app_handle = self.app.clone();
             Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
                 let Some(app) = app_handle.upgrade() else {
@@ -412,7 +412,7 @@ impl McpTabState {
         };
 
         let on_connect: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let app_handle = self.app.clone();
             Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
                 let Some(app) = app_handle.upgrade() else {
@@ -583,7 +583,7 @@ impl McpTabState {
         };
 
         let on_disconnect: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let app_handle = self.app.clone();
             Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
                 let Some(app) = app_handle.upgrade() else {
@@ -608,7 +608,7 @@ impl McpTabState {
         };
 
         let on_toggle_expand: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     if this.mcp.expanded_server_id.as_deref() == Some(&id) {

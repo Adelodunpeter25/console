@@ -131,7 +131,7 @@ impl ConsoleDesktopApp {
         };
 
         let file_key = (
-            session_key.clone(),
+            session_key,
             trigger.query.clone(),
             project_root.clone(),
         );
@@ -151,7 +151,7 @@ impl ConsoleDesktopApp {
             let client = self.client.clone();
             let entity = cx.entity().downgrade();
             let owner = owner.to_owned();
-            let apply_key = command_key.clone();
+            let apply_key = command_key;
             cx.spawn(async move |_, cx| {
                 let commands = client
                     .assist
@@ -179,9 +179,9 @@ impl ConsoleDesktopApp {
             let client = self.client.clone();
             let entity = cx.entity().downgrade();
             let owner = owner.to_owned();
-            let apply_key = file_key.clone();
+            let apply_key = file_key;
             let query = trigger.query.clone();
-            let root = (!project_root.is_empty()).then_some(project_root.clone());
+            let root = (!project_root.is_empty()).then_some(project_root);
             cx.spawn(async move |_, cx| {
                 let files = client
                     .assist
@@ -235,7 +235,7 @@ impl ConsoleDesktopApp {
 
         let owner = owner.to_owned();
         let entity = cx.entity().downgrade();
-        let composer = composer.clone();
+        let composer = composer;
         Some(
             AutocompleteView::new(items, highlighted, loading)
                 .with_anchor_cell(anchor_bounds)

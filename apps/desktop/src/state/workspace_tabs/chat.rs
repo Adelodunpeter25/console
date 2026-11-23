@@ -108,7 +108,7 @@ impl ConsoleDesktopApp {
                             .filter(|cwd| !cwd.is_empty());
                         let target_cwd = session_cwd.or_else(|| {
                             this.selected_project_for_pane(&pane_id)
-                                .map(|project| project.path.clone())
+                                .map(|project| project.path)
                         });
                         if let Some(cwd) = target_cwd {
                             this.reload_branches_for_pane(pane_id, cwd, cx);
@@ -182,10 +182,10 @@ impl ConsoleDesktopApp {
                         let annotations = (*this.annotations_for_pane(&submit_pane_id)).clone();
                         this.queue_prompt_for_pane(
                             submit_pane_id.clone(),
-                            prompt.clone(),
+                            prompt,
                             attachments,
                             annotations,
-                            context_files.clone(),
+                            context_files,
                             cx,
                         );
                         return;
@@ -195,7 +195,7 @@ impl ConsoleDesktopApp {
                     let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
                     let annotations = (*this.annotations_for_pane(&submit_pane_id)).clone();
                     this.submit_prompt_with_context(
-                        prompt.clone(),
+                        prompt,
                         attachments,
                         annotations,
                         context_files,

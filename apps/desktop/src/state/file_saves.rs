@@ -82,7 +82,7 @@ impl ConsoleDesktopApp {
                     state.update(cx, |state, cx| state.mark_saved(request.revision, cx));
                 }
                 self.viewer_file_etags
-                    .insert(request.path.clone(), saved.etag.clone());
+                    .insert(request.path.clone(), saved.etag);
             }
             Err(err) => {
                 // Nothing was written and the buffer stays dirty: reporting it

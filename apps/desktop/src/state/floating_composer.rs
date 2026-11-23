@@ -731,7 +731,7 @@ impl ConsoleDesktopApp {
             }
         })
         .on_submit({
-            let entity = entity.clone();
+            let entity = entity;
             move |prompt: String, _window: &mut Window, cx: &mut App| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
@@ -1023,7 +1023,7 @@ impl ConsoleDesktopApp {
             .or_else(|| Some(new_session.cwd.clone()).filter(|cwd| !cwd.is_empty()))
             .or_else(|| {
                 self.selected_project_for_pane(&target_pane)
-                    .map(|project| project.path.clone())
+                    .map(|project| project.path)
             });
         if let Some(cwd) = branch_cwd {
             self.reload_branches_for_pane(target_pane.clone(), cwd, cx);

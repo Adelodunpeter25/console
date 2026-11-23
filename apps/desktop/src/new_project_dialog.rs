@@ -128,7 +128,7 @@ impl NewProjectDialog {
             app.update(cx, |app_state, cx| {
                 app_state.close_new_project_dialog(cx);
                 if let Some(main_handle) = app_state.main_window_handle {
-                    let app_entity = cx.entity().clone();
+                    let app_entity = cx.entity();
                     cx.defer(move |cx| {
                         let _ = main_handle.update(cx, |_root, main_window, cx| {
                             main_window.activate_window();

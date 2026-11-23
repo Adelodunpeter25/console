@@ -781,11 +781,11 @@ impl Render for ConsoleDesktopApp {
                                     on_focus_pane,
                                 )
                                 .with_tab_follow(move |pane_id| tab_follows.get(pane_id).cloned())
-                                .with_dirty_paths(dirty_file_paths.clone())
+                                .with_dirty_paths(dirty_file_paths)
                                 .with_new_pane(new_split_pane)
                                 .with_new_tab_menu({
                                     let entity = entity.clone();
-                                    let menus = new_tab_menus.clone();
+                                    let menus = new_tab_menus;
                                     move |pane_id| {
                                         let handle = menus.get(pane_id)?.clone();
                                         Some((

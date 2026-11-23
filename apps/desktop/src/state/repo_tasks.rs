@@ -204,7 +204,7 @@ impl ConsoleDesktopApp {
             Rc::make_mut(&mut self.sessions).push(task.session.clone());
         }
         crate::window::broadcast_settings_refresh(cx);
-        self.select_and_open_session(task.session.id.clone(), cx);
+        self.select_and_open_session(task.session.id, cx);
     }
 
     /// Open Settings on the Providers tab, where the GitHub token lives.
@@ -212,7 +212,7 @@ impl ConsoleDesktopApp {
     /// the New-project dialog's handoff.
     pub(crate) fn open_github_settings(&mut self, cx: &mut Context<Self>) {
         if let Some(main_handle) = self.main_window_handle {
-            let app_entity = cx.entity().clone();
+            let app_entity = cx.entity();
             cx.defer(move |cx| {
                 let _ = main_handle.update(cx, |_root, main_window, cx| {
                     main_window.activate_window();

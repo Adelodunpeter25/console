@@ -584,7 +584,7 @@ impl ConsoleDesktopApp {
             self.select_and_open_session(sid.to_string(), cx);
             return;
         }
-        let prev_sid = self.active_session_for_pane(pane_id).map(|s| s.to_string());
+        let prev_sid = self.active_session_for_pane(pane_id);
         self.select_workspace_tab(pane_id, tab_id);
         self.sync_workspace_webviews(cx);
         if let Some(sid) = tab_id.strip_prefix("chat:") {

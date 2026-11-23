@@ -41,7 +41,7 @@ pub(crate) fn wire_open_change_for_pane(
     pane_id: String,
 ) {
     let load_entity = entity.clone();
-    let load_pane_id = pane_id.clone();
+    let load_pane_id = pane_id;
     transcript.set_load_diff(move |path, turn_index, cx| {
         load_change_diff(&load_entity, &load_pane_id, path, turn_index, cx)
     });

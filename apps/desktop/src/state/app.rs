@@ -194,20 +194,23 @@ impl ConsoleDesktopApp {
         });
         let entity = cx.entity().downgrade();
         {
-            let entity = entity.clone();
+            let transcript_entity = entity.clone();
             transcript_view.update(cx, |transcript, _| {
-                super::transcript_wiring::wire_preview_image(transcript, entity.clone());
-                super::transcript_wiring::wire_view_subagent(transcript, entity.clone());
+                super::transcript_wiring::wire_preview_image(transcript, transcript_entity.clone());
+                super::transcript_wiring::wire_view_subagent(transcript, transcript_entity.clone());
                 super::transcript_wiring::wire_open_file_for_active_pane(
                     transcript,
-                    entity.clone(),
+                    transcript_entity.clone(),
                 );
                 super::transcript_wiring::wire_open_change_for_active_pane(
                     transcript,
-                    entity.clone(),
+                    transcript_entity.clone(),
                 );
-                super::transcript_wiring::wire_fork_for_active_pane(transcript, entity.clone());
-                super::transcript_wiring::wire_cite_for_active_pane(transcript, entity.clone());
+                super::transcript_wiring::wire_fork_for_active_pane(
+                    transcript,
+                    transcript_entity.clone(),
+                );
+                super::transcript_wiring::wire_cite_for_active_pane(transcript, transcript_entity);
             });
         }
         let model_menu = ContextMenuHandle::new(cx).on_toggle({
@@ -281,7 +284,7 @@ impl ConsoleDesktopApp {
                             .filter(|cwd| !cwd.is_empty());
                         let target_cwd = session_cwd.or_else(|| {
                             this.selected_project_for_pane("pane-main")
-                                .map(|project| project.path.clone())
+                                .map(|project| project.path)
                         });
                         if let Some(cwd) = target_cwd {
                             this.reload_branches_for_pane("pane-main".to_string(), cwd, cx);
@@ -298,7 +301,7 @@ impl ConsoleDesktopApp {
             }
         });
         let usage_menu = ContextMenuHandle::new(cx).on_toggle({
-            let entity = entity.clone();
+            let entity = entity;
             move |open, _window, cx| {
                 if open && let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
@@ -362,10 +365,10 @@ impl ConsoleDesktopApp {
                             let annotations = (*this.annotations_for_pane(&pane_id)).clone();
                             this.queue_prompt_for_pane(
                                 pane_id,
-                                prompt.clone(),
+                                prompt,
                                 attachments,
                                 annotations,
-                                context_files.clone(),
+                                context_files,
                                 cx,
                             );
                             return;
@@ -373,7 +376,7 @@ impl ConsoleDesktopApp {
                         let attachments = (*this.attachments_for_pane(&pane_id)).clone();
                         let annotations = (*this.annotations_for_pane(&pane_id)).clone();
                         this.submit_prompt_with_context(
-                            prompt.clone(),
+                            prompt,
                             attachments,
                             annotations,
                             context_files,
@@ -542,7 +545,7 @@ impl ConsoleDesktopApp {
             approval_mode: ApprovalMode::default(),
             thinking_level: None,
             model_menu,
-            thinking_menu: thinking_menu.clone(),
+            thinking_menu,
             usage_menu,
             tasks_menu,
             subagents_menu,

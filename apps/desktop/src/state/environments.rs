@@ -325,7 +325,7 @@ impl ConsoleDesktopApp {
         cx.notify();
 
         let client = self.client.clone();
-        let url = env.url.clone();
+        let url = env.url;
 
         cx.spawn(async move |entity, cx| {
             client.set_base_url(&url).await;
