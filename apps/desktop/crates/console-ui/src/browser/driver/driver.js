@@ -706,6 +706,9 @@
         let nodes;
         try {
           nodes = Array.from(el.querySelectorAll(fs.selector));
+          if (el.matches && el.matches(fs.selector)) {
+            nodes.unshift(el);
+          }
         } catch (error) {
           return { error: 'Invalid selector for field ' + name + ': ' + error.message };
         }

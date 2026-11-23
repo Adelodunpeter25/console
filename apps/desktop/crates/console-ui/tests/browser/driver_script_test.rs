@@ -175,4 +175,8 @@ fn driver_extract_waits_for_new_content_and_reports_unchanged() {
         js.contains("No visible match for scope: "),
         "scope no-match message lost"
     );
+    assert!(
+        js.contains("el.matches(fs.selector)"),
+        "extract field self-match lost"
+    );
 }

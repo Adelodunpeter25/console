@@ -407,7 +407,13 @@ func (r *JSRuntime) open(ctx context.Context, args map[string]any) (any, error) 
 	if liveURL == "" {
 		liveURL = url
 	}
-	return map[string]any{"tabId": tabID, "url": liveURL, "title": title}, nil
+	return map[string]any{
+		"tabId":        tabID,
+		"url":          liveURL,
+		"title":        title,
+		"requestedUrl": url,
+		"redirected":   liveURL != url,
+	}, nil
 }
 
 func (r *JSRuntime) page(ctx context.Context, args map[string]any) (any, error) {
@@ -454,7 +460,16 @@ func (r *JSRuntime) gotoTab(ctx context.Context, args map[string]any) (any, erro
 	}
 	r.setActive(row.ID)
 	_, title, liveURL := parseHeader(res.Result)
-	return map[string]any{"tabId": row.ID, "url": liveURL, "title": title}, nil
+	if liveURL == "" {
+		liveURL = url
+	}
+	return map[string]any{
+		"tabId":        row.ID,
+		"url":          liveURL,
+		"title":        title,
+		"requestedUrl": url,
+		"redirected":   liveURL != url,
+	}, nil
 }
 
 func (r *JSRuntime) snapshot(ctx context.Context, args map[string]any) (any, error) {
@@ -1093,7 +1108,10 @@ func describeLocator(args map[string]any, selector string) string {
 func (r *JSRuntime) close(ctx context.Context, args map[string]any) (any, error) {
 	tabID := argStringOr(args, "tabId", "")
 	if tabID == "" {
-		return nil, jskernel.Errorf("browser.close needs {tabId}; open tabs are listed by browser.tabs()")
+		tabID = r.activeTabID()
+	}
+	if tabID == "" {
+		return nil, jskernel.Errorf("browser.close needs {tabId} when no tab is active; open tabs are listed by browser.tabs()")
 	}
 	if !r.manager.isOwned(r.session, tabID) {
 		return nil, jskernel.Errorf("tab %s was not opened by this kernel; only tabs from browser.open() can be closed here", tabID)

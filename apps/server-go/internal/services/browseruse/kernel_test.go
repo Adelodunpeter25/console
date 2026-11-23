@@ -629,3 +629,63 @@ func TestFindHandleSurvivesRerendersAndDiesOnNavigation(t *testing.T) {
 		t.Fatalf("unknown handle should fail, got: %v", err)
 	}
 }
+
+func TestOpenAndGotoReportRedirects(t *testing.T) {
+	m := NewManager()
+	desktop := newFakeDesktop()
+	baseHandler := desktop.handler()
+	redirectHandler := func(ctx context.Context, req tools.BrowserActionRequest) (tools.BrowserActionResult, error) {
+		res, err := baseHandler(ctx, req)
+		if err != nil || req.Action != "navigate" {
+			return res, err
+		}
+		if strings.Contains(req.URL, "/redirect") {
+			res.Result = strings.ReplaceAll(res.Result, req.URL, "https://example.com/final")
+		}
+		return res, nil
+	}
+
+	rt, err := m.runtime("s1", redirectHandler)
+	if err != nil {
+		t.Fatalf("runtime: %v", err)
+	}
+	out, err := rt.Eval(context.Background(), `browser.open({url: "https://example.com/redirect"})`, 5*time.Second)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	var opened map[string]any
+	if err := json.Unmarshal([]byte(completionText(t, out)), &opened); err != nil {
+		t.Fatalf("decode open: %v", err)
+	}
+	if opened["requestedUrl"] != "https://example.com/redirect" || opened["url"] != "https://example.com/final" || opened["redirected"] != true {
+		t.Fatalf("open redirect fields = %#v", opened)
+	}
+
+	out, err = rt.Eval(context.Background(), `browser.goto({url: "https://example.com/same"})`, 5*time.Second)
+	if err != nil {
+		t.Fatalf("goto: %v", err)
+	}
+	var navigated map[string]any
+	if err := json.Unmarshal([]byte(completionText(t, out)), &navigated); err != nil {
+		t.Fatalf("decode goto: %v", err)
+	}
+	if navigated["requestedUrl"] != "https://example.com/same" || navigated["url"] != "https://example.com/same" || navigated["redirected"] != false {
+		t.Fatalf("goto non-redirect fields = %#v", navigated)
+	}
+}
+
+func TestCloseDefaultsToActiveOwnedTab(t *testing.T) {
+	m := NewManager()
+	desktop := newFakeDesktop()
+	if _, err := eval(t, m, "s1", desktop, `browser.close()`); err == nil || !strings.Contains(err.Error(), "no tab is active") {
+		t.Fatalf("close with no active tab should fail, got: %v", err)
+	}
+	opened := evalJSON(t, m, "s1", desktop, `browser.open({url: "https://example.com"})`)
+	closed := evalJSON(t, m, "s1", desktop, `browser.close()`)
+	if closed["tabId"] != opened["tabId"] || closed["closed"].(float64) != 1 {
+		t.Fatalf("close() = %#v, want tabId %v", closed, opened["tabId"])
+	}
+	if ids := desktop.tabIDs(); len(ids) != 0 {
+		t.Fatalf("active tab was not closed: %v", ids)
+	}
+}
