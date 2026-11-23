@@ -23,12 +23,13 @@ impl ConsoleDesktopApp {
         let entry = self
             .session_background_work
             .entry(session_id.to_string())
-            .or_insert_with(|| Rc::new(Vec::new()));
-        let list = Rc::make_mut(entry);
-        match list.iter_mut().find(|w| w.id == work.id) {
-            Some(existing) => *existing = work.clone(),
-            None => list.push(work.clone()),
-        }
+            .or_insert_with(|| Rc::from([]));
+        super::types::rc_slice_edit(entry, |list| {
+            match list.iter_mut().find(|w| w.id == work.id) {
+                Some(existing) => *existing = work.clone(),
+                None => list.push(work.clone()),
+            }
+        });
         if work.is_running_shell() {
             self.poll_background_shells(session_id.to_string(), cx);
         }
@@ -58,7 +59,7 @@ impl ConsoleDesktopApp {
     ) {
         let has_running = list.iter().any(|w| w.is_running_shell());
         self.session_background_work
-            .insert(session_id.clone(), Rc::new(list));
+            .insert(session_id.clone(), Rc::from(list));
         if has_running {
             self.poll_background_shells(session_id, cx);
         }
@@ -99,7 +100,7 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.session_background_work
-                            .insert(session_id.clone(), Rc::new(list));
+                            .insert(session_id.clone(), Rc::from(list));
                         if has_running {
                             this.poll_background_shells(session_id, cx);
                         }

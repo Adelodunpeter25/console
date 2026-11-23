@@ -15,7 +15,7 @@ use crate::primitives::{IconName, MenuItem};
 
 #[allow(clippy::type_complexity)]
 pub fn github_menu_section(
-    repos: Option<Rc<Vec<GithubRepo>>>,
+    repos: Option<Rc<[GithubRepo]>>,
     loading: bool,
     has_error: bool,
     on_open: &Rc<dyn Fn(GithubRepo, &mut Window, &mut App) + 'static>,

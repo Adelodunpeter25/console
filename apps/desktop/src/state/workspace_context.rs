@@ -36,10 +36,7 @@ impl ConsoleDesktopApp {
                 }
             })
             .or_else(|| project_id.and_then(|key| self.workspace_path_for_key(key)))
-            .or_else(|| {
-                self.selected_project_for_pane(pane_id)
-                    .map(|p| p.path)
-            })
+            .or_else(|| self.selected_project_for_pane(pane_id).map(|p| p.path))
     }
 
     pub fn active_pane_target(&self) -> (Option<String>, Option<String>) {
@@ -98,10 +95,7 @@ impl ConsoleDesktopApp {
                             .as_ref()
                             .and_then(|key| self.workspace_path_for_key(key))
                     })
-                    .or_else(|| {
-                        self.selected_project_for_pane(pane_id)
-                            .map(|p| p.path)
-                    });
+                    .or_else(|| self.selected_project_for_pane(pane_id).map(|p| p.path));
                 (session_id, cwd)
             }
             None => (None, None),
@@ -146,7 +140,7 @@ impl ConsoleDesktopApp {
                                 {
                                     return;
                                 }
-                                let changes = Rc::new(changes);
+                                let changes = Rc::from(changes);
                                 this.transcript_for_pane(&pane_id)
                                     .update(cx, |t, cx| t.set_session_changes(changes, cx));
                                 cx.notify();

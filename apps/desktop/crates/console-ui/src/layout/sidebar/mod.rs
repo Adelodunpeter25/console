@@ -210,10 +210,10 @@ pub struct SidebarView {
     pub visible: bool,
     pub width: f32,
     /// Shared with the app state; cloned per frame as a refcount bump.
-    pub sessions: Rc<Vec<SessionHeader>>,
+    pub sessions: Rc<[SessionHeader]>,
     /// Known projects, used to resolve each session's project name. Shared
     /// with the app state; cloned per frame as a refcount bump.
-    pub projects: Rc<Vec<ProjectInfo>>,
+    pub projects: Rc<[ProjectInfo]>,
     pub selected_session_id: Option<String>,
     /// Collapsed project sections (project id or [`NO_PROJECT_KEY`]).
     pub collapsed_projects: Rc<HashSet<String>>,
@@ -277,8 +277,8 @@ impl SidebarView {
     pub fn new(
         visible: bool,
         width: f32,
-        sessions: Rc<Vec<SessionHeader>>,
-        projects: Rc<Vec<ProjectInfo>>,
+        sessions: Rc<[SessionHeader]>,
+        projects: Rc<[ProjectInfo]>,
         selected_session_id: Option<String>,
         collapsed_projects: Rc<HashSet<String>>,
         running_sessions: HashMap<String, i64>,

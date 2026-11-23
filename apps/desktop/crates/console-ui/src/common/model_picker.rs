@@ -69,7 +69,7 @@ pub use console_shared::format::{format_context_window, format_model_name};
 
 #[derive(Clone, IntoElement)]
 pub struct ModelDropdownMenu {
-    providers: Rc<Vec<ProviderCatalogEntry>>,
+    providers: Rc<[ProviderCatalogEntry]>,
     selected: Option<SelectedModel>,
     active_tab: PickerTab,
     favorites: Rc<HashSet<String>>,
@@ -95,7 +95,7 @@ pub struct ModelDropdownMenu {
 impl ModelDropdownMenu {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        providers: Rc<Vec<ProviderCatalogEntry>>,
+        providers: Rc<[ProviderCatalogEntry]>,
         selected: Option<SelectedModel>,
         active_tab: PickerTab,
         favorites: Rc<HashSet<String>>,
@@ -188,12 +188,10 @@ impl RenderOnce for ModelDropdownMenu {
         // selected model's row — or the first row when that model isn't in
         // the visible list — so Enter always has a sensible target.
         let list_scroll = menu.scroll_handle();
-        let visible_keys: Rc<Vec<(String, String)>> = Rc::new(
-            visible_models
-                .iter()
-                .map(|(prov, _, m)| (prov.clone(), m.id.clone()))
-                .collect(),
-        );
+        let visible_keys: Rc<[(String, String)]> = visible_models
+            .iter()
+            .map(|(prov, _, m)| (prov.clone(), m.id.clone()))
+            .collect();
         let highlight_ix = if visible_models.is_empty() {
             None
         } else {
@@ -211,15 +209,13 @@ impl RenderOnce for ModelDropdownMenu {
         };
         // Tab / shift-tab cycle the rail: Favorites first, then providers in
         // catalog order, wrapping at both ends.
-        let picker_tabs: Rc<Vec<PickerTab>> = Rc::new(
-            std::iter::once(PickerTab::Favorites)
-                .chain(
-                    self.providers
-                        .iter()
-                        .map(|p| PickerTab::Provider(p.name.clone())),
-                )
-                .collect(),
-        );
+        let picker_tabs: Rc<[PickerTab]> = std::iter::once(PickerTab::Favorites)
+            .chain(
+                self.providers
+                    .iter()
+                    .map(|p| PickerTab::Provider(p.name.clone())),
+            )
+            .collect();
 
         div()
             .id("model-dropdown-card")
@@ -613,7 +609,7 @@ pub struct ModelRolePicker {
     pub label: &'static str,
     pub description: &'static str,
     pub selected: Option<SelectedModel>,
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
     pub active_tab: PickerTab,
     pub favorites: Rc<HashSet<String>>,

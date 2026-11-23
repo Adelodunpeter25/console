@@ -20,22 +20,21 @@ impl ConsoleDesktopApp {
         match started_at {
             Some(t) => {
                 self.running_sessions.insert(session_id.to_string(), t);
-                if let Some(session) = Rc::make_mut(&mut self.sessions)
-                    .iter_mut()
-                    .find(|s| s.id == session_id)
-                {
-                    session.status = "working".to_string();
-                }
+                super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                    if let Some(session) = sessions.iter_mut().find(|s| s.id == session_id) {
+                        session.status = "working".to_string();
+                    }
+                });
             }
             None => {
                 self.running_sessions.remove(session_id);
-                if let Some(session) = Rc::make_mut(&mut self.sessions)
-                    .iter_mut()
-                    .find(|s| s.id == session_id)
-                    && session.status == "working"
-                {
-                    session.status = "idle".to_string();
-                }
+                super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                    if let Some(session) = sessions.iter_mut().find(|s| s.id == session_id)
+                        && session.status == "working"
+                    {
+                        session.status = "idle".to_string();
+                    }
+                });
             }
         }
     }
@@ -134,18 +133,19 @@ impl ConsoleDesktopApp {
         self.question_selected.remove(session_id);
     }
 
-    pub(crate) fn attachments_for_pane(&self, pane_id: &str) -> Rc<Vec<ImageAttachment>> {
+    pub(crate) fn attachments_for_pane(&self, pane_id: &str) -> Rc<[ImageAttachment]> {
         self.attachments
             .get(pane_id)
             .cloned()
-            .unwrap_or_else(|| Rc::new(Vec::new()))
+            .unwrap_or_else(|| Rc::from([]))
     }
 
     pub(crate) fn set_attachments_for_pane(&mut self, pane_id: &str, items: Vec<ImageAttachment>) {
         if items.is_empty() {
             self.attachments.remove(pane_id);
         } else {
-            self.attachments.insert(pane_id.to_string(), Rc::new(items));
+            self.attachments
+                .insert(pane_id.to_string(), Rc::from(items));
         }
     }
 
@@ -171,8 +171,8 @@ impl ConsoleDesktopApp {
             let parked = self
                 .history_draft_attachments
                 .remove(pane_id)
-                .unwrap_or_else(|| Rc::new(Vec::new()));
-            self.set_attachments_for_pane(pane_id, (*parked).clone());
+                .unwrap_or_else(|| Rc::from([]));
+            self.set_attachments_for_pane(pane_id, parked.to_vec());
             self.restore_recalled_annotations(pane_id, message_id, true, cx);
             cx.notify();
             return;
@@ -210,9 +210,10 @@ impl ConsoleDesktopApp {
             return;
         }
         match self.attachments.get_mut(pane_id) {
-            Some(existing) => Rc::make_mut(existing).append(&mut items),
+            Some(existing) => super::types::rc_slice_edit(existing, |v| v.append(&mut items)),
             None => {
-                self.attachments.insert(pane_id.to_string(), Rc::new(items));
+                self.attachments
+                    .insert(pane_id.to_string(), Rc::from(items));
             }
         }
     }

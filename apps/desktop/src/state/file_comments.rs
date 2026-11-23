@@ -840,7 +840,7 @@ impl ConsoleDesktopApp {
         &self,
         pane_id: &str,
         cx: &mut Context<Self>,
-    ) -> Rc<Vec<ComposerComment>> {
+    ) -> Rc<[ComposerComment]> {
         let session_key = self.comment_target_session_key(pane_id);
         let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
         let leaves = if is_chat {
@@ -862,7 +862,7 @@ impl ConsoleDesktopApp {
             })
         });
         if !has_any_staged {
-            return Rc::new(Vec::new());
+            return Rc::from([]);
         }
 
         let entity = cx.entity().downgrade();
@@ -909,7 +909,7 @@ impl ConsoleDesktopApp {
                 ));
             }
         }
-        Rc::new(all_comments)
+        Rc::from(all_comments)
     }
 
     pub(crate) fn review_comment_overlays(

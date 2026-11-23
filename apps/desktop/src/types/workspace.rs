@@ -83,7 +83,7 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) shells_menu: ContextMenuHandle,
     pub(crate) automations_menu: ContextMenuHandle,
     pub(crate) selected_project_id: Option<String>,
-    pub(crate) branches: Rc<Vec<GitBranchInfo>>,
+    pub(crate) branches: Rc<[GitBranchInfo]>,
     pub(crate) branch_loaded: bool,
     pub(crate) branch_is_git_repository: bool,
     /// Folder `branches` was loaded for (the session's own cwd, which for a

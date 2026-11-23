@@ -47,14 +47,14 @@ pub struct TasksPill {
     pub completed: usize,
     pub total: usize,
     pub menu: ContextMenuHandle,
-    pub items: Rc<Vec<TodoItem>>,
+    pub items: Rc<[TodoItem]>,
 }
 
 /// The session's subagents plus the menu handle that anchors their popover.
 pub struct SubagentsPill {
     pub running: bool,
     pub menu: ContextMenuHandle,
-    pub items: Rc<Vec<SubagentInfo>>,
+    pub items: Rc<[SubagentInfo]>,
 }
 
 /// One running detached shell in the shells popover.
@@ -66,15 +66,15 @@ pub struct ShellEntry {
 /// The session's running shells, their popover anchor, and the stop action.
 pub struct ShellsPill {
     pub menu: ContextMenuHandle,
-    pub shells: Rc<Vec<ShellEntry>>,
+    pub shells: Rc<[ShellEntry]>,
     pub on_stop: StopHandler,
 }
 
 /// The session's active automations and webhook subscriptions.
 pub struct AutomationsPill {
     pub menu: ContextMenuHandle,
-    pub automations: Rc<Vec<Automation>>,
-    pub webhooks: Rc<Vec<WebhookSubscription>>,
+    pub automations: Rc<[Automation]>,
+    pub webhooks: Rc<[WebhookSubscription]>,
     pub on_pause: ActionHandler,
     pub on_resume: ActionHandler,
     pub on_delete_automation: ActionHandler,

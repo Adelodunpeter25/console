@@ -178,8 +178,8 @@ impl ConsoleDesktopApp {
                     }
                     this.reveal_chat_for_pane(&submit_pane_id, cx);
                     if this.is_active_session_running_for_pane(&submit_pane_id) {
-                        let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
-                        let annotations = (*this.annotations_for_pane(&submit_pane_id)).clone();
+                        let attachments = this.attachments_for_pane(&submit_pane_id).to_vec();
+                        let annotations = this.annotations_for_pane(&submit_pane_id).to_vec();
                         this.queue_prompt_for_pane(
                             submit_pane_id.clone(),
                             prompt,
@@ -192,8 +192,8 @@ impl ConsoleDesktopApp {
                     }
                     this.active_pane_id = Some(submit_pane_id.clone());
                     this.selected_session_id = this.active_session_for_pane(&submit_pane_id);
-                    let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
-                    let annotations = (*this.annotations_for_pane(&submit_pane_id)).clone();
+                    let attachments = this.attachments_for_pane(&submit_pane_id).to_vec();
+                    let annotations = this.annotations_for_pane(&submit_pane_id).to_vec();
                     this.submit_prompt_with_context(
                         prompt,
                         attachments,
@@ -479,7 +479,7 @@ impl ConsoleDesktopApp {
             .or_else(|| self.selected_project_id.clone())
     }
 
-    pub(crate) fn pane_branches(&self, pane_id: &str) -> Rc<Vec<GitBranchInfo>> {
+    pub(crate) fn pane_branches(&self, pane_id: &str) -> Rc<[GitBranchInfo]> {
         self.workspace_pane_states
             .get(pane_id)
             .map(|state| state.branches.clone())

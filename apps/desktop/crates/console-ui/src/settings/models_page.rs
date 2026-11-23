@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 #[derive(IntoElement)]
 pub struct ModelsPage {
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
     pub tabs: [PickerTab; 2],
     pub favorites: Rc<HashSet<String>>,

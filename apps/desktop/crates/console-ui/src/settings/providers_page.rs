@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 #[derive(IntoElement)]
 pub struct ProvidersPage {
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub auth_status: Option<AuthStatusResponse>,
     pub logging_in: HashSet<String>,
     pub on_login: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,

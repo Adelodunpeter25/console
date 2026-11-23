@@ -23,9 +23,9 @@ use super::picker_menus::{ProjectMenuExtras, branch_menu_section, project_menu_s
 
 #[derive(IntoElement)]
 pub struct WorkspaceFooter {
-    projects: Rc<Vec<ProjectInfo>>,
+    projects: Rc<[ProjectInfo]>,
     selected_project_id: Option<String>,
-    branches: Rc<Vec<GitBranchInfo>>,
+    branches: Rc<[GitBranchInfo]>,
     branch_loaded: bool,
     is_git_repository: bool,
     branch_pending: bool,
@@ -33,7 +33,7 @@ pub struct WorkspaceFooter {
     /// Repositories from the connected GitHub account for the menu's GitHub
     /// section. None until the first fetch; `github_repos_error` then says
     /// why (None error + None repos means not connected).
-    github_repos: Option<Rc<Vec<GithubRepo>>>,
+    github_repos: Option<Rc<[GithubRepo]>>,
     github_repos_loading: bool,
     github_repos_error: Option<String>,
     /// The repo a GitHub tap is cloning right now, if any. Shown on the
@@ -59,9 +59,9 @@ pub struct WorkspaceFooter {
 impl WorkspaceFooter {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        projects: Rc<Vec<ProjectInfo>>,
+        projects: Rc<[ProjectInfo]>,
         selected_project_id: Option<String>,
-        branches: Rc<Vec<GitBranchInfo>>,
+        branches: Rc<[GitBranchInfo]>,
         branch_loaded: bool,
         is_git_repository: bool,
         branch_pending: bool,
@@ -122,7 +122,7 @@ impl WorkspaceFooter {
     /// section.
     pub fn github_section(
         mut self,
-        repos: Option<Rc<Vec<GithubRepo>>>,
+        repos: Option<Rc<[GithubRepo]>>,
         loading: bool,
         error: Option<String>,
     ) -> Self {

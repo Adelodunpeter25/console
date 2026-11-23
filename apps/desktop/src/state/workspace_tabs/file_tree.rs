@@ -66,7 +66,7 @@ impl ConsoleDesktopApp {
         if cwd.is_none() {
             self.file_tree_fs_watch = None;
             self.file_tree_git_watch = None;
-            self.file_tree_nodes = Rc::new(Vec::new());
+            self.file_tree_nodes = Rc::from([]);
             self.set_working_changes(Vec::new());
             cx.notify();
             return;
@@ -214,7 +214,7 @@ impl ConsoleDesktopApp {
     pub fn fetch_file_tree(&mut self, cx: &mut Context<Self>) {
         let (_, cwd) = self.active_pane_target();
         let Some(cwd) = cwd else {
-            self.file_tree_nodes = Rc::new(Vec::new());
+            self.file_tree_nodes = Rc::from([]);
             cx.notify();
             return;
         };
@@ -238,7 +238,7 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                let tree = Rc::new(tree);
+                                let tree: Rc<[console_ui::FileTreeNode]> = Rc::from(tree);
                                 for data in this.file_tree_data.values_mut() {
                                     *data = tree.clone();
                                 }
@@ -260,7 +260,7 @@ impl ConsoleDesktopApp {
     /// derived here, once per update, instead of on every repaint.
     fn set_working_changes(&mut self, files: Vec<console_core::types::GitFileEntry>) {
         self.git_badges = Rc::new(console_ui::aggregate_git_badges(&files));
-        self.working_changes = Rc::new(files);
+        self.working_changes = Rc::from(files);
     }
 
     pub fn fetch_git_changes(&mut self, cx: &mut Context<Self>) {

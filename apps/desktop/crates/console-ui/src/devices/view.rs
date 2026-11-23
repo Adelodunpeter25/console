@@ -75,7 +75,7 @@ pub struct DeviceViewer {
     /// Set by `player_event` when the page reports a post-start status
     /// (proves the start script executed), used to stop the retry loop.
     start_reported: Option<u64>,
-    devices: Rc<Vec<DeviceDescriptor>>,
+    devices: Rc<[DeviceDescriptor]>,
     selected_id: Option<String>,
     pending: DeviceViewerPending,
     booting_id: Option<String>,
@@ -102,7 +102,7 @@ impl DeviceViewer {
             loaded_player_base: None,
             start_generation: 0,
             start_reported: None,
-            devices: Rc::new(Vec::new()),
+            devices: Rc::from([]),
             selected_id: None,
             pending: DeviceViewerPending {
                 select: Rc::new(RefCell::new(None)),
@@ -224,7 +224,7 @@ impl DeviceViewer {
                                 {
                                     this.selected_id = None;
                                 }
-                                this.devices = Rc::new(devices);
+                                this.devices = Rc::from(devices);
                                 if this.selected_id.is_some() {
                                     this.start_selected_stream(cx);
                                 }
@@ -511,7 +511,7 @@ impl DeviceViewer {
                         {
                             this.selected_id = Some(device.id.clone());
                         }
-                        this.devices = Rc::new(devices);
+                        this.devices = Rc::from(devices);
                         if finished {
                             this.booting_id = None;
                             this.start_selected_stream(cx);
@@ -562,7 +562,7 @@ impl DeviceViewer {
                             this.error = Some(err.to_string());
                         }
                         if let Ok(devices) = result {
-                            this.devices = Rc::new(devices);
+                            this.devices = Rc::from(devices);
                             this.start_selected_stream(cx);
                         }
                         cx.notify();

@@ -133,7 +133,7 @@ pub struct CodeViewerLine {
 #[derive(IntoElement)]
 pub struct CodeViewer {
     id: String,
-    lines: Rc<Vec<CodeViewerLine>>,
+    lines: Rc<[CodeViewerLine]>,
     list_state: ListState,
     selection_state: Option<Entity<SelectionState>>,
     scrollbar_state: Option<Rc<ScrollbarState>>,
@@ -145,7 +145,7 @@ impl CodeViewer {
     pub fn new(id: impl Into<String>, list_state: ListState) -> Self {
         Self {
             id: id.into(),
-            lines: Rc::new(Vec::new()),
+            lines: Rc::from([]),
             list_state,
             selection_state: None,
             scrollbar_state: None,
@@ -155,11 +155,11 @@ impl CodeViewer {
     }
 
     pub fn lines(mut self, lines: Vec<CodeViewerLine>) -> Self {
-        self.lines = Rc::new(lines);
+        self.lines = Rc::from(lines);
         self
     }
 
-    pub fn rc_lines(mut self, lines: Rc<Vec<CodeViewerLine>>) -> Self {
+    pub fn rc_lines(mut self, lines: Rc<[CodeViewerLine]>) -> Self {
         self.lines = lines;
         self
     }

@@ -19,7 +19,7 @@ impl ConsoleDesktopApp {
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            this.providers = Rc::new(providers);
+                            this.providers = Rc::from(providers);
                             cx.notify();
                         });
                     }

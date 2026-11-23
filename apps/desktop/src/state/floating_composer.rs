@@ -59,7 +59,7 @@ impl ConsoleDesktopApp {
         if let Some(project_id) = project_id.clone() {
             self.refresh_branches_for_project(&project_id, cx);
         } else {
-            self.branches = Rc::new(Vec::new());
+            self.branches = Rc::from([]);
         }
 
         let snapshot = FloatingSnapshot {
@@ -134,7 +134,7 @@ impl ConsoleDesktopApp {
         let text = input.content().to_string();
         let mentions = input.mentions().to_vec();
         let context_files = input.context_files().to_vec();
-        let attachments = (*self.attachments_for_pane(FLOATING_KEY)).clone();
+        let attachments = self.attachments_for_pane(FLOATING_KEY).to_vec();
         self.save_draft_for_key(
             FLOATING_KEY,
             &text,
@@ -179,11 +179,7 @@ impl ConsoleDesktopApp {
 
     /// Re-apply the pickers stashed with the prompt. Each one is checked
     /// against live state and left at its default when it no longer exists.
-    fn restore_floating_choices(
-        &mut self,
-        choices: FloatingDraftChoices,
-        cx: &mut Context<Self>,
-    ) {
+    fn restore_floating_choices(&mut self, choices: FloatingDraftChoices, cx: &mut Context<Self>) {
         let project_id = (!choices.project_id.is_empty()).then_some(choices.project_id);
         let project_exists = project_id
             .as_deref()
@@ -350,7 +346,7 @@ impl ConsoleDesktopApp {
     /// Explicitly select "No project": drop project scope and branch state.
     pub fn floating_no_project_chosen(&mut self, cx: &mut Context<Self>) {
         self.floating_composer.choose_no_project();
-        self.branches = Rc::new(Vec::new());
+        self.branches = Rc::from([]);
         cx.notify();
     }
 
@@ -763,7 +759,7 @@ impl ConsoleDesktopApp {
             cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.branches = Rc::new(result.branches);
+                        this.branches = Rc::from(result.branches);
                         this.branch_loaded = true;
                         this.branch_is_git_repository = result.is_git_repository;
                         this.floating_composer.set_branches(this.branches.clone());
@@ -800,7 +796,7 @@ impl ConsoleDesktopApp {
         let prompt = submit.prompt.clone();
         // Attachments staged in the card move onto the new session; the card's
         // own copy is dropped so reopening starts clean.
-        let staged_attachments = (*submit.attachments).clone();
+        let staged_attachments = submit.attachments.to_vec();
         self.set_attachments_for_pane(FLOATING_KEY, Vec::new());
         self.autocomplete_states.remove(FLOATING_AUTOCOMPLETE_KEY);
         // Only pastes whose chip is still in the prompt are uploaded.
@@ -994,7 +990,7 @@ impl ConsoleDesktopApp {
         if self.active_pane_id.as_deref() == Some(pane_id) {
             self.selected_session_id = Some(new_session.id.clone());
         }
-        Rc::make_mut(&mut self.sessions).insert(0, new_session.clone());
+        super::types::rc_slice_edit(&mut self.sessions, |v| v.insert(0, new_session.clone()));
         self.switch_workspace_for_session(&new_session.id, pane_id, cx);
         let target_pane = self
             .active_pane_id

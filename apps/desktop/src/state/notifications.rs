@@ -112,8 +112,10 @@ impl ConsoleDesktopApp {
                                                         .iter()
                                                         .any(|s| s.id == session_id)
                                                     {
-                                                        std::rc::Rc::make_mut(&mut this.sessions)
-                                                            .retain(|s| s.id != session_id);
+                                                        super::types::rc_slice_edit(
+                                                            &mut this.sessions,
+                                                            |v| v.retain(|s| s.id != session_id),
+                                                        );
                                                         this.close_session_chat_tabs(
                                                             &session_id,
                                                             cx,

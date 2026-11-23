@@ -10,7 +10,7 @@ impl TranscriptView {
             self.prompts_scroll
                 .scroll_to_item_strict(last, ScrollStrategy::Bottom);
         }
-        self.prompts = Rc::new(prompts);
+        self.prompts = Rc::from(prompts);
         cx.notify();
     }
 

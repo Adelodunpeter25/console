@@ -15,7 +15,7 @@ use crate::theme::Theme;
 
 #[derive(IntoElement)]
 pub struct PortsPopover {
-    ports: Rc<Vec<ForwardedPort>>,
+    ports: Rc<[ForwardedPort]>,
     menu_handle: ContextMenuHandle,
     on_open_url: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_unforward: Rc<dyn Fn(u16, &mut Window, &mut App) + 'static>,
@@ -23,7 +23,7 @@ pub struct PortsPopover {
 
 impl PortsPopover {
     pub fn new(
-        ports: Rc<Vec<ForwardedPort>>,
+        ports: Rc<[ForwardedPort]>,
         menu_handle: ContextMenuHandle,
         on_open_url: impl Fn(String, &mut Window, &mut App) + 'static,
         on_unforward: impl Fn(u16, &mut Window, &mut App) + 'static,

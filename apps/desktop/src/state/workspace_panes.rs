@@ -119,7 +119,7 @@ impl ConsoleDesktopApp {
         for state in self.workspace_pane_states.values_mut() {
             if state.selected_project_id.as_deref() == Some(key.as_str()) {
                 state.selected_project_id = None;
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = true;
                 state.branch_is_git_repository = false;
                 state.branch_cwd = None;
@@ -151,7 +151,7 @@ impl ConsoleDesktopApp {
         self.selected_project_id = None;
         for state in self.workspace_pane_states.values_mut() {
             state.selected_project_id = None;
-            Rc::make_mut(&mut state.branches).clear();
+            state.branches = Rc::from([]);
             state.branch_loaded = true;
             state.branch_is_git_repository = false;
             // Otherwise a reopen against the same cwd looks already-loaded and
@@ -373,7 +373,7 @@ impl ConsoleDesktopApp {
             {
                 state.selected_project_id =
                     Some(console_core::project_id_of_workspace_key(&key).to_owned());
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = false;
                 state.branch_cwd = None;
             }

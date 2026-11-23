@@ -147,13 +147,13 @@ impl ConsoleDesktopApp {
                 .insert(new_workspace_id.clone(), target_pane_id.clone());
             if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
                 state.selected_project_id = new_workspace_id.clone();
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = false;
                 state.branch_is_git_repository = false;
             }
             if let Some(state) = self.workspace_pane_states.get_mut(&target_pane_id) {
                 state.selected_project_id = new_workspace_id.clone();
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = false;
                 state.branch_is_git_repository = false;
             }
@@ -167,7 +167,7 @@ impl ConsoleDesktopApp {
         } else {
             if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
                 state.selected_project_id = Some(project_id.clone());
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = false;
                 state.branch_is_git_repository = false;
             }
@@ -196,13 +196,13 @@ impl ConsoleDesktopApp {
         // change immediately; persist the cwd change on the backend.
         // Use the pre-move session id: after the workspace switch the old
         // pane id may no longer exist in the active tree.
-        if let Some(sid) = session_id.clone()
-            && let Some(session) = Rc::make_mut(&mut self.sessions)
-                .iter_mut()
-                .find(|s| s.id == sid)
-        {
-            session.project_id = Some(project.id.clone());
-            session.cwd = project.path.clone();
+        if let Some(sid) = session_id.clone() {
+            super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                if let Some(session) = sessions.iter_mut().find(|s| s.id == sid) {
+                    session.project_id = Some(project.id.clone());
+                    session.cwd = project.path.clone();
+                }
+            });
         }
 
         let path = project.path.clone();
@@ -328,13 +328,13 @@ impl ConsoleDesktopApp {
                 .insert(new_workspace_id.clone(), target_pane_id.clone());
             if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
                 state.selected_project_id = None;
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = true;
                 state.branch_is_git_repository = false;
             }
             if let Some(state) = self.workspace_pane_states.get_mut(&target_pane_id) {
                 state.selected_project_id = None;
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = true;
                 state.branch_is_git_repository = false;
             }
@@ -344,7 +344,7 @@ impl ConsoleDesktopApp {
         } else {
             if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
                 state.selected_project_id = None;
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = true;
                 state.branch_is_git_repository = false;
             }
@@ -366,12 +366,11 @@ impl ConsoleDesktopApp {
         self.pending_project_override
             .insert(session_id.clone(), None);
 
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|s| s.id == session_id)
-        {
-            session.project_id = None;
-        }
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|s| s.id == session_id) {
+                session.project_id = None;
+            }
+        });
         self.refresh_file_tree(cx);
 
         let client = self.client.clone();
@@ -448,7 +447,9 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         if !this.projects.iter().any(|p| p.id == project.id) {
-                            Rc::make_mut(&mut this.projects).push(project.clone());
+                            super::types::rc_slice_edit(&mut this.projects, |v| {
+                                v.push(project.clone())
+                            });
                         }
                         this.select_project_for_pane(pane_id.clone(), project.id, cx);
                         crate::window::broadcast_settings_refresh(cx);
@@ -480,7 +481,7 @@ impl ConsoleDesktopApp {
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
         if !self.projects.iter().any(|p| p.id == project.id) {
-            Rc::make_mut(&mut self.projects).push(project.clone());
+            super::types::rc_slice_edit(&mut self.projects, |v| v.push(project.clone()));
         }
         self.select_project_for_pane(pane_id, project.id, cx);
         crate::window::broadcast_settings_refresh(cx);
@@ -532,7 +533,7 @@ impl ConsoleDesktopApp {
                         match result {
                             Ok(branches) => {
                                 if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
-                                    state.branches = Rc::new(branches.branches);
+                                    state.branches = Rc::from(branches.branches);
                                     state.branch_loaded = true;
                                     state.branch_is_git_repository = branches.is_git_repository;
                                 }
@@ -614,7 +615,9 @@ impl ConsoleDesktopApp {
                                 if this.active_pane_id.as_deref() == Some(pane_id.as_str()) {
                                     this.selected_session_id = Some(new_session.id.clone());
                                 }
-                                Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
+                                super::types::rc_slice_edit(&mut this.sessions, |v| {
+                                    v.insert(0, new_session.clone())
+                                });
                                 this.open_chat_tab_in_pane(
                                     &pane_id,
                                     new_session.id.clone(),
@@ -721,7 +724,7 @@ impl ConsoleDesktopApp {
                             {
                                 state.branch_loaded = true;
                                 if let Ok(branches) = result {
-                                    state.branches = Rc::new(branches.branches);
+                                    state.branches = Rc::from(branches.branches);
                                     state.branch_is_git_repository = branches.is_git_repository;
                                 }
                             }
@@ -741,7 +744,7 @@ impl ConsoleDesktopApp {
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            this.projects = Rc::new(projects);
+                            this.projects = Rc::from(projects);
                             cx.notify();
                         });
                     }
@@ -752,7 +755,7 @@ impl ConsoleDesktopApp {
     }
 
     pub fn remove_project(&mut self, project_id: String, cx: &mut Context<Self>) {
-        Rc::make_mut(&mut self.projects).retain(|p| p.id != project_id);
+        super::types::rc_slice_edit(&mut self.projects, |v| v.retain(|p| p.id != project_id));
         if self
             .selected_project_id
             .as_deref()
@@ -782,7 +785,7 @@ impl ConsoleDesktopApp {
                 .is_some_and(|k| console_core::project_id_of_workspace_key(k) == project_id)
             {
                 state.selected_project_id = None;
-                state.branches = Rc::new(Vec::new());
+                state.branches = Rc::from([]);
                 state.branch_loaded = false;
             }
         }

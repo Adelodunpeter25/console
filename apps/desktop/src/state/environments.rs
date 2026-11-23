@@ -336,15 +336,15 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         // Reset in-memory session and workspace caches, closing all open tabs
-                        this.sessions = std::rc::Rc::new(Vec::new());
+                        this.sessions = std::rc::Rc::from([]);
                         this.selected_session_id = None;
-                        this.projects = std::rc::Rc::new(Vec::new());
+                        this.projects = std::rc::Rc::from([]);
                         this.selected_project_id = None;
                         // The GitHub repo list belongs to the old server; the
                         // next menu open refetches it from the new one.
                         this.github_repos = None;
                         this.github_repos_loaded = false;
-                        this.branches = std::rc::Rc::new(Vec::new());
+                        this.branches = std::rc::Rc::from([]);
                         this.branch_loaded = false;
                         this.transcript_scroll_positions.clear();
                         this.clear_transcript_pagination();
@@ -424,8 +424,8 @@ impl ConsoleDesktopApp {
                         this.changes_review_data.clear();
                         this.changes_review_collapsed.clear();
                         this.file_tree_scrolls.clear();
-                        this.file_tree_nodes = std::rc::Rc::new(Vec::new());
-                        this.working_changes = std::rc::Rc::new(Vec::new());
+                        this.file_tree_nodes = std::rc::Rc::from([]);
+                        this.working_changes = std::rc::Rc::from([]);
                         this.git_badges = std::rc::Rc::new(std::collections::HashMap::new());
                         this.file_tree_selected_path = None;
 

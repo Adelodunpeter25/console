@@ -143,7 +143,7 @@ pub struct ConsoleDesktopApp {
     /// Shared session history for the sidebar/titlebar. `Rc` so per-frame
     /// renders clone a refcount, not the vector; mutations go through
     /// `Rc::make_mut`.
-    pub sessions: Rc<Vec<SessionHeader>>,
+    pub sessions: Rc<[SessionHeader]>,
     pub selected_session_id: Option<String>,
     /// Session currently being renamed inline in the sidebar.
     pub(crate) session_rename_id: Option<String>,
@@ -175,7 +175,7 @@ pub struct ConsoleDesktopApp {
     pub active_pane_id: Option<String>,
     /// Shared with every pane's model picker; cloned per frame as a refcount
     /// bump.
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     /// Live-fetched models per provider, keyed by provider name. Populated
     /// lazily by `load_models_for_provider`; until a provider's entry exists,
     /// the picker falls back to the static `models` embedded in
@@ -202,9 +202,9 @@ pub struct ConsoleDesktopApp {
     pub automations_menu: ContextMenuHandle,
     /// Shared with the sidebar and footer; cloned per frame as a refcount
     /// bump.
-    pub projects: Rc<Vec<ProjectInfo>>,
+    pub projects: Rc<[ProjectInfo]>,
     pub selected_project_id: Option<String>,
-    pub branches: Rc<Vec<GitBranchInfo>>,
+    pub branches: Rc<[GitBranchInfo]>,
     pub branch_loaded: bool,
     pub branch_is_git_repository: bool,
     pub branch_pending: bool,
@@ -231,20 +231,19 @@ pub struct ConsoleDesktopApp {
     pub question_input: Entity<ComposerInput>,
     /// staged composer images keyed by pane. Values are `Rc` so per-frame
     /// renders clone a refcount instead of megabyte base64 payloads.
-    pub attachments: std::collections::HashMap<String, Rc<Vec<ImageAttachment>>>,
+    pub attachments: std::collections::HashMap<String, Rc<[ImageAttachment]>>,
     /// Staged browser element annotations keyed by pane (plan §8.4 C).
     /// Parallel to `attachments` rather than a mixed enum, so chips,
     /// drafts, and queue threading stay type-specific.
     pub browser_annotations:
-        std::collections::HashMap<String, Rc<Vec<console_core::BrowserElementAnnotation>>>,
+        std::collections::HashMap<String, Rc<[console_core::BrowserElementAnnotation]>>,
     /// Composer history recall swaps the staged chips as the user steps
     /// through past prompts, so the chips that were staged before stepping
     /// back are parked here and restored when they step forward onto the
     /// uncommitted draft again. Keyed by pane; removed once navigation ends.
-    pub(crate) history_draft_attachments:
-        std::collections::HashMap<String, Rc<Vec<ImageAttachment>>>,
+    pub(crate) history_draft_attachments: std::collections::HashMap<String, Rc<[ImageAttachment]>>,
     pub(crate) history_draft_annotations:
-        std::collections::HashMap<String, Rc<Vec<console_core::BrowserElementAnnotation>>>,
+        std::collections::HashMap<String, Rc<[console_core::BrowserElementAnnotation]>>,
     /// Run-derived interactive and display state. All of these are keyed by
     /// session id (not pane id) so a run's question, todos,
     /// and notices stay attached to the chat that owns the run. Switching a
@@ -315,7 +314,7 @@ pub struct ConsoleDesktopApp {
     pub device_view: Option<gpui::Entity<console_ui::DeviceViewer>>,
     pub computer_view: Option<gpui::Entity<console_ui::ComputerViewer>>,
     pub forwarded_ports_by_project:
-        std::collections::HashMap<String, Rc<Vec<console_core::ForwardedPort>>>,
+        std::collections::HashMap<String, Rc<[console_core::ForwardedPort]>>,
     pub ports_menu_handle: console_ui::ContextMenuHandle,
     /// In-window menu bar dropdowns (Windows/Linux; macOS uses the native menu).
     pub menubar_file_menu: console_ui::ContextMenuHandle,
@@ -325,8 +324,8 @@ pub struct ConsoleDesktopApp {
     pub(crate) new_split_pane: Option<String>,
     /// The `+` dropdown's open state, one per workspace pane.
     pub(crate) new_tab_menus: std::collections::HashMap<String, console_ui::ContextMenuHandle>,
-    pub file_tree_nodes: Rc<Vec<console_ui::FileTreeNode>>,
-    pub working_changes: Rc<Vec<console_core::types::GitFileEntry>>,
+    pub file_tree_nodes: Rc<[console_ui::FileTreeNode]>,
+    pub working_changes: Rc<[console_core::types::GitFileEntry]>,
     /// Derived from `working_changes`; only set through
     /// `set_working_changes` so the two cannot disagree.
     pub git_badges: Rc<std::collections::HashMap<String, console_ui::GitBadge>>,
@@ -350,24 +349,24 @@ pub struct ConsoleDesktopApp {
     /// `diffText` per row is already included by the `GET /changes` response
     /// with a resolved scope, so no per-file follow-up fetch is needed.
     pub(crate) changes_review_data:
-        std::collections::HashMap<String, Rc<Vec<console_core::types::SessionFileChange>>>,
+        std::collections::HashMap<String, Rc<[console_core::types::SessionFileChange]>>,
     /// Paths collapsed in a given review tab (local UI state, not persisted).
     /// A file starts collapsed iff it was already reviewed when the tab's
     /// data was fetched; toggling reviewed flips membership here too.
     pub(crate) changes_review_collapsed:
         std::collections::HashMap<String, std::collections::HashSet<String>>,
     /// Tree contents and expanded folders for each open Files tab, keyed by tab id.
-    pub(crate) file_tree_data: std::collections::HashMap<String, Rc<Vec<console_ui::FileTreeNode>>>,
+    pub(crate) file_tree_data: std::collections::HashMap<String, Rc<[console_ui::FileTreeNode]>>,
     pub(crate) file_tree_expanded:
         std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub(crate) file_tree_scrolls: std::collections::HashMap<String, gpui::ScrollHandle>,
     pub file_tree_selected_path: Option<String>,
     pub session_subagents:
-        std::collections::HashMap<String, Rc<Vec<console_core::types::SubagentInfo>>>,
+        std::collections::HashMap<String, Rc<[console_core::types::SubagentInfo]>>,
     /// Background work per session id (detached shells, subagents), fed by the
     /// run stream and hydrated from the work list endpoint.
     pub session_background_work:
-        std::collections::HashMap<String, Rc<Vec<console_core::BackgroundWork>>>,
+        std::collections::HashMap<String, Rc<[console_core::BackgroundWork]>>,
     pub preview_tab: Option<(String, std::time::Instant)>,
     pub open_file_contents: std::collections::HashMap<String, String>,
     /// Why a file tab could not load, by path. A path in here is not asked
@@ -532,7 +531,7 @@ pub struct ConsoleDesktopApp {
     /// The connected GitHub account's repositories for the project menu's
     /// GitHub section. None until the first fetch; a failed fetch surfaces
     /// `github_repos_error` instead, so "none" never means "unreachable".
-    pub github_repos: Option<std::rc::Rc<Vec<console_core::types::GithubRepo>>>,
+    pub github_repos: Option<std::rc::Rc<[console_core::types::GithubRepo]>>,
     /// True while the repo list is being fetched.
     pub github_repos_loading: bool,
     /// Failure text for the repo list and repo-task actions, shown verbatim
@@ -675,4 +674,21 @@ pub struct ConsoleDesktopApp {
     pub settled_collapsed: bool,
     pub is_window_active: bool,
     pub _subscriptions: Vec<Subscription>,
+}
+
+pub(crate) fn rc_slice_edit<T: Clone>(rc: &mut Rc<[T]>, f: impl FnOnce(&mut Vec<T>)) {
+    let mut vec = rc.to_vec();
+    f(&mut vec);
+    *rc = Rc::from(vec);
+}
+
+pub(crate) fn rc_slice_update<T: Clone, R>(rc: &mut Rc<[T]>, f: impl FnOnce(&mut [T]) -> R) -> R {
+    if let Some(slice) = Rc::get_mut(rc) {
+        f(slice)
+    } else {
+        let mut vec = rc.to_vec();
+        let res = f(&mut vec);
+        *rc = Rc::from(vec);
+        res
+    }
 }

@@ -514,7 +514,7 @@ fn entry_row(
 /// runs with the trimmed query whenever it changes.
 pub struct CommandPaletteModal {
     input: Entity<ComposerInput>,
-    entries: Rc<Vec<PaletteEntry>>,
+    entries: Rc<[PaletteEntry]>,
     open: bool,
     /// Whether the query locally filters the item list. Set to `false` when an
     /// external source already answers the query (e.g. server-side file search).
@@ -579,7 +579,7 @@ impl CommandPaletteModal {
         );
         Self {
             input,
-            entries: Rc::new(Vec::new()),
+            entries: Rc::from([]),
             open: false,
             filterable: true,
             selected: 0,
@@ -722,7 +722,7 @@ impl CommandPaletteModal {
     /// Replace the entry list. Safe to call from async contexts — notifies so
     /// the modal re-renders with the fresh rows.
     pub fn set_entries(&mut self, entries: Vec<PaletteEntry>, cx: &mut Context<Self>) {
-        self.entries = Rc::new(entries);
+        self.entries = Rc::from(entries);
         if let Some(tab) = &self.tab
             && !self
                 .entries

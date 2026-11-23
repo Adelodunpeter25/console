@@ -36,7 +36,7 @@ impl ConsoleDesktopApp {
             active.as_deref(),
             self.is_window_active,
         );
-        self.sessions = Rc::new(sessions);
+        self.sessions = Rc::from(sessions);
         self.refresh_dock_badge();
         if read_active && let Some(active) = active {
             // The refresh this triggers returns the chat read, so it ends there.
@@ -146,17 +146,23 @@ impl ConsoleDesktopApp {
             return;
         }
 
-        let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
+        let Some(current_title) = self
+            .sessions
+            .iter()
             .find(|session| session.id == session_id)
+            .map(|session| session.title.as_str())
         else {
             return;
         };
-        if session.title == title {
+        if current_title == title {
             cx.notify();
             return;
         }
-        session.title = title.clone();
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.title = title.clone();
+            }
+        });
         console_ui::workspace::ops::rename_tabs(
             &mut self.workspace_root,
             |tab| {
@@ -302,9 +308,9 @@ impl ConsoleDesktopApp {
             .filter(|s| !existing_ids.contains(&s.id))
             .collect();
         if !new_sessions.is_empty() {
-            let mut all = (*self.sessions).clone();
+            let mut all = self.sessions.to_vec();
             all.extend(new_sessions);
-            self.sessions = Rc::new(all);
+            self.sessions = Rc::from(all);
         }
         cx.notify();
     }
@@ -319,20 +325,19 @@ impl ConsoleDesktopApp {
             return;
         };
         let pinned = !current;
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|session| session.id == session_id)
-        {
-            session.pinned_at = if pinned {
-                Some(chrono::Utc::now().timestamp_millis())
-            } else {
-                None
-            };
-            // Pinned and settled are mutually exclusive: pinning unsettles.
-            if pinned {
-                session.settled_at = None;
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.pinned_at = if pinned {
+                    Some(chrono::Utc::now().timestamp_millis())
+                } else {
+                    None
+                };
+                // Pinned and settled are mutually exclusive: pinning unsettles.
+                if pinned {
+                    session.settled_at = None;
+                }
             }
-        }
+        });
         cx.notify();
 
         let client = self.client.clone();
@@ -359,13 +364,14 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                if let Some(session) = Rc::make_mut(&mut this.sessions)
-                                    .iter_mut()
-                                    .find(|session| session.id == session_id)
-                                {
-                                    session.pinned_at = header.pinned_at;
-                                    session.settled_at = header.settled_at;
-                                }
+                                super::types::rc_slice_update(&mut this.sessions, |sessions| {
+                                    if let Some(session) =
+                                        sessions.iter_mut().find(|session| session.id == session_id)
+                                    {
+                                        session.pinned_at = header.pinned_at;
+                                        session.settled_at = header.settled_at;
+                                    }
+                                });
                                 cx.notify();
                             });
                         }
@@ -442,7 +448,7 @@ impl ConsoleDesktopApp {
     /// select the next appropriate session, and notify the backend to soft-delete.
     pub(crate) fn delete_session(&mut self, id: String, cx: &mut Context<Self>) {
         let del_id = id.clone();
-        Rc::make_mut(&mut self.sessions).retain(|s| s.id != id);
+        super::types::rc_slice_edit(&mut self.sessions, |v| v.retain(|s| s.id != id));
         self.refresh_dock_badge();
         // The chat is gone, so its remembered position is too.
         self.forget_transcript_scroll_position(&id, cx);
@@ -544,20 +550,19 @@ impl ConsoleDesktopApp {
         else {
             return;
         };
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|session| session.id == session_id)
-        {
-            session.settled_at = if settled {
-                Some(chrono::Utc::now().timestamp_millis())
-            } else {
-                None
-            };
-            // Pinned and settled are mutually exclusive: settling unpins.
-            if settled {
-                session.pinned_at = None;
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.settled_at = if settled {
+                    Some(chrono::Utc::now().timestamp_millis())
+                } else {
+                    None
+                };
+                // Pinned and settled are mutually exclusive: settling unpins.
+                if settled {
+                    session.pinned_at = None;
+                }
             }
-        }
+        });
         // A settled chat drops out of the Dock badge count, an unsettled one
         // comes back into it.
         self.refresh_dock_badge();
@@ -588,12 +593,13 @@ impl ConsoleDesktopApp {
                             app.update(cx, |this, cx| {
                                 // Roll the optimistic mark back before
                                 // showing the server's refusal.
-                                if let Some(session) = Rc::make_mut(&mut this.sessions)
-                                    .iter_mut()
-                                    .find(|session| session.id == session_id)
-                                {
-                                    (session.settled_at, session.pinned_at) = previous;
-                                }
+                                super::types::rc_slice_update(&mut this.sessions, |sessions| {
+                                    if let Some(session) =
+                                        sessions.iter_mut().find(|session| session.id == session_id)
+                                    {
+                                        (session.settled_at, session.pinned_at) = previous;
+                                    }
+                                });
                                 this.refresh_dock_badge();
                                 this.set_error_for_session(&session_id, message, cx)
                             });
@@ -645,23 +651,26 @@ impl ConsoleDesktopApp {
             cx.notify();
         }
 
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|session| session.id == session_id)
-        {
-            if let Some(prov) = payload.provider.as_deref().filter(|p| !p.is_empty()) {
-                session.provider = prov.to_string();
+        let thinking_changed = super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                if let Some(prov) = payload.provider.as_deref().filter(|p| !p.is_empty()) {
+                    session.provider = prov.to_string();
+                }
+                if let Some(ref mid) = payload.model_id {
+                    session.model_id = mid.clone();
+                }
+                if payload.thinking_level.is_some() {
+                    session.thinking_level = payload
+                        .thinking_level
+                        .as_ref()
+                        .map(|t| t.as_str().to_string());
+                    return true;
+                }
             }
-            if let Some(ref mid) = payload.model_id {
-                session.model_id = mid.clone();
-            }
-            if payload.thinking_level.is_some() {
-                session.thinking_level = payload
-                    .thinking_level
-                    .as_ref()
-                    .map(|t| t.as_str().to_string());
-                cx.notify();
-            }
+            false
+        });
+        if thinking_changed {
+            cx.notify();
         }
 
         let client = self.client.clone();
@@ -752,17 +761,16 @@ impl ConsoleDesktopApp {
         self.clear_question_inputs_for_session(&session_id, cx);
         self.clear_error_for_session(&session_id, cx);
         if let Some(ans_str) = answer.as_str()
-            && ans_str == "Approve" && question.question.contains("Full Access") {
-                let pane_ids: Vec<String> = self.workspace_pane_states.keys().cloned().collect();
-                for pane_id in pane_ids {
-                    if self.active_session_for_pane(&pane_id).as_deref() == Some(&session_id) {
-                        self.set_pane_approval_mode(
-                            &pane_id,
-                            console_core::ApprovalMode::FullAccess,
-                        );
-                    }
+            && ans_str == "Approve"
+            && question.question.contains("Full Access")
+        {
+            let pane_ids: Vec<String> = self.workspace_pane_states.keys().cloned().collect();
+            for pane_id in pane_ids {
+                if self.active_session_for_pane(&pane_id).as_deref() == Some(&session_id) {
+                    self.set_pane_approval_mode(&pane_id, console_core::ApprovalMode::FullAccess);
                 }
             }
+        }
         cx.notify();
 
         let client = self.client.clone();
@@ -818,23 +826,28 @@ impl ConsoleDesktopApp {
             self.set_pane_thinking_level(pane_id, Some(level));
         }
 
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|session| session.id == header.id)
-        {
-            session.cwd = header.cwd.clone();
-            session.project_id = header.project_id.clone();
-            session.model_id = header.model_id.clone();
-            session.provider = header.provider.clone();
-            session.approval_mode = header.approval_mode.clone();
-            session.thinking_level = header.thinking_level.clone();
-            session.status = header.status.clone();
-            session.updated_at = header.updated_at;
-            // Keep the sidebar row and any open chat tabs in step when the
-            // backend renames the session (e.g. after the first turn) or updates
-            // the provider/model.
-            if !header.title.trim().is_empty() && session.title != header.title {
-                session.title = header.title.clone();
+        let (found_session, renamed) =
+            super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                if let Some(session) = sessions.iter_mut().find(|session| session.id == header.id) {
+                    session.cwd = header.cwd.clone();
+                    session.project_id = header.project_id.clone();
+                    session.model_id = header.model_id.clone();
+                    session.provider = header.provider.clone();
+                    session.approval_mode = header.approval_mode.clone();
+                    session.thinking_level = header.thinking_level.clone();
+                    session.status = header.status.clone();
+                    session.updated_at = header.updated_at;
+                    let renamed = !header.title.trim().is_empty() && session.title != header.title;
+                    if renamed {
+                        session.title = header.title.clone();
+                    }
+                    (true, renamed)
+                } else {
+                    (false, false)
+                }
+            });
+        if found_session {
+            if renamed {
                 console_ui::workspace::ops::rename_tabs(
                     &mut self.workspace_root,
                     |tab| {
@@ -938,7 +951,7 @@ impl ConsoleDesktopApp {
             if override_project != self.pane_workspace_key(pane_id) {
                 if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
                     state.selected_project_id = override_project.clone();
-                    Rc::make_mut(&mut state.branches).clear();
+                    state.branches = Rc::from([]);
                     state.branch_loaded = true;
                     state.branch_is_git_repository = false;
                 }
@@ -979,7 +992,7 @@ impl ConsoleDesktopApp {
         }
         if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
             state.selected_project_id = target_id.clone();
-            Rc::make_mut(&mut state.branches).clear();
+            state.branches = Rc::from([]);
             state.branch_loaded = resolved.is_none();
             state.branch_is_git_repository = false;
         }
@@ -1049,13 +1062,12 @@ impl ConsoleDesktopApp {
             return;
         }
         self.pending_project_override.remove(session_id);
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|session| session.id == session_id)
-        {
-            session.project_id = header.project_id.clone();
-            session.cwd = header.cwd.clone();
-        }
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.project_id = header.project_id.clone();
+                session.cwd = header.cwd.clone();
+            }
+        });
     }
 
     /// Remember which pane holds focus for the current workspace, so splits
@@ -1156,7 +1168,7 @@ impl ConsoleDesktopApp {
             self.selected_project_id = target_project_id.clone();
             if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
                 state.selected_project_id = target_project_id.clone();
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = target_project.is_none();
                 state.branch_is_git_repository = false;
             }
@@ -1218,7 +1230,7 @@ impl ConsoleDesktopApp {
                 if self.pane_workspace_key(active_pane_id).is_some() {
                     if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
                         state.selected_project_id = None;
-                        std::rc::Rc::make_mut(&mut state.branches).clear();
+                        state.branches = Rc::from([]);
                         state.branch_loaded = true;
                         state.branch_is_git_repository = false;
                     }
@@ -1244,8 +1256,7 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
-        let prev_sid = self
-            .active_session_for_pane(&active_pane_id);
+        let prev_sid = self.active_session_for_pane(&active_pane_id);
 
         // The chat this pane is showing keeps its position: the new one
         // replaces its transcript.
@@ -1430,7 +1441,9 @@ impl ConsoleDesktopApp {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 let new_id = header.id.clone();
-                                Rc::make_mut(&mut this.sessions).insert(0, header);
+                                super::types::rc_slice_edit(&mut this.sessions, |v| {
+                                    v.insert(0, header)
+                                });
                                 this.active_pane_id = Some(pane_id.clone());
                                 this.select_and_open_session(new_id, cx);
                             });
@@ -1478,23 +1491,23 @@ impl ConsoleDesktopApp {
     /// costs no request. Best-effort: a failed report only means the dot
     /// clears on the next refresh instead.
     pub(crate) fn report_session_read(&mut self, session_id: &str, cx: &mut Context<Self>) {
-        let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
+        let needs_report = self
+            .sessions
+            .iter()
             .find(|session| session.id == session_id)
-        else {
-            return;
-        };
-        if !console_core::types::notification::needs_read_report(session) {
+            .is_some_and(console_core::types::notification::needs_read_report);
+        if !needs_report {
             return;
         }
-        session.unread = false;
-        // A needs-attention chat with no run behind it settles to done on the
-        // server when read. A chat that is genuinely waiting on a question
-        // keeps the alert: its run is still active, and the next refresh says
-        // so.
-        if session.status == "needs_attention" && !self.running_sessions.contains_key(session_id) {
-            session.status = "done".to_string();
-        }
+        let is_running = self.running_sessions.contains_key(session_id);
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.unread = false;
+                if session.status == "needs_attention" && !is_running {
+                    session.status = "done".to_string();
+                }
+            }
+        });
         super::macos_notifications::clear_for_session(session_id);
         self.refresh_dock_badge();
         cx.notify();
@@ -1545,12 +1558,11 @@ impl ConsoleDesktopApp {
     /// Like [`Self::report_session_read`] but always calls the server: the
     /// local header may not know yet that the run just made the chat unread.
     fn force_session_read(&mut self, session_id: &str, cx: &mut Context<Self>) {
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|session| session.id == session_id)
-        {
-            session.unread = false;
-        }
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.unread = false;
+            }
+        });
         super::macos_notifications::clear_for_session(session_id);
         self.refresh_dock_badge();
         cx.notify();
@@ -1590,16 +1602,22 @@ impl ConsoleDesktopApp {
     /// dot appears at once; a server refusal (a running or settled chat)
     /// rolls it back and shows the reason.
     pub(crate) fn mark_session_unread(&mut self, session_id: String, cx: &mut Context<Self>) {
-        let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
+        let Some(already_unread) = self
+            .sessions
+            .iter()
             .find(|session| session.id == session_id)
+            .map(|session| session.unread)
         else {
             return;
         };
-        if session.unread {
+        if already_unread {
             return;
         }
-        session.unread = true;
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.unread = true;
+            }
+        });
         self.refresh_dock_badge();
         cx.notify();
 
@@ -1611,12 +1629,13 @@ impl ConsoleDesktopApp {
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            if let Some(session) = Rc::make_mut(&mut this.sessions)
-                                .iter_mut()
-                                .find(|session| session.id == session_id)
-                            {
-                                session.unread = false;
-                            }
+                            super::types::rc_slice_update(&mut this.sessions, |sessions| {
+                                if let Some(session) =
+                                    sessions.iter_mut().find(|session| session.id == session_id)
+                                {
+                                    session.unread = false;
+                                }
+                            });
                             this.refresh_dock_badge();
                             this.set_error_for_session(&session_id, message, cx)
                         });
@@ -1671,7 +1690,7 @@ impl ConsoleDesktopApp {
                                 });
                                 let app_entity_for_older = entity.clone();
                                 transcript.update(cx, |t, cx| {
-                                    t.set_session_changes(Rc::new(bootstrap.changes), cx);
+                                    t.set_session_changes(Rc::from(bootstrap.changes), cx);
                                     t.set_turns(detail.turns, cx);
                                     t.set_pagination(detail.has_more, detail.next_cursor);
                                     // Wire Load older handler for this pane/session

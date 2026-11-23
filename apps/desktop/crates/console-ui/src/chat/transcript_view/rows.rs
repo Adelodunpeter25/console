@@ -84,7 +84,7 @@ impl TranscriptView {
             return presentation.clone();
         }
 
-        let content_parts = Rc::new(content.to_vec());
+        let content_parts: Rc<[AssistantContentPart]> = Rc::from(content);
         let copy_content = content_parts
             .iter()
             .filter_map(|part| match part {

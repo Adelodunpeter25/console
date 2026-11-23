@@ -662,7 +662,7 @@ pub type ForkHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 
 #[derive(IntoElement)]
 pub struct AssistantMessageBubble {
-    pub content_parts: Rc<Vec<AssistantContentPart>>,
+    pub content_parts: Rc<[AssistantContentPart]>,
     pub is_streaming: bool,
     pub created_at: Option<i64>,
     /// Server-computed output throughput for this turn, already gated there.
@@ -688,7 +688,7 @@ pub struct AssistantMessageBubble {
 }
 
 impl AssistantMessageBubble {
-    pub fn new(content_parts: Rc<Vec<AssistantContentPart>>) -> Self {
+    pub fn new(content_parts: Rc<[AssistantContentPart]>) -> Self {
         Self {
             content_parts,
             is_streaming: false,

@@ -361,8 +361,8 @@ impl ConsoleDesktopApp {
                         this.active_pane_id = Some(pane_id.clone());
                         this.selected_session_id = this.active_session_for_pane(&pane_id);
                         if this.is_active_session_running_for_pane(&pane_id) {
-                            let attachments = (*this.attachments_for_pane(&pane_id)).clone();
-                            let annotations = (*this.annotations_for_pane(&pane_id)).clone();
+                            let attachments = this.attachments_for_pane(&pane_id).to_vec();
+                            let annotations = this.annotations_for_pane(&pane_id).to_vec();
                             this.queue_prompt_for_pane(
                                 pane_id,
                                 prompt,
@@ -373,8 +373,8 @@ impl ConsoleDesktopApp {
                             );
                             return;
                         }
-                        let attachments = (*this.attachments_for_pane(&pane_id)).clone();
-                        let annotations = (*this.annotations_for_pane(&pane_id)).clone();
+                        let attachments = this.attachments_for_pane(&pane_id).to_vec();
+                        let annotations = this.annotations_for_pane(&pane_id).to_vec();
                         this.submit_prompt_with_context(
                             prompt,
                             attachments,
@@ -425,7 +425,9 @@ impl ConsoleDesktopApp {
                             .clone()
                             .unwrap_or_else(|| "pane-main".to_string());
                         if let Some(staged) = this.attachments.get_mut(&pane_id) {
-                            Rc::make_mut(staged).pop();
+                            super::types::rc_slice_edit(staged, |v| {
+                                v.pop();
+                            });
                             if staged.is_empty() {
                                 this.attachments.remove(&pane_id);
                             }
@@ -518,7 +520,7 @@ impl ConsoleDesktopApp {
         let mut app = Self {
             client,
             transport: console_core::services::Transport,
-            sessions: Rc::new(Vec::new()),
+            sessions: Rc::from([]),
             selected_session_id: None,
             session_rename_id: None,
             session_rename_input,
@@ -536,7 +538,7 @@ impl ConsoleDesktopApp {
             drafts_push_pending: std::collections::HashSet::new(),
             pending_project_override: std::collections::HashMap::new(),
             active_pane_id: initial_active_pane_id,
-            providers: Rc::new(Vec::new()),
+            providers: Rc::from([]),
             models_by_provider: Rc::new(std::collections::HashMap::new()),
             loading_models: std::collections::HashSet::new(),
             selected_model: None,
@@ -551,9 +553,9 @@ impl ConsoleDesktopApp {
             subagents_menu,
             shells_menu,
             automations_menu,
-            projects: Rc::new(Vec::new()),
+            projects: Rc::from([]),
             selected_project_id: initial_selected_project_id,
-            branches: Rc::new(Vec::new()),
+            branches: Rc::from([]),
             branch_loaded: false,
             branch_is_git_repository: false,
             branch_pending: false,
@@ -606,8 +608,8 @@ impl ConsoleDesktopApp {
             menubar_edit_menu: console_ui::ContextMenuHandle::new(cx),
             new_split_pane: None,
             new_tab_menus: std::collections::HashMap::new(),
-            file_tree_nodes: Rc::new(Vec::new()),
-            working_changes: Rc::new(Vec::new()),
+            file_tree_nodes: Rc::from([]),
+            working_changes: Rc::from([]),
             git_badges: Rc::new(std::collections::HashMap::new()),
             file_tree_fs_watch: None,
             file_tree_git_watch: None,

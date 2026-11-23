@@ -119,12 +119,12 @@ pub struct ComposerView {
     pub approval_mode: ApprovalMode,
     pub thinking_level: Option<ThinkingLevel>,
     pub supported_thinking_levels: Vec<ThinkingLevel>,
-    pub attachments: Rc<Vec<ImageAttachment>>,
+    pub attachments: Rc<[ImageAttachment]>,
     /// File line comments staged for this pane. Rendered as chips above the
     /// input; they are part of the outgoing prompt without occupying the text
     /// field.
-    pub comments: Rc<Vec<ComposerComment>>,
-    pub annotations: Rc<Vec<ComposerAnnotation>>,
+    pub comments: Rc<[ComposerComment]>,
+    pub annotations: Rc<[ComposerAnnotation]>,
     /// A floating overlay (file/diff tabs) rather than the docked chat footer.
     floating: bool,
     pub has_queued_prompt: bool,
@@ -173,9 +173,9 @@ impl ComposerView {
             approval_mode: ApprovalMode::default(),
             thinking_level: None,
             supported_thinking_levels: Vec::new(),
-            attachments: Rc::new(Vec::new()),
-            comments: Rc::new(Vec::new()),
-            annotations: Rc::new(Vec::new()),
+            attachments: Rc::from([]),
+            comments: Rc::from([]),
+            annotations: Rc::from([]),
             floating: false,
             has_queued_prompt: false,
             mic_enabled: false,
@@ -299,17 +299,17 @@ impl ComposerView {
         self
     }
 
-    pub fn attachments(mut self, attachments: Rc<Vec<ImageAttachment>>) -> Self {
+    pub fn attachments(mut self, attachments: Rc<[ImageAttachment]>) -> Self {
         self.attachments = attachments;
         self
     }
 
-    pub fn comments(mut self, comments: Rc<Vec<ComposerComment>>) -> Self {
+    pub fn comments(mut self, comments: Rc<[ComposerComment]>) -> Self {
         self.comments = comments;
         self
     }
 
-    pub fn annotations(mut self, annotations: Rc<Vec<ComposerAnnotation>>) -> Self {
+    pub fn annotations(mut self, annotations: Rc<[ComposerAnnotation]>) -> Self {
         self.annotations = annotations;
         self
     }
@@ -407,7 +407,7 @@ impl ComposerView {
 /// The staged-image chip row. Public so the floating composer renders the same
 /// chips the docked one does instead of keeping a second copy.
 pub fn composer_attachment_row(
-    attachments: Rc<Vec<ImageAttachment>>,
+    attachments: Rc<[ImageAttachment]>,
     on_remove: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_preview: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     theme: Theme,
@@ -480,7 +480,7 @@ pub fn composer_attachment_row(
 
 impl ComposerView {
     fn render_attachments(
-        attachments: Rc<Vec<ImageAttachment>>,
+        attachments: Rc<[ImageAttachment]>,
         on_remove: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
         on_preview: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
         theme: Theme,
@@ -488,7 +488,7 @@ impl ComposerView {
         composer_attachment_row(attachments, on_remove, on_preview, theme)
     }
 
-    fn render_comments(comments: Rc<Vec<ComposerComment>>, theme: Theme) -> impl IntoElement {
+    fn render_comments(comments: Rc<[ComposerComment]>, theme: Theme) -> impl IntoElement {
         div()
             .w_full()
             .flex()
@@ -542,7 +542,7 @@ impl ComposerView {
     }
 
     fn render_annotations(
-        annotations: Rc<Vec<ComposerAnnotation>>,
+        annotations: Rc<[ComposerAnnotation]>,
         on_remove: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
         theme: Theme,
     ) -> impl IntoElement {

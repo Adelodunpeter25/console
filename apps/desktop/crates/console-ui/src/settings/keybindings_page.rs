@@ -891,23 +891,23 @@ fn filter_categories(query: &str, categories: &[KeybindingCategory]) -> Vec<Keyb
 /// once and share it — re-deriving on every frame made scrolling stutter.
 #[derive(Default)]
 struct ShortcutCatalogCache {
-    categories: Option<std::sync::Arc<Vec<KeybindingCategory>>>,
+    categories: Option<std::sync::Arc<[KeybindingCategory]>>,
 }
 
 impl gpui::Global for ShortcutCatalogCache {}
 
-fn cached_categories(cx: &mut App) -> std::sync::Arc<Vec<KeybindingCategory>> {
+fn cached_categories(cx: &mut App) -> std::sync::Arc<[KeybindingCategory]> {
     if !cx.has_global::<ShortcutCatalogCache>() {
         let shortcuts = shortcuts_from_keymap(cx);
         let categories = keybinding_categories(&shortcuts);
         cx.set_global(ShortcutCatalogCache {
-            categories: Some(std::sync::Arc::new(categories)),
+            categories: Some(std::sync::Arc::from(categories)),
         });
     }
     cx.global::<ShortcutCatalogCache>()
         .categories
         .clone()
-        .unwrap_or_default()
+        .unwrap_or_else(|| std::sync::Arc::from([]))
 }
 
 #[derive(IntoElement)]
@@ -934,11 +934,11 @@ impl RenderOnce for KeybindingsPage {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let cached = cached_categories(cx);
-        let categories: std::sync::Arc<Vec<KeybindingCategory>> =
+        let categories: std::sync::Arc<[KeybindingCategory]> =
             if self.filter_query.trim().is_empty() {
                 cached
             } else {
-                std::sync::Arc::new(filter_categories(&self.filter_query, &cached))
+                std::sync::Arc::from(filter_categories(&self.filter_query, &cached))
             };
         let is_empty = categories.is_empty();
 

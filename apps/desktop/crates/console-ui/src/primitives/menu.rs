@@ -234,7 +234,7 @@ pub struct ContextMenuHandle {
     /// The composer's caret preservation is one of these; a site can add its
     /// own on top.
     #[allow(clippy::type_complexity)]
-    on_toggle: Rc<Vec<Rc<dyn Fn(bool, &mut Window, &mut App)>>>,
+    on_toggle: Rc<[Rc<dyn Fn(bool, &mut Window, &mut App)>]>,
 }
 
 impl ContextMenuHandle {
@@ -245,16 +245,16 @@ impl ContextMenuHandle {
             focus: cx.focus_handle(),
             scroll: ScrollHandle::default(),
             trigger_bounds: Rc::new(Cell::new(None)),
-            on_toggle: Rc::new(Vec::new()),
+            on_toggle: Rc::from([]),
         }
     }
 
     /// Observe open/close transitions. Called only on an actual change, in the
     /// order the observers were added.
     pub fn on_toggle(mut self, handler: impl Fn(bool, &mut Window, &mut App) + 'static) -> Self {
-        let mut handlers = (*self.on_toggle).clone();
+        let mut handlers = self.on_toggle.to_vec();
         handlers.push(Rc::new(handler));
-        self.on_toggle = Rc::new(handlers);
+        self.on_toggle = Rc::from(handlers);
         self
     }
 
@@ -1171,15 +1171,13 @@ fn row(
         })
 }
 
-fn focusable_indexes(items: &[MenuItem]) -> Rc<Vec<usize>> {
-    Rc::new(
-        items
-            .iter()
-            .enumerate()
-            .filter(|(_, item)| item.is_focusable())
-            .map(|(index, _)| index)
-            .collect(),
-    )
+fn focusable_indexes(items: &[MenuItem]) -> Rc<[usize]> {
+    items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| item.is_focusable())
+        .map(|(index, _)| index)
+        .collect()
 }
 
 /// The next highlighted item index for a navigation key, wrapping at both ends.

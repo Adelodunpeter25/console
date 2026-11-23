@@ -48,7 +48,7 @@ const ESTIMATED_TRANSCRIPT_ROW_HEIGHT: f32 = 120.0;
 
 #[derive(Clone)]
 pub(crate) struct AssistantPresentation {
-    pub(crate) content_parts: Rc<Vec<AssistantContentPart>>,
+    pub(crate) content_parts: Rc<[AssistantContentPart]>,
     pub(crate) copy_content: SharedString,
 }
 
@@ -139,7 +139,7 @@ pub struct TranscriptView {
     scrollbar_state: std::rc::Rc<ScrollbarState>,
     pub(crate) prompts_open: bool,
     pub(crate) prompts_focus: FocusHandle,
-    pub(crate) prompts: Rc<Vec<console_core::SessionPrompt>>,
+    pub(crate) prompts: Rc<[console_core::SessionPrompt]>,
     /// The pointer is over the transcript: the floating controls show only then.
     pub(crate) hovered: bool,
     pub(crate) prompts_scroll: UniformListScrollHandle,
@@ -193,7 +193,7 @@ pub struct TranscriptView {
     turn_changes: HashMap<String, Rc<TurnChanges>>,
     /// The raw session change list the grouped map was built from, kept for
     /// the whole-session totals in the pinned summary pill.
-    session_changes: Rc<Vec<SessionFileChange>>,
+    session_changes: Rc<[SessionFileChange]>,
     /// Opens the diff of one changed file of one turn:
     /// `(path, turn_index, diff_text)`.
     pub(crate) on_open_change:
@@ -236,7 +236,7 @@ impl TranscriptView {
             scrollbar_state: ScrollbarState::new(),
             prompts_open: false,
             prompts_focus: cx.focus_handle(),
-            prompts: Rc::new(Vec::new()),
+            prompts: Rc::from([]),
             hovered: false,
             prompts_scroll: UniformListScrollHandle::new(),
             prompts_stale: true,
@@ -265,7 +265,7 @@ impl TranscriptView {
             on_open_html_editor: None,
             link_handler: None,
             turn_changes: HashMap::new(),
-            session_changes: Rc::new(Vec::new()),
+            session_changes: Rc::from([]),
             on_open_change: None,
             load_diff: None,
             on_fork: None,
@@ -433,10 +433,7 @@ impl Render for TranscriptView {
         {
             return root
                 .child(crate::chat::cite_overlay::cite_popup(
-                    line,
-                    container,
-                    selection,
-                    theme,
+                    line, container, selection, theme,
                 ))
                 .into_any_element();
         }

@@ -35,15 +35,15 @@ pub(crate) struct PaneChatSnapshot {
     pub launch_state: Option<String>,
     pub error: Option<PaneError>,
     pub notice: Option<String>,
-    pub todos: Rc<Vec<TodoItem>>,
+    pub todos: Rc<[TodoItem]>,
     pub todos_completed: usize,
     /// Unfinished todos exist, so the tasks pill shows.
     pub todos_active: bool,
-    pub subagents: Rc<Vec<SubagentInfo>>,
+    pub subagents: Rc<[SubagentInfo]>,
     pub subagents_running: bool,
     pub shells: Vec<BackgroundWork>,
-    pub automations: Rc<Vec<Automation>>,
-    pub webhooks: Rc<Vec<WebhookSubscription>>,
+    pub automations: Rc<[Automation]>,
+    pub webhooks: Rc<[WebhookSubscription]>,
     pub queued_prompts: Vec<QueuedPrompt>,
     pub suggestions: Vec<String>,
     pub pending_question: Option<AskQuestionRequest>,
@@ -69,7 +69,7 @@ impl ConsoleDesktopApp {
             .map(|s| s.provider.clone())
             .unwrap_or_else(|| "claude".to_string());
 
-        let todos: Rc<Vec<TodoItem>> = Rc::new(self.todo_items_for_pane(pane_id));
+        let todos: Rc<[TodoItem]> = Rc::from(self.todo_items_for_pane(pane_id));
         let todos_completed = todos
             .iter()
             .filter(|item| {
@@ -81,11 +81,11 @@ impl ConsoleDesktopApp {
             .count();
         let todos_active = !todos.is_empty() && todos_completed < todos.len();
 
-        let subagents: Rc<Vec<SubagentInfo>> = session_id
+        let subagents: Rc<[SubagentInfo]> = session_id
             .as_deref()
             .and_then(|sid| self.session_subagents.get(sid))
             .cloned()
-            .unwrap_or_default();
+            .unwrap_or_else(|| Rc::from([]));
         let subagents_running = subagents.iter().any(|sub| sub.status == "running");
 
         let shells = session_id
@@ -93,13 +93,13 @@ impl ConsoleDesktopApp {
             .map(|sid| self.running_shells_for_session(sid))
             .unwrap_or_default();
 
-        let automations = Rc::new(
+        let automations: Rc<[Automation]> = Rc::from(
             session_id
                 .as_deref()
                 .map(|sid| self.automations_for_session(sid))
                 .unwrap_or_default(),
         );
-        let webhooks = Rc::new(
+        let webhooks: Rc<[WebhookSubscription]> = Rc::from(
             session_id
                 .as_deref()
                 .map(|sid| self.webhooks_for_session(sid))

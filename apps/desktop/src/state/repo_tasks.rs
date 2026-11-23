@@ -16,8 +16,6 @@
 //! the floating card show "Cloning <name>…", and further repo taps wait
 //! instead of firing a duplicate clone.
 
-use std::rc::Rc;
-
 use gpui::Context;
 
 use super::ConsoleDesktopApp;
@@ -60,11 +58,11 @@ impl ConsoleDesktopApp {
                         let mirror = this.floating_composer.open;
                         match result {
                             Ok(repos) => {
-                                this.github_repos = Some(std::rc::Rc::new(repos.clone()));
+                                this.github_repos = Some(std::rc::Rc::from(repos.clone()));
                                 this.github_repos_error = None;
                                 if mirror {
                                     this.floating_composer.github_repos =
-                                        Some(std::rc::Rc::new(repos));
+                                        Some(std::rc::Rc::from(repos));
                                     this.floating_composer.github_repos_loading = false;
                                     this.floating_composer.github_repos_error = None;
                                 }
@@ -161,7 +159,9 @@ impl ConsoleDesktopApp {
                         match result {
                             Ok(project) => {
                                 if !this.projects.iter().any(|p| p.id == project.id) {
-                                    Rc::make_mut(&mut this.projects).push(project.clone());
+                                    super::types::rc_slice_edit(&mut this.projects, |v| {
+                                        v.push(project.clone())
+                                    });
                                 }
                                 // The card paints its own copy of the list.
                                 if !this
@@ -170,8 +170,10 @@ impl ConsoleDesktopApp {
                                     .iter()
                                     .any(|p| p.id == project.id)
                                 {
-                                    Rc::make_mut(&mut this.floating_composer.projects)
-                                        .push(project.clone());
+                                    super::types::rc_slice_edit(
+                                        &mut this.floating_composer.projects,
+                                        |v| v.push(project.clone()),
+                                    );
                                 }
                                 this.floating_project_changed(project.id, cx);
                             }
@@ -198,10 +200,10 @@ impl ConsoleDesktopApp {
     /// workspace switch (it reads the session's project).
     pub fn adopt_repo_task(&mut self, task: console_core::types::RepoTask, cx: &mut Context<Self>) {
         if !self.projects.iter().any(|p| p.id == task.project.id) {
-            Rc::make_mut(&mut self.projects).push(task.project.clone());
+            super::types::rc_slice_edit(&mut self.projects, |v| v.push(task.project.clone()));
         }
         if !self.sessions.iter().any(|s| s.id == task.session.id) {
-            Rc::make_mut(&mut self.sessions).push(task.session.clone());
+            super::types::rc_slice_edit(&mut self.sessions, |v| v.push(task.session.clone()));
         }
         crate::window::broadcast_settings_refresh(cx);
         self.select_and_open_session(task.session.id, cx);

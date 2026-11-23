@@ -35,7 +35,7 @@ impl ConsoleDesktopApp {
 
         self.changes_review_data
             .entry(tab_id.clone())
-            .or_insert_with(|| std::rc::Rc::new(Vec::new()));
+            .or_insert_with(|| std::rc::Rc::from([]));
         self.fetch_changes_review_data(&tab_id, session_id, cx);
         cx.notify();
     }
@@ -64,7 +64,7 @@ impl ConsoleDesktopApp {
                                 this.changes_review_collapsed
                                     .insert(tab_id.clone(), collapsed);
                                 this.changes_review_data
-                                    .insert(tab_id.clone(), std::rc::Rc::new(changes));
+                                    .insert(tab_id.clone(), std::rc::Rc::from(changes));
                                 cx.notify();
                             });
                         }

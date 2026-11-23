@@ -162,12 +162,11 @@ impl ConsoleDesktopApp {
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         self.add_queued_prompt_for_session(&session_id, queued_item);
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|s| s.id == session_id)
-        {
-            session.settled_at = None;
-        }
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|s| s.id == session_id) {
+                session.settled_at = None;
+            }
+        });
 
         if !keep_draft {
             self.composer_for_pane(&pane_id)
@@ -424,16 +423,14 @@ impl ConsoleDesktopApp {
         if !running {
             self.active_pane_id = Some(pane_id.clone());
             self.selected_session_id = self.active_session_for_pane(&pane_id);
-            let attachments = (*self.attachments_for_pane(&pane_id)).clone();
-            let annotations = (*self.annotations_for_pane(&pane_id)).clone();
+            let attachments = self.attachments_for_pane(&pane_id).to_vec();
+            let annotations = self.annotations_for_pane(&pane_id).to_vec();
             self.submit_prompt_with_context(prompt, attachments, annotations, context_files, cx);
             return;
         }
-        let attachments = (*self.attachments_for_pane(&pane_id)).clone();
-        let annotations = (*self.annotations_for_pane(&pane_id)).clone();
-        let Some(session_id) = self
-            .active_session_for_pane(&pane_id)
-        else {
+        let attachments = self.attachments_for_pane(&pane_id).to_vec();
+        let annotations = self.annotations_for_pane(&pane_id).to_vec();
+        let Some(session_id) = self.active_session_for_pane(&pane_id) else {
             return;
         };
         self.set_attachments_for_pane(&pane_id, Vec::new());
@@ -580,8 +577,7 @@ impl ConsoleDesktopApp {
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
         self.clear_error_for_pane(&run_pane_id, cx);
-        let active_session = self
-            .active_session_for_pane(&run_pane_id);
+        let active_session = self.active_session_for_pane(&run_pane_id);
         if !keep_draft {
             self.clear_draft_for_session(active_session.as_deref(), cx);
             if let Some(ref sid) = active_session {
@@ -655,14 +651,13 @@ impl ConsoleDesktopApp {
         // id is resolved after creation inside the spawned run.
         let run_started_at = chrono::Utc::now().timestamp();
         let initial_run_token = if let Some(ref sid) = active_sid {
-            if let Some(session) = Rc::make_mut(&mut self.sessions)
-                .iter_mut()
-                .find(|s| &s.id == sid)
-            {
-                let count = session.message_count.unwrap_or(0);
-                session.message_count = Some(count + 1);
-                session.settled_at = None;
-            }
+            super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                if let Some(session) = sessions.iter_mut().find(|s| &s.id == sid) {
+                    let count = session.message_count.unwrap_or(0);
+                    session.message_count = Some(count + 1);
+                    session.settled_at = None;
+                }
+            });
             self.set_session_running(sid, Some(run_started_at));
             self.next_run_token_for_session(sid)
         } else {
@@ -705,7 +700,7 @@ impl ConsoleDesktopApp {
                                         if this.active_pane_id.as_deref() == Some(run_pane_id.as_str()) {
                                             this.selected_session_id = Some(sid.clone());
                                         }
-                                        Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
+                                        super::types::rc_slice_edit(&mut this.sessions, |v| v.insert(0, new_session.clone()));
                                         this.open_chat_tab_in_pane(&run_pane_id, sid.clone(), new_session.title.clone(), cx);
                                         this.set_session_running(&sid, Some(run_started_at));
                                         assigned_token = this.next_run_token_for_session(&sid);
@@ -1087,28 +1082,31 @@ impl ConsoleDesktopApp {
                 let list = self
                     .session_subagents
                     .entry(run_session_id.to_string())
-                    .or_insert_with(|| Rc::new(Vec::new()));
-                let list_mut = Rc::make_mut(list);
-                if let Some(existing) = list_mut.iter_mut().find(|s| s.subagent_id == subagent_id) {
-                    existing.name = name;
-                    existing.role = role;
-                    existing.prompt = prompt;
-                    existing.status = "running".to_string();
-                } else {
-                    list_mut.push(console_core::types::SubagentInfo {
-                        subagent_id,
-                        parent_tool_call_id,
-                        name,
-                        role,
-                        prompt,
-                        current_turn: 1,
-                        status: "running".to_string(),
-                        summary: None,
-                        error: None,
-                        activities: Vec::new(),
-                        ..Default::default()
-                    });
-                }
+                    .or_insert_with(|| Rc::from([]));
+                super::types::rc_slice_edit(list, |list_mut| {
+                    if let Some(existing) =
+                        list_mut.iter_mut().find(|s| s.subagent_id == subagent_id)
+                    {
+                        existing.name = name;
+                        existing.role = role;
+                        existing.prompt = prompt;
+                        existing.status = "running".to_string();
+                    } else {
+                        list_mut.push(console_core::types::SubagentInfo {
+                            subagent_id,
+                            parent_tool_call_id,
+                            name,
+                            role,
+                            prompt,
+                            current_turn: 1,
+                            status: "running".to_string(),
+                            summary: None,
+                            error: None,
+                            activities: Vec::new(),
+                            ..Default::default()
+                        });
+                    }
+                });
             }
             AgentSessionEvent::SubagentActivity { event } => {
                 let console_core::SubagentActivityEvent {
@@ -1123,34 +1121,35 @@ impl ConsoleDesktopApp {
                 let tool_call_id = tool_call_id.unwrap_or_default();
                 let tool_name = tool_name.unwrap_or_default();
                 if let Some(list) = self.session_subagents.get_mut(run_session_id) {
-                    let list_mut = Rc::make_mut(list);
-                    if let Some(subagent) =
-                        list_mut.iter_mut().find(|s| s.subagent_id == subagent_id)
-                    {
-                        subagent.current_turn = subagent.current_turn.max(turn_index);
-                        if let Some(act) = subagent
-                            .activities
-                            .iter_mut()
-                            .find(|a| a.tool_call_id == tool_call_id)
+                    super::types::rc_slice_update(list, |list_mut| {
+                        if let Some(subagent) =
+                            list_mut.iter_mut().find(|s| s.subagent_id == subagent_id)
                         {
-                            act.status = status;
-                            if error.is_some() {
-                                act.error = error;
-                            }
-                        } else {
-                            subagent
+                            subagent.current_turn = subagent.current_turn.max(turn_index);
+                            if let Some(act) = subagent
                                 .activities
-                                .push(console_core::types::SubagentActivityItem {
-                                    turn_index,
-                                    tool_call_id,
-                                    tool_name,
-                                    summary: None,
-                                    args,
-                                    status,
-                                    error,
-                                });
+                                .iter_mut()
+                                .find(|a| a.tool_call_id == tool_call_id)
+                            {
+                                act.status = status;
+                                if error.is_some() {
+                                    act.error = error;
+                                }
+                            } else {
+                                subagent.activities.push(
+                                    console_core::types::SubagentActivityItem {
+                                        turn_index,
+                                        tool_call_id,
+                                        tool_name,
+                                        summary: None,
+                                        args,
+                                        status,
+                                        error,
+                                    },
+                                );
+                            }
                         }
-                    }
+                    });
                 }
             }
             AgentSessionEvent::SubagentEnd { event } => {
@@ -1162,21 +1161,22 @@ impl ConsoleDesktopApp {
                     total_turns,
                 } = event;
                 if let Some(list) = self.session_subagents.get_mut(run_session_id) {
-                    let list_mut = Rc::make_mut(list);
-                    if let Some(subagent) =
-                        list_mut.iter_mut().find(|s| s.subagent_id == subagent_id)
-                    {
-                        subagent.status = status;
-                        if summary.is_some() {
-                            subagent.summary = summary;
+                    super::types::rc_slice_update(list, |list_mut| {
+                        if let Some(subagent) =
+                            list_mut.iter_mut().find(|s| s.subagent_id == subagent_id)
+                        {
+                            subagent.status = status;
+                            if summary.is_some() {
+                                subagent.summary = summary;
+                            }
+                            if error.is_some() {
+                                subagent.error = error;
+                            }
+                            if total_turns > 0 {
+                                subagent.current_turn = total_turns;
+                            }
                         }
-                        if error.is_some() {
-                            subagent.error = error;
-                        }
-                        if total_turns > 0 {
-                            subagent.current_turn = total_turns;
-                        }
-                    }
+                    });
                 }
             }
             AgentSessionEvent::BackgroundWorkStarted { work }
@@ -1320,22 +1320,26 @@ impl ConsoleDesktopApp {
                 }
             }
             AgentSessionEvent::SessionTitleUpdated { title } => {
-                if let Some(session) = Rc::make_mut(&mut self.sessions)
-                    .iter_mut()
-                    .find(|session| session.id == run_session_id)
-                {
-                    session.title = title.clone();
-                }
+                super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                    if let Some(session) = sessions
+                        .iter_mut()
+                        .find(|session| session.id == run_session_id)
+                    {
+                        session.title = title.clone();
+                    }
+                });
                 self.update_session_title_in_panes(run_session_id, &title, cx);
             }
             AgentSessionEvent::SessionApprovalModeUpdated { approval_mode } => {
                 let mode = console_core::ApprovalMode::from_value(&approval_mode);
-                if let Some(session) = Rc::make_mut(&mut self.sessions)
-                    .iter_mut()
-                    .find(|session| session.id == run_session_id)
-                {
-                    session.approval_mode = mode.value().to_string();
-                }
+                super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                    if let Some(session) = sessions
+                        .iter_mut()
+                        .find(|session| session.id == run_session_id)
+                    {
+                        session.approval_mode = mode.value().to_string();
+                    }
+                });
                 self.set_pane_approval_mode(run_pane_id, mode);
                 let pane_ids: Vec<String> = self.workspace_pane_states.keys().cloned().collect();
                 for pane_id in pane_ids {

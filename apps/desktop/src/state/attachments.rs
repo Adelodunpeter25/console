@@ -4,8 +4,6 @@
 use std::path::Path;
 
 use console_core::ImageAttachment;
-use std::rc::Rc;
-
 use console_ui::attachment_image;
 use gpui::{ClipboardEntry, Context, ExternalPaths, Window};
 
@@ -229,7 +227,9 @@ impl ConsoleDesktopApp {
         if let Some(staged) = self.attachments.get_mut(pane_id)
             && index < staged.len()
         {
-            Rc::make_mut(staged).remove(index);
+            super::types::rc_slice_edit(staged, |v| {
+                v.remove(index);
+            });
             if staged.is_empty() {
                 self.attachments.remove(pane_id);
             }

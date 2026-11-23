@@ -130,7 +130,7 @@ pub struct RunScriptRow {
 /// the selection is transcript machinery shared with chat bubbles.
 #[derive(Clone)]
 pub struct RunOutputView {
-    pub lines: Rc<Vec<String>>,
+    pub lines: Rc<[String]>,
     pub list_state: ListState,
     pub selection: TranscriptSelection,
     pub scrollbar_state: Rc<ScrollbarState>,
@@ -140,7 +140,7 @@ impl RunScriptRow {
     /// Attach a selectable output view.
     pub fn with_output_view(
         mut self,
-        lines: Rc<Vec<String>>,
+        lines: Rc<[String]>,
         list_state: ListState,
         selection: TranscriptSelection,
         scrollbar_state: Rc<ScrollbarState>,

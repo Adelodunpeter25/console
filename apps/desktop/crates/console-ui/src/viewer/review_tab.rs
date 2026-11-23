@@ -36,7 +36,7 @@ const REVIEW_DIFF_PREVIEW_LINES: usize = 1000;
 #[derive(IntoElement)]
 pub struct ReviewTab {
     scope: ChangesScope,
-    changes: Rc<Vec<SessionFileChange>>,
+    changes: Rc<[SessionFileChange]>,
     collapsed: std::collections::HashSet<String>,
     on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_comment_target: Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
@@ -49,7 +49,7 @@ pub struct ReviewTab {
 impl ReviewTab {
     pub fn new(
         scope: ChangesScope,
-        changes: Rc<Vec<SessionFileChange>>,
+        changes: Rc<[SessionFileChange]>,
         collapsed: std::collections::HashSet<String>,
         on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_comment_target: Rc<dyn Fn(String, DiffCommentTarget) + 'static>,

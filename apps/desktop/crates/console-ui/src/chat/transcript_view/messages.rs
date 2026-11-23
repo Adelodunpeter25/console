@@ -124,7 +124,7 @@ impl TranscriptView {
 
     pub fn set_turns(&mut self, turns: Vec<Turn>, cx: &mut Context<Self>) {
         self.just_sent = None;
-        self.prompts = Rc::new(Vec::new());
+        self.prompts = Rc::from([]);
         self.prompts_stale = true;
         self.live.clear();
         self.pending_results.clear();

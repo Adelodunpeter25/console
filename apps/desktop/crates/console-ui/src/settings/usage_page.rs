@@ -15,7 +15,7 @@ use std::rc::Rc;
 #[derive(IntoElement)]
 pub struct UsagePage {
     pub reports: Option<Rc<HashMap<String, Option<UsageReport>>>>,
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub auth_status: Option<AuthStatusResponse>,
     /// Pasted provider API keys, keyed by provider id. Only "is there a key"
     /// is read here — the key itself never reaches a client.

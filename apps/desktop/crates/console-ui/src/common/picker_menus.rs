@@ -36,7 +36,7 @@ pub struct ProjectMenuExtras {
 /// card's rows carry folder icons, the footer's keep the plain look.
 #[allow(clippy::type_complexity)]
 pub fn project_menu_section(
-    projects: Rc<Vec<ProjectInfo>>,
+    projects: Rc<[ProjectInfo]>,
     selected_id: Option<String>,
     with_icons: bool,
     on_select: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -91,7 +91,7 @@ pub fn project_menu_section(
 /// mode.
 #[allow(clippy::type_complexity)]
 pub fn branch_menu_section(
-    branches: Rc<Vec<GitBranchInfo>>,
+    branches: Rc<[GitBranchInfo]>,
     is_selected: &Rc<dyn Fn(&GitBranchInfo) -> bool + 'static>,
     on_select: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     with_icons: bool,

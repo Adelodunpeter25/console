@@ -25,14 +25,14 @@ pub const ESTIMATED_LOG_ROW_HEIGHT: f32 = 17.0;
 #[derive(IntoElement)]
 pub struct LogsViewer {
     id: String,
-    lines: Rc<Vec<String>>,
+    lines: Rc<[String]>,
     list_state: ListState,
     selection: Option<TranscriptSelection>,
     scrollbar_state: Option<Rc<ScrollbarState>>,
 }
 
 impl LogsViewer {
-    pub fn new(id: impl Into<String>, lines: Rc<Vec<String>>, list_state: ListState) -> Self {
+    pub fn new(id: impl Into<String>, lines: Rc<[String]>, list_state: ListState) -> Self {
         Self {
             id: id.into(),
             lines,

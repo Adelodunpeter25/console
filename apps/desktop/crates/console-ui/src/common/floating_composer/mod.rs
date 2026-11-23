@@ -152,7 +152,7 @@ pub struct FloatingSubmit {
     pub mentions: Vec<ComposerMention>,
     /// Staged images, carried onto the new session so the launch doesn't
     /// silently drop a pasted screenshot.
-    pub attachments: Rc<Vec<ImageAttachment>>,
+    pub attachments: Rc<[ImageAttachment]>,
     pub pending_pastes: Vec<PendingPaste>,
     pub project_id: Option<String>,
     pub cwd: Option<String>,
@@ -171,13 +171,13 @@ pub struct FloatingSubmit {
 
 /// The app-state snapshot pushed into the card on open.
 pub struct FloatingSnapshot {
-    pub projects: Rc<Vec<ProjectInfo>>,
+    pub projects: Rc<[ProjectInfo]>,
     pub selected_project_id: Option<String>,
-    pub github_repos: Option<Rc<Vec<GithubRepo>>>,
+    pub github_repos: Option<Rc<[GithubRepo]>>,
     pub github_repos_loading: bool,
     pub github_repos_error: Option<String>,
-    pub branches: Rc<Vec<GitBranchInfo>>,
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub branches: Rc<[GitBranchInfo]>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
     pub favorites: Rc<HashSet<String>>,
     pub selected_model: Option<SelectedModel>,
@@ -191,13 +191,13 @@ impl FloatingSnapshot {
     /// has pushed a real one.
     pub fn empty() -> Self {
         Self {
-            projects: Rc::new(Vec::new()),
+            projects: Rc::from([]),
             selected_project_id: None,
             github_repos: None,
             github_repos_loading: false,
             github_repos_error: None,
-            branches: Rc::new(Vec::new()),
-            providers: Rc::new(Vec::new()),
+            branches: Rc::from([]),
+            providers: Rc::from([]),
             models_by_provider: Rc::new(HashMap::new()),
             favorites: Rc::new(HashSet::new()),
             selected_model: None,
@@ -226,18 +226,18 @@ pub struct FloatingComposerState {
     pub open: bool,
     pub submitting: bool,
     pub error: Option<String>,
-    pub projects: Rc<Vec<ProjectInfo>>,
+    pub projects: Rc<[ProjectInfo]>,
     pub selected_project_id: Option<String>,
     /// The connected GitHub account's repos for the project menu's GitHub
     /// section (None error + None repos = not connected). Seeded on open and
     /// refreshed in place, so a refresh from any menu reaches an open card.
-    pub github_repos: Option<Rc<Vec<GithubRepo>>>,
+    pub github_repos: Option<Rc<[GithubRepo]>>,
     pub github_repos_loading: bool,
     pub github_repos_error: Option<String>,
-    pub branches: Rc<Vec<GitBranchInfo>>,
+    pub branches: Rc<[GitBranchInfo]>,
     pub branch: BranchChoice,
     pub worktree_base: Option<String>,
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
     pub favorites: Rc<HashSet<String>>,
     pub selected_model: Option<SelectedModel>,
@@ -248,7 +248,7 @@ pub struct FloatingComposerState {
     /// alongside the branch rather than inherited silently.
     pub approval_mode: ApprovalMode,
     /// Staged images, mirrored from the app so the card can paint chips.
-    pub attachments: Rc<Vec<ImageAttachment>>,
+    pub attachments: Rc<[ImageAttachment]>,
     pub pending_pastes: Vec<PendingPaste>,
     /// Dictation state, mirrored from the app's STT flow each frame: enabled
     /// (credentials configured), live take (with elapsed secs), transcribing
@@ -304,22 +304,22 @@ impl FloatingComposerState {
             open: false,
             submitting: false,
             error: None,
-            projects: Rc::new(Vec::new()),
+            projects: Rc::from([]),
             selected_project_id: None,
             github_repos: None,
             github_repos_loading: false,
             github_repos_error: None,
-            branches: Rc::new(Vec::new()),
+            branches: Rc::from([]),
             branch: BranchChoice::default(),
             worktree_base: None,
-            providers: Rc::new(Vec::new()),
+            providers: Rc::from([]),
             models_by_provider: Rc::new(HashMap::new()),
             favorites: Rc::new(HashSet::new()),
             selected_model: None,
             thinking_level: None,
             supported_thinking_levels: Vec::new(),
             approval_mode: ApprovalMode::default(),
-            attachments: Rc::new(Vec::new()),
+            attachments: Rc::from([]),
             pending_pastes: Vec::new(),
             mic_enabled: false,
             mic_recording: false,
@@ -385,7 +385,7 @@ impl FloatingComposerState {
         self.error = None;
         self.autocomplete = None;
         self.autocomplete_key = None;
-        self.attachments = Rc::new(Vec::new());
+        self.attachments = Rc::from([]);
         self.pending_pastes.clear();
         self.open = true;
 
@@ -410,7 +410,7 @@ impl FloatingComposerState {
     /// equal list must not count as a change. An empty list is compared by
     /// length rather than by `Rc` identity, because the store hands back a
     /// fresh `Rc` for "no attachments" each time.
-    pub fn set_attachments(&mut self, attachments: Rc<Vec<ImageAttachment>>) -> bool {
+    pub fn set_attachments(&mut self, attachments: Rc<[ImageAttachment]>) -> bool {
         let unchanged = self.attachments.len() == attachments.len()
             && (attachments.is_empty() || Rc::ptr_eq(&self.attachments, &attachments));
         if unchanged {
@@ -554,7 +554,7 @@ impl FloatingComposerState {
 
     pub fn choose_no_project(&mut self) {
         self.selected_project_id = None;
-        self.branches = Rc::new(Vec::new());
+        self.branches = Rc::from([]);
         self.branch = BranchChoice::default();
         self.worktree_base = None;
     }
@@ -563,7 +563,7 @@ impl FloatingComposerState {
     /// The project itself is already set by `choose_project`; this only
     /// delivers the refs, so the branch menu stops offering the previous
     /// project's branches.
-    pub fn set_branches(&mut self, branches: Rc<Vec<GitBranchInfo>>) {
+    pub fn set_branches(&mut self, branches: Rc<[GitBranchInfo]>) {
         self.branches = branches;
         // The chosen base may not exist in the new project.
         if let BranchChoice::FromBranch(name) = &self.branch
@@ -592,7 +592,7 @@ impl FloatingComposerState {
     /// anything changed, so the caller can skip a notify.
     pub fn set_model_catalog(
         &mut self,
-        providers: Rc<Vec<ProviderCatalogEntry>>,
+        providers: Rc<[ProviderCatalogEntry]>,
         models_by_provider: Rc<HashMap<String, Vec<Model>>>,
         favorites: Rc<HashSet<String>>,
     ) -> bool {

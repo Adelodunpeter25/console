@@ -58,7 +58,7 @@ pub struct FileTreeNode {
 
 #[derive(IntoElement)]
 pub struct FileTreeView {
-    tree: Rc<Vec<FileTreeNode>>,
+    tree: Rc<[FileTreeNode]>,
     expanded_folders: HashSet<String>,
     selected_path: Option<String>,
     search_query: String,
@@ -71,7 +71,7 @@ pub struct FileTreeView {
 
 impl FileTreeView {
     pub fn new(
-        tree: Rc<Vec<FileTreeNode>>,
+        tree: Rc<[FileTreeNode]>,
         expanded_folders: HashSet<String>,
         selected_path: Option<String>,
         search_query: String,

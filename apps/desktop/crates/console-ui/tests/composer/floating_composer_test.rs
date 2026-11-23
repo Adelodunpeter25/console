@@ -114,7 +114,7 @@ fn project_menu_section_renders_no_project_row() {
     use console_ui::primitives::MenuItem;
     use std::rc::Rc;
 
-    let projects = Rc::new(vec![ProjectInfo {
+    let projects: Rc<[ProjectInfo]> = Rc::from([ProjectInfo {
         id: "p1".into(),
         name: "Project 1".into(),
         path: "/path/to/p1".into(),
@@ -214,7 +214,7 @@ fn branch_menu_section_offers_no_remote_branches() {
     use console_ui::primitives::MenuItem;
     use std::rc::Rc;
 
-    let branches = Rc::new(vec![
+    let branches: Rc<[GitBranchInfo]> = Rc::from([
         GitBranchInfo {
             name: "main".into(),
             current: true,

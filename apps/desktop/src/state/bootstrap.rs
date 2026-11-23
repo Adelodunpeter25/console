@@ -206,7 +206,7 @@ impl ConsoleDesktopApp {
                                             model_id: m.id.clone(),
                                         })
                                     });
-                                    this.providers = Rc::new(providers);
+                                    this.providers = Rc::from(providers);
                                     if let Some(first) = this.providers.first() {
                                         let first_name = first.name.clone();
                                         let needs_init = match &this.active_picker_tab {
@@ -303,7 +303,7 @@ impl ConsoleDesktopApp {
                     let project_path = cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.projects = Rc::new(projects);
+                                this.projects = Rc::from(projects);
                                 if this.selected_project_id.is_none() {
                                     // The workspace key, so a restored worktree chat
                                     // lands in its worktree's workspace.
@@ -340,7 +340,7 @@ impl ConsoleDesktopApp {
                                 cx.update(|cx| {
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
-                                            this.branches = Rc::new(branches.branches.clone());
+                                            this.branches = Rc::from(branches.branches.clone());
                                             this.branch_loaded = true;
                                             this.branch_is_git_repository =
                                                 branches.is_git_repository;
@@ -348,7 +348,7 @@ impl ConsoleDesktopApp {
                                                 this.workspace_pane_states.get_mut(&active_id)
                                                 && state.branch_cwd.is_none()
                                             {
-                                                state.branches = Rc::new(branches.branches);
+                                                state.branches = Rc::from(branches.branches);
                                                 state.branch_loaded = true;
                                                 state.branch_is_git_repository =
                                                     branches.is_git_repository;

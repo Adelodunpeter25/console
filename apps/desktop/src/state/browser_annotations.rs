@@ -10,11 +10,11 @@ use gpui::Context;
 use super::ConsoleDesktopApp;
 
 impl ConsoleDesktopApp {
-    pub(crate) fn annotations_for_pane(&self, pane_id: &str) -> Rc<Vec<BrowserElementAnnotation>> {
+    pub(crate) fn annotations_for_pane(&self, pane_id: &str) -> Rc<[BrowserElementAnnotation]> {
         self.browser_annotations
             .get(pane_id)
             .cloned()
-            .unwrap_or_else(|| Rc::new(Vec::new()))
+            .unwrap_or_else(|| Rc::from([]))
     }
 
     pub(crate) fn set_annotations_for_pane(
@@ -26,7 +26,7 @@ impl ConsoleDesktopApp {
             self.browser_annotations.remove(pane_id);
         } else {
             self.browser_annotations
-                .insert(pane_id.to_string(), Rc::new(items));
+                .insert(pane_id.to_string(), Rc::from(items));
         }
     }
 
@@ -39,10 +39,10 @@ impl ConsoleDesktopApp {
             return;
         }
         match self.browser_annotations.get_mut(pane_id) {
-            Some(existing) => Rc::make_mut(existing).append(&mut items),
+            Some(existing) => super::types::rc_slice_edit(existing, |v| v.append(&mut items)),
             None => {
                 self.browser_annotations
-                    .insert(pane_id.to_string(), Rc::new(items));
+                    .insert(pane_id.to_string(), Rc::from(items));
             }
         }
     }
@@ -56,7 +56,12 @@ impl ConsoleDesktopApp {
         if let Some(staged) = self.browser_annotations.get_mut(pane_id)
             && index < staged.len()
         {
-            let removed = Rc::make_mut(staged).remove(index);
+            let removed = {
+                let mut vec = staged.to_vec();
+                let r = vec.remove(index);
+                *staged = Rc::from(vec);
+                r
+            };
             let _ = removed;
             if staged.is_empty() {
                 self.browser_annotations.remove(pane_id);
@@ -167,8 +172,8 @@ impl ConsoleDesktopApp {
             let parked = self
                 .history_draft_annotations
                 .remove(pane_id)
-                .unwrap_or_else(|| Rc::new(Vec::new()));
-            self.set_annotations_for_pane(pane_id, (*parked).clone());
+                .unwrap_or_else(|| Rc::from([]));
+            self.set_annotations_for_pane(pane_id, parked.to_vec());
             cx.notify();
             return;
         }
@@ -195,9 +200,9 @@ impl ConsoleDesktopApp {
         &self,
         pane_id: &str,
         cx: &mut Context<Self>,
-    ) -> Rc<Vec<console_ui::ComposerAnnotation>> {
+    ) -> Rc<[console_ui::ComposerAnnotation]> {
         let entity = cx.entity().downgrade();
-        let chips = self
+        let chips: Vec<_> = self
             .annotations_for_pane(pane_id)
             .iter()
             .enumerate()
@@ -235,6 +240,6 @@ impl ConsoleDesktopApp {
                 )
             })
             .collect();
-        Rc::new(chips)
+        Rc::from(chips)
     }
 }

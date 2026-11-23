@@ -14,7 +14,7 @@ use crate::theme::Theme;
 /// The floating task list that opens above the tasks pill: a compact card
 /// with one truncated title per row and a status marker, capped so a long
 /// checklist scrolls instead of covering the chat.
-pub(crate) fn tasks_popover(items: Rc<Vec<TodoItem>>, theme: Theme) -> AnyElement {
+pub(crate) fn tasks_popover(items: Rc<[TodoItem]>, theme: Theme) -> AnyElement {
     let total = items.len();
     let completed = items
         .iter()
@@ -211,7 +211,7 @@ pub(crate) fn pill_popover_card(
 
 /// The subagents popover: one truncated human-readable title per subagent,
 /// its icon lit while the subagent is still running.
-pub(crate) fn subagents_popover(items: Rc<Vec<SubagentInfo>>, theme: Theme) -> AnyElement {
+pub(crate) fn subagents_popover(items: Rc<[SubagentInfo]>, theme: Theme) -> AnyElement {
     let rows = items.iter().enumerate().map(|(index, sub)| {
         let running = sub.status == "running";
         div()
@@ -267,7 +267,7 @@ pub(crate) fn subagents_popover(items: Rc<Vec<SubagentInfo>>, theme: Theme) -> A
 /// The shells popover: one truncated command per running shell with a stop
 /// button on the right.
 pub(crate) fn shells_popover(
-    shells: Rc<Vec<ShellEntry>>,
+    shells: Rc<[ShellEntry]>,
     on_stop: StopHandler,
     theme: Theme,
 ) -> AnyElement {
@@ -329,8 +329,8 @@ pub(crate) fn shells_popover(
 /// The automations & webhooks popover: lists active/paused schedules and
 /// webhook subscriptions for the session with pause/resume and delete actions.
 pub(crate) fn automations_popover(
-    automations: Rc<Vec<Automation>>,
-    webhooks: Rc<Vec<WebhookSubscription>>,
+    automations: Rc<[Automation]>,
+    webhooks: Rc<[WebhookSubscription]>,
     on_pause: ActionHandler,
     on_resume: ActionHandler,
     on_delete_automation: ActionHandler,

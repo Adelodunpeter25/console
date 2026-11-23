@@ -37,19 +37,19 @@ use super::super::picker_menus::{
 
 /// One frame of state to paint.
 pub struct Data {
-    pub projects: Rc<Vec<ProjectInfo>>,
+    pub projects: Rc<[ProjectInfo]>,
     pub selected_project_id: Option<String>,
     /// The connected GitHub account's repos for the project menu's GitHub
     /// section, with load/error flags (None error + None repos = not
     /// connected). Mirrored from app state on every frame, so a refresh from
     /// any menu reaches an open card.
-    pub github_repos: Option<Rc<Vec<GithubRepo>>>,
+    pub github_repos: Option<Rc<[GithubRepo]>>,
     pub github_repos_loading: bool,
     pub github_repos_error: Option<String>,
-    pub branches: Rc<Vec<GitBranchInfo>>,
+    pub branches: Rc<[GitBranchInfo]>,
     pub branch: BranchChoice,
     pub worktree_base: Option<String>,
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
     pub favorites: Rc<HashSet<String>>,
     pub selected_model: Option<SelectedModel>,
@@ -61,7 +61,7 @@ pub struct Data {
     pub thinking_level: Option<ThinkingLevel>,
     pub supported_thinking_levels: Vec<ThinkingLevel>,
     pub approval_mode: ApprovalMode,
-    pub attachments: Rc<Vec<ImageAttachment>>,
+    pub attachments: Rc<[ImageAttachment]>,
     /// Dictation state mirrored from the app (see FloatingComposerState).
     pub mic_enabled: bool,
     pub mic_recording: bool,
@@ -125,15 +125,15 @@ impl FloatingComposerView {
             thinking_menu,
             model_dropdown,
             data: Data {
-                projects: Rc::new(Vec::new()),
+                projects: Rc::from([]),
                 selected_project_id: None,
                 github_repos: None,
                 github_repos_loading: false,
                 github_repos_error: None,
-                branches: Rc::new(Vec::new()),
+                branches: Rc::from([]),
                 branch: BranchChoice::default(),
                 worktree_base: None,
-                providers: Rc::new(Vec::new()),
+                providers: Rc::from([]),
                 models_by_provider: Rc::new(HashMap::new()),
                 favorites: Rc::new(HashSet::new()),
                 selected_model: None,
@@ -143,7 +143,7 @@ impl FloatingComposerView {
                 thinking_level: None,
                 supported_thinking_levels: Vec::new(),
                 approval_mode: ApprovalMode::default(),
-                attachments: Rc::new(Vec::new()),
+                attachments: Rc::from([]),
                 mic_enabled: false,
                 mic_recording: false,
                 mic_elapsed_secs: 0,

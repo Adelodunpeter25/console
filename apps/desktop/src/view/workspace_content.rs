@@ -853,14 +853,14 @@ impl ConsoleDesktopApp {
         // A tab restored from disk has no data yet; fetch it once.
         if !self.changes_review_data.contains_key(&tab_id) {
             self.changes_review_data
-                .insert(tab_id.clone(), Rc::new(Vec::new()));
+                .insert(tab_id.clone(), Rc::from([]));
             self.fetch_changes_review_data(&tab_id, session_id, cx);
         }
         let changes = self
             .changes_review_data
             .get(&tab_id)
             .cloned()
-            .unwrap_or_else(|| Rc::new(Vec::new()));
+            .unwrap_or_else(|| Rc::from([]));
         let collapsed = self
             .changes_review_collapsed
             .get(&tab_id)
@@ -1022,16 +1022,14 @@ impl ConsoleDesktopApp {
                 });
             ShellsPill {
                 menu: self.pane_shells_menu(pane_id),
-                shells: Rc::new(
-                    snapshot
-                        .shells
-                        .iter()
-                        .map(|work| ShellEntry {
-                            id: work.id.clone(),
-                            command: work.shell_command(),
-                        })
-                        .collect(),
-                ),
+                shells: snapshot
+                    .shells
+                    .iter()
+                    .map(|work| ShellEntry {
+                        id: work.id.clone(),
+                        command: work.shell_command(),
+                    })
+                    .collect(),
                 on_stop,
             }
         });
@@ -1623,8 +1621,8 @@ impl ConsoleDesktopApp {
                             if prompt.trim().is_empty() {
                                 return;
                             }
-                            let attachments = (*this.attachments_for_pane(&pane_id)).clone();
-                            let annotations = (*this.annotations_for_pane(&pane_id)).clone();
+                            let attachments = this.attachments_for_pane(&pane_id).to_vec();
+                            let annotations = this.annotations_for_pane(&pane_id).to_vec();
                             let context_files =
                                 console_shared::composer::mentions::submitted_mention_paths(
                                     this.composer_for_pane(&pane_id).read(cx).mentions(),
@@ -1718,8 +1716,8 @@ impl ConsoleDesktopApp {
                         if prompt.trim().is_empty() {
                             return;
                         }
-                        let attachments = (*this.attachments_for_pane(&pane_id)).clone();
-                        let annotations = (*this.annotations_for_pane(&pane_id)).clone();
+                        let attachments = this.attachments_for_pane(&pane_id).to_vec();
+                        let annotations = this.annotations_for_pane(&pane_id).to_vec();
                         let context_files =
                             console_shared::composer::mentions::submitted_mention_paths(
                                 this.composer_for_pane(&pane_id).read(cx).mentions(),

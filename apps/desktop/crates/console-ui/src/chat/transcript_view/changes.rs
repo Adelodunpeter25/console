@@ -5,7 +5,7 @@ impl TranscriptView {
     /// whose chip rows appeared, changed or went away.
     pub fn set_session_changes(
         &mut self,
-        changes: Rc<Vec<SessionFileChange>>,
+        changes: Rc<[SessionFileChange]>,
         cx: &mut Context<Self>,
     ) {
         let before: Vec<usize> = self.rows_with_turn_changes();
@@ -28,7 +28,7 @@ impl TranscriptView {
 
     pub fn clear_session_changes(&mut self, cx: &mut Context<Self>) {
         if !self.session_changes.is_empty() {
-            self.set_session_changes(Rc::new(Vec::new()), cx);
+            self.set_session_changes(Rc::from([]), cx);
         }
     }
 
