@@ -48,7 +48,12 @@ fn test_markdown_classification() {
 fn test_video_classification() {
     for ext in VIDEO_EXTENSIONS {
         let path = format!("media/clip{}", ext);
-        assert_eq!(file_kind_for_path(&path), FileKind::Video, "failed for {}", path);
+        assert_eq!(
+            file_kind_for_path(&path),
+            FileKind::Video,
+            "failed for {}",
+            path
+        );
     }
 }
 
@@ -56,7 +61,12 @@ fn test_video_classification() {
 fn test_audio_classification() {
     for ext in AUDIO_EXTENSIONS {
         let path = format!("media/track{}", ext);
-        assert_eq!(file_kind_for_path(&path), FileKind::Audio, "failed for {}", path);
+        assert_eq!(
+            file_kind_for_path(&path),
+            FileKind::Audio,
+            "failed for {}",
+            path
+        );
     }
 }
 
@@ -64,7 +74,12 @@ fn test_audio_classification() {
 fn test_pdf_classification() {
     for ext in PDF_EXTENSIONS {
         let path = format!("docs/doc{}", ext);
-        assert_eq!(file_kind_for_path(&path), FileKind::Pdf, "failed for {}", path);
+        assert_eq!(
+            file_kind_for_path(&path),
+            FileKind::Pdf,
+            "failed for {}",
+            path
+        );
     }
 }
 
@@ -204,8 +219,8 @@ fn test_extension_lists_match_server() {
     let details = [
         ".icns", ".tiff", ".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar", ".jar",
         ".war", ".exe", ".dll", ".so", ".dylib", ".a", ".o", ".obj", ".bin", ".iso", ".dmg",
-        ".pkg", ".deb", ".rpm", ".apk", ".ipa", ".node", ".ttf", ".otf", ".woff", ".woff2",
-        ".eot", ".wasm", ".psd", ".sketch", ".class", ".pyc", ".db", ".sqlite", ".sqlite3",
+        ".pkg", ".deb", ".rpm", ".apk", ".ipa", ".node", ".ttf", ".otf", ".woff", ".woff2", ".eot",
+        ".wasm", ".psd", ".sketch", ".class", ".pyc", ".db", ".sqlite", ".sqlite3",
     ];
     assert_eq!(VIDEO_EXTENSIONS, video);
     assert_eq!(AUDIO_EXTENSIONS, audio);

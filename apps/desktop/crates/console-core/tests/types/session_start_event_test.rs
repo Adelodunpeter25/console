@@ -13,7 +13,10 @@ fn session_start_event_decodes_server_elapsed() {
             started_at,
             elapsed_ms,
         } => {
-            assert_eq!(started_at.as_deref(), Some("2026-10-13T09:45:44.936584122Z"));
+            assert_eq!(
+                started_at.as_deref(),
+                Some("2026-10-13T09:45:44.936584122Z")
+            );
             assert_eq!(elapsed_ms, Some(4200));
         }
         other => panic!("wrong event: {other:?}"),

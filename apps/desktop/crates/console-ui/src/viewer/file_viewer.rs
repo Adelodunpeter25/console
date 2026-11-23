@@ -8,8 +8,8 @@
 use crate::primitives::file_type_icon;
 use crate::theme::Theme;
 use gpui::{
-    AnyElement, App, DispatchPhase, Entity, IntoElement, ParentElement, RenderOnce,
-    ScrollEvent, Styled, Window, canvas, div, px,
+    AnyElement, App, DispatchPhase, Entity, IntoElement, ParentElement, RenderOnce, ScrollEvent,
+    Styled, Window, canvas, div, px,
 };
 use std::rc::Rc;
 

@@ -169,7 +169,9 @@ impl TranscriptView {
                 id: message.id,
                 content: message.content,
                 stop_reason: message.stop_reason,
-                created_at: message.created_at.or_else(|| Some(chrono::Utc::now().timestamp())),
+                created_at: message
+                    .created_at
+                    .or_else(|| Some(chrono::Utc::now().timestamp())),
                 tok_per_sec: message.tok_per_sec,
             };
             turn.responses.push(msg);
@@ -211,9 +213,11 @@ impl TranscriptView {
         let mut pending_results = std::mem::take(&mut self.pending_results);
         let run = self.ensure_tail_run();
         for call in calls {
-            if let Some(ActivityEvent::ToolCall(entry)) = run.events.iter_mut().find(|event| {
-                matches!(event, ActivityEvent::ToolCall(e) if e.call.id == call.id)
-            }) {
+            if let Some(ActivityEvent::ToolCall(entry)) = run
+                .events
+                .iter_mut()
+                .find(|event| matches!(event, ActivityEvent::ToolCall(e) if e.call.id == call.id))
+            {
                 entry.call = call;
             } else {
                 let result = pending_results.remove(&call.id);

@@ -35,7 +35,9 @@ impl ConsoleDesktopApp {
                     };
                     let _ = handle.update(cx, |_, window, cx| {
                         if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| this.open_file_comment_in_pane(request, window, cx));
+                            app.update(cx, |this, cx| {
+                                this.open_file_comment_in_pane(request, window, cx)
+                            });
                         }
                     });
                 });
@@ -961,7 +963,11 @@ impl ConsoleDesktopApp {
             return Vec::new();
         };
         let mut overlays = Vec::new();
-        for comment in pane.file_comments.iter_mut().filter(|comment| comment.path == path) {
+        for comment in pane
+            .file_comments
+            .iter_mut()
+            .filter(|comment| comment.path == path)
+        {
             let id = comment.id;
             let start_line = comment.start_line;
             let end_line = comment.end_line;
@@ -977,22 +983,30 @@ impl ConsoleDesktopApp {
             let old_side = comment.old_side;
             let action_entity = entity.clone();
             let action_pane = pane_id.clone();
-            let act = move |f: fn(&mut ConsoleDesktopApp, &str, u64, &mut Context<ConsoleDesktopApp>)| {
-                let entity = action_entity.clone();
-                let pane_id = action_pane.clone();
-                move |_window: &mut Window, cx: &mut App| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| f(this, &pane_id, id, cx));
+            let act =
+                move |f: fn(&mut ConsoleDesktopApp, &str, u64, &mut Context<ConsoleDesktopApp>)| {
+                    let entity = action_entity.clone();
+                    let pane_id = action_pane.clone();
+                    move |_window: &mut Window, cx: &mut App| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| f(this, &pane_id, id, cx));
+                        }
                     }
-                }
-            };
-            let rows = if matches!(card_state, FileCommentCardState::Draft | FileCommentCardState::Editing) {
+                };
+            let rows = if matches!(
+                card_state,
+                FileCommentCardState::Draft | FileCommentCardState::Editing
+            ) {
                 9
             } else {
                 4 + text.lines().count().max(1) as u32 + (text.len() / 80) as u32
             };
             overlays.push(editor_ui::DiffRowOverlay::new(
-                if old_side { editor_ui::DiffSide::Old } else { editor_ui::DiffSide::New },
+                if old_side {
+                    editor_ui::DiffSide::Old
+                } else {
+                    editor_ui::DiffSide::New
+                },
                 end_line,
                 rows,
                 move |_, _| {

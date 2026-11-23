@@ -7,8 +7,7 @@ pub fn key_binding(
     context: Option<&str>,
     cx: &App,
 ) -> KeyBinding {
-    let context_predicate =
-        context.map(|c| KeyBindingContextPredicate::parse(c).unwrap().into());
+    let context_predicate = context.map(|c| KeyBindingContextPredicate::parse(c).unwrap().into());
     KeyBinding::load(
         keystrokes,
         Box::new(action),

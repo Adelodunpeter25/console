@@ -289,11 +289,7 @@ pub struct WakeRecord {
 
 impl WakeRecord {
     pub fn new(message: String, at: i64) -> Self {
-        let at = if at > 10_000_000_000 {
-            at / 1000
-        } else {
-            at
-        };
+        let at = if at > 10_000_000_000 { at / 1000 } else { at };
         Self { message, at }
     }
 }

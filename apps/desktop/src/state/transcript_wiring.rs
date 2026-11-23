@@ -256,7 +256,10 @@ pub(crate) fn wire_view_subagent(
     transcript.set_load_tool_result(move |message_id, call_id, cx| {
         let target = tool_entity.upgrade().and_then(|app| {
             let app = app.read(cx);
-            let pane_id = app.active_pane_id.clone().unwrap_or_else(|| "pane-main".to_string());
+            let pane_id = app
+                .active_pane_id
+                .clone()
+                .unwrap_or_else(|| "pane-main".to_string());
             app.active_session_for_pane(&pane_id)
                 .map(|session_id| (app.client.clone(), session_id))
         });

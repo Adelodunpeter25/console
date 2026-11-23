@@ -208,7 +208,9 @@ fn render_assistant_bubble(
     tok_per_sec: Option<f64>,
     turn_changes: Option<std::rc::Rc<crate::chat::change_chips::TurnChanges>>,
     streaming: bool,
-    preview_handler: Option<std::rc::Rc<dyn Fn(std::sync::Arc<gpui::Image>, &mut gpui::Window, &mut App) + 'static>>,
+    preview_handler: Option<
+        std::rc::Rc<dyn Fn(std::sync::Arc<gpui::Image>, &mut gpui::Window, &mut App) + 'static>,
+    >,
     link_handler: Option<LinkHandler>,
 ) -> AnyElement {
     let presentation = view_ref.assistant_presentation(turn_index, response_index, content);

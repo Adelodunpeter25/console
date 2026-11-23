@@ -212,8 +212,18 @@ pub fn code_argument_summary(code: &str) -> Option<String> {
 
     // 2. Common tool helper functions: file("..."), edit("..."), etc.
     for prefix in [
-        "file", "edit", "write", "glob", "grep", "fetch", "webSearch", "webFetch",
-        "todo", "visualize", "readChat", "readSkill",
+        "file",
+        "edit",
+        "write",
+        "glob",
+        "grep",
+        "fetch",
+        "webSearch",
+        "webFetch",
+        "todo",
+        "visualize",
+        "readChat",
+        "readSkill",
     ] {
         if let Some(arg) = extract_helper_call(trimmed, prefix) {
             return Some(truncate(&format!("{prefix}({arg})"), 72));

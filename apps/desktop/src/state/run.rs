@@ -1425,9 +1425,7 @@ impl ConsoleDesktopApp {
                                                 this.transcript_for_pane(&pane).update(
                                                     cx,
                                                     |t, cx| {
-                                                        if detail.turns.len()
-                                                            >= t.turn_count()
-                                                        {
+                                                        if detail.turns.len() >= t.turn_count() {
                                                             t.set_turns(detail.turns, cx);
                                                             t.resume_streaming(started_at, cx);
                                                         }

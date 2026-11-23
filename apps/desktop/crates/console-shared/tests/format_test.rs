@@ -25,7 +25,9 @@ fn model_names_are_split_and_capitalised() {
 #[test]
 fn selector_labels_are_simplified() {
     assert_eq!(
-        format_selector_label("main.flex-1.grid-container > article.grid-section.col-span-full > div.cell-pad.col-span-1"),
+        format_selector_label(
+            "main.flex-1.grid-container > article.grid-section.col-span-full > div.cell-pad.col-span-1"
+        ),
         "div.cell-pad"
     );
     assert_eq!(
@@ -34,7 +36,10 @@ fn selector_labels_are_simplified() {
     );
     assert_eq!(format_selector_label("#main-nav"), "#main-nav");
     assert_eq!(format_selector_label("button"), "button");
-    assert_eq!(format_selector_label("   span.badge.is-primary   "), "span.badge");
+    assert_eq!(
+        format_selector_label("   span.badge.is-primary   "),
+        "span.badge"
+    );
     assert_eq!(format_selector_label(".card.border-red"), ".card");
     assert_eq!(format_selector_label(""), "");
 }

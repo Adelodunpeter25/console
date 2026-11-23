@@ -38,15 +38,12 @@ pub const PDF_EXTENSIONS: &[&str] = &[".pdf"];
 
 /// Non-image binary formats with no inline viewer: they get a details card.
 pub const DETAILS_EXTENSIONS: &[&str] = &[
-    ".icns", ".tiff",
-    // Archives
+    ".icns", ".tiff", // Archives
     ".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar", ".jar", ".war",
     // Executables / objects / disk images
     ".exe", ".dll", ".so", ".dylib", ".a", ".o", ".obj", ".bin", ".iso", ".dmg", ".pkg", ".deb",
-    ".rpm", ".apk", ".ipa", ".node",
-    // Fonts
-    ".ttf", ".otf", ".woff", ".woff2", ".eot",
-    // Documents / other opaque formats
+    ".rpm", ".apk", ".ipa", ".node", // Fonts
+    ".ttf", ".otf", ".woff", ".woff2", ".eot", // Documents / other opaque formats
     ".wasm", ".psd", ".sketch", ".class", ".pyc", ".db", ".sqlite", ".sqlite3",
 ];
 

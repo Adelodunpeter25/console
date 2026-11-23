@@ -871,7 +871,10 @@ impl ConsoleDesktopApp {
 
         let entity = cx.entity().downgrade();
         let tab_id_for_collapse = tab_id.clone();
-        let pane_id_for_review = self.workspace_chat().map(|(pane, _)| pane.to_string()).unwrap_or_else(|| pane_id.to_string());
+        let pane_id_for_review = self
+            .workspace_chat()
+            .map(|(pane, _)| pane.to_string())
+            .unwrap_or_else(|| pane_id.to_string());
         let on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut gpui::App)> = {
             let entity = entity.clone();
             let tab_id = tab_id_for_collapse;
@@ -888,31 +891,48 @@ impl ConsoleDesktopApp {
         let on_comment_target: Rc<dyn Fn(String, editor_ui::DiffCommentTarget)> = {
             let comment_tx = self.file_comment_tx.clone();
             Rc::new(move |path: String, target: editor_ui::DiffCommentTarget| {
-                let _ = comment_tx.send(crate::state::types::FileCommentRequest {
+                let request = crate::state::types::FileCommentRequest {
                     path,
                     start_line: target.start_line,
                     end_line: target.end_line,
                     old_side: target.side == editor_ui::DiffSide::Old,
-                });
+                };
+                let _ = comment_tx.send(request);
             })
         };
-        let comment_overlays: Rc<dyn Fn(String, &mut Window, &mut gpui::App) -> Vec<editor_ui::DiffRowOverlay>> = {
+        let comment_overlays: Rc<
+            dyn Fn(String, &mut Window, &mut gpui::App) -> Vec<editor_ui::DiffRowOverlay>,
+        > = {
             let entity = entity.clone();
             let pane_id = pane_id_for_review.clone();
-            Rc::new(move |path: String, window: &mut Window, cx: &mut gpui::App| {
-                let pane_id = pane_id.clone();
-                let Some(app) = entity.upgrade() else { return Vec::new(); };
-                app.update(cx, |this, cx| this.review_comment_overlays(&pane_id, &path, window, cx))
-            })
+            Rc::new(
+                move |path: String, window: &mut Window, cx: &mut gpui::App| {
+                    let pane_id = pane_id.clone();
+                    let Some(app) = entity.upgrade() else {
+                        return Vec::new();
+                    };
+                    app.update(cx, |this, cx| {
+                        this.review_comment_overlays(&pane_id, &path, window, cx)
+                    })
+                },
+            )
         };
-        let comment_selections: Rc<dyn Fn(String, &mut Window, &mut gpui::App) -> Vec<editor_ui::DiffCommentTarget>> = {
+        let comment_selections: Rc<
+            dyn Fn(String, &mut Window, &mut gpui::App) -> Vec<editor_ui::DiffCommentTarget>,
+        > = {
             let entity = entity.clone();
             let pane_id = pane_id_for_review.clone();
-            Rc::new(move |path: String, window: &mut Window, cx: &mut gpui::App| {
-                let pane_id = pane_id.clone();
-                let Some(app) = entity.upgrade() else { return Vec::new(); };
-                app.update(cx, |this, cx| this.review_comment_selections(&pane_id, &path, window, cx))
-            })
+            Rc::new(
+                move |path: String, window: &mut Window, cx: &mut gpui::App| {
+                    let pane_id = pane_id.clone();
+                    let Some(app) = entity.upgrade() else {
+                        return Vec::new();
+                    };
+                    app.update(cx, |this, cx| {
+                        this.review_comment_selections(&pane_id, &path, window, cx)
+                    })
+                },
+            )
         };
         let list_key = format!("changes-review:{}", tab_id);
         let count = console_core::types::count_changes_for_scope(&changes, scope);

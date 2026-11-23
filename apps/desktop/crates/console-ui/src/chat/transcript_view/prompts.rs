@@ -49,11 +49,14 @@ impl TranscriptView {
 
     /// When the newest user prompt was sent, in unix seconds.
     pub fn latest_user_prompt_at(&self) -> Option<i64> {
-        self.turns.iter().rev().find_map(|turn| match turn.user.as_ref() {
-            Some(AgentMessage::User { created_at, .. }) => {
-                created_at.and_then(crate::utils::time::normalize_unix_timestamp)
-            }
-            _ => None,
-        })
+        self.turns
+            .iter()
+            .rev()
+            .find_map(|turn| match turn.user.as_ref() {
+                Some(AgentMessage::User { created_at, .. }) => {
+                    created_at.and_then(crate::utils::time::normalize_unix_timestamp)
+                }
+                _ => None,
+            })
     }
 }

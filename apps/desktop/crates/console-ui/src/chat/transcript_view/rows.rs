@@ -28,8 +28,7 @@ impl TranscriptView {
     /// measured heights and virtualization state for every other turn.
     pub(super) fn remeasure_turn(&self, turn_index: usize) {
         if turn_index < self.list_state.item_count() {
-            self.list_state
-                .remeasure_items(turn_index..turn_index + 1);
+            self.list_state.remeasure_items(turn_index..turn_index + 1);
         }
     }
 

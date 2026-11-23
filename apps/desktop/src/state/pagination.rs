@@ -232,12 +232,7 @@ impl ConsoleDesktopApp {
                         };
                         let transcript = this.transcript_for_pane(&pane_id);
                         transcript.update(cx, |t, cx| {
-                            t.prepend_turns(
-                                detail.turns,
-                                state.has_more,
-                                state.next_cursor,
-                                cx,
-                            );
+                            t.prepend_turns(detail.turns, state.has_more, state.next_cursor, cx);
                         });
                         this.set_pagination_for_session(&session_id, state, cx);
                         let found = transcript.update(cx, |t, cx| t.jump_to_prompt(from_end, cx));

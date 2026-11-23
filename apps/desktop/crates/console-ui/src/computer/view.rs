@@ -121,7 +121,8 @@ impl ComputerViewer {
 
     #[cfg(not(target_os = "macos"))]
     fn build_webview(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
-        self.host_error = Some("Embedded Computer viewer is currently supported on macOS.".to_string());
+        self.host_error =
+            Some("Embedded Computer viewer is currently supported on macOS.".to_string());
     }
 
     pub fn connect(&mut self, cx: &mut Context<Self>) {
@@ -299,7 +300,6 @@ impl ComputerViewer {
                         ),
                 )
             })
-
             .into_any_element()
     }
 }

@@ -71,7 +71,10 @@ impl Turn {
                             }
                             result
                         });
-                        Some(ActivityEvent::ToolCall(Box::new(ToolCallEntry { call, result })))
+                        Some(ActivityEvent::ToolCall(Box::new(ToolCallEntry {
+                            call,
+                            result,
+                        })))
                     }
                 })
                 .collect(),

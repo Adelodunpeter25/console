@@ -6,9 +6,9 @@ use std::rc::Rc;
 
 use gpui::{
     App, ClipboardItem, DispatchPhase, ElementId, Entity, FocusHandle, Font, FontWeight, Hsla,
-    InteractiveElement, IntoElement, ListState, MouseButton, MouseMoveEvent,
-    MouseUpEvent, ParentElement, RenderOnce, StatefulInteractiveElement, Styled, StyledText,
-    TextRun, Window, actions, canvas, div, list, prelude::*, px,
+    InteractiveElement, IntoElement, ListState, MouseButton, MouseMoveEvent, MouseUpEvent,
+    ParentElement, RenderOnce, StatefulInteractiveElement, Styled, StyledText, TextRun, Window,
+    actions, canvas, div, list, prelude::*, px,
 };
 
 use crate::markdown::highlight::{self, TokenClass};

@@ -1084,7 +1084,6 @@ impl DeviceViewer {
                         ),
                 )
             })
-
             .into_any_element()
     }
 

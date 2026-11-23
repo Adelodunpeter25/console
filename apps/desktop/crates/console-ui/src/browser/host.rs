@@ -788,7 +788,13 @@ impl WebviewHost {
         }
     }
     pub fn sync_bounds(&self, _bounds: Bounds<Pixels>, _scale: f32) {}
-    pub fn sync_bounds_clipped(&self, _bounds: Bounds<Pixels>, _visible: Bounds<Pixels>, _scale: f32) {}
+    pub fn sync_bounds_clipped(
+        &self,
+        _bounds: Bounds<Pixels>,
+        _visible: Bounds<Pixels>,
+        _scale: f32,
+    ) {
+    }
     pub fn set_visible(&self, _visible: bool) {}
     pub fn native_focus_within(&self) -> bool {
         false

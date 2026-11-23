@@ -41,7 +41,8 @@ pub struct ReviewTab {
     on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_comment_target: Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
     comment_overlays: Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static>,
-    comment_selections: Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static>,
+    comment_selections:
+        Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static>,
     list_state: Option<ListState>,
 }
 
@@ -52,8 +53,12 @@ impl ReviewTab {
         collapsed: std::collections::HashSet<String>,
         on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_comment_target: Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
-        comment_overlays: Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static>,
-        comment_selections: Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static>,
+        comment_overlays: Rc<
+            dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static,
+        >,
+        comment_selections: Rc<
+            dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static,
+        >,
     ) -> Self {
         Self {
             scope,
@@ -221,7 +226,9 @@ fn render_review_entry(
     on_toggle_collapsed: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_comment_target: &Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
     comment_overlays: &Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static>,
-    comment_selections: &Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static>,
+    comment_selections: &Rc<
+        dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static,
+    >,
     window: &mut Window,
     cx: &mut App,
 ) -> gpui::AnyElement {
@@ -376,8 +383,7 @@ fn render_review_entry(
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(status_color)
                                 .child(status_label),
-                        )
-
+                        ),
                 ),
         )
         .when_some(diff_info, |el, (diff, total_lines)| {
@@ -427,11 +433,7 @@ fn render_review_entry(
                                 list_state.splice(ix..ix + 1, 1);
                             }
                         })
-                        .child(app_icon(
-                            IconName::ChevronDown,
-                            12.0,
-                            theme.text_secondary,
-                        ))
+                        .child(app_icon(IconName::ChevronDown, 12.0, theme.text_secondary))
                         .child(
                             div()
                                 .text_size(px(12.0))
@@ -444,13 +446,14 @@ fn render_review_entry(
         .into_any_element()
 }
 
-
 fn sync_review_comments(
     view: &Entity<editor_ui::DiffView>,
     path: &str,
     on_comment_target: &Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
     comment_overlays: &Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static>,
-    comment_selections: &Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static>,
+    comment_selections: &Rc<
+        dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static,
+    >,
     window: &mut Window,
     cx: &mut App,
 ) {

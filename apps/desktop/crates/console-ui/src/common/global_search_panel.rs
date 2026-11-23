@@ -12,16 +12,16 @@
 
 use std::rc::Rc;
 
+use crate::IconName;
+use crate::Theme;
+use crate::input::{ComposerEvent, ComposerInput};
+use crate::primitives::{app_icon, base_name, file_type_icon};
 use console_core::{ConsoleClient, GrepMatch, GrepOptions};
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
     KeyBinding, ParentElement, Render, SharedString, Styled, Window, div, prelude::FluentBuilder,
     px, uniform_list,
 };
-use crate::IconName;
-use crate::Theme;
-use crate::input::{ComposerEvent, ComposerInput};
-use crate::primitives::{app_icon, base_name, file_type_icon};
 
 /// Debounce for typed queries.
 const SEARCH_DEBOUNCE_MS: u64 = 150;

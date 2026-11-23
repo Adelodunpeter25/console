@@ -4,8 +4,8 @@ use console_core::types::terminal::{TerminalSize, TerminalSpawnParams, TerminalS
 use gpui::{
     App, Bounds, Context, ElementInputHandler, EntityInputHandler, ExternalPaths, FocusHandle,
     Focusable, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, ParentElement, Pixels, Render, ScrollEvent, SharedString, Styled,
-    UTF16Selection, Window, div, prelude::*, px,
+    MouseUpEvent, ParentElement, Pixels, Render, ScrollEvent, SharedString, Styled, UTF16Selection,
+    Window, div, prelude::*, px,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -751,41 +751,39 @@ impl Render for TerminalView {
                     }
                 },
             )
-            .on_scroll(
-                cx.listener(move |this, event: &ScrollEvent, _window, cx| {
-                    let delta = match event.delta {
-                        gpui::ScrollDelta::Lines(lines) => lines.y.round() as i32,
-                        gpui::ScrollDelta::Pixels(pixels) => {
-                            (f32::from(pixels.y) / 16.0).round() as i32
-                        }
+            .on_scroll(cx.listener(move |this, event: &ScrollEvent, _window, cx| {
+                let delta = match event.delta {
+                    gpui::ScrollDelta::Lines(lines) => lines.y.round() as i32,
+                    gpui::ScrollDelta::Pixels(pixels) => {
+                        (f32::from(pixels.y) / 16.0).round() as i32
+                    }
+                };
+                if delta == 0 {
+                    return;
+                }
+                // TUI mouse reporting: forward wheel as WheelUp/WheelDown
+                // reports (one per notch) instead of scrolling local
+                // scrollback. Shift bypasses so scrollback still works.
+                let mode = this.mouse_mode();
+                if mode.enabled && !event.modifiers.shift {
+                    let pos = this.cell_at_point(event.position.x, event.position.y);
+                    let kind = if delta > 0 {
+                        TerminalMouseEventKind::WheelUp
+                    } else {
+                        TerminalMouseEventKind::WheelDown
                     };
-                    if delta == 0 {
-                        return;
+                    for _ in 0..delta.unsigned_abs().min(10) {
+                        this.forward_mouse_report(kind, pos, event.modifiers);
                     }
-                    // TUI mouse reporting: forward wheel as WheelUp/WheelDown
-                    // reports (one per notch) instead of scrolling local
-                    // scrollback. Shift bypasses so scrollback still works.
-                    let mode = this.mouse_mode();
-                    if mode.enabled && !event.modifiers.shift {
-                        let pos = this.cell_at_point(event.position.x, event.position.y);
-                        let kind = if delta > 0 {
-                            TerminalMouseEventKind::WheelUp
-                        } else {
-                            TerminalMouseEventKind::WheelDown
-                        };
-                        for _ in 0..delta.unsigned_abs().min(10) {
-                            this.forward_mouse_report(kind, pos, event.modifiers);
-                        }
-                        cx.stop_propagation();
-                        return;
-                    }
-                    if let Some(h) = &this.handle {
-                        h.scroll(delta);
-                        this.scrollback_offset = (this.scrollback_offset + delta).max(0);
-                        cx.stop_propagation();
-                    }
-                }),
-            )
+                    cx.stop_propagation();
+                    return;
+                }
+                if let Some(h) = &this.handle {
+                    h.scroll(delta);
+                    this.scrollback_offset = (this.scrollback_offset + delta).max(0);
+                    cx.stop_propagation();
+                }
+            }))
             .when_some(status_banner, |el, (msg, color)| {
                 el.child(
                     div()

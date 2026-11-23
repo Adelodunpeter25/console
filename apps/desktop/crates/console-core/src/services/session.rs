@@ -343,14 +343,17 @@ impl SessionService {
             .send()
             .await
             .context("Failed to get tool result")?;
-        let body: ApiResponse<console_proto::ToolResult> = self
-            .transport
-            .decode_json(resp)
-            .await
-            .context("Failed to parse tool result response")?;
+        let body: ApiResponse<console_proto::ToolResult> =
+            self.transport
+                .decode_json(resp)
+                .await
+                .context("Failed to parse tool result response")?;
         match (body.success, body.data) {
             (true, Some(data)) => Ok(ToolResult::from_proto(&data)),
-            (_, _) => Err(anyhow!(body.error.unwrap_or_else(|| "Failed to load tool result".into()))),
+            (_, _) => Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to load tool result".into())
+            )),
         }
     }
 

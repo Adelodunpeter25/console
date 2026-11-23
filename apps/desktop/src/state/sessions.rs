@@ -1668,10 +1668,8 @@ impl ConsoleDesktopApp {
                                     .flatten();
 
                                 composer.update(cx, |input, cx| {
-                                    input.set_prompt_history(
-                                        user_prompt_history(&detail.turns),
-                                        cx,
-                                    );
+                                    input
+                                        .set_prompt_history(user_prompt_history(&detail.turns), cx);
                                 });
                                 let app_entity_for_older = entity.clone();
                                 transcript.update(cx, |t, cx| {
@@ -1789,4 +1787,3 @@ impl ConsoleDesktopApp {
         .detach();
     }
 }
-

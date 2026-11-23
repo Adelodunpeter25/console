@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, App, Context, Div, ElementId, Entity, FocusHandle, Focusable, HitboxBehavior,
-    IntoElement, MouseButton, ParentElement, Render, SharedString, Stateful, Styled,
-    Subscription, Window, canvas, div, img, prelude::*, px,
+    IntoElement, MouseButton, ParentElement, Render, SharedString, Stateful, Styled, Subscription,
+    Window, canvas, div, img, prelude::*, px,
 };
 
 use super::actions::*;
@@ -1466,30 +1466,24 @@ impl BrowserView {
         let host = self.host.clone();
         let show_native = self.should_show();
         let surface_size = self.surface_size.clone();
-        let mut area = div()
-            .flex_1()
-            .min_h_0()
-            .relative()
-            .bg(theme.surface)
-            .child(
-                canvas(
-                    move |bounds, window, _| {
-                        surface_size.set(Some((
-                            f32::from(bounds.size.width),
-                            f32::from(bounds.size.height),
-                        )));
-                        if let Some(host) = &host {
-                            host.sync_bounds(bounds, window.scale_factor());
-                            host.set_visible(show_native);
-                        }
-                        window.insert_hitbox(bounds, HitboxBehavior::Normal)
-                    },
-                    move |_, _hitbox, _window, _| {},
-                )
-                .absolute()
-                .size_full(),
+        let mut area = div().flex_1().min_h_0().relative().bg(theme.surface).child(
+            canvas(
+                move |bounds, window, _| {
+                    surface_size.set(Some((
+                        f32::from(bounds.size.width),
+                        f32::from(bounds.size.height),
+                    )));
+                    if let Some(host) = &host {
+                        host.sync_bounds(bounds, window.scale_factor());
+                        host.set_visible(show_native);
+                    }
+                    window.insert_hitbox(bounds, HitboxBehavior::Normal)
+                },
+                move |_, _hitbox, _window, _| {},
             )
-;
+            .absolute()
+            .size_full(),
+        );
         if let Some(popover) = self.render_annotation_popover(theme, cx) {
             area = area.child(gpui::deferred(popover));
         }

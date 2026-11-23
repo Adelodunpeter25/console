@@ -65,14 +65,18 @@ impl TranscriptView {
             return;
         };
         let Some(message_id) = self.turns.iter().find_map(|turn| {
-            turn.run.as_ref()?.events.iter().find_map(|event| match event {
-                ActivityEvent::ToolCall(entry) if entry.call.id == call_id => entry
-                    .result
-                    .as_ref()
-                    .filter(|r| r.omitted_size > 0)
-                    .and_then(|r| r.result_message_id.clone()),
-                _ => None,
-            })
+            turn.run
+                .as_ref()?
+                .events
+                .iter()
+                .find_map(|event| match event {
+                    ActivityEvent::ToolCall(entry) if entry.call.id == call_id => entry
+                        .result
+                        .as_ref()
+                        .filter(|r| r.omitted_size > 0)
+                        .and_then(|r| r.result_message_id.clone()),
+                    _ => None,
+                })
         }) else {
             return;
         };

@@ -170,8 +170,15 @@ fn run_without_tool_calls_emits_no_block() {
 #[test]
 fn turn_changes_attach_only_to_final_turn_across_wake_boundary() {
     let mut t1 = user_turn("t1", "u1", 100, None);
-    t1.responses.push(assistant_text("Applied fixes, waiting for background check."));
-    let mut t2 = wake_turn("t2", "Background work completed, continuing agent", 200, None);
+    t1.responses.push(assistant_text(
+        "Applied fixes, waiting for background check.",
+    ));
+    let mut t2 = wake_turn(
+        "t2",
+        "Background work completed, continuing agent",
+        200,
+        None,
+    );
     t2.responses.push(assistant_text("Checks passed."));
     let turns = vec![t1, t2];
 
@@ -189,8 +196,8 @@ fn turn_changes_attach_only_to_final_turn_across_wake_boundary() {
     let grouped = group_turn_changes(&changes);
 
     assert!(turn_changes_for_turn(&turns, &grouped, 0).is_none());
-    let final_turn = turn_changes_for_turn(&turns, &grouped, 1)
-        .expect("final turn should carry turn changes");
+    let final_turn =
+        turn_changes_for_turn(&turns, &grouped, 1).expect("final turn should carry turn changes");
     assert_eq!(final_turn.files.len(), 1);
     assert_eq!(final_turn.files[0].path, "src/lib.rs");
 }

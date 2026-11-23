@@ -163,8 +163,6 @@ struct SidebarScrollTracker {
     row_keys: Vec<SidebarRowKey>,
 }
 
-
-
 /// Determine the target scroll offset after the sidebar row structure has changed
 /// (such as expanding or collapsing project sections). Anchors to the previous top-visible
 /// row, or its nearest still-existing ancestor/predecessor if the item was collapsed.
