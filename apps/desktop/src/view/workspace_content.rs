@@ -124,6 +124,7 @@ impl ConsoleDesktopApp {
                 *scope,
                 active_tab.map(|tab| tab.id()).unwrap_or_default(),
                 pane_id,
+                window,
                 cx,
             );
         }
@@ -848,8 +849,10 @@ impl ConsoleDesktopApp {
         scope: ChangesScope,
         tab_id: String,
         pane_id: &str,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        self.ensure_workspace_pane_state(pane_id, window, cx);
         // A tab restored from disk has no data yet; fetch it once.
         if !self.changes_review_data.contains_key(&tab_id) {
             self.changes_review_data
@@ -872,10 +875,7 @@ impl ConsoleDesktopApp {
 
         let entity = cx.entity().downgrade();
         let tab_id_for_collapse = tab_id.clone();
-        let pane_id_for_review = self
-            .workspace_chat()
-            .map(|(pane, _)| pane.to_string())
-            .unwrap_or_else(|| pane_id.to_string());
+        let pane_id_for_review = pane_id.to_string();
         let on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut gpui::App)> = {
             let entity = entity.clone();
             let tab_id = tab_id_for_collapse;
@@ -889,7 +889,7 @@ impl ConsoleDesktopApp {
                 },
             )
         };
-        let on_comment_target: Rc<dyn Fn(String, editor_ui::DiffCommentTarget)> = {
+        let on_comment_target: console_ui::viewer::review_tab::ReviewCommentTargetHandler = {
             let comment_tx = self.file_comment_tx.clone();
             Rc::new(move |path: String, target: editor_ui::DiffCommentTarget| {
                 let request = crate::state::types::FileCommentRequest {
@@ -901,47 +901,79 @@ impl ConsoleDesktopApp {
                 let _ = comment_tx.send(request);
             })
         };
-        let comment_overlays: Rc<
-            dyn Fn(String, &mut Window, &mut gpui::App) -> Vec<editor_ui::DiffRowOverlay>,
-        > = {
-            let entity = entity.clone();
-            let pane_id = pane_id_for_review.clone();
-            Rc::new(
-                move |path: String, window: &mut Window, cx: &mut gpui::App| {
-                    let pane_id = pane_id.clone();
-                    let Some(app) = entity.upgrade() else {
-                        return Vec::new();
-                    };
-                    app.update(cx, |this, cx| {
-                        this.review_comment_overlays(&pane_id, &path, window, cx)
-                    })
-                },
-            )
-        };
-        let comment_selections: Rc<
-            dyn Fn(String, &mut Window, &mut gpui::App) -> Vec<editor_ui::DiffCommentTarget>,
-        > = {
+        let sync_comments: console_ui::viewer::review_tab::ReviewSyncCommentsHandler = {
             let entity = entity;
             let pane_id = pane_id_for_review;
             Rc::new(
-                move |path: String, window: &mut Window, cx: &mut gpui::App| {
-                    let pane_id = pane_id.clone();
+                move |path: String,
+                      view: &gpui::Entity<editor_ui::DiffView>,
+                      window: &mut Window,
+                      cx: &mut gpui::App| {
                     let Some(app) = entity.upgrade() else {
-                        return Vec::new();
+                        return 0;
                     };
                     app.update(cx, |this, cx| {
-                        this.review_comment_selections(&pane_id, &path, window, cx)
+                        this.sync_diff_comments(&pane_id, &path, view, window, cx)
                     })
                 },
             )
         };
+        let scoped_paths: Vec<String> =
+            console_core::types::filter_changes_for_scope(&changes, scope)
+                .into_iter()
+                .map(|c| c.path)
+                .collect();
+        let count = scoped_paths.len();
+        let row_sigs: Vec<u64> = {
+            use std::hash::{Hash, Hasher};
+            let target_session = self.comment_target_session_key(pane_id);
+            let comments = self
+                .workspace_pane_states
+                .get(pane_id)
+                .map(|p| p.file_comments.as_slice())
+                .unwrap_or(&[]);
+            scoped_paths
+                .iter()
+                .map(|path| {
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    collapsed.contains(path).hash(&mut hasher);
+                    for c in comments.iter().filter(|c| &c.path == path) {
+                        c.id.hash(&mut hasher);
+                        (c.state as u8).hash(&mut hasher);
+                        c.is_staged_for(&target_session).hash(&mut hasher);
+                        c.text.hash(&mut hasher);
+                        c.start_line.hash(&mut hasher);
+                        c.end_line.hash(&mut hasher);
+                        c.old_side.hash(&mut hasher);
+                        (!c.input.read(cx).content().trim().is_empty()).hash(&mut hasher);
+                    }
+                    hasher.finish()
+                })
+                .collect()
+        };
         let list_key = format!("changes-review:{}", tab_id);
-        let count = console_core::types::count_changes_for_scope(&changes, scope);
         let list_state = self.viewer_list_states.entry(list_key).or_insert_with(|| {
             gpui::ListState::new(count, gpui::ListAlignment::Top, gpui::px(120.0))
         });
+        let prev_sigs_state = window.use_keyed_state(
+            gpui::ElementId::Name(format!("changes-review-sigs:{}", tab_id).into()),
+            cx,
+            |_, _| Vec::<u64>::new(),
+        );
         if list_state.item_count() != count {
             list_state.reset(count);
+        } else {
+            let prev_sigs = prev_sigs_state.read(cx);
+            if prev_sigs.len() == row_sigs.len() {
+                for (ix, (prev, next)) in prev_sigs.iter().zip(row_sigs.iter()).enumerate() {
+                    if prev != next {
+                        list_state.splice(ix..ix + 1, 1);
+                    }
+                }
+            }
+        }
+        if *prev_sigs_state.read(cx) != row_sigs {
+            prev_sigs_state.update(cx, |slot, _| *slot = row_sigs);
         }
         let list_state = list_state.clone();
 
@@ -951,8 +983,7 @@ impl ConsoleDesktopApp {
             collapsed,
             on_toggle_collapsed,
             on_comment_target,
-            comment_overlays,
-            comment_selections,
+            sync_comments,
         )
         .list_state(list_state)
         .into_any_element()

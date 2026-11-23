@@ -9,7 +9,7 @@ use std::rc::Rc;
 
 use gpui::{
     App, Entity, FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    RenderOnce, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
+    RenderOnce, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
 use crate::input::ComposerInput;
@@ -181,7 +181,10 @@ impl RenderOnce for FileCommentCard {
                         .on_mouse_down(MouseButton::Left, |_, _: &mut Window, cx| {
                             cx.stop_propagation()
                         })
-                        .on_click(move |_, window, cx| (cancel_for_click)(window, cx))
+                        .on_mouse_up(MouseButton::Left, move |_, window, cx| {
+                            cx.stop_propagation();
+                            (cancel_for_click)(window, cx);
+                        })
                         .child(
                             div()
                                 .text_size(px(12.0))
@@ -203,7 +206,8 @@ impl RenderOnce for FileCommentCard {
                         .on_mouse_down(MouseButton::Left, |_, _: &mut Window, cx| {
                             cx.stop_propagation()
                         })
-                        .on_click(move |_, window, cx| {
+                        .on_mouse_up(MouseButton::Left, move |_, window, cx| {
+                            cx.stop_propagation();
                             if can_commit {
                                 (commit_for_click)(window, cx);
                             }
@@ -243,7 +247,10 @@ impl RenderOnce for FileCommentCard {
                         .on_mouse_down(MouseButton::Left, |_, _: &mut Window, cx| {
                             cx.stop_propagation()
                         })
-                        .on_click(move |_, window, cx| (edit_for_click)(window, cx))
+                        .on_mouse_up(MouseButton::Left, move |_, window, cx| {
+                            cx.stop_propagation();
+                            (edit_for_click)(window, cx);
+                        })
                         .child(
                             div()
                                 .text_size(px(11.5))
@@ -264,7 +271,10 @@ impl RenderOnce for FileCommentCard {
                         .on_mouse_down(MouseButton::Left, |_, _: &mut Window, cx| {
                             cx.stop_propagation()
                         })
-                        .on_click(move |_, window, cx| (remove)(window, cx))
+                        .on_mouse_up(MouseButton::Left, move |_, window, cx| {
+                            cx.stop_propagation();
+                            (remove)(window, cx);
+                        })
                         .child(
                             div()
                                 .text_size(px(11.5))
@@ -286,7 +296,10 @@ impl RenderOnce for FileCommentCard {
                         .on_mouse_down(MouseButton::Left, |_, _: &mut Window, cx| {
                             cx.stop_propagation()
                         })
-                        .on_click(move |_, window, cx| (send)(window, cx))
+                        .on_mouse_up(MouseButton::Left, move |_, window, cx| {
+                            cx.stop_propagation();
+                            (send)(window, cx);
+                        })
                         .child(
                             div()
                                 .text_size(px(11.5))

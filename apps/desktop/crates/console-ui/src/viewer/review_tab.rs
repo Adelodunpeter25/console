@@ -4,7 +4,7 @@
 use std::rc::Rc;
 
 use console_core::types::{ChangesScope, SessionFileChange};
-use editor_ui::{DiffCommentTarget, DiffRowOverlay};
+use editor_ui::DiffCommentTarget;
 use gpui::{
     App, Entity, FontWeight, InteractiveElement, IntoElement, ListState, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, list, prelude::FluentBuilder, px,
@@ -33,16 +33,18 @@ const REVIEW_DIFF_MAX_HEIGHT: f32 = 800.0;
 /// initial open for huge files without permanently truncating them.
 const REVIEW_DIFF_PREVIEW_LINES: usize = 1000;
 
+pub type ReviewCommentTargetHandler = Rc<dyn Fn(String, DiffCommentTarget) + 'static>;
+pub type ReviewSyncCommentsHandler =
+    Rc<dyn Fn(String, &Entity<editor_ui::DiffView>, &mut Window, &mut App) -> u32 + 'static>;
+
 #[derive(IntoElement)]
 pub struct ReviewTab {
     scope: ChangesScope,
     changes: Rc<[SessionFileChange]>,
     collapsed: std::collections::HashSet<String>,
     on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_comment_target: Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
-    comment_overlays: Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static>,
-    comment_selections:
-        Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static>,
+    on_comment_target: ReviewCommentTargetHandler,
+    sync_comments: ReviewSyncCommentsHandler,
     list_state: Option<ListState>,
 }
 
@@ -52,13 +54,8 @@ impl ReviewTab {
         changes: Rc<[SessionFileChange]>,
         collapsed: std::collections::HashSet<String>,
         on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-        on_comment_target: Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
-        comment_overlays: Rc<
-            dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static,
-        >,
-        comment_selections: Rc<
-            dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static,
-        >,
+        on_comment_target: ReviewCommentTargetHandler,
+        sync_comments: ReviewSyncCommentsHandler,
     ) -> Self {
         Self {
             scope,
@@ -66,8 +63,7 @@ impl ReviewTab {
             collapsed,
             on_toggle_collapsed,
             on_comment_target,
-            comment_overlays,
-            comment_selections,
+            sync_comments,
             list_state: None,
         }
     }
@@ -87,8 +83,7 @@ impl RenderOnce for ReviewTab {
         let file_count = scoped.len();
         let on_toggle_collapsed = self.on_toggle_collapsed;
         let on_comment_target = self.on_comment_target;
-        let comment_overlays = self.comment_overlays;
-        let comment_selections = self.comment_selections;
+        let sync_comments = self.sync_comments;
 
         div()
             .size_full()
@@ -158,8 +153,7 @@ impl RenderOnce for ReviewTab {
                 let collapsed = Rc::new(self.collapsed);
                 let on_toggle_collapsed = on_toggle_collapsed.clone();
                 let on_comment_target = on_comment_target.clone();
-                let comment_overlays = comment_overlays.clone();
-                let comment_selections = comment_selections.clone();
+                let sync_comments = sync_comments.clone();
 
                 let list_state_for_rows = list_state.clone();
                 div()
@@ -178,8 +172,7 @@ impl RenderOnce for ReviewTab {
                                 Some(&list_state_for_rows),
                                 &on_toggle_collapsed,
                                 &on_comment_target,
-                                &comment_overlays,
-                                &comment_selections,
+                                &sync_comments,
                                 window,
                                 cx,
                             )
@@ -206,8 +199,7 @@ impl RenderOnce for ReviewTab {
                                     None,
                                     &on_toggle_collapsed,
                                     &on_comment_target,
-                                    &comment_overlays,
-                                    &comment_selections,
+                                    &sync_comments,
                                     window,
                                     cx,
                                 )
@@ -218,17 +210,15 @@ impl RenderOnce for ReviewTab {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_review_entry(
     ix: usize,
     entry: &SessionFileChange,
     is_collapsed: bool,
     list_state: Option<&ListState>,
     on_toggle_collapsed: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_comment_target: &Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
-    comment_overlays: &Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static>,
-    comment_selections: &Rc<
-        dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static,
-    >,
+    on_comment_target: &ReviewCommentTargetHandler,
+    sync_comments: &ReviewSyncCommentsHandler,
     window: &mut Window,
     cx: &mut App,
 ) -> gpui::AnyElement {
@@ -262,9 +252,11 @@ fn render_review_entry(
                     entry.updated_at,
                     text.len()
                 );
+                let comment_path = entry.path.clone();
+                let comment_handler = on_comment_target.clone();
                 let state =
                     window.use_keyed_state(gpui::ElementId::Name(key.into()), cx, |_, cx| {
-                        build_editor_diff_capped_sized(
+                        let (diff, total) = build_editor_diff_capped_sized(
                             text,
                             &entry.path,
                             &theme,
@@ -272,7 +264,13 @@ fn render_review_entry(
                             REVIEW_FONT_SIZE,
                             REVIEW_LINE_HEIGHT,
                             cx,
-                        )
+                        );
+                        diff.view.update(cx, |view, _| {
+                            view.on_comment_target(move |target| {
+                                comment_handler(comment_path.clone(), target);
+                            });
+                        });
+                        (diff, total)
                     });
                 state.read(cx).clone()
             })
@@ -387,17 +385,9 @@ fn render_review_entry(
                 ),
         )
         .when_some(diff_info, |el, (diff, total_lines)| {
-            sync_review_comments(
-                &diff.view,
-                &entry.path,
-                on_comment_target,
-                comment_overlays,
-                comment_selections,
-                window,
-                cx,
-            );
-            let raw_height = (diff.line_count as f32 * REVIEW_LINE_HEIGHT + 8.0)
-                + overlay_height(&comment_overlays(entry.path.clone(), window, cx));
+            let overlay_rows = sync_comments(entry.path.clone(), &diff.view, window, cx);
+            let raw_height =
+                (diff.line_count + overlay_rows as usize) as f32 * REVIEW_LINE_HEIGHT + 8.0;
             let is_vertically_scrollable = raw_height > REVIEW_DIFF_MAX_HEIGHT;
             let height = raw_height.min(REVIEW_DIFF_MAX_HEIGHT);
             let remaining = total_lines.saturating_sub(diff.line_count);
@@ -444,33 +434,4 @@ fn render_review_entry(
             })
         })
         .into_any_element()
-}
-
-fn sync_review_comments(
-    view: &Entity<editor_ui::DiffView>,
-    path: &str,
-    on_comment_target: &Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
-    comment_overlays: &Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static>,
-    comment_selections: &Rc<
-        dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static,
-    >,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let comment_path = path.to_string();
-    let comment_handler = on_comment_target.clone();
-    view.update(cx, |view, cx| {
-        view.on_comment_target(move |target| {
-            comment_handler(comment_path.clone(), target);
-        });
-        view.set_comment_selections(comment_selections(path.to_string(), window, cx), cx);
-        view.set_row_overlays(comment_overlays(path.to_string(), window, cx), cx);
-    });
-}
-
-fn overlay_height(overlays: &[DiffRowOverlay]) -> f32 {
-    overlays
-        .iter()
-        .map(|overlay| overlay.rows.saturating_sub(1) as f32 * REVIEW_LINE_HEIGHT)
-        .sum()
 }

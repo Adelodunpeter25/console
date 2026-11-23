@@ -49,7 +49,7 @@ impl ConsoleDesktopApp {
     /// Session key (`session_id` or `"new_chat"`) that a comment staged in
     /// `pane_id` belongs to: the pane's own active chat, or the workspace's
     /// focused chat when `pane_id` is a file/diff split.
-    fn comment_target_session_key(&self, pane_id: &str) -> String {
+    pub(crate) fn comment_target_session_key(&self, pane_id: &str) -> String {
         self.active_session_for_pane(pane_id)
             .or_else(|| self.focused_chat().map(|(_, sid)| sid.to_string()))
             .unwrap_or_else(|| "new_chat".to_string())
@@ -568,8 +568,22 @@ impl ConsoleDesktopApp {
             return;
         };
         // A chip in the chat composer has no inline card to focus; bring the
-        // file forward first so Edit lands somewhere visible.
-        if self.pane_active_file_path(pane_id).as_deref() != Some(path.as_str()) {
+        // file forward first so Edit lands somewhere visible (unless the pane
+        // is already showing the review tab, which renders the card inline).
+        let showing_review = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.id == pane_id)
+            .and_then(|leaf| {
+                let active_id = leaf.active_tab_id.as_deref()?;
+                leaf.tabs.iter().find(|tab| tab.id() == active_id)
+            })
+            .is_some_and(|tab| {
+                matches!(tab, console_core::WorkspaceTabConfig::ChangesReview { .. })
+            });
+        if !showing_review && self.pane_active_file_path(pane_id).as_deref() != Some(path.as_str())
+        {
             self.open_file_tab_in_pane(pane_id, path, cx);
         }
         let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
@@ -912,126 +926,6 @@ impl ConsoleDesktopApp {
         Rc::from(all_comments)
     }
 
-    pub(crate) fn review_comment_overlays(
-        &mut self,
-        pane_id: &str,
-        path: &str,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Vec<editor_ui::DiffRowOverlay> {
-        self.review_comment_cards(pane_id, path, cx)
-    }
-
-    pub(crate) fn review_comment_selections(
-        &mut self,
-        pane_id: &str,
-        path: &str,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Vec<editor_ui::DiffCommentTarget> {
-        self.ensure_file_comments_loaded(pane_id, cx);
-        self.workspace_pane_states
-            .get(pane_id)
-            .map(|pane| {
-                pane.file_comments
-                    .iter()
-                    .filter(|comment| comment.path == path)
-                    .map(|comment| editor_ui::DiffCommentTarget {
-                        side: if comment.old_side {
-                            editor_ui::DiffSide::Old
-                        } else {
-                            editor_ui::DiffSide::New
-                        },
-                        start_line: comment.start_line,
-                        end_line: comment.end_line,
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    fn review_comment_cards(
-        &mut self,
-        pane_id: &str,
-        path: &str,
-        cx: &mut Context<Self>,
-    ) -> Vec<editor_ui::DiffRowOverlay> {
-        self.ensure_file_comments_loaded(pane_id, cx);
-        let pane_id = pane_id.to_string();
-        let entity = cx.entity().downgrade();
-        let Some(pane) = self.workspace_pane_states.get_mut(&pane_id) else {
-            return Vec::new();
-        };
-        let mut overlays = Vec::new();
-        for comment in pane
-            .file_comments
-            .iter_mut()
-            .filter(|comment| comment.path == path)
-        {
-            let id = comment.id;
-            let start_line = comment.start_line;
-            let end_line = comment.end_line;
-            let staged = comment.is_staged_for("new_chat");
-            let card_state = match comment.state {
-                FileCommentState::Draft => FileCommentCardState::Draft,
-                FileCommentState::Added => FileCommentCardState::Added,
-                FileCommentState::Editing => FileCommentCardState::Editing,
-            };
-            let text = comment.text.clone();
-            let input = comment.input.clone();
-            let comment_path = comment.path.clone();
-            let old_side = comment.old_side;
-            let action_entity = entity.clone();
-            let action_pane = pane_id.clone();
-            let act =
-                move |f: fn(&mut ConsoleDesktopApp, &str, u64, &mut Context<ConsoleDesktopApp>)| {
-                    let entity = action_entity.clone();
-                    let pane_id = action_pane.clone();
-                    move |_window: &mut Window, cx: &mut App| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| f(this, &pane_id, id, cx));
-                        }
-                    }
-                };
-            let rows = if matches!(
-                card_state,
-                FileCommentCardState::Draft | FileCommentCardState::Editing
-            ) {
-                9
-            } else {
-                4 + text.lines().count().max(1) as u32 + (text.len() / 80) as u32
-            };
-            overlays.push(editor_ui::DiffRowOverlay::new(
-                if old_side {
-                    editor_ui::DiffSide::Old
-                } else {
-                    editor_ui::DiffSide::New
-                },
-                end_line,
-                rows,
-                move |_, _| {
-                    FileCommentCard::new(
-                        id,
-                        comment_path.clone(),
-                        start_line,
-                        end_line,
-                        card_state,
-                        text.clone(),
-                        input.clone(),
-                        act(ConsoleDesktopApp::commit_file_comment),
-                        act(ConsoleDesktopApp::cancel_file_comment),
-                        act(ConsoleDesktopApp::edit_file_comment),
-                        act(ConsoleDesktopApp::remove_file_comment),
-                        act(ConsoleDesktopApp::toggle_comment_staged),
-                        staged,
-                    )
-                    .into_any_element()
-                },
-            ));
-        }
-        overlays
-    }
-
     /// Cards for the active file, anchored under their ranges by `FileViewer`.
     pub(crate) fn file_comment_cards(
         &mut self,
@@ -1144,7 +1038,8 @@ impl ConsoleDesktopApp {
     }
 
     /// Mirror the pane's comments for a diff into the diff view: tinted rows
-    /// plus an inline card under the last row of each range.
+    /// plus an inline card under the last row of each range. Returns the total
+    /// overlay row count so callers sizing the diff container can reserve room.
     pub(crate) fn sync_diff_comments(
         &mut self,
         pane_id: &str,
@@ -1152,13 +1047,19 @@ impl ConsoleDesktopApp {
         view: &gpui::Entity<editor_ui::DiffView>,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> u32 {
+        use std::hash::{Hash, Hasher};
+
         self.ensure_file_comments_loaded(pane_id, cx);
         let target_session = self.comment_target_session_key(pane_id);
         let entity = cx.entity().downgrade();
         let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
-            return;
+            return 0;
         };
+
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        target_session.hash(&mut hasher);
+        let mut total_rows: u32 = 0;
         let mut selections = Vec::new();
         let mut overlays = Vec::new();
         for comment in pane.file_comments.iter_mut().filter(|c| c.path == path) {
@@ -1180,16 +1081,28 @@ impl ConsoleDesktopApp {
 
             let editing = comment.state != FileCommentState::Added;
             let text_rows =
-                comment.text.lines().count().max(1) as u32 + (comment.text.len() / 80) as u32;
-            let rows = if editing { 9 } else { 4 + text_rows };
+                comment.text.lines().count().max(1) as u32 + (comment.text.len() / 50) as u32;
+            let rows = if editing { 9 } else { 5 + text_rows };
+            total_rows += rows;
 
             let id = comment.id;
             let state = comment.state;
             let staged = comment.is_staged_for(&target_session);
             let text = comment.text.clone();
             let input = comment.input.clone();
+            let can_commit = !input.read(cx).content().trim().is_empty();
             let card_path = comment.path.clone();
             let (start_line, end_line) = (comment.start_line, comment.end_line);
+
+            id.hash(&mut hasher);
+            (state as u8).hash(&mut hasher);
+            staged.hash(&mut hasher);
+            text.hash(&mut hasher);
+            start_line.hash(&mut hasher);
+            end_line.hash(&mut hasher);
+            comment.old_side.hash(&mut hasher);
+            can_commit.hash(&mut hasher);
+
             let pane_id = pane_id.to_string();
             let entity = entity.clone();
             overlays.push(editor_ui::DiffRowOverlay::new(
@@ -1234,9 +1147,21 @@ impl ConsoleDesktopApp {
                 },
             ));
         }
-        view.update(cx, |view, cx| {
-            view.set_comment_selections(selections, cx);
-            view.set_row_overlays(overlays, cx);
-        });
+
+        let sig = hasher.finish();
+        let sync_key = format!("diff-comment-sync-{}", view.entity_id().as_u64());
+        let last_sig = window.use_keyed_state(
+            gpui::ElementId::Name(sync_key.into()),
+            cx,
+            |_, _| None::<u64>,
+        );
+        if *last_sig.read(cx) != Some(sig) {
+            last_sig.update(cx, |slot, _| *slot = Some(sig));
+            view.update(cx, |view, cx| {
+                view.set_comment_selections(selections, cx);
+                view.set_row_overlays(overlays, cx);
+            });
+        }
+        total_rows
     }
 }
