@@ -17,7 +17,6 @@ import com.console.mobile.core.util.mentionPaths
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
 import com.console.mobile.data.api.ConsoleJson
-import com.console.mobile.data.local.ChatPersistence
 import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.AgentSessionEvent
 import com.console.mobile.data.model.AskQuestionRequest
@@ -56,7 +55,6 @@ class ChatRepository(
     private val chats: ChatStateHolder,
     private val sessions: SessionStateHolder,
     private val projectState: com.console.mobile.data.store.ProjectStateHolder? = null,
-    private val persistence: ChatPersistence? = null,
     private val providerRepo: ProviderRepository? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
@@ -71,48 +69,7 @@ class ChatRepository(
         val attachments: List<ImageAttachment>,
     )
 
-    init {
-        persistence?.let { p ->
-            scope.launch(Dispatchers.IO) {
-                val cached = p.load()
-                if (cached.isNotEmpty()) {
-                    // A cached draft can be a duplicate of a sent prompt when the
-                    // app died before the cache caught up; validate against the
-                    // server BEFORE injecting, so the old text never reaches the
-                    // composer. One headers fetch covers every draft.
-                    var validated = cached
-                    try {
-                        val headers = withContext(Dispatchers.IO) { api.getSessions() }.associateBy { it.id }
-                        validated = cached.filter { (id, state) ->
-                            val header = headers[id]
-                            when {
-                                header == null -> true
-                                // Sent prompts persist messages, so a session
-                                // whose server activity outdates the draft
-                                // loses the cached input.
-                                (header.message_count ?: 0) > 0 -> state.draftUpdatedAt == null ||
-                                    header.updated_at <= state.draftUpdatedAt
-                                else -> header.status != "working"
-                            }
-                        }.toMap()
-                    } catch (_: Exception) {
-                        // Offline: keep drafts as-is.
-                    }
-                    if (validated.size != cached.size) {
-                        p.saveValidated(validated)
-                    }
-                    if (validated.isNotEmpty()) {
-                        withContext(Dispatchers.Main.immediate) {
-                            chats.setAll(validated)
-                        }
-                    }
-                }
-                chats.sessions.collect { current ->
-                    p.scheduleSave(current)
-                }
-            }
-        }
-    }
+
 
     fun snapshot(sessionId: String) = toChatSnapshot(chats.get(sessionId))
 
@@ -146,28 +103,72 @@ class ChatRepository(
     private val serverDrafts = mutableMapOf<String, console.v1.ChatDraft>()
     private val draftPushJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
 
+    private fun draftKey(sessionId: String): String =
+        if (com.console.mobile.core.chat.isNewChatId(sessionId)) FLOATING_DRAFT_KEY else sessionId
+
     /** Pull the chat's synced draft on open; adopt it when it is newer than ours. */
     fun loadDraft(sessionId: String) {
+        val key = draftKey(sessionId)
         scope.launch {
             try {
-                val remote = withContext(Dispatchers.IO) { api.getDraft(sessionId) } ?: return@launch
+                val remote = withContext(Dispatchers.IO) { api.getDraft(key) } ?: return@launch
                 adoptDraft(sessionId, remote)
             } catch (_: Exception) {
-                // Offline: the local draft stays authoritative until the next push.
             }
         }
     }
 
     private fun adoptDraft(sessionId: String, remote: console.v1.ChatDraft) {
-        serverDrafts[sessionId] = remote
+        val key = draftKey(sessionId)
+        serverDrafts[key] = remote
         val local = chats.get(sessionId)
         if (local.running || remote.updated_at <= (local.draftUpdatedAt ?: 0L)) return
         chats.update(sessionId) {
             it.copy(
                 input = remote.text,
-                draftUpdatedAt = if (remote.text.trim().isNotEmpty()) remote.updated_at else null,
+                draftUpdatedAt = if (remote.text.trim().isNotEmpty() || remote.floating != null) remote.updated_at else null,
             )
         }
+        if (com.console.mobile.core.chat.isNewChatId(sessionId)) {
+            remote.floating?.let { applyFloatingChoices(sessionId, it) }
+        }
+    }
+
+    private fun applyFloatingChoices(sessionId: String, choices: console.v1.FloatingDraftChoices) {
+        val current = sessions.getView(sessionId)
+        val worktreePending = choices.branch_mode == "new_worktree"
+        sessions.setView(
+            sessionId,
+            current.copy(
+                projectId = choices.project_id.takeIf { it.isNotBlank() } ?: current.projectId,
+                sessionProvider = choices.provider.takeIf { it.isNotBlank() } ?: current.sessionProvider,
+                sessionModelId = choices.model_id.takeIf { it.isNotBlank() } ?: current.sessionModelId,
+                thinkingLevel = choices.thinking_level.takeIf { it.isNotBlank() } ?: current.thinkingLevel,
+                approvalMode = choices.approval_mode.takeIf { it.isNotBlank() } ?: current.approvalMode,
+                worktreePending = worktreePending,
+                worktreeBase = choices.worktree_base.takeIf { it.isNotBlank() },
+                worktreeBranch = if (worktreePending) "New worktree" else choices.branch_name.takeIf { it.isNotBlank() },
+            ),
+        )
+    }
+
+    private fun buildFloatingChoices(sessionId: String): console.v1.FloatingDraftChoices {
+        val view = sessions.getView(sessionId)
+        val (branchMode, branchName) = when {
+            view.worktreePending -> "new_worktree" to ""
+            !view.worktreeBranch.isNullOrBlank() -> "from_branch" to view.worktreeBranch
+            else -> "project" to ""
+        }
+        return console.v1.FloatingDraftChoices(
+            project_id = view.projectId.orEmpty(),
+            branch_mode = branchMode,
+            branch_name = branchName,
+            worktree_base = view.worktreeBase.orEmpty(),
+            provider = view.sessionProvider.orEmpty(),
+            model_id = view.sessionModelId.orEmpty(),
+            thinking_level = view.thinkingLevel.orEmpty(),
+            approval_mode = view.approvalMode,
+        )
     }
 
     /**
@@ -198,10 +199,10 @@ class ChatRepository(
         b.draft?.let { adoptDraft(sessionId, it) }
     }
 
-    private fun scheduleDraftPush(sessionId: String) {
-        if (com.console.mobile.core.chat.isNewChatId(sessionId)) return
-        draftPushJobs.remove(sessionId)?.cancel()
-        draftPushJobs[sessionId] = scope.launch {
+    fun scheduleDraftPush(sessionId: String) {
+        val key = draftKey(sessionId)
+        draftPushJobs.remove(key)?.cancel()
+        draftPushJobs[key] = scope.launch {
             kotlinx.coroutines.delay(DRAFT_PUSH_DEBOUNCE_MS)
             pushDraft(sessionId)
         }
@@ -209,40 +210,57 @@ class ChatRepository(
 
     /** Push immediately, e.g. when leaving the chat; also used after a send clears the composer. */
     fun flushDraft(sessionId: String) {
-        if (com.console.mobile.core.chat.isNewChatId(sessionId)) return
-        draftPushJobs.remove(sessionId)?.cancel()
+        val key = draftKey(sessionId)
+        draftPushJobs.remove(key)?.cancel()
         scope.launch { pushDraft(sessionId) }
     }
 
+    fun clearFloatingDraft() {
+        draftPushJobs.remove(FLOATING_DRAFT_KEY)?.cancel()
+        scope.launch {
+            val draft = console.v1.ChatDraft(
+                session_id = FLOATING_DRAFT_KEY,
+                text = "",
+                updated_at = System.currentTimeMillis(),
+            )
+            try {
+                val result = withContext(Dispatchers.IO) { api.putDraft(draft) }
+                result.draft?.let { serverDrafts[FLOATING_DRAFT_KEY] = it }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     private suspend fun pushDraft(sessionId: String) {
+        val key = draftKey(sessionId)
+        val isFloating = com.console.mobile.core.chat.isNewChatId(sessionId)
         val state = chats.get(sessionId)
         val text = state.input
-        val held = serverDrafts[sessionId]
+        val held = serverDrafts[key]
         val draft = console.v1.ChatDraft(
-            session_id = sessionId,
+            session_id = key,
             text = text,
-            // Chips keep their ranges only while the text they point into is unchanged.
             mentions = if (held?.text == text) held.mentions else emptyList(),
             comments = held?.comments ?: emptyList(),
-            // Stamp when the text was last edited, not when the push happens, so a
-            // push delayed by being offline cannot overwrite a newer edit elsewhere.
             updated_at = state.draftUpdatedAt ?: System.currentTimeMillis(),
+            floating = if (isFloating) buildFloatingChoices(sessionId) else null,
         )
         try {
             val result = withContext(Dispatchers.IO) { api.putDraft(draft) }
             val stored = result.draft
-            if (stored != null) serverDrafts[sessionId] = stored
-            // Another device wrote later: adopt its text rather than overwrite it next time.
+            if (stored != null) serverDrafts[key] = stored
             if (!result.applied && stored != null && chats.get(sessionId).input == text) {
                 chats.update(sessionId) {
                     it.copy(
                         input = stored.text,
-                        draftUpdatedAt = if (stored.text.trim().isNotEmpty()) stored.updated_at else null,
+                        draftUpdatedAt = if (stored.text.trim().isNotEmpty() || stored.floating != null) stored.updated_at else null,
                     )
+                }
+                if (isFloating) {
+                    stored.floating?.let { applyFloatingChoices(sessionId, it) }
                 }
             }
         } catch (_: Exception) {
-            // Offline: retried on the next edit or when the chat is reopened.
         }
     }
 
@@ -602,10 +620,6 @@ class ChatRepository(
             )
         }
         if (clearComposer) {
-            // The prompt no longer lives in the composer; drop the cached
-            // draft before the suppressed save window.
-            persistence?.removeSession(sessionId)
-            // Clear the synced copy too, so other devices stop offering sent text.
             flushDraft(sessionId)
         }
         sessions.setStatus(sessionId, SessionStatus.Working)
@@ -621,7 +635,6 @@ class ChatRepository(
         )
         val bodyJson = ConsoleJson.encodeToString(RunPromptDto.serializer(), body)
         val controller = getOrCreate(sessionId, bodyJson)
-        persistence?.setSuppress(true)
         try {
             controller.startRun(streamClient)
         } catch (e: Exception) {
@@ -630,7 +643,6 @@ class ChatRepository(
             restoreFailedSend(sessionId)
             if (!isAbortError(msg)) markError(sessionId, msg)
             finalize(sessionId, !isAbortError(msg))
-            persistence?.setSuppress(false)
         }
     }
 
@@ -660,7 +672,6 @@ class ChatRepository(
             }
             chats.update(sessionId) { abortSessionRun(it) }
             sessions.setStatus(sessionId, SessionStatus.Done)
-            persistence?.setSuppress(false)
         }
     }
 
@@ -682,9 +693,6 @@ class ChatRepository(
                     attachments = emptyList(),
                 )
             }
-            // The staged prompt lives server-side now; drop the local draft copy
-            // and the synced one so other devices stop offering the queued text.
-            persistence?.removeSession(sessionId)
             flushDraft(sessionId)
         }
         projectState?.unsettleSession(sessionId)
@@ -826,7 +834,6 @@ class ChatRepository(
         if (current.running || controllers[sessionId]?.isActive == true) return
         chats.update(sessionId) { it.copy(running = true) }
         sessions.setStatus(sessionId, SessionStatus.Working)
-        persistence?.setSuppress(true)
         try {
             // since=0 replays the whole current run buffer, which is what an
             // attach wants — a run this device never saw start has no local
@@ -923,7 +930,6 @@ class ChatRepository(
         restoreFailedSend(sessionId)
         chats.update(sessionId) { finalizeSessionRun(it, hadError) }
         sessions.setStatus(sessionId, if (hadError) SessionStatus.NeedsAttention else SessionStatus.Done)
-        persistence?.setSuppress(false)
     }
 
     // Interactive request payloads are console.v1 (args as JSON bytes),
@@ -953,5 +959,6 @@ class ChatRepository(
 
     private companion object {
         const val DRAFT_PUSH_DEBOUNCE_MS = 800L
+        const val FLOATING_DRAFT_KEY = "__floating__"
     }
 }

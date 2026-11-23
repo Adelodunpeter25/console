@@ -8,7 +8,6 @@ import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
 import com.console.mobile.data.api.HttpTransport
 import com.console.mobile.data.api.OkHttpConsoleApi
-import com.console.mobile.data.local.ChatPersistence
 import com.console.mobile.data.local.PreferencesStore
 import com.console.mobile.data.local.TokenStore
 import com.console.mobile.data.repo.AuthRepository
@@ -131,9 +130,6 @@ object AppContainer {
         private set
 
     lateinit var environmentsStateHolder: EnvironmentsStateHolder
-        private set
-
-    lateinit var chatPersistence: ChatPersistence
         private set
 
     lateinit var chatRepository: ChatRepository
@@ -263,7 +259,6 @@ object AppContainer {
         terminalStateHolder = TerminalStateHolder()
         environmentsStateHolder = EnvironmentsStateHolder()
 
-        chatPersistence = ChatPersistence.create(app)
         val streamClient = ChatStreamClient(httpClient)
 
         projectRepository = ProjectRepository(
@@ -314,7 +309,6 @@ object AppContainer {
             chats = chatStateHolder,
             sessions = sessionStateHolder,
             projectState = projectStateHolder,
-            persistence = chatPersistence,
             providerRepo = providerRepository,
         )
         sessionRepository = SessionRepository(
@@ -324,7 +318,6 @@ object AppContainer {
             appState = appStateHolder,
             chats = chatStateHolder,
             chatRepo = chatRepository,
-            persistence = chatPersistence,
             onSessionGone = { chatRepository.discard(it) },
         )
         authRepository = AuthRepository(
@@ -375,7 +368,6 @@ object AppContainer {
             environmentsState = environmentsStateHolder,
             appState = appStateHolder,
             chatState = chatStateHolder,
-            chatPersistence = chatPersistence,
             sessionState = sessionStateHolder,
             projectState = projectStateHolder,
             providerState = providerStateHolder,

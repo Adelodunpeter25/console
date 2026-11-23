@@ -1,6 +1,5 @@
 package com.console.mobile.data.repo
 
-import com.console.mobile.data.local.ChatPersistence
 import com.console.mobile.data.local.PreferencesStore
 import com.console.mobile.data.store.AppStateHolder
 import com.console.mobile.data.store.AuthStateHolder
@@ -21,7 +20,6 @@ class EnvironmentsRepository(
     private val environmentsState: EnvironmentsStateHolder,
     private val appState: AppStateHolder,
     private val chatState: ChatStateHolder,
-    private val chatPersistence: ChatPersistence,
     private val sessionState: SessionStateHolder,
     private val projectState: ProjectStateHolder,
     private val providerState: ProviderStateHolder,
@@ -183,7 +181,6 @@ class EnvironmentsRepository(
 
     fun resetServerState() {
         chatState.clearAll()
-        chatPersistence.clear()
         sessionState.clearAll()
         projectState.clear()
         providerState.clear()
