@@ -58,7 +58,7 @@ impl ConsoleDesktopApp {
         let leaves = self.workspace_root.leaves();
         let shows_path = |leaf: &&console_core::LeafPaneNode| {
             leaf.tabs.iter().any(
-                |tab| matches!(tab, console_core::WorkspaceTabConfig::File { path: tab_path, .. } | console_core::WorkspaceTabConfig::Diff { path: tab_path, .. } if tab_path == path),
+                |tab| matches!(tab, console_core::WorkspaceTabConfig::File { path: tab_path, .. } | console_core::WorkspaceTabConfig::Diff { path: tab_path, .. } if tab_path == path) || matches!(tab, console_core::WorkspaceTabConfig::ChangesReview { .. }),
             )
         };
         if let Some(active) = &self.active_pane_id
@@ -152,6 +152,7 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         let pane_id = self.pane_hosting_file(&request.path);
+        self.ensure_workspace_pane_state(&pane_id, window, cx);
         let Some(pane) = self.workspace_pane_states.get(&pane_id) else {
             return;
         };
