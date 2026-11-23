@@ -194,7 +194,11 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		maxMatches := clampInt(c.QueryInt("limit", 200), 1, 2000)
+		// No limit param means "everything": the service pages through the index.
+		maxMatches := 0
+		if c.Query("limit") != "" {
+			maxMatches = clampInt(c.QueryInt("limit", 200), 1, 2000)
+		}
 		result, err := fs.Grep(root, query, fssvc.GrepOptions{
 			Mode:         mode,
 			Case:         caseMode,

@@ -16,11 +16,12 @@ use crate::IconName;
 use crate::Theme;
 use crate::input::{ComposerEvent, ComposerInput};
 use crate::primitives::{app_icon, base_name, file_type_icon};
+use crate::tooltip::Tooltip;
 use console_core::{ConsoleClient, GrepCaseMode, GrepMatch, GrepMode, GrepOptions};
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
-    KeyBinding, ParentElement, Render, SharedString, Styled, Window, div, prelude::FluentBuilder,
-    px, uniform_list,
+    KeyBinding, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window,
+    div, prelude::FluentBuilder, px, uniform_list,
 };
 
 /// Debounce for typed queries.
@@ -93,8 +94,8 @@ pub struct GlobalSearchPanel {
     focus_handle: FocusHandle,
     open: bool,
     root: Option<String>,
-    groups: Rc<Vec<FileGroup>>,
-    rows: Rc<Vec<SearchRow>>,
+    groups: Rc<[FileGroup]>,
+    rows: Rc<[SearchRow]>,
     selected_row: Option<usize>,
     total_matched: usize,
     matched_files: usize,
@@ -123,8 +124,8 @@ impl GlobalSearchPanel {
             focus_handle: cx.focus_handle(),
             open: false,
             root: None,
-            groups: Rc::new(Vec::new()),
-            rows: Rc::new(Vec::new()),
+            groups: Rc::from([]),
+            rows: Rc::from([]),
             selected_row: None,
             total_matched: 0,
             matched_files: 0,
@@ -152,8 +153,8 @@ impl GlobalSearchPanel {
     pub fn open(&mut self, root: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
         self.root = root;
         self.open = true;
-        self.groups = Rc::new(Vec::new());
-        self.rows = Rc::new(Vec::new());
+        self.groups = Rc::from([]);
+        self.rows = Rc::from([]);
         self.selected_row = None;
         self.total_matched = 0;
         self.matched_files = 0;
@@ -193,8 +194,8 @@ impl GlobalSearchPanel {
         let generation = self.search_generation;
 
         if query.trim().is_empty() {
-            self.groups = Rc::new(Vec::new());
-            self.rows = Rc::new(Vec::new());
+            self.groups = Rc::from([]);
+            self.rows = Rc::from([]);
             self.selected_row = None;
             self.total_matched = 0;
             self.matched_files = 0;
@@ -226,7 +227,11 @@ impl GlobalSearchPanel {
             }
 
             let options = GrepOptions {
-                mode: if regex { GrepMode::Regex } else { GrepMode::Plain },
+                mode: if regex {
+                    GrepMode::Regex
+                } else {
+                    GrepMode::Plain
+                },
                 case_mode: if case_sensitive {
                     GrepCaseMode::Sensitive
                 } else {
@@ -262,14 +267,14 @@ impl GlobalSearchPanel {
                         this.selected_row = rows
                             .iter()
                             .position(|row| matches!(row, SearchRow::Match { .. }));
-                        this.groups = Rc::new(groups);
-                        this.rows = Rc::new(rows);
+                        this.groups = Rc::from(groups);
+                        this.rows = Rc::from(rows);
                     }
                     Err(_) => {
                         this.total_matched = 0;
                         this.matched_files = 0;
-                        this.groups = Rc::new(Vec::new());
-                        this.rows = Rc::new(Vec::new());
+                        this.groups = Rc::from([]);
+                        this.rows = Rc::from([]);
                         this.selected_row = None;
                     }
                 }
@@ -309,12 +314,7 @@ impl GlobalSearchPanel {
         }
     }
 
-    fn toggle_option(
-        &mut self,
-        option: SearchToggle,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn toggle_option(&mut self, option: SearchToggle, window: &mut Window, cx: &mut Context<Self>) {
         match option {
             SearchToggle::Case => self.case_sensitive = !self.case_sensitive,
             SearchToggle::Word => self.whole_word = !self.whole_word,
@@ -571,7 +571,7 @@ impl Render for GlobalSearchPanel {
                     .flex()
                     .flex_col()
                     .rounded(theme_radius(&theme))
-                    .bg(theme.surface)
+                    .bg(theme.menu)
                     .border_1()
                     .border_color(theme.border)
                     .overflow_hidden()
@@ -612,6 +612,7 @@ impl Render for GlobalSearchPanel {
                                         "Aa",
                                         self.case_sensitive,
                                         SearchToggle::Case,
+                                        "Match case",
                                         &theme,
                                         &toggle_entity,
                                     ))
@@ -620,6 +621,7 @@ impl Render for GlobalSearchPanel {
                                         "ab",
                                         self.whole_word,
                                         SearchToggle::Word,
+                                        "Match whole word",
                                         &theme,
                                         &toggle_entity,
                                     ))
@@ -628,6 +630,7 @@ impl Render for GlobalSearchPanel {
                                         ".*",
                                         self.regex,
                                         SearchToggle::Regex,
+                                        "Use regular expression",
                                         &theme,
                                         &toggle_entity,
                                     )),
@@ -781,6 +784,7 @@ fn toggle_button(
     label: &'static str,
     active: bool,
     option: SearchToggle,
+    tooltip: &'static str,
     theme: &Theme,
     entity: &gpui::WeakEntity<GlobalSearchPanel>,
 ) -> impl IntoElement {
@@ -795,9 +799,14 @@ fn toggle_button(
         .cursor_pointer()
         .text_size(px(11.0))
         .font_weight(gpui::FontWeight::SEMIBOLD)
-        .text_color(if active { theme.accent } else { theme.text_tertiary })
+        .text_color(if active {
+            theme.accent
+        } else {
+            theme.text_tertiary
+        })
         .when(active, |el| el.bg(theme.accent.opacity(0.15)))
         .hover(|el| el.bg(theme.raised))
+        .tooltip(Tooltip::text(tooltip))
         .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
             cx.stop_propagation();
             if let Some(panel) = entity.upgrade() {

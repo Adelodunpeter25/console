@@ -530,6 +530,10 @@ type GrepOptions struct {
 	Cursor       uint32
 }
 
+// grepPageSize is how many matches each index page asks for when a search is
+// unlimited.
+const grepPageSize = 1000
+
 // ErrFffUnavailable is returned when the fff index isn't wired in for this
 // server (e.g. missing native library), so the caller can render an empty
 // state instead of a hard error.
@@ -553,16 +557,43 @@ func (s *FsService) Grep(root, query string, opts GrepOptions) (types.GrepResult
 	}
 	defer lease.Release()
 
-	result, err := lease.GrepWithOptions(query, fff.GrepOptions{
-		Mode:         opts.Mode,
-		Case:         opts.Case,
-		WholeWord:    opts.WholeWord,
-		ContextLines: opts.ContextLines,
-		MaxMatches:   opts.MaxMatches,
-		Cursor:       opts.Cursor,
-	})
-	if err != nil {
-		return types.GrepResult{}, err
+	fetch := func(cursor uint32, pageSize int) (fff.GrepResult, error) {
+		return lease.GrepWithOptions(query, fff.GrepOptions{
+			Mode:         opts.Mode,
+			Case:         opts.Case,
+			WholeWord:    opts.WholeWord,
+			ContextLines: opts.ContextLines,
+			MaxMatches:   pageSize,
+			Cursor:       cursor,
+		})
+	}
+
+	var result fff.GrepResult
+	if opts.MaxMatches > 0 {
+		result, err = fetch(opts.Cursor, opts.MaxMatches)
+		if err != nil {
+			return types.GrepResult{}, err
+		}
+	} else {
+		// Unlimited: keep following the cursor until the index has no more
+		// files to scan. The cursor must advance or we would loop forever.
+		cursor := opts.Cursor
+		for {
+			page, perr := fetch(cursor, grepPageSize)
+			if perr != nil {
+				return types.GrepResult{}, perr
+			}
+			result.Matches = append(result.Matches, page.Matches...)
+			result.TotalMatched += page.TotalMatched
+			result.FilteredFiles = page.FilteredFiles
+			if page.RegexError != nil {
+				result.RegexError = page.RegexError
+			}
+			if !page.HasMore || page.NextCursor == cursor {
+				break
+			}
+			cursor = page.NextCursor
+		}
 	}
 
 	matches := make([]types.GrepMatch, 0, len(result.Matches))
