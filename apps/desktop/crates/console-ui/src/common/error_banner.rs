@@ -78,7 +78,7 @@ pub fn error_banner(
             )
             .child(copy_button_with_action(
                 "error-copy".into(),
-                message.clone(),
+                message,
                 theme,
                 on_copied,
                 cx,

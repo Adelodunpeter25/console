@@ -227,7 +227,7 @@ impl FileTreeView {
                     });
             let element: gpui::AnyElement = if is_html {
                 let p_browser = node_path.clone();
-                let p_editor = node_path.clone();
+                let p_editor = node_path;
                 let on_browser = on_open_browser.clone();
                 let on_editor_for_browser = on_select.clone();
                 let on_editor_direct = on_select.clone();

@@ -344,7 +344,7 @@ impl RenderOnce for SidebarSessionItem {
             && !is_renaming
             && let Some(bounds) = probe_bounds.get()
         {
-            let hover_mgr_card = hover_mgr.clone();
+            let hover_mgr_card = hover_mgr;
             let model_name = if !session.model_id.is_empty() {
                 let base = console_shared::format::format_model_name(&session.model_id);
                 let thinking = session

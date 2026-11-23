@@ -182,7 +182,7 @@ impl RenderOnce for ImagePreview {
                             // transparent background stay visible in dark mode.
                             .child(transparency_grid())
                             .child(
-                                img(self.image.clone())
+                                img(self.image)
                                     .id("image-preview-img")
                                     .max_w_full()
                                     .max_h_full()

@@ -325,7 +325,7 @@ impl RenderOnce for UsagePage {
                                                                             .text_size(px(12.5))
                                                                             .font_weight(gpui::FontWeight::MEDIUM)
                                                                             .text_color(theme.text)
-                                                                            .child(limit.label.clone()),
+                                                                            .child(limit.label),
                                                                     )
                                                                     .when_some(tier_label, |row, tier| {
                                                                         row.child(

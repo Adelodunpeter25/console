@@ -164,7 +164,7 @@ impl RenderOnce for PortsPopover {
                                                     .cursor_pointer()
                                                     .hover(|s| s.bg(theme.overlay_strong))
                                                     .on_click({
-                                                        let port_url = port_url.clone();
+                                                        let port_url = port_url;
                                                         let on_open = on_open.clone();
                                                         let handle_close = handle_close.clone();
                                                         move |_, window, cx| {
@@ -191,7 +191,7 @@ impl RenderOnce for PortsPopover {
                                                     .hover(|s| s.bg(theme.danger_soft))
                                                     .on_click({
                                                         let on_unforward = on_unforward.clone();
-                                                        let handle_close = handle_close.clone();
+                                                        let handle_close = handle_close;
                                                         move |_, window, cx| {
                                                             handle_close.close(window, cx);
                                                             (on_unforward)(port_num, window, cx);

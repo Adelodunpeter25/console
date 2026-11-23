@@ -408,7 +408,7 @@ impl RenderOnce for RunPanel {
                                     .text_size(px(11.0))
                                     .font_family(MONO_FAMILY)
                                     .text_color(theme.text_tertiary)
-                                    .child(row.command.clone()),
+                                    .child(row.command),
                             )
                             .child(
                                 div()
@@ -444,12 +444,12 @@ impl RenderOnce for RunPanel {
                                 .overflow_hidden()
                                 .child(
                                     LogsViewer::new(
-                                        row.script_id.clone(),
+                                        row.script_id,
                                         view.lines.clone(),
                                         view.list_state.clone(),
                                     )
                                     .selection(view.selection.clone())
-                                    .scrollbar_state(view.scrollbar_state.clone()),
+                                    .scrollbar_state(view.scrollbar_state),
                                 ),
                         )
                         .into_any_element()
@@ -458,7 +458,7 @@ impl RenderOnce for RunPanel {
                         .text_size(px(11.0))
                         .font_family(MONO_FAMILY)
                         .text_color(theme.text_secondary)
-                        .child(row.output.clone())
+                        .child(row.output)
                         .into_any_element()
                 };
                 card = card.child(

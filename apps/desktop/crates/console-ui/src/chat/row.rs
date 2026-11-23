@@ -172,7 +172,7 @@ pub fn transcript_row(
     if index + 1 == view_ref.turns.len() && !view_ref.live.is_empty() {
         column = column.child(render_assistant_bubble(
             view_ref,
-            entity.clone(),
+            entity,
             index,
             response_count,
             &view_ref.live,

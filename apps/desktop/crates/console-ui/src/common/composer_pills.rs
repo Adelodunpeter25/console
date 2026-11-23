@@ -485,7 +485,7 @@ fn suggestion_pill(
 ) -> Stateful<Div> {
     let picked = text.clone();
     let width_for_hover = hover.clone();
-    let set_hover = hover.clone();
+    let set_hover = hover;
     div()
         .id(ElementId::Name(id.into()))
         .flex_none()

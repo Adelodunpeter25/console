@@ -71,7 +71,7 @@ impl ComputerViewer {
             cx: cx.to_async(),
             view: cx.entity().downgrade(),
         };
-        let on_ipc = deferred.clone();
+        let on_ipc = deferred;
         let on_responder_change: Box<dyn Fn(bool)> = {
             let executor = cx.foreground_executor().clone();
             let async_cx = cx.to_async();

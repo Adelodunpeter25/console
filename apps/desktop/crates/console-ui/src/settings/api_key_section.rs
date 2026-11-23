@@ -237,7 +237,7 @@ impl RenderOnce for ApiKeyProviderSection {
                     .rounded(px(6.0))
                     .px(px(8.0))
                     .py(px(6.0))
-                    .child(input.clone()),
+                    .child(input),
             );
             row = row.child(
                 div()

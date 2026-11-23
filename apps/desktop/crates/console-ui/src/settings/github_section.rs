@@ -245,7 +245,7 @@ fn build_form_area(
     }
 
     let mut body = div().flex().flex_col().gap(px(8.0));
-    if let Some(input) = input.clone() {
+    if let Some(input) = input {
         body = body.child(
             div()
                 .border_1()

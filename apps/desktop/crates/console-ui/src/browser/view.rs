@@ -348,7 +348,7 @@ impl BrowserView {
             })
         };
 
-        let on_ipc = deferred.clone();
+        let on_ipc = deferred;
 
         let content = HostContent {
             user_agent: Some(USER_AGENT.to_owned()),
@@ -544,7 +544,7 @@ impl BrowserView {
             }),
             role: inspection.role.clone(),
             accessible_name: inspection.accessible_name.clone(),
-            computed_styles: inspection.computed_styles.clone(),
+            computed_styles: inspection.computed_styles,
             user_comment: trimmed,
             screenshot_base64: self.annotation_screenshot.clone(),
         };

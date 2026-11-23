@@ -422,7 +422,7 @@ impl RenderOnce for WorkspaceTabBar {
                                     .rounded(px(4.0))
                                     .cursor_default()
                                     .invisible()
-                                    .group_hover(group_name.clone(), |el| el.visible())
+                                    .group_hover(group_name, |el| el.visible())
                                     .hover(|s| s.bg(theme.overlay))
                                     .on_mouse_down(MouseButton::Left, {
                                         let id = id_for_close;

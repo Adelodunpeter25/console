@@ -196,12 +196,10 @@ fn this_clients_error_encoding_still_decodes() {
 fn an_unrecognised_status_does_not_break_the_list() {
     // One server in a state this build does not know about must not blank
     // every other entry in the settings list.
-    let envelope = format!(
-        r#"{{"success": true, "data": [
-            {{"id":"ok","label":"Ok","transport":"http","status":"connected"}},
-            {{"id":"odd","label":"Odd","transport":"http","status":"warming_up"}}
-        ]}}"#
-    );
+    let envelope = r#"{"success": true, "data": [
+            {"id":"ok","label":"Ok","transport":"http","status":"connected"},
+            {"id":"odd","label":"Odd","transport":"http","status":"warming_up"}
+        ]}"#.to_string();
     let body: ApiResponse<Vec<McpServerConfig>> =
         serde_json::from_str(&envelope).expect("decode list");
     let list = body.data.expect("data");

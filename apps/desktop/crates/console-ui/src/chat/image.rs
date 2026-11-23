@@ -103,11 +103,10 @@ pub fn resolve_workspace_path(path: &str, cwd: Option<&str>) -> String {
         if let Some(home) = dirs_home() {
             p = home;
         }
-    } else if let Some(rest) = p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\")) {
-        if let Some(home) = dirs_home() {
+    } else if let Some(rest) = p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\"))
+        && let Some(home) = dirs_home() {
             p = format!("{home}/{rest}");
         }
-    }
     let candidate = if Path::new(&p).is_absolute() {
         p
     } else if let Some(cwd) = cwd.filter(|c| !c.is_empty()) {
@@ -131,13 +130,12 @@ fn percent_decode(s: &str) -> String {
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+        if bytes[i] == b'%' && i + 2 < bytes.len()
+            && let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
                 out.push(v);
                 i += 3;
                 continue;
             }
-        }
         out.push(bytes[i]);
         i += 1;
     }
@@ -160,7 +158,7 @@ pub fn workspace_image_state(path: &str, cx: &mut App) -> Option<WorkspaceImageS
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     let fetch_path = path.to_string();
-    let fetch_fs = fs.clone();
+    let fetch_fs = fs;
     // The app holds a Tokio runtime for its whole lifetime (main.rs enters
     // it before gpui starts), so tokio::spawn works from render code.
     tokio::spawn(async move {

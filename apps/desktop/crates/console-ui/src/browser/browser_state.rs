@@ -252,10 +252,10 @@ pub mod cookies {
         });
         let mut objects: Vec<Retained<AnyObject>> = vec![
             // SAFETY: NSString/NSDate widen to AnyObject, no data moved.
-            unsafe { into_any(name.clone()) },
-            unsafe { into_any(value.clone()) },
-            unsafe { into_any(domain.clone()) },
-            unsafe { into_any(path.clone()) },
+            unsafe { into_any(name) },
+            unsafe { into_any(value) },
+            unsafe { into_any(domain) },
+            unsafe { into_any(path) },
         ];
 
         if cookie.secure {

@@ -144,7 +144,7 @@ impl DeviceViewer {
             cx: cx.to_async(),
             view: cx.entity().downgrade(),
         };
-        let on_ipc = deferred.clone();
+        let on_ipc = deferred;
         let on_responder_change: Box<dyn Fn(bool)> = {
             let executor = cx.foreground_executor().clone();
             let async_cx = cx.to_async();
@@ -399,7 +399,7 @@ impl DeviceViewer {
         let client = self.client.clone();
         let view = cx.entity().downgrade();
         let platform = device_platform(&device).as_str().to_string();
-        let id = device.id.clone();
+        let id = device.id;
         let action = action.to_string();
         // Empty appearance asks the server to flip the device's real mode.
         let appearance = (action == "appearance").then(|| "toggle".to_string());
@@ -445,7 +445,7 @@ impl DeviceViewer {
         let client = self.client.clone();
         let view = cx.entity().downgrade();
         let platform = device_platform(&device).as_str().to_string();
-        let id = device.id.clone();
+        let id = device.id;
         cx.spawn(async move |_, cx| {
             let result = client.devices.boot(&id, &platform).await;
             cx.update(|cx| {
@@ -550,7 +550,7 @@ impl DeviceViewer {
         let client = self.client.clone();
         let view = cx.entity().downgrade();
         let platform = device_platform(&device).as_str().to_string();
-        let id = device.id.clone();
+        let id = device.id;
         cx.spawn(async move |_, cx| {
             let shutdown = client.devices.shutdown(&id, &platform).await;
             let result = client.devices.list().await;
@@ -580,7 +580,7 @@ impl DeviceViewer {
         let name = device_display_name(&device);
         let client = self.client.clone();
         let platform = device_platform(&device).as_str().to_string();
-        let id = device.id.clone();
+        let id = device.id;
         let handler = self.on_screenshot.clone();
         let window_handle = window.window_handle();
         cx.spawn(async move |_, cx| {
@@ -879,7 +879,7 @@ impl DeviceViewer {
                         .unwrap_or_else(|| "Ready".to_string()),
                 );
             }
-            return Some(device_state_label(&device.state).to_string());
+            return Some(device_state_label(&device.state));
         }
         None
     }

@@ -163,10 +163,7 @@ async fn browser_http_survives_real_manager_forward() {
                     Err(_) => return,
                 };
                 let target = tunnel_target(&path.lock().expect("path lock").clone());
-                match target {
-                    Some(port) => bridge(ws, port).await,
-                    None => {}
-                }
+                if let Some(port) = target { bridge(ws, port).await }
             });
         }
     });

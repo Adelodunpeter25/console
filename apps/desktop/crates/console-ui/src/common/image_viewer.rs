@@ -81,7 +81,7 @@ impl RenderOnce for ImageViewerModal {
                     .on_mouse_down(MouseButton::Left, |_, _, _| {})
                     .child(transparency_grid())
                     .child(
-                        img(self.image.clone())
+                        img(self.image)
                             .max_w(px(936.0))
                             .max_h(px(616.0))
                             .object_fit(gpui::ObjectFit::ScaleDown),

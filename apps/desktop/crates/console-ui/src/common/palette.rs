@@ -823,7 +823,7 @@ impl CommandPaletteModal {
             // Navigation row: hand the id to the browse hook and keep the
             // palette up.
             if let Some(callback) = self.browse_callback.clone() {
-                let id = entry.id.clone();
+                let id = entry.id;
                 window.defer(cx, move |window, cx| callback(id.as_ref(), window, cx));
             }
         } else {
@@ -977,7 +977,7 @@ impl Render for CommandPaletteModal {
                                     {
                                         let callback = palette.read(cx).browse_callback.clone();
                                         if let Some(callback) = callback {
-                                            let target_path = path.clone();
+                                            let target_path = path;
                                             window.defer(cx, move |window, cx| {
                                                 callback(&target_path, window, cx)
                                             });

@@ -435,7 +435,7 @@ impl Render for TranscriptView {
                 .child(crate::chat::cite_overlay::cite_popup(
                     line,
                     container,
-                    selection.clone(),
+                    selection,
                     theme,
                 ))
                 .into_any_element();

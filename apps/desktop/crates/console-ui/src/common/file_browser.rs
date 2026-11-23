@@ -265,7 +265,7 @@ impl Render for FileBrowser {
                         selected,
                         entries,
                         loading,
-                        entity.clone(),
+                        entity,
                         &theme,
                     )),
             )

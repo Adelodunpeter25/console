@@ -54,7 +54,7 @@ pub fn scroll_watch(on_scroll: impl Fn(&mut Window, &mut App) + 'static) -> impl
     canvas(
         |_, _, _| (),
         move |bounds, _, window, _cx| {
-            let on_scroll = on_scroll.clone();
+            let on_scroll = on_scroll;
             window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
                 if phase == DispatchPhase::Capture && bounds.contains(&event.position) {
                     on_scroll(window, cx);

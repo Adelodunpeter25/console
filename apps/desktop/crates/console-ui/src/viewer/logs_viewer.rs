@@ -103,7 +103,7 @@ impl RenderOnce for LogsViewer {
             .child(render::frame_reset(selection))
             .child(selection_listener)
             .child(
-                list(self.list_state.clone(), move |line_ix, _window, cx| {
+                list(self.list_state, move |line_ix, _window, cx| {
                     let theme = Theme::current(cx);
                     let palette = Palette::from_theme(&theme);
                     let line = lines_rc.get(line_ix).map(String::as_str).unwrap_or("");

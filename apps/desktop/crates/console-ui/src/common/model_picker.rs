@@ -275,7 +275,7 @@ impl RenderOnce for ModelDropdownMenu {
             })
             .on_action({
                 let menu = menu.clone();
-                let keys = visible_keys.clone();
+                let keys = visible_keys;
                 let resolved = highlight_ix;
                 let on_select = on_select.clone();
                 move |_: &ModelPickerConfirm, window, cx| {
@@ -299,8 +299,8 @@ impl RenderOnce for ModelDropdownMenu {
                 }
             })
             .on_action({
-                let menu = menu.clone();
-                let tabs = picker_tabs.clone();
+                let menu = menu;
+                let tabs = picker_tabs;
                 let active = active_tab.clone();
                 let on_tab = on_tab.clone();
                 move |_: &ModelPickerPreviousTab, window, cx| {
@@ -689,17 +689,17 @@ impl RenderOnce for ModelRolePicker {
             );
 
         let panel = {
-            let providers = providers.clone();
-            let models_by_provider = models_by_provider.clone();
-            let active_tab = active_tab.clone();
-            let search = search.clone();
+            let providers = providers;
+            let models_by_provider = models_by_provider;
+            let active_tab = active_tab;
+            let search = search;
             let on_tab = on_tab.clone();
             let on_select = on_select.clone();
             let on_clear = on_clear.clone();
             let on_favorite = on_favorite.clone();
-            let favorites = favorites.clone();
-            let selected_model = selected.clone();
-            let query = query.clone();
+            let favorites = favorites;
+            let selected_model = selected;
+            let query = query;
 
             move |handle: &ContextMenuHandle, _window: &mut Window, _cx: &mut App| {
                 let close_handle = handle.clone();

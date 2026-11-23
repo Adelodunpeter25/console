@@ -165,7 +165,7 @@ fn account_row(
                     // Rename works on the active account too: labels are
                     // display-only, so they never interfere with pinning.
                     let rename_id = account_id.clone();
-                    let rename_display = display.clone();
+                    let rename_display = display;
                     let on_rename = on_rename.clone();
                     let provider = provider.to_string();
                     div()
@@ -188,7 +188,7 @@ fn account_row(
                         .child("Rename")
                 })
                 .child({
-                    let remove_id = account_id.clone();
+                    let remove_id = account_id;
                     let on_remove = on_remove.clone();
                     let provider = provider.to_string();
                     div()

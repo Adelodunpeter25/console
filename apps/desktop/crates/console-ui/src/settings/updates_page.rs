@@ -38,7 +38,7 @@ impl RenderOnce for UpdatesPage {
             None => "Local build".to_string(),
         };
         let summary = match &self.status {
-            UpdateStatus::Idle => installed.clone(),
+            UpdateStatus::Idle => installed,
             UpdateStatus::Checking => "Checking for updates…".to_string(),
             UpdateStatus::UpToDate => format!("You're on the latest version. {installed}."),
             UpdateStatus::Available { build } => {

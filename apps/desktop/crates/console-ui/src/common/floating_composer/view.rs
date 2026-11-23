@@ -796,7 +796,7 @@ impl FloatingComposerView {
                                     .when_some(autocomplete_anchor, |el, anchor_bounds| {
                                         el.child(AutocompleteView::bounds_probe(anchor_bounds))
                                     })
-                                    .child(input.clone()),
+                                    .child(input),
                             ),
                     )
                     // suggestion popup

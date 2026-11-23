@@ -146,11 +146,10 @@ fn ensure_host(
                         .and_then(|h| h.as_f64())
                     {
                         let clamped = (h as f32).clamp(80.0, 4000.0);
-                        if let Ok(mut map) = CARDS.lock() {
-                            if let Some(entry) = map.get_mut(&row_key) {
+                        if let Ok(mut map) = CARDS.lock()
+                            && let Some(entry) = map.get_mut(&row_key) {
                                 entry.measured_height = Some(clamped);
                             }
-                        }
                         let _ = ipc_cx.update(|cx| cx.refresh_windows());
                     }
                 }

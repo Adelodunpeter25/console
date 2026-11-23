@@ -29,7 +29,7 @@ fn test_mention_creation_and_separator_outside_range() {
     let mention_range = start..(start + mention_len);
 
     mentions.push(ComposerMention {
-        range: mention_range.clone(),
+        range: mention_range,
         path: path.to_string(),
         label: path.to_string(),
     });

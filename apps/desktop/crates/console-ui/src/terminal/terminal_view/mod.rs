@@ -507,7 +507,7 @@ impl Render for TerminalView {
         };
 
         let snapshot = self.snapshot.clone();
-        let view_handle = cx.entity().clone();
+        let view_handle = cx.entity();
         let view_for_key = view_handle.clone();
         let handle_for_key = self.handle.clone();
         let focus_for_key = self.focus.clone();
@@ -1006,9 +1006,9 @@ impl Render for TerminalView {
                                         }
                                     },
                                     {
-                                        let snapshot = snapshot.clone();
-                                        let paint_cache = paint_cache.clone();
-                                        let view_for_canvas = view_handle.clone();
+                                        let snapshot = snapshot;
+                                        let paint_cache = paint_cache;
+                                        let view_for_canvas = view_handle;
                                         let focus_for_canvas = self.focus.clone();
                                         move |bounds, (cols, rows, cell_w, cell_h), window, cx| {
                                             window.handle_input(
