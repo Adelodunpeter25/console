@@ -285,7 +285,9 @@ impl Render for NewProjectDialog {
 
         div()
             .size_full()
-            .bg(theme.canvas)
+            .flex()
+            .flex_col()
+            .bg(theme.menu)
             .track_focus(&self.focus_handle)
             // Enter submits from anywhere in the dialog; it never reaches the
             // inputs first because they live in their own focus scopes and
@@ -299,18 +301,37 @@ impl Render for NewProjectDialog {
             }))
             .child(
                 div()
-                    .mx(px(20.0))
-                    .mt(px(52.0))
+                    .flex_none()
+                    .px(px(20.0))
+                    .pt(px(44.0))
+                    .pb(px(14.0))
+                    .border_b_1()
+                    .border_color(theme.border)
                     .flex()
                     .flex_col()
-                    .gap(px(14.0))
+                    .gap(px(2.0))
                     .child(
                         div()
-                            .text_size(px(17.0))
+                            .text_size(px(15.0))
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .text_color(theme.text)
                             .child("New Project"),
                     )
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(theme.text_tertiary)
+                            .child("Start from an empty folder or clone a repository."),
+                    ),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .p(px(20.0))
+                    .flex()
+                    .flex_col()
+                    .gap(px(16.0))
                     .child(
                         div()
                             .flex()
@@ -359,7 +380,15 @@ impl Render for NewProjectDialog {
                     .child(match self.error.clone() {
                         Some((kind, message)) => error_row(kind, &message, &theme, cx),
                         None => div(),
-                    })
+                    }),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .px(px(20.0))
+                    .py(px(12.0))
+                    .border_t_1()
+                    .border_color(theme.border)
                     .child(
                         div()
                             .flex()
@@ -401,11 +430,7 @@ fn mode_card(
         .rounded(px(8.0))
         .border_1()
         .border_color(if selected { theme.accent } else { theme.border })
-        .bg(if selected {
-            theme.surface
-        } else {
-            theme.canvas
-        })
+        .bg(if selected { theme.overlay } else { theme.menu })
         .flex()
         .flex_col()
         .gap(px(4.0))
