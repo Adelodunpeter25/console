@@ -101,6 +101,29 @@ fn log_build_identity() {
     );
 }
 
+/// AppKit's Touch Bar finder throws from `removeObserver:forKeyPath:` while a
+/// window is torn down (crash after closing the New Project dialog). The app
+/// has no Touch Bar UI, so opt out of the customize item that drives it.
+#[cfg(target_os = "macos")]
+fn disable_touch_bar() {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+    if let Some(class) = AnyClass::get(c"NSApplication") {
+        unsafe {
+            let _: () = msg_send![class, setAutomaticCustomizeTouchBarMenuItemEnabled: false];
+        }
+    }
+    if let Some(class) = AnyClass::get(c"NSUserDefaults") {
+        unsafe {
+            let defaults: *mut AnyObject = msg_send![class, standardUserDefaults];
+            if !defaults.is_null() {
+                let key = objc2_foundation::NSString::from_str("NSTouchBarFinderDisabled");
+                let _: () = msg_send![defaults, setBool: true, forKey: &*key];
+            }
+        }
+    }
+}
+
 fn main() {
     // Route log:: macros to stderr (see scripts/dev.sh: RUST_LOG controls the
     // level, reload.sh captures output to dist/.dev_console.log). Without this
@@ -130,6 +153,8 @@ fn main() {
     let app = gpui_platform::application().with_assets(Assets);
 
     app.run(|cx: &mut App| {
+        #[cfg(target_os = "macos")]
+        disable_touch_bar();
         // Core weights only: the remaining 7 register after first paint
         // (see ConsoleDesktopApp::new) so ~1.7MB of TTF parsing stays off
         // the startup path.
