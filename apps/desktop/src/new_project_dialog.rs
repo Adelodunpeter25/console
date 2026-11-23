@@ -152,7 +152,18 @@ impl NewProjectDialog {
     /// folder chooser, which would otherwise be orphaned with no dialog to
     /// report back to.
     fn close(&self, window: &mut Window, cx: &mut Context<Self>) {
-        window.defer(cx, |window, _cx| window.remove_window());
+        let main_handle = self
+            .app
+            .upgrade()
+            .and_then(|app| app.read(cx).main_window_handle);
+        // Hand focus to the main window before this one goes away, so AppKit
+        // never tears down the key window with no successor.
+        window.defer(cx, move |window, cx| {
+            if let Some(main_handle) = main_handle {
+                let _ = cx.update_window(main_handle, |_r, main, _c| main.activate_window());
+            }
+            window.remove_window();
+        });
         if let Some(app) = self.app.upgrade() {
             app.update(cx, |app_state, cx| {
                 app_state.new_project_dialog_handle = None;
