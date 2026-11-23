@@ -78,7 +78,7 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Toggle a file block's local expand/collapse state within a review tab.
+    /// Toggle a file's local expand/collapse state within a review tab.
     pub fn toggle_changes_review_collapsed(
         &mut self,
         tab_id: &str,
@@ -93,62 +93,5 @@ impl ConsoleDesktopApp {
             set.insert(path.to_string());
         }
         cx.notify();
-    }
-
-    /// Toggle the reviewed flag for one `(path, turn_index)` row: optimistic
-    /// local update (also auto-collapses/expands the file block), then
-    /// confirmed via `POST /changes/reviewed`.
-    pub fn toggle_change_reviewed(
-        &mut self,
-        tab_id: &str,
-        session_id: String,
-        path: String,
-        turn_index: u32,
-        cx: &mut Context<Self>,
-    ) {
-        let new_reviewed = {
-            let Some(data) = self.changes_review_data.get(tab_id) else {
-                return;
-            };
-            let Some(entry) = data
-                .iter()
-                .find(|c| c.path == path && c.turn_index == turn_index)
-            else {
-                return;
-            };
-            !entry.reviewed
-        };
-
-        if let Some(data) = self.changes_review_data.get_mut(tab_id) {
-            let data_vec = std::rc::Rc::make_mut(data);
-            if let Some(entry) = data_vec
-                .iter_mut()
-                .find(|c| c.path == path && c.turn_index == turn_index)
-            {
-                entry.reviewed = new_reviewed;
-            }
-        }
-        let collapsed = self
-            .changes_review_collapsed
-            .entry(tab_id.to_string())
-            .or_default();
-        if new_reviewed {
-            collapsed.insert(path.clone());
-        } else {
-            collapsed.remove(&path);
-        }
-        cx.notify();
-
-        let client = self.client.clone();
-        cx.spawn(async move |_entity, _cx| {
-            if let Err(err) = client
-                .sessions
-                .set_change_reviewed(&session_id, &path, turn_index, new_reviewed)
-                .await
-            {
-                log::warn!("Failed to persist reviewed state: {}", err);
-            }
-        })
-        .detach();
     }
 }

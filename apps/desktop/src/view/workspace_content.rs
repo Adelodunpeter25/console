@@ -123,6 +123,7 @@ impl ConsoleDesktopApp {
                 session_id.clone(),
                 *scope,
                 active_tab.map(|tab| tab.id()).unwrap_or_default(),
+                pane_id,
                 cx,
             );
         }
@@ -848,6 +849,7 @@ impl ConsoleDesktopApp {
         session_id: String,
         scope: ChangesScope,
         tab_id: String,
+        pane_id: &str,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         // A tab restored from disk has no data yet; fetch it once.
@@ -869,6 +871,7 @@ impl ConsoleDesktopApp {
 
         let entity = cx.entity().downgrade();
         let tab_id_for_collapse = tab_id.clone();
+        let pane_id_for_review = self.workspace_chat().map(|(pane, _)| pane.to_string()).unwrap_or_else(|| pane_id.to_string());
         let on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut gpui::App)> = {
             let entity = entity.clone();
             let tab_id = tab_id_for_collapse;
@@ -882,29 +885,35 @@ impl ConsoleDesktopApp {
                 },
             )
         };
-        let tab_id_for_reviewed = tab_id.clone();
-        let session_id_for_reviewed = session_id.clone();
-        let on_toggle_reviewed: Rc<dyn Fn(String, u32, &mut Window, &mut gpui::App)> = {
-            let entity = entity.clone();
-            let tab_id = tab_id_for_reviewed;
-            let session_id = session_id_for_reviewed;
-            Rc::new(
-                move |path: String, turn_index: u32, _window: &mut Window, cx: &mut gpui::App| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.toggle_change_reviewed(
-                                &tab_id,
-                                session_id.clone(),
-                                path,
-                                turn_index,
-                                cx,
-                            );
-                        });
-                    }
-                },
-            )
+        let on_comment_target: Rc<dyn Fn(String, editor_ui::DiffCommentTarget)> = {
+            let comment_tx = self.file_comment_tx.clone();
+            Rc::new(move |path: String, target: editor_ui::DiffCommentTarget| {
+                let _ = comment_tx.send(crate::state::types::FileCommentRequest {
+                    path,
+                    start_line: target.start_line,
+                    end_line: target.end_line,
+                    old_side: target.side == editor_ui::DiffSide::Old,
+                });
+            })
         };
-
+        let comment_overlays: Rc<dyn Fn(String, &mut Window, &mut gpui::App) -> Vec<editor_ui::DiffRowOverlay>> = {
+            let entity = entity.clone();
+            let pane_id = pane_id_for_review.clone();
+            Rc::new(move |path: String, window: &mut Window, cx: &mut gpui::App| {
+                let pane_id = pane_id.clone();
+                let Some(app) = entity.upgrade() else { return Vec::new(); };
+                app.update(cx, |this, cx| this.review_comment_overlays(&pane_id, &path, window, cx))
+            })
+        };
+        let comment_selections: Rc<dyn Fn(String, &mut Window, &mut gpui::App) -> Vec<editor_ui::DiffCommentTarget>> = {
+            let entity = entity.clone();
+            let pane_id = pane_id_for_review.clone();
+            Rc::new(move |path: String, window: &mut Window, cx: &mut gpui::App| {
+                let pane_id = pane_id.clone();
+                let Some(app) = entity.upgrade() else { return Vec::new(); };
+                app.update(cx, |this, cx| this.review_comment_selections(&pane_id, &path, window, cx))
+            })
+        };
         let list_key = format!("changes-review:{}", tab_id);
         let count = console_core::types::count_changes_for_scope(&changes, scope);
         let list_state = self.viewer_list_states.entry(list_key).or_insert_with(|| {
@@ -920,7 +929,9 @@ impl ConsoleDesktopApp {
             changes,
             collapsed,
             on_toggle_collapsed,
-            on_toggle_reviewed,
+            on_comment_target,
+            comment_overlays,
+            comment_selections,
         )
         .list_state(list_state)
         .into_any_element()

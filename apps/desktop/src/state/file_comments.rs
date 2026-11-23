@@ -35,7 +35,7 @@ impl ConsoleDesktopApp {
                     };
                     let _ = handle.update(cx, |_, window, cx| {
                         if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| this.open_file_comment(request, window, cx));
+                            app.update(cx, |this, cx| this.open_file_comment_in_pane(request, window, cx));
                         }
                     });
                 });
@@ -145,7 +145,7 @@ impl ConsoleDesktopApp {
         (input, subscription)
     }
 
-    fn open_file_comment(
+    pub(crate) fn open_file_comment_in_pane(
         &mut self,
         request: FileCommentRequest,
         window: &mut Window,
@@ -907,6 +907,114 @@ impl ConsoleDesktopApp {
             }
         }
         Rc::new(all_comments)
+    }
+
+    pub(crate) fn review_comment_overlays(
+        &mut self,
+        pane_id: &str,
+        path: &str,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<editor_ui::DiffRowOverlay> {
+        self.review_comment_cards(pane_id, path, cx)
+    }
+
+    pub(crate) fn review_comment_selections(
+        &mut self,
+        pane_id: &str,
+        path: &str,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<editor_ui::DiffCommentTarget> {
+        self.ensure_file_comments_loaded(pane_id, cx);
+        self.workspace_pane_states
+            .get(pane_id)
+            .map(|pane| {
+                pane.file_comments
+                    .iter()
+                    .filter(|comment| comment.path == path)
+                    .map(|comment| editor_ui::DiffCommentTarget {
+                        side: if comment.old_side {
+                            editor_ui::DiffSide::Old
+                        } else {
+                            editor_ui::DiffSide::New
+                        },
+                        start_line: comment.start_line,
+                        end_line: comment.end_line,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn review_comment_cards(
+        &mut self,
+        pane_id: &str,
+        path: &str,
+        cx: &mut Context<Self>,
+    ) -> Vec<editor_ui::DiffRowOverlay> {
+        self.ensure_file_comments_loaded(pane_id, cx);
+        let pane_id = pane_id.to_string();
+        let entity = cx.entity().downgrade();
+        let Some(pane) = self.workspace_pane_states.get_mut(&pane_id) else {
+            return Vec::new();
+        };
+        let mut overlays = Vec::new();
+        for comment in pane.file_comments.iter_mut().filter(|comment| comment.path == path) {
+            let id = comment.id;
+            let start_line = comment.start_line;
+            let end_line = comment.end_line;
+            let staged = comment.is_staged_for("new_chat");
+            let card_state = match comment.state {
+                FileCommentState::Draft => FileCommentCardState::Draft,
+                FileCommentState::Added => FileCommentCardState::Added,
+                FileCommentState::Editing => FileCommentCardState::Editing,
+            };
+            let text = comment.text.clone();
+            let input = comment.input.clone();
+            let comment_path = comment.path.clone();
+            let old_side = comment.old_side;
+            let action_entity = entity.clone();
+            let action_pane = pane_id.clone();
+            let act = move |f: fn(&mut ConsoleDesktopApp, &str, u64, &mut Context<ConsoleDesktopApp>)| {
+                let entity = action_entity.clone();
+                let pane_id = action_pane.clone();
+                move |_window: &mut Window, cx: &mut App| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| f(this, &pane_id, id, cx));
+                    }
+                }
+            };
+            let rows = if matches!(card_state, FileCommentCardState::Draft | FileCommentCardState::Editing) {
+                9
+            } else {
+                4 + text.lines().count().max(1) as u32 + (text.len() / 80) as u32
+            };
+            overlays.push(editor_ui::DiffRowOverlay::new(
+                if old_side { editor_ui::DiffSide::Old } else { editor_ui::DiffSide::New },
+                end_line,
+                rows,
+                move |_, _| {
+                    FileCommentCard::new(
+                        id,
+                        comment_path.clone(),
+                        start_line,
+                        end_line,
+                        card_state,
+                        text.clone(),
+                        input.clone(),
+                        act(ConsoleDesktopApp::commit_file_comment),
+                        act(ConsoleDesktopApp::cancel_file_comment),
+                        act(ConsoleDesktopApp::edit_file_comment),
+                        act(ConsoleDesktopApp::remove_file_comment),
+                        act(ConsoleDesktopApp::toggle_comment_staged),
+                        staged,
+                    )
+                    .into_any_element()
+                },
+            ));
+        }
+        overlays
     }
 
     /// Cards for the active file, anchored under their ranges by `FileViewer`.

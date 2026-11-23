@@ -1,12 +1,12 @@
-//! "View all" session changes review tab: every changed file in a scope,
-//! stacked in one scrollable column with per-file mark-as-reviewed state
-//! (§6 of `docs/session-changes-turn-diff-plan.md`).
+//! "View all" session changes review tab: one row per changed file, expanded
+//! into an editor diff with the same comment gutter as the full diff tab.
 
 use std::rc::Rc;
 
 use console_core::types::{ChangesScope, SessionFileChange};
+use editor_ui::{DiffCommentTarget, DiffRowOverlay};
 use gpui::{
-    App, FontWeight, InteractiveElement, IntoElement, ListState, ParentElement, RenderOnce,
+    App, Entity, FontWeight, InteractiveElement, IntoElement, ListState, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, list, prelude::FluentBuilder, px,
 };
 
@@ -15,9 +15,7 @@ use crate::primitives::icons::{IconName, app_icon};
 use crate::primitives::{base_name, file_type_icon};
 use crate::theme::Theme;
 use crate::utils::short_parent_dir;
-use crate::viewer::diff_viewer::{
-    DiffViewer, EditorDiff, build_editor_diff_capped_sized, build_editor_diff_sized,
-};
+use crate::viewer::diff_viewer::{DiffViewer, EditorDiff, build_editor_diff_capped_sized};
 
 /// Code size and row height of a file's diff in this view.
 const REVIEW_FONT_SIZE: f32 = 11.0;
@@ -41,7 +39,9 @@ pub struct ReviewTab {
     changes: Rc<Vec<SessionFileChange>>,
     collapsed: std::collections::HashSet<String>,
     on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_toggle_reviewed: Rc<dyn Fn(String, u32, &mut Window, &mut App) + 'static>,
+    on_comment_target: Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
+    comment_overlays: Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static>,
+    comment_selections: Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static>,
     list_state: Option<ListState>,
 }
 
@@ -51,14 +51,18 @@ impl ReviewTab {
         changes: Rc<Vec<SessionFileChange>>,
         collapsed: std::collections::HashSet<String>,
         on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-        on_toggle_reviewed: Rc<dyn Fn(String, u32, &mut Window, &mut App) + 'static>,
+        on_comment_target: Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
+        comment_overlays: Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static>,
+        comment_selections: Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static>,
     ) -> Self {
         Self {
             scope,
             changes,
             collapsed,
             on_toggle_collapsed,
-            on_toggle_reviewed,
+            on_comment_target,
+            comment_overlays,
+            comment_selections,
             list_state: None,
         }
     }
@@ -77,7 +81,9 @@ impl RenderOnce for ReviewTab {
         let total_deletions: u32 = scoped.iter().map(|c| c.deletions).sum();
         let file_count = scoped.len();
         let on_toggle_collapsed = self.on_toggle_collapsed;
-        let on_toggle_reviewed = self.on_toggle_reviewed;
+        let on_comment_target = self.on_comment_target;
+        let comment_overlays = self.comment_overlays;
+        let comment_selections = self.comment_selections;
 
         div()
             .size_full()
@@ -146,7 +152,9 @@ impl RenderOnce for ReviewTab {
                 let scoped = Rc::new(scoped);
                 let collapsed = Rc::new(self.collapsed);
                 let on_toggle_collapsed = on_toggle_collapsed.clone();
-                let on_toggle_reviewed = on_toggle_reviewed.clone();
+                let on_comment_target = on_comment_target.clone();
+                let comment_overlays = comment_overlays.clone();
+                let comment_selections = comment_selections.clone();
 
                 let list_state_for_rows = list_state.clone();
                 div()
@@ -164,7 +172,9 @@ impl RenderOnce for ReviewTab {
                                 is_collapsed,
                                 Some(&list_state_for_rows),
                                 &on_toggle_collapsed,
-                                &on_toggle_reviewed,
+                                &on_comment_target,
+                                &comment_overlays,
+                                &comment_selections,
                                 window,
                                 cx,
                             )
@@ -190,7 +200,9 @@ impl RenderOnce for ReviewTab {
                                     is_collapsed,
                                     None,
                                     &on_toggle_collapsed,
-                                    &on_toggle_reviewed,
+                                    &on_comment_target,
+                                    &comment_overlays,
+                                    &comment_selections,
                                     window,
                                     cx,
                                 )
@@ -207,7 +219,9 @@ fn render_review_entry(
     is_collapsed: bool,
     list_state: Option<&ListState>,
     on_toggle_collapsed: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_toggle_reviewed: &Rc<dyn Fn(String, u32, &mut Window, &mut App) + 'static>,
+    on_comment_target: &Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
+    comment_overlays: &Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static>,
+    comment_selections: &Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static>,
     window: &mut Window,
     cx: &mut App,
 ) -> gpui::AnyElement {
@@ -215,11 +229,7 @@ fn render_review_entry(
     let file_name = base_name(&entry.path);
     let short_dir = short_parent_dir(&entry.path);
     let path_for_toggle = entry.path.clone();
-    let path_for_reviewed = entry.path.clone();
-    let turn_index = entry.turn_index;
     let on_toggle_collapsed = on_toggle_collapsed.clone();
-    let on_toggle_reviewed = on_toggle_reviewed.clone();
-    let reviewed = entry.reviewed;
     let (status_label, status_color) = match entry.status.as_str() {
         "modified" => ("M", theme.warning),
         "added" => ("A", theme.success),
@@ -229,18 +239,8 @@ fn render_review_entry(
     let additions = entry.additions;
     let deletions = entry.deletions;
 
-    let expanded_state = window.use_keyed_state(
-        gpui::ElementId::Name(
-            format!("review-diff-expanded-{}-{}", entry.path, entry.turn_index).into(),
-        ),
-        cx,
-        |_, _| false,
-    );
-    let is_expanded = *expanded_state.read(cx);
-
-    // One cached editor diff view per file, turn, and expansion state.
-    // The key carries the row's update time and diff length, so a changed
-    // diff builds a fresh view.
+    // One cached editor diff view per file. The key carries the row's update
+    // time and diff length, so a changed diff builds a fresh view.
     let diff_info: Option<(EditorDiff, usize)> = if is_collapsed {
         None
     } else {
@@ -250,37 +250,22 @@ fn render_review_entry(
             .filter(|text| !text.trim().is_empty())
             .map(|text| {
                 let key = format!(
-                    "review-diff-{}-{}-{}-{}-{}",
+                    "review-diff-{}-{}-{}",
                     entry.path,
-                    entry.turn_index,
                     entry.updated_at,
-                    text.len(),
-                    is_expanded
+                    text.len()
                 );
                 let state =
                     window.use_keyed_state(gpui::ElementId::Name(key.into()), cx, |_, cx| {
-                        if is_expanded {
-                            let diff = build_editor_diff_sized(
-                                text,
-                                &entry.path,
-                                &theme,
-                                REVIEW_FONT_SIZE,
-                                REVIEW_LINE_HEIGHT,
-                                cx,
-                            );
-                            let total = diff.line_count;
-                            (diff, total)
-                        } else {
-                            build_editor_diff_capped_sized(
-                                text,
-                                &entry.path,
-                                &theme,
-                                REVIEW_DIFF_PREVIEW_LINES,
-                                REVIEW_FONT_SIZE,
-                                REVIEW_LINE_HEIGHT,
-                                cx,
-                            )
-                        }
+                        build_editor_diff_capped_sized(
+                            text,
+                            &entry.path,
+                            &theme,
+                            REVIEW_DIFF_PREVIEW_LINES,
+                            REVIEW_FONT_SIZE,
+                            REVIEW_LINE_HEIGHT,
+                            cx,
+                        )
                     });
                 state.read(cx).clone()
             })
@@ -290,11 +275,10 @@ fn render_review_entry(
         .w_full()
         .flex()
         .flex_col()
-        .when(reviewed, |el| el.opacity(0.6))
         .child(
             div()
                 .id(gpui::ElementId::Name(
-                    format!("review-header-{}-{}", entry.path, entry.turn_index).into(),
+                    format!("review-header-{}", entry.path).into(),
                 ))
                 .flex()
                 .items_center()
@@ -393,70 +377,28 @@ fn render_review_entry(
                                 .text_color(status_color)
                                 .child(status_label),
                         )
-                        .child(
-                            div()
-                                .id(gpui::ElementId::Name(
-                                    format!("review-mark-{}-{}", entry.path, entry.turn_index)
-                                        .into(),
-                                ))
-                                .flex()
-                                .items_center()
-                                .gap(px(6.0))
-                                .px(px(8.0))
-                                .h(px(24.0))
-                                .rounded(px(6.0))
-                                .cursor_pointer()
-                                .when(reviewed, |el| el.bg(theme.overlay_strong))
-                                .when(!reviewed, |el| {
-                                    el.border_1().border_color(theme.border_strong)
-                                })
-                                .hover(|s| s.bg(theme.overlay))
-                                .on_click(move |event, window, cx| {
-                                    cx.stop_propagation();
-                                    let _ = event;
-                                    (on_toggle_reviewed)(
-                                        path_for_reviewed.clone(),
-                                        turn_index,
-                                        window,
-                                        cx,
-                                    );
-                                })
-                                .child(app_icon(
-                                    IconName::Check,
-                                    10.0,
-                                    if reviewed {
-                                        theme.success
-                                    } else {
-                                        theme.text_tertiary
-                                    },
-                                ))
-                                .child(
-                                    div()
-                                        .text_size(px(10.5))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(if reviewed {
-                                            theme.success
-                                        } else {
-                                            theme.text_tertiary
-                                        })
-                                        .child(if reviewed {
-                                            "Reviewed"
-                                        } else {
-                                            "Mark as reviewed"
-                                        }),
-                                ),
-                        ),
+
                 ),
         )
         .when_some(diff_info, |el, (diff, total_lines)| {
-            let raw_height = diff.line_count as f32 * REVIEW_LINE_HEIGHT + 8.0;
+            sync_review_comments(
+                &diff.view,
+                &entry.path,
+                on_comment_target,
+                comment_overlays,
+                comment_selections,
+                window,
+                cx,
+            );
+            let raw_height = (diff.line_count as f32 * REVIEW_LINE_HEIGHT + 8.0)
+                + overlay_height(&comment_overlays(entry.path.clone(), window, cx));
             let is_vertically_scrollable = raw_height > REVIEW_DIFF_MAX_HEIGHT;
             let height = raw_height.min(REVIEW_DIFF_MAX_HEIGHT);
-            let remaining = total_lines.saturating_sub(REVIEW_DIFF_PREVIEW_LINES);
-            let show_toggle = total_lines > REVIEW_DIFF_PREVIEW_LINES;
+            let remaining = total_lines.saturating_sub(diff.line_count);
+            let show_toggle = remaining > 0;
             let diff_box = div()
                 .id(gpui::ElementId::Name(
-                    format!("review-diff-box-{}-{}", entry.path, entry.turn_index).into(),
+                    format!("review-diff-box-{}", entry.path).into(),
                 ))
                 .w_full()
                 .h(px(height))
@@ -466,12 +408,11 @@ fn render_review_entry(
                 })
                 .child(DiffViewer::new(diff.view));
             el.child(diff_box).when(show_toggle, |el| {
-                let expanded_state = expanded_state.clone();
                 let list_state = list_state.cloned();
                 el.child(
                     div()
                         .id(gpui::ElementId::Name(
-                            format!("review-diff-more-{}-{}", entry.path, entry.turn_index).into(),
+                            format!("review-diff-more-{}", entry.path).into(),
                         ))
                         .w_full()
                         .flex()
@@ -481,21 +422,13 @@ fn render_review_entry(
                         .py(px(8.0))
                         .cursor_pointer()
                         .hover(|s| s.bg(theme.overlay))
-                        .on_click(move |_, _, cx| {
-                            expanded_state.update(cx, |expanded, cx| {
-                                *expanded = !*expanded;
-                                cx.notify();
-                            });
+                        .on_click(move |_, _window, _cx| {
                             if let Some(list_state) = &list_state {
                                 list_state.splice(ix..ix + 1, 1);
                             }
                         })
                         .child(app_icon(
-                            if is_expanded {
-                                IconName::ChevronUp
-                            } else {
-                                IconName::ChevronDown
-                            },
+                            IconName::ChevronDown,
                             12.0,
                             theme.text_secondary,
                         ))
@@ -503,14 +436,38 @@ fn render_review_entry(
                             div()
                                 .text_size(px(12.0))
                                 .text_color(theme.text_secondary)
-                                .child(if is_expanded {
-                                    "Show less".to_string()
-                                } else {
-                                    format!("Show {remaining} more lines")
-                                }),
+                                .child(format!("Show {remaining} more lines")),
                         ),
                 )
             })
         })
         .into_any_element()
+}
+
+
+fn sync_review_comments(
+    view: &Entity<editor_ui::DiffView>,
+    path: &str,
+    on_comment_target: &Rc<dyn Fn(String, DiffCommentTarget) + 'static>,
+    comment_overlays: &Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffRowOverlay> + 'static>,
+    comment_selections: &Rc<dyn Fn(String, &mut Window, &mut App) -> Vec<DiffCommentTarget> + 'static>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let comment_path = path.to_string();
+    let comment_handler = on_comment_target.clone();
+    view.update(cx, |view, cx| {
+        view.on_comment_target(move |target| {
+            comment_handler(comment_path.clone(), target);
+        });
+        view.set_comment_selections(comment_selections(path.to_string(), window, cx), cx);
+        view.set_row_overlays(comment_overlays(path.to_string(), window, cx), cx);
+    });
+}
+
+fn overlay_height(overlays: &[DiffRowOverlay]) -> f32 {
+    overlays
+        .iter()
+        .map(|overlay| overlay.rows.saturating_sub(1) as f32 * REVIEW_LINE_HEIGHT)
+        .sum()
 }
