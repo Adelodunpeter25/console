@@ -152,7 +152,7 @@ impl NewProjectDialog {
     /// folder chooser, which would otherwise be orphaned with no dialog to
     /// report back to.
     fn close(&self, window: &mut Window, cx: &mut Context<Self>) {
-        window.remove_window();
+        window.defer(cx, |window, _cx| window.remove_window());
         if let Some(app) = self.app.upgrade() {
             app.update(cx, |app_state, cx| {
                 app_state.new_project_dialog_handle = None;

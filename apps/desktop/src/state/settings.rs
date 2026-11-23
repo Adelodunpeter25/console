@@ -247,8 +247,10 @@ impl ConsoleDesktopApp {
     pub fn close_new_project_dialog(&mut self, cx: &mut Context<Self>) {
         if let Some(handle) = self.new_project_dialog_handle.take() {
             self.new_project_dialog_view = None;
-            let _ = cx.update_window(handle, |_root, window, _cx| {
-                window.remove_window();
+            cx.defer(move |cx| {
+                let _ = handle.update(cx, |_root, window, _cx| {
+                    window.remove_window();
+                });
             });
         }
     }
