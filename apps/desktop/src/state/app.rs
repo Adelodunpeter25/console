@@ -318,92 +318,14 @@ impl ConsoleDesktopApp {
         let shells_menu = ContextMenuHandle::new(cx);
         let automations_menu = ContextMenuHandle::new(cx);
 
-        let drafts = startup.drafts;
-        // Persisted drafts from closed tabs are shown in the sidebar.
-        // Sessions that are currently open in workspace tabs belong in their tab's composer, not the sidebar.
-        let mut open_session_ids = std::collections::HashSet::new();
-        for leaf in initial_root.leaves() {
-            for tab in &leaf.tabs {
-                if let console_core::WorkspaceTabConfig::Chat { session_id, .. } = tab {
-                    open_session_ids.insert(session_id.clone());
-                }
-            }
-        }
-        let sidebar_draft_ids: std::collections::HashSet<String> = drafts
-            .keys()
-            .filter(|k| {
-                k.as_str() != "new_chat"
-                    && k.as_str() != crate::state::floating_composer::FLOATING_KEY
-                    && !drafts[*k].prompt.trim().is_empty()
-                    && !open_session_ids.contains(*k)
-            })
-            .cloned()
-            .collect();
-        let initial_main_session = initial_root
-            .leaves()
-            .into_iter()
-            .find(|l| l.id == "pane-main")
-            .and_then(|leaf| {
-                if let Some(session_id) = leaf
-                    .active_tab_id
-                    .as_deref()
-                    .and_then(|tab_id| tab_id.strip_prefix("chat:"))
-                {
-                    return Some(session_id.to_owned());
-                }
-                leaf.tabs
-                    .iter()
-                    .filter_map(|tab| match tab {
-                        console_core::WorkspaceTabConfig::Chat {
-                            session_id,
-                            last_active_at_ms,
-                            ..
-                        } => Some((session_id, last_active_at_ms.unwrap_or(0))),
-                        _ => None,
-                    })
-                    .max_by_key(|(_, ts)| *ts)
-                    .map(|(id, _)| id.clone())
-            });
-        let initial_draft_key = initial_main_session.as_deref().unwrap_or("new_chat");
-        if let Some(initial_draft) = drafts.get(initial_draft_key)
-            && (!initial_draft.prompt.trim().is_empty() || !initial_draft.context_files.is_empty())
-        {
-            let mentions = initial_draft
-                .mentions
-                .iter()
-                .map(|mention| console_ui::ComposerMention {
-                    range: mention.start..mention.end,
-                    path: mention.path.clone(),
-                    label: mention.label.clone().unwrap_or_else(|| {
-                        std::path::Path::new(&mention.path)
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or(&mention.path)
-                            .to_string()
-                    }),
-                })
-                .collect();
-            let context_files = initial_draft.context_files.clone();
-            composer_input.update(cx, |input, cx| {
-                input.set_content_with_mentions(initial_draft.prompt.clone(), mentions, cx);
-                input.set_context_files(context_files);
-                cx.notify();
-            });
-        }
+        let drafts = std::collections::HashMap::new();
+        let sidebar_draft_ids = std::collections::HashSet::new();
 
-        // Flush unsaved drafts when the app quits: the 500ms debounced save
-        // can be cut short by an exit, losing the last edit (e.g. a
-        // just-cited quote). The scroll positions are flushed for the same
-        // reason: the debounced write may not have run, and the chat still on
-        // screen has moved since its last snapshot.
         let drafts_quit_subscription = cx.on_app_quit(|this, cx| {
             this.flush_state_for_exit();
             this.snapshot_visible_pane_scrolls(cx);
             this.persist_transcript_scroll();
-            let drafts = this.drafts.clone();
-            async move {
-                crate::persistence::store::save_drafts(drafts);
-            }
+            async move {}
         });
 
         let subscriptions = vec![
@@ -466,7 +388,6 @@ impl ConsoleDesktopApp {
                         this.submit_steer_for_pane(pane_id, prompt, context_files.clone(), cx);
                     }
                     ComposerEvent::Edited => {
-                        // Save raw text for crash safety; does NOT update sidebar_draft_ids.
                         let input = input.read(cx);
                         let text = input.content().to_string();
                         let mentions = input.mentions().to_vec();
@@ -482,6 +403,9 @@ impl ConsoleDesktopApp {
                             &annotations,
                             cx,
                         );
+                        if let Some(session_id) = session_id {
+                            this.schedule_draft_push(session_id, cx);
+                        }
                     }
                     ComposerEvent::Focus => cx.notify(),
                     // Backspace on an empty composer removes the last staged
@@ -606,7 +530,6 @@ impl ConsoleDesktopApp {
             workspaces_dirty: std::cell::Cell::new(false),
             last_workspaces_persist: std::cell::Cell::new(None),
             persisted_workspaces_bytes: std::cell::RefCell::new(None),
-            drafts_save_pending: false,
             drafts_push_pending: std::collections::HashSet::new(),
             pending_project_override: std::collections::HashMap::new(),
             active_pane_id: initial_active_pane_id,

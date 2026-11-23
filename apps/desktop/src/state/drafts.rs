@@ -1,74 +1,31 @@
-use console_core::{ProjectInfoExt, SessionHeaderExt};
+use console_core::SessionHeaderExt;
 use console_ui::{ComposerMention, DraftSummary};
 use gpui::Context;
-use std::time::Duration;
 
-use crate::persistence;
+
 use crate::state::app::ConsoleDesktopApp;
-
-/// Trailing delay before composer text hits disk. Typing previously caused a
-/// full store read+parse+pretty-write per keystroke on the UI thread; now
-/// bursts coalesce into one write shortly after typing pauses.
-const DRAFTS_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
+use crate::state::types::{InMemoryDraft, InMemoryDraftMention};
 
 impl ConsoleDesktopApp {
     pub fn draft_summaries(&self) -> Vec<DraftSummary> {
         let mut summaries = Vec::new();
-        for (key, draft) in &self.drafts {
-            let prompt_trimmed = draft.prompt.trim();
-            if prompt_trimmed.is_empty() {
+        for session_id in &self.sidebar_draft_ids {
+            let Some(session) = self.sessions.iter().find(|s| &s.id == session_id) else {
                 continue;
-            }
-            // Session drafts only appear in the sidebar once confirmed (tab was closed
-            // with unsent text). new_chat is always shown when it has text.
-            if key != "new_chat" && !self.sidebar_draft_ids.contains(key) {
-                continue;
-            }
-            let first_line = prompt_trimmed
-                .lines()
-                .next()
-                .unwrap_or("")
-                .trim()
-                .to_string();
-            let preview = if first_line.chars().count() > 42 {
-                let truncated: String = first_line.chars().take(40).collect();
-                format!("{truncated}…")
-            } else {
-                first_line
             };
-            let project_name = if key == "new_chat" {
-                self.active_pane_id
-                    .as_deref()
-                    .and_then(|pane_id| self.selected_project_for_pane(pane_id))
-                    .map(|p| p.name.clone())
-            } else if let Some(session) = self.sessions.iter().find(|s| &s.id == key) {
-                self.projects
-                    .iter()
-                    .find(|project| project.matches_session(session))
-                    .map(|project| project.name.clone())
-            } else {
-                None
-            };
-
-            if key == "new_chat" {
-                summaries.push(DraftSummary {
-                    session_id: None,
-                    title: "New Chat".to_string(),
-                    preview,
-                    project_name,
-                    updated_at: draft.updated_at,
-                });
-            } else if let Some(session) = self.sessions.iter().find(|s| &s.id == key) {
-                summaries.push(DraftSummary {
-                    session_id: Some(session.id.clone()),
-                    title: session.display_title().to_string(),
-                    preview,
-                    project_name,
-                    updated_at: draft.updated_at,
-                });
-            }
+            let updated_at = self
+                .drafts
+                .get(session_id)
+                .map(|d| d.updated_at)
+                .unwrap_or(0);
+            summaries.push(DraftSummary {
+                session_id: Some(session.id.clone()),
+                title: session.display_title().to_string(),
+                preview: String::new(),
+                project_name: None,
+                updated_at,
+            });
         }
-        summaries.sort_by_key(|b| std::cmp::Reverse(b.updated_at));
         summaries
     }
 
@@ -222,28 +179,28 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         let key = key.to_string();
+        let _ = cx;
         if text.trim().is_empty()
             && context_files.is_empty()
             && attachments.is_empty()
             && annotations.is_empty()
         {
-            if self.drafts.remove(&key).is_some() {
-                self.schedule_drafts_save(cx);
-            }
+            self.drafts.remove(&key);
         } else {
-            let persisted_mentions = mentions
+            let in_memory_mentions = mentions
                 .iter()
-                .map(|mention| persistence::store::PersistedDraftMention {
+                .map(|mention| InMemoryDraftMention {
                     start: mention.range.start,
                     end: mention.range.end,
                     path: mention.path.clone(),
                     label: Some(mention.label.clone()),
                 })
                 .collect::<Vec<_>>();
+            let existing_floating = self.drafts.get(&key).and_then(|d| d.floating.clone());
             let changed = match self.drafts.get(&key) {
                 Some(existing) => {
                     existing.prompt != text
-                        || existing.mentions != persisted_mentions
+                        || existing.mentions != in_memory_mentions
                         || existing.context_files != context_files
                         || existing.attachments != attachments
                         || existing.annotations != annotations
@@ -253,48 +210,27 @@ impl ConsoleDesktopApp {
             if changed {
                 self.drafts.insert(
                     key,
-                    persistence::store::PersistedDraft {
+                    InMemoryDraft {
                         prompt: text.to_string(),
-                        updated_at: chrono::Utc::now().timestamp(),
-                        mentions: persisted_mentions,
+                        updated_at: chrono::Utc::now().timestamp_millis(),
+                        mentions: in_memory_mentions,
                         context_files: context_files.to_vec(),
                         attachments: attachments.to_vec(),
                         annotations: annotations.to_vec(),
-                        floating: None,
+                        floating: existing_floating,
                     },
                 );
-                self.schedule_drafts_save(cx);
             }
         }
     }
 
     pub fn clear_draft_for_session(&mut self, session_id: Option<&str>, cx: &mut Context<Self>) {
         let key = session_id.unwrap_or("new_chat");
-        if self.drafts.remove(key).is_some() {
-            self.schedule_drafts_save(cx);
-        }
+        self.drafts.remove(key);
         if let Some(session_id) = session_id {
+            self.sidebar_draft_ids.remove(session_id);
             self.schedule_draft_push(session_id.to_string(), cx);
         }
-    }
-
-    pub(crate) fn schedule_drafts_save(&mut self, cx: &mut Context<Self>) {
-        if self.drafts_save_pending {
-            return;
-        }
-        self.drafts_save_pending = true;
-        cx.spawn(async move |entity, cx| {
-            cx.background_executor().timer(DRAFTS_SAVE_DEBOUNCE).await;
-            let _ = cx.update(|cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this: &mut ConsoleDesktopApp, _| {
-                        this.drafts_save_pending = false;
-                        persistence::store::save_drafts(this.drafts.clone());
-                    });
-                }
-            });
-        })
-        .detach();
     }
 
     /// Called when a tab closes — commits the current draft state to the sidebar.

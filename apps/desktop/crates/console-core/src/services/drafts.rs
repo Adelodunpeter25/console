@@ -1,7 +1,7 @@
 //! Synced per-chat composer drafts (`/api/drafts/:sessionId`).
 
 use anyhow::{Context, Result, anyhow};
-use console_proto::{ChatDraft, PutDraftResponse};
+use console_proto::{ChatDraft, ListDraftsResponse, PutDraftResponse};
 use serde::Deserialize;
 
 use crate::types::ApiResponse;
@@ -20,6 +20,31 @@ struct GetDraftData {
 impl DraftService {
     pub fn new(transport: HttpTransport) -> Self {
         Self { transport }
+    }
+
+    /// Session IDs that currently have a non-empty draft on the server.
+    pub async fn list(&self) -> Result<Vec<String>> {
+        let url = self.transport.url("/api/drafts").await;
+        let response = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to list drafts")?;
+        let body: ApiResponse<ListDraftsResponse> = self
+            .transport
+            .decode_json(response)
+            .await
+            .context("Failed to parse drafts list response")?;
+        if body.success {
+            Ok(body.data.map(|d| d.session_ids).unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error.unwrap_or_else(|| "Failed to list drafts".into())
+            ))
+        }
     }
 
     /// The chat's stored draft, or `None` when it has never had one.
@@ -79,6 +104,34 @@ impl DraftService {
             (_, _) => Err(anyhow!(
                 body.error.unwrap_or_else(|| "Failed to save draft".into())
             )),
+        }
+    }
+
+    /// Clear a draft on the server.
+    pub async fn delete(&self, session_id: &str) -> Result<()> {
+        let url = self
+            .transport
+            .url(&format!("/api/drafts/{}", encode_segment(session_id)))
+            .await;
+        let response = self
+            .transport
+            .client()
+            .delete(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to delete draft")?;
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(response)
+            .await
+            .context("Failed to parse draft delete response")?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                body.error.unwrap_or_else(|| "Failed to delete draft".into())
+            ))
         }
     }
 }

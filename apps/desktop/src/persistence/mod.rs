@@ -25,7 +25,6 @@ pub struct StartupState {
     pub environments: Option<store::PersistedEnvironmentsState>,
     pub onboarding_seen: bool,
     pub workspaces: WorkspacesDocument,
-    pub drafts: std::collections::HashMap<String, store::PersistedDraft>,
     /// Per-chat transcript scroll positions, so a chat reopens where it was
     /// left rather than at the top.
     pub transcript_scroll: Option<store::PersistedTranscriptScrollState>,
@@ -34,7 +33,6 @@ pub struct StartupState {
 /// Read the state the app starts from.
 pub fn load_startup() -> StartupState {
     let document = store::read_document();
-    let drafts = store::read_drafts();
     StartupState {
         window: document.window,
         layout: document.layout.unwrap_or_default(),
@@ -44,7 +42,6 @@ pub fn load_startup() -> StartupState {
             .map(|state| state.seen || !state.dismissed.is_empty())
             .unwrap_or(false),
         workspaces: document.workspaces.unwrap_or_default(),
-        drafts: drafts.drafts,
         transcript_scroll: document.transcript_scroll,
     }
 }

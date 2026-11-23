@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -24,6 +25,33 @@ type DraftService struct {
 
 func NewDraftService(manager *db.DB) *DraftService {
 	return &DraftService{manager: manager}
+}
+
+// ListSessionIDs returns session IDs that currently have a non-empty draft
+// (excluding the reserved __floating__ key).
+func (s *DraftService) ListSessionIDs() ([]string, error) {
+	rows, err := s.manager.Global().Query(
+		`SELECT session_id, body FROM chat_drafts WHERE session_id != '__floating__' ORDER BY updated_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var sessionID, body string
+		if err := rows.Scan(&sessionID, &body); err != nil {
+			return nil, err
+		}
+		draft := &consolev1.ChatDraft{}
+		if err := protojson.Unmarshal([]byte(body), draft); err != nil {
+			continue
+		}
+		if strings.TrimSpace(draft.Text) != "" || len(draft.Comments) > 0 {
+			ids = append(ids, sessionID)
+		}
+	}
+	return ids, rows.Err()
 }
 
 // Get returns the stored draft, or nil when the chat has none.

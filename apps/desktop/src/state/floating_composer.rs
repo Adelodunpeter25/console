@@ -14,7 +14,7 @@
 
 use std::rc::Rc;
 
-use crate::persistence::store::{PersistedBranchChoice, PersistedFloatingChoices};
+use console_proto::FloatingDraftChoices;
 
 use console_core::{
     AgentMessage, ApprovalMode, CreateSessionDto, CreateWorktreeSpec, ImageAttachment,
@@ -32,7 +32,7 @@ use super::autocomplete::FLOATING_AUTOCOMPLETE_KEY;
 /// Reserved key for the card's staged images. The attachment store is keyed by
 /// owner rather than strictly by pane, so the card claims a key of its own and
 /// never collides with a real pane id.
-pub(crate) const FLOATING_KEY: &str = "__floating_composer__";
+pub(crate) const FLOATING_KEY: &str = "__floating__";
 
 impl ConsoleDesktopApp {
     /// ⌘N — open the launcher instead of creating a session immediately.
@@ -82,6 +82,7 @@ impl ConsoleDesktopApp {
         };
         self.floating_composer.show(snapshot, window, cx);
         self.restore_floating_stash(cx);
+        self.pull_floating_draft(cx);
 
         // Mirror the docked picker's popover-open handler: fetch the live
         // model list rather than opening on the static catalog. Favorites
@@ -126,10 +127,9 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// Keep an unsent prompt (text, mentions, images) under the card's own
-    /// draft key so reopening restores it. The key is never listed in the
-    /// sidebar and is never synced.
-    fn stash_floating_prompt(&mut self, cx: &mut Context<Self>) {
+    /// Keep an unsent prompt (text, mentions, images, pickers) under the
+    /// reserved floating key and sync it to the server.
+    pub(crate) fn stash_floating_prompt(&mut self, cx: &mut Context<Self>) {
         let input = self.floating_composer.input.read(cx);
         let text = input.content().to_string();
         let mentions = input.mentions().to_vec();
@@ -145,73 +145,91 @@ impl ConsoleDesktopApp {
             cx,
         );
         let card = &self.floating_composer;
-        let choices = PersistedFloatingChoices {
-            project_id: card.selected_project_id.clone(),
-            branch: match &card.branch {
-                BranchChoice::Project => PersistedBranchChoice::Project,
-                BranchChoice::NewWorktree => PersistedBranchChoice::NewWorktree,
-                BranchChoice::FromBranch(name) => PersistedBranchChoice::FromBranch(name.clone()),
-            },
-            worktree_base: card.worktree_base.clone(),
-            model: card
+        let (branch_mode, branch_name) = match &card.branch {
+            BranchChoice::Project => ("project".to_string(), String::new()),
+            BranchChoice::NewWorktree => ("new_worktree".to_string(), String::new()),
+            BranchChoice::FromBranch(name) => ("from_branch".to_string(), name.clone()),
+        };
+        let choices = FloatingDraftChoices {
+            project_id: card.selected_project_id.clone().unwrap_or_default(),
+            branch_mode,
+            branch_name,
+            worktree_base: card.worktree_base.clone().unwrap_or_default(),
+            provider: card
                 .selected_model
                 .as_ref()
-                .map(|m| (m.provider.clone(), m.model_id.clone())),
-            thinking_level: card.thinking_level,
+                .map(|m| m.provider.clone())
+                .unwrap_or_default(),
+            model_id: card
+                .selected_model
+                .as_ref()
+                .map(|m| m.model_id.clone())
+                .unwrap_or_default(),
+            thinking_level: card
+                .thinking_level
+                .map(|t| t.as_str().to_string())
+                .unwrap_or_default(),
             approval_mode: card.approval_mode.value().to_string(),
         };
-        if let Some(draft) = self.drafts.get_mut(FLOATING_KEY)
-            && draft.floating.as_ref() != Some(&choices)
-        {
+        if let Some(draft) = self.drafts.get_mut(FLOATING_KEY) {
             draft.floating = Some(choices);
-            self.schedule_drafts_save(cx);
         }
+        self.schedule_draft_push(FLOATING_KEY.to_string(), cx);
     }
 
     /// Re-apply the pickers stashed with the prompt. Each one is checked
     /// against live state and left at its default when it no longer exists.
     fn restore_floating_choices(
         &mut self,
-        choices: PersistedFloatingChoices,
+        choices: FloatingDraftChoices,
         cx: &mut Context<Self>,
     ) {
-        let project_exists = choices
-            .project_id
+        let project_id = (!choices.project_id.is_empty()).then_some(choices.project_id);
+        let project_exists = project_id
             .as_deref()
             .is_some_and(|id| self.projects.iter().any(|p| p.id == id));
-        if project_exists && let Some(id) = choices.project_id.clone() {
+        if project_exists && let Some(id) = project_id {
             self.floating_project_changed(id, cx);
-            // The branch list is still the previous project's here; `set_branches`
-            // drops a base that isn't in the list once the fetch lands.
-            self.floating_composer.branch = match choices.branch {
-                PersistedBranchChoice::Project => BranchChoice::Project,
-                PersistedBranchChoice::NewWorktree => BranchChoice::NewWorktree,
-                PersistedBranchChoice::FromBranch(name) => BranchChoice::FromBranch(name),
+            self.floating_composer.branch = match choices.branch_mode.as_str() {
+                "new_worktree" => BranchChoice::NewWorktree,
+                "from_branch" if !choices.branch_name.is_empty() => {
+                    BranchChoice::FromBranch(choices.branch_name)
+                }
+                _ => BranchChoice::Project,
             };
-            self.floating_composer.worktree_base = choices.worktree_base;
-        } else if choices.project_id.is_none() {
+            self.floating_composer.worktree_base =
+                (!choices.worktree_base.is_empty()).then_some(choices.worktree_base);
+        } else if project_id.is_none() {
             self.floating_no_project_chosen(cx);
         }
 
-        if let Some((provider, model_id)) = choices.model {
-            let known = self.providers.iter().any(|p| p.name == provider)
+        if !choices.provider.is_empty() && !choices.model_id.is_empty() {
+            let known = self.providers.iter().any(|p| p.name == choices.provider)
                 && self
                     .models_by_provider
-                    .get(&provider)
-                    .is_none_or(|models| models.iter().any(|m| m.id == model_id));
+                    .get(&choices.provider)
+                    .is_none_or(|models| models.iter().any(|m| m.id == choices.model_id));
             if known {
-                let model = SelectedModel { provider, model_id };
+                let model = SelectedModel {
+                    provider: choices.provider,
+                    model_id: choices.model_id,
+                };
                 let supported = self.supported_thinking_levels_for_model(Some(&model));
+                let thinking = (!choices.thinking_level.is_empty())
+                    .then(|| ThinkingLevel::from_str(&choices.thinking_level))
+                    .flatten();
                 self.floating_composer.selected_model = Some(model);
                 self.floating_composer
-                    .set_thinking_context(choices.thinking_level, supported);
+                    .set_thinking_context(thinking, supported);
             }
         }
-        self.floating_composer.approval_mode = ApprovalMode::from_value(&choices.approval_mode);
+        if !choices.approval_mode.is_empty() {
+            self.floating_composer.approval_mode = ApprovalMode::from_value(&choices.approval_mode);
+        }
         cx.notify();
     }
 
-    fn restore_floating_stash(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn restore_floating_stash(&mut self, cx: &mut Context<Self>) {
         let Some((text, mentions)) = self.get_draft_with_mentions_for_key(FLOATING_KEY) else {
             return;
         };
@@ -903,9 +921,7 @@ impl ConsoleDesktopApp {
                     match result {
                         Ok(new_session) => {
                             this.floating_composer.hide();
-                            if this.drafts.remove(FLOATING_KEY).is_some() {
-                                this.schedule_drafts_save(cx);
-                            }
+                            this.clear_draft_for_session(Some(FLOATING_KEY), cx);
                             this.open_floating_session(
                                 &pane_id,
                                 &new_session,
@@ -1091,9 +1107,7 @@ impl ConsoleDesktopApp {
                     match result {
                         Ok(new_session) => {
                             this.floating_composer.hide();
-                            if this.drafts.remove(FLOATING_KEY).is_some() {
-                                this.schedule_drafts_save(cx);
-                            }
+                            this.clear_draft_for_session(Some(FLOATING_KEY), cx);
                             this.open_floating_session(
                                 &pane_id,
                                 &new_session,

@@ -116,6 +116,25 @@ pub(crate) struct FileSaveRequest {
     pub revision: u64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InMemoryDraftMention {
+    pub start: usize,
+    pub end: usize,
+    pub path: String,
+    pub label: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct InMemoryDraft {
+    pub prompt: String,
+    pub updated_at: i64,
+    pub mentions: Vec<InMemoryDraftMention>,
+    pub context_files: Vec<String>,
+    pub attachments: Vec<console_core::ImageAttachment>,
+    pub annotations: Vec<console_core::BrowserElementAnnotation>,
+    pub floating: Option<console_proto::FloatingDraftChoices>,
+}
+
 pub struct ConsoleDesktopApp {
     pub client: ConsoleClient,
     /// Streaming plumbing shared by every surface (start/attach run, watch
@@ -146,8 +165,6 @@ pub struct ConsoleDesktopApp {
     pub(crate) workspaces_dirty: std::cell::Cell<bool>,
     pub(crate) last_workspaces_persist: std::cell::Cell<Option<std::time::Instant>>,
     pub(crate) persisted_workspaces_bytes: std::cell::RefCell<Option<Vec<u8>>>,
-    /// Trailing timer latch for draft file saves (see `schedule_drafts_save`).
-    pub(crate) drafts_save_pending: bool,
     /// Sessions with a debounced server draft push in flight.
     pub(crate) drafts_push_pending: std::collections::HashSet<String>,
     /// User-picked folder per session awaiting server confirmation
@@ -649,7 +666,7 @@ pub struct ConsoleDesktopApp {
     pub chrome_importing: bool,
     pub chrome_status: Option<String>,
     pub update_status: console_ui::settings::UpdateStatus,
-    pub drafts: std::collections::HashMap<String, crate::persistence::store::PersistedDraft>,
+    pub drafts: std::collections::HashMap<String, InMemoryDraft>,
     /// Session IDs whose draft is confirmed for sidebar display.
     /// Only updated when a tab closes (or submit). Typing never touches this —
     /// so the sidebar stays frozen while a tab is open.

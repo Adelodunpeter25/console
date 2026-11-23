@@ -21,6 +21,10 @@ impl ConsoleDesktopApp {
         self._subscriptions.push(cx.subscribe(
             &input,
             |this, _input, event: &ComposerEvent, cx| match event {
+                ComposerEvent::Edited => {
+                    this.stash_floating_prompt(cx);
+                    cx.notify();
+                }
                 ComposerEvent::Submit(prompt, context_files) => {
                     this.submit_floating_composer(prompt.clone(), context_files.clone(), cx);
                 }
@@ -127,6 +131,7 @@ impl ConsoleDesktopApp {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 this.set_session_list(sessions, cx);
+                                this.refresh_draft_session_ids(cx);
                                 if matches!(
                                     target_for_bootstrap,
                                     crate::window::WindowLaunchTarget::RestorePersisted
@@ -380,6 +385,7 @@ impl ConsoleDesktopApp {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 this.set_session_list(sessions, cx);
+                                this.refresh_draft_session_ids(cx);
                                 cx.notify();
                             });
                         }

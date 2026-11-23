@@ -30,58 +30,6 @@ pub struct PersistedEnvironmentsState {
     pub active_id: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PersistedDraftMention {
-    pub start: usize,
-    pub end: usize,
-    pub path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-}
-
-/// Base the floating composer was set to launch from.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PersistedBranchChoice {
-    Project,
-    NewWorktree,
-    FromBranch(String),
-}
-
-/// The floating composer's pickers, stashed beside its unsent prompt.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct PersistedFloatingChoices {
-    pub project_id: Option<String>,
-    pub branch: PersistedBranchChoice,
-    /// The worktree cut point for a NewWorktree launch; None is the repo
-    /// default. Defaulted so drafts persisted before the field existed load.
-    #[serde(default)]
-    pub worktree_base: Option<String>,
-    pub model: Option<(String, String)>,
-    pub thinking_level: Option<console_core::ThinkingLevel>,
-    pub approval_mode: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PersistedDraft {
-    pub prompt: String,
-    pub updated_at: i64,
-    #[serde(default)]
-    pub mentions: Vec<PersistedDraftMention>,
-    #[serde(default)]
-    pub context_files: Vec<String>,
-    #[serde(default)]
-    pub attachments: Vec<console_core::ImageAttachment>,
-    #[serde(default)]
-    pub annotations: Vec<console_core::BrowserElementAnnotation>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub floating: Option<PersistedFloatingChoices>,
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct PersistedDraftsState {
-    pub drafts: std::collections::HashMap<String, PersistedDraft>,
-}
-
 /// Which servers have already been shown the first-run setup panel.
 ///
 /// One bit per server, keyed by environment id — the same stable ids
@@ -157,11 +105,6 @@ pub struct StorageDocument {
     /// other section along with it.
     #[serde(default)]
     pub transcript_scroll: Option<PersistedTranscriptScrollState>,
-    /// Drafts live in `drafts.json`, so a layout or workspace write never
-    /// rewrites the images a draft can carry. Read only: this is where
-    /// pre-split documents kept them, and it is dropped on the next write.
-    #[serde(default, skip_serializing)]
-    pub drafts: Option<PersistedDraftsState>,
 }
 
 pub fn storage_directory() -> PathBuf {
@@ -170,10 +113,6 @@ pub fn storage_directory() -> PathBuf {
 
 fn storage_path() -> PathBuf {
     storage_directory().join("state.json")
-}
-
-fn drafts_path() -> PathBuf {
-    storage_directory().join("drafts.json")
 }
 
 /// Read the state document.
@@ -274,42 +213,6 @@ fn update_document(update: impl FnOnce(&mut StorageDocument)) {
     }
 }
 
-/// Read the drafts document.
-///
-/// Drafts live in their own file so a layout or workspace write never
-/// rewrites the images a draft can carry. Documents written before the split
-/// kept them in `state.json`, so that is the fallback — and the first read
-/// moves them across, so dropping the old copy cannot lose them.
-pub fn read_drafts() -> PersistedDraftsState {
-    match fs::read_to_string(drafts_path()) {
-        Ok(contents) => return serde_json::from_str(&contents).unwrap_or_default(),
-        // A drafts file that cannot be read is left alone rather than
-        // overwritten: the next save would replace it with nothing.
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            log::warn!("Failed to read drafts: {error}");
-            return PersistedDraftsState::default();
-        }
-        Err(_) => {}
-    }
-
-    let legacy = read_state_file().drafts.unwrap_or_default();
-    if let Err(error) = write_drafts_file(&legacy) {
-        log::warn!("Failed to persist drafts: {error}");
-    }
-    legacy
-}
-
-fn write_drafts_file(state: &PersistedDraftsState) -> std::io::Result<()> {
-    let path = drafts_path();
-    let directory = path.parent().unwrap_or_else(|| Path::new("."));
-    fs::create_dir_all(directory)?;
-
-    let temporary_path = path.with_extension(format!("json.{}.tmp", std::process::id()));
-    let contents = serde_json::to_vec(state).map_err(std::io::Error::other)?;
-    fs::write(&temporary_path, contents)?;
-    fs::rename(temporary_path, path)
-}
-
 pub fn save_window(state: PersistedWindowState) {
     update_document(|document| document.window = Some(state));
 }
@@ -362,8 +265,3 @@ pub fn save_environment_list_preserving_active(environments: Vec<PersistedEnviro
     });
 }
 
-pub fn save_drafts(drafts: std::collections::HashMap<String, PersistedDraft>) {
-    if let Err(error) = write_drafts_file(&PersistedDraftsState { drafts }) {
-        log::warn!("Failed to persist drafts: {error}");
-    }
-}

@@ -14,7 +14,8 @@ use console_ui::ComposerMention;
 use gpui::Context;
 
 use super::app::ConsoleDesktopApp;
-use crate::persistence;
+use super::floating_composer::FLOATING_KEY;
+use super::types::{InMemoryDraft, InMemoryDraftMention};
 
 /// Trailing delay before a draft goes to the server; typing bursts coalesce.
 const DRAFT_PUSH_DEBOUNCE: Duration = Duration::from_millis(800);
@@ -98,6 +99,7 @@ impl ConsoleDesktopApp {
                 .unwrap_or_default(),
             comments: Vec::new(),
             updated_at: chrono::Utc::now().timestamp_millis(),
+            floating: local.and_then(|draft| draft.floating.clone()),
         })
     }
 
@@ -125,7 +127,7 @@ impl ConsoleDesktopApp {
         let local_ms = self
             .drafts
             .get(&session_id)
-            .map(|draft| draft.updated_at.saturating_mul(1000))
+            .map(|draft| draft.updated_at)
             .unwrap_or(0);
         if remote.updated_at <= local_ms {
             return;
@@ -151,19 +153,23 @@ impl ConsoleDesktopApp {
             .get(&session_id)
             .map(|draft| draft.annotations.clone())
             .unwrap_or_default();
-        if remote.text.trim().is_empty() && attachments.is_empty() && annotations.is_empty() {
+        if remote.text.trim().is_empty()
+            && attachments.is_empty()
+            && annotations.is_empty()
+            && remote.floating.is_none()
+        {
             self.drafts.remove(&session_id);
             self.sidebar_draft_ids.remove(&session_id);
         } else {
             self.drafts.insert(
                 session_id.clone(),
-                persistence::store::PersistedDraft {
+                InMemoryDraft {
                     prompt: remote.text.clone(),
-                    updated_at: remote.updated_at / 1000,
+                    updated_at: remote.updated_at,
                     mentions: remote
                         .mentions
                         .iter()
-                        .map(|mention| persistence::store::PersistedDraftMention {
+                        .map(|mention| InMemoryDraftMention {
                             start: mention.start as usize,
                             end: mention.end as usize,
                             path: mention.path.clone(),
@@ -175,11 +181,21 @@ impl ConsoleDesktopApp {
                     ),
                     attachments,
                     annotations,
-                    floating: None,
+                    floating: remote.floating.clone(),
                 },
             );
+            if session_id != FLOATING_KEY && !remote.text.trim().is_empty() {
+                self.sidebar_draft_ids.insert(session_id.clone());
+            }
         }
-        self.schedule_drafts_save(cx);
+
+        if session_id == FLOATING_KEY {
+            if self.floating_composer.open {
+                self.restore_floating_stash(cx);
+            }
+            cx.notify();
+            return;
+        }
 
         let Some(pane_id) = self.pane_showing_session(&session_id) else {
             cx.notify();
@@ -201,5 +217,41 @@ impl ConsoleDesktopApp {
             });
         }
         cx.notify();
+    }
+
+    /// Fetch the synced floating composer draft from the server.
+    pub(crate) fn pull_floating_draft(&mut self, cx: &mut Context<Self>) {
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            let Ok(Some(remote)) = client.drafts.get(FLOATING_KEY).await else {
+                return;
+            };
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.adopt_remote_draft(remote, cx));
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Fetch the list of session IDs that have non-empty drafts on the server
+    /// so the sidebar pencil icon reflects server state.
+    pub(crate) fn refresh_draft_session_ids(&mut self, cx: &mut Context<Self>) {
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            let Ok(ids) = client.drafts.list().await else {
+                return;
+            };
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.sidebar_draft_ids = ids.into_iter().collect();
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
     }
 }

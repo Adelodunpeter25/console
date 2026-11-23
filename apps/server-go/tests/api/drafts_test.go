@@ -102,6 +102,44 @@ func TestDraftsLastWriteWinsAndClear(t *testing.T) {
 	}
 }
 
+func TestDraftsListExcludesClearedAndFloating(t *testing.T) {
+	app := draftApp(t)
+
+	for _, tc := range []struct {
+		id   string
+		body string
+	}{
+		{"s1", `{"text":"hello","updatedAt":"100"}`},
+		{"s2", `{"text":"","updatedAt":"100"}`},
+		{"__floating__", `{"text":"floating","updatedAt":"100","floating":{"projectId":"p1"}}`},
+	} {
+		req := httptest.NewRequest("PUT", "/api/drafts/"+tc.id, strings.NewReader(tc.body))
+		req.Header.Set("Content-Type", "application/json")
+		if _, err := app.Test(req, 10000); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	req := httptest.NewRequest("GET", "/api/drafts", nil)
+	resp, err := app.Test(req, 10000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	var env struct {
+		Success bool `json:"success"`
+		Data    struct {
+			SessionIDs []string `json:"sessionIds"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &env); err != nil || !env.Success {
+		t.Fatalf("list envelope: %s", raw)
+	}
+	if len(env.Data.SessionIDs) != 1 || env.Data.SessionIDs[0] != "s1" {
+		t.Fatalf("expected [s1], got %v", env.Data.SessionIDs)
+	}
+}
+
 // A device with a fast clock must not stamp a draft that nothing else can
 // overwrite: a far-future updatedAt is pulled back to the server's now.
 func TestDraftsFutureTimestampIsClamped(t *testing.T) {
