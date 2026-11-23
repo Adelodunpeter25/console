@@ -868,6 +868,7 @@ impl ConsoleDesktopApp {
             .get(&tab_id)
             .cloned()
             .unwrap_or_else(|| {
+                // Default: every file starts collapsed until the user expands it.
                 changes.iter().map(|c| c.path.clone()).collect()
             });
 
