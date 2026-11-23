@@ -83,7 +83,6 @@ pub struct DeviceViewer {
     loading: bool,
     error: Option<String>,
     stream_status: Option<String>,
-    occluded: bool,
     was_natively_focused: bool,
     last_window_focus: Option<FocusHandle>,
     switcher_menu: ContextMenuHandle,
@@ -113,7 +112,6 @@ impl DeviceViewer {
             loading: false,
             error: None,
             stream_status: None,
-            occluded: false,
             was_natively_focused: false,
             last_window_focus: None,
             switcher_menu: ContextMenuHandle::new(cx),
@@ -612,21 +610,12 @@ impl DeviceViewer {
 
     /// Per-frame push from the app: whether this surface is the visible right
     /// panel tab, and whether a GPUI overlay is open above it.
-    pub fn sync_native_state(
-        &mut self,
-        surface_visible: bool,
-        overlay_open: bool,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn sync_native_state(&mut self, surface_visible: bool, cx: &mut Context<Self>) {
         let Some(host) = self.host.clone() else {
             return;
         };
-        let occluded = overlay_open || self.switcher_menu.is_open();
-        if self.occluded != occluded {
-            self.occluded = occluded;
-        }
         let has_device = self.selected_id.is_some();
-        let show = surface_visible && has_device && !occluded;
+        let show = surface_visible && has_device;
         if !show {
             // The surface cannot use the keyboard while it is hidden; give
             // keyboard focus back unconditionally. `native_focus_within()`
@@ -699,10 +688,6 @@ impl DeviceViewer {
             }
         }
         self.was_natively_focused = natively_focused;
-    }
-
-    pub fn overlay_open(&self) -> bool {
-        self.switcher_menu.is_open()
     }
 
     fn toolbar_button(
@@ -1052,7 +1037,6 @@ impl DeviceViewer {
 
     fn render_video_area(&self, theme: Theme) -> AnyElement {
         let host = self.host.clone();
-        let occluded = self.occluded;
         let has_device = self.selected_id.is_some();
         div()
             .flex_1()
@@ -1100,19 +1084,7 @@ impl DeviceViewer {
                         ),
                 )
             })
-            .when(occluded && has_device, |el| {
-                el.child(
-                    div()
-                        .absolute()
-                        .size_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .bg(theme.canvas)
-                        .text_color(theme.text_tertiary)
-                        .child("Device hidden while menu is open"),
-                )
-            })
+
             .into_any_element()
     }
 

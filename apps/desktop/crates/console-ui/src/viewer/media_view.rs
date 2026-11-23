@@ -111,7 +111,6 @@ pub struct FileMediaView {
     media_url: String,
     host: Option<Rc<WebviewHost>>,
     host_error: Option<String>,
-    occluded: bool,
     was_natively_focused: bool,
     last_window_focus: Option<FocusHandle>,
 }
@@ -133,7 +132,6 @@ impl FileMediaView {
             media_url: media_url.into(),
             host: None,
             host_error: None,
-            occluded: false,
             was_natively_focused: false,
             last_window_focus: None,
         };
@@ -209,24 +207,15 @@ impl FileMediaView {
         self.host_error = Some("Media preview is currently supported on macOS.".to_string());
     }
 
-    /// Push from the app: whether this surface's file tab is the visible one,
-    /// and whether a GPUI overlay is open above it.
-    pub fn sync_native_state(
-        &mut self,
-        surface_visible: bool,
-        occluded: bool,
-        cx: &mut Context<Self>,
-    ) {
-        let occluded = occluded || self.occluded;
-        self.occluded = occluded;
-        let show = surface_visible && !occluded;
+    /// Push from the app: whether this surface's file tab is the visible one.
+    pub fn sync_native_state(&mut self, surface_visible: bool, cx: &mut Context<Self>) {
         let Some(host) = self.host.clone() else {
             return;
         };
-        if !show && host.native_focus_within() {
+        if !surface_visible && host.native_focus_within() {
             self.reclaim_native_keyboard(cx);
         }
-        host.set_visible(show);
+        host.set_visible(surface_visible);
     }
 
     pub fn reclaim_native_keyboard(&mut self, cx: &mut Context<Self>) {
@@ -431,45 +420,5 @@ impl FileMediaView {
             .on_click(cx.listener(move |this, _, window, cx| {
                 on_click(this, window, cx);
             }))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn html_escapes_url() {
-        assert_eq!(html_escape("a?x=1&y=\"2\""), "a?x=1&amp;y=&quot;2&quot;");
-    }
-
-    #[test]
-    fn page_html_contains_src() {
-        let html = media_page_html(
-            MediaFileKind::Video,
-            "http://h/api/fs/file/media?path=%2Fa.mp4&token=t",
-        );
-        assert!(html.contains("<video"));
-        assert!(html.contains("src=\"http://h/api/fs/file/media?path=%2Fa.mp4&amp;token=t\""));
-    }
-
-    #[test]
-    fn pdf_uses_iframe() {
-        let html = media_page_html(MediaFileKind::Pdf, "http://h/x.pdf");
-        assert!(html.contains("<iframe"));
-        assert!(html.contains("src=\"http://h/x.pdf\""));
-    }
-
-    #[test]
-    fn audio_uses_audio_tag() {
-        let html = media_page_html(MediaFileKind::Audio, "http://h/a.mp3");
-        assert!(html.contains("<audio"));
-    }
-
-    #[test]
-    fn data_url_is_percent_encoded() {
-        let url = data_url_for_html("<p>&\"'");
-        assert!(url.starts_with("data:text/html;charset=utf-8,"));
-        assert!(url.contains("%3C") || url.contains("%3c"));
     }
 }

@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, App, Context, Div, ElementId, Entity, FocusHandle, Focusable, HitboxBehavior,
-    IntoElement, MouseButton, ObjectFit, ParentElement, Render, SharedString, Stateful, Styled,
+    IntoElement, MouseButton, ParentElement, Render, SharedString, Stateful, Styled,
     Subscription, Window, canvas, div, img, prelude::*, px,
 };
 
@@ -90,15 +90,11 @@ pub struct BrowserView {
     address_focused: bool,
     was_natively_focused: bool,
     last_window_focus: Option<FocusHandle>,
-    occluded: bool,
     /// Whether this view's tab is the visible one in its pane, as last pushed
     /// by the owner via `sync_native_state`. Every show/hide decision goes
     /// through it, so a navigation or load event on an inactive tab can never
     /// re-show the native view above other content (e.g. the chat).
     surface_visible: bool,
-    snapshot: Option<Arc<gpui::Image>>,
-    snapshot_pending: bool,
-    snapshot_epoch: u64,
     inspecting: bool,
     active_inspection: Option<BrowserElementInspection>,
     /// Comment input for the annotation popover, created once at `new`.
@@ -132,20 +128,10 @@ pub struct BrowserView {
 
 /// Whether a browser tab's native view should be shown.
 ///
-/// The native view is a sibling above GPUI's Metal layer, so whenever it is not
-/// hidden it paints over everything GPUI draws, including the chat. It is shown
-/// only when its tab is the visible one (`surface_visible`), it has a page, it
-/// is not in an error state, and it is not covered by an open GPUI overlay
-/// (unless a snapshot of it is already standing in, `snapshot_pending`).
-pub fn should_show_native(
-    surface_visible: bool,
-    has_page: bool,
-    occluded: bool,
-    snapshot_pending: bool,
-    has_error: bool,
-) -> bool {
-    let covered_by_overlay = occluded && !snapshot_pending;
-    surface_visible && has_page && !has_error && !covered_by_overlay
+/// It is shown only when its tab is the visible one (`surface_visible`), it
+/// has a page, and it is not in an error state.
+pub fn should_show_native(surface_visible: bool, has_page: bool, has_error: bool) -> bool {
+    surface_visible && has_page && !has_error
 }
 
 impl BrowserView {
@@ -257,11 +243,7 @@ impl BrowserView {
             address_focused: false,
             was_natively_focused: false,
             last_window_focus: None,
-            occluded: false,
             surface_visible: false,
-            snapshot: None,
-            snapshot_pending: false,
-            snapshot_epoch: 0,
             inspecting: false,
             active_inspection: None,
             annotation_input,
@@ -450,7 +432,6 @@ impl BrowserView {
                         inspection.bounds.height,
                     );
                     self.active_inspection = Some(inspection);
-                    self.snapshot_pending = true;
                     self.annotation_screenshot = None;
                     self.annotation_capture_failed = false;
                     self.annotation_focus_pending = true;
@@ -471,8 +452,6 @@ impl BrowserView {
                     self.inspecting = false;
                     self.active_inspection = None;
                     self.annotation_screenshot = None;
-                    self.snapshot_pending = false;
-                    self.apply_native_visibility();
                     cx.notify();
                 }
                 InspectorIpcMessage::ScriptResult {
@@ -513,7 +492,6 @@ impl BrowserView {
             self.active_inspection = None;
             self.annotation_screenshot = None;
             self.annotation_focus_pending = false;
-            self.snapshot_pending = false;
         }
         if let Some(host) = &self.host {
             let script = format!(
@@ -572,7 +550,6 @@ impl BrowserView {
         };
         self.annotation_screenshot = None;
         self.annotation_focus_pending = false;
-        self.snapshot_pending = false;
         self.annotation_input.update(cx, |input, cx| {
             input.clear(cx);
         });
@@ -604,7 +581,6 @@ impl BrowserView {
         self.active_inspection = None;
         self.annotation_screenshot = None;
         self.annotation_focus_pending = false;
-        self.snapshot_pending = false;
         self.annotation_input.update(cx, |input, cx| {
             input.clear(cx);
         });
@@ -638,8 +614,6 @@ impl BrowserView {
                             let _ = view.update(cx, |this, cx| {
                                 if this.active_inspection.is_some() {
                                     this.annotation_capture_failed = true;
-                                    this.snapshot_pending = false;
-                                    this.apply_native_visibility();
                                     cx.notify();
                                 }
                             });
@@ -653,16 +627,6 @@ impl BrowserView {
                                 // Only fill the popover that asked for it.
                                 if this.active_inspection.is_some() {
                                     this.annotation_screenshot = Some(b64);
-                                    // The same capture's full frame stands
-                                    // in as the cover, so the annotation
-                                    // popover needs no second snapshot.
-                                    let image = gpui::Image::from_bytes(
-                                        gpui::ImageFormat::Png,
-                                        captured.full_png,
-                                    );
-                                    this.snapshot = Some(Arc::new(image));
-                                    this.snapshot_pending = false;
-                                    this.apply_native_visibility();
                                     cx.notify();
                                 }
                             });
@@ -678,20 +642,16 @@ impl BrowserView {
                     flag
                 });
                 if !still_open {
-                    cx.update(|cx| {
-                        let _ = view.update(cx, |this, _| {
-                            this.snapshot_pending = false;
-                        });
-                    });
                     break;
                 }
             }
             cx.update(|cx| {
                 let _ = view.update(cx, |this, cx| {
-                    if this.snapshot_pending && this.active_inspection.is_some() {
+                    if this.active_inspection.is_some()
+                        && this.annotation_screenshot.is_none()
+                        && !this.annotation_capture_failed
+                    {
                         this.annotation_capture_failed = true;
-                        this.snapshot_pending = false;
-                        this.apply_native_visibility();
                         cx.notify();
                     }
                 });
@@ -883,9 +843,6 @@ impl BrowserView {
         self.can_go_back = false;
         self.can_go_forward = false;
         self.address_dirty = false;
-        self.snapshot = None;
-        self.snapshot_pending = false;
-        self.snapshot_epoch = self.snapshot_epoch.wrapping_add(1);
         self.address
             .update(cx, |address, cx| address.set_content(String::new(), cx));
         cx.notify();
@@ -980,8 +937,6 @@ impl BrowserView {
         should_show_native(
             self.surface_visible,
             self.navigation_requested,
-            self.occluded,
-            self.snapshot_pending,
             self.navigation_error.is_some() || self.host_error.is_some(),
         )
     }
@@ -1001,80 +956,16 @@ impl BrowserView {
     }
 
     /// Push from the owner (`sync_workspace_webviews`, and the active tab's
-    /// render): whether this surface is the visible tab in its pane, and
-    /// whether a GPUI overlay is open above it. Event-driven, not per frame, so
-    /// the flag is stored and every later show/hide consults it.
-    pub fn sync_native_state(
-        &mut self,
-        surface_visible: bool,
-        occluded: bool,
-        cx: &mut Context<Self>,
-    ) {
+    /// render): whether this surface is the visible tab in its pane.
+    /// Event-driven, not per frame, so the flag is stored and every later
+    /// show/hide consults it.
+    pub fn sync_native_state(&mut self, surface_visible: bool, cx: &mut Context<Self>) {
         let was_visible = self.surface_visible;
-        let occlusion_started = occluded && !self.occluded;
-        let occlusion_ended = !occluded && self.occluded;
-        self.occluded = occluded;
         self.surface_visible = surface_visible;
 
         let Some(host) = self.host.clone() else {
             return;
         };
-
-        if !occluded {
-            if self.snapshot.is_some() || self.snapshot_pending {
-                self.snapshot = None;
-                self.snapshot_pending = false;
-                self.snapshot_epoch += 1;
-            }
-        } else if occlusion_started
-            && !self.snapshot_pending
-            && self.snapshot.is_none()
-            && self.active_inspection.is_none()
-        {
-            self.snapshot_pending = true;
-            let epoch = self.snapshot_epoch;
-            let slot = crate::browser::host::SnapshotSlot::default();
-            host.take_snapshot(slot.clone());
-            let view = cx.entity().downgrade();
-            cx.spawn(async move |_, cx| {
-                for _ in 0..30 {
-                    cx.background_executor()
-                        .timer(std::time::Duration::from_millis(50))
-                        .await;
-                    if slot.lock().unwrap().is_some() {
-                        let result = slot.lock().unwrap().take();
-                        if let Some(Ok(bytes)) = result {
-                            let image = std::sync::Arc::new(gpui::Image::from_bytes(
-                                gpui::ImageFormat::Png,
-                                bytes,
-                            ));
-                            cx.update(|cx| {
-                                let _ = view.update(cx, |this, cx| {
-                                    if this.snapshot_epoch == epoch && this.occluded {
-                                        this.snapshot = Some(image);
-                                        this.snapshot_pending = false;
-                                        this.apply_native_visibility();
-                                        cx.notify();
-                                    }
-                                });
-                            });
-                        } else {
-                            cx.update(|cx| {
-                                let _ = view.update(cx, |this, cx| {
-                                    if this.snapshot_epoch == epoch {
-                                        this.snapshot_pending = false;
-                                        this.apply_native_visibility();
-                                        cx.notify();
-                                    }
-                                });
-                            });
-                        }
-                        break;
-                    }
-                }
-            })
-            .detach();
-        }
 
         let show = self.should_show();
         if !show {
@@ -1082,10 +973,10 @@ impl BrowserView {
                 self.reclaim_native_keyboard(cx);
             }
             host.set_visible(false);
-        } else if !was_visible || occlusion_ended {
+        } else if !was_visible {
             // The canvas shows the native view after syncing bounds, so a tab
-            // returning from another workspace or from under an overlay never
-            // flashes at its previous frame. Request the frame that paints it.
+            // returning from another workspace never flashes at its previous
+            // frame. Request the frame that paints it.
             cx.notify();
         }
     }
@@ -1212,13 +1103,6 @@ impl BrowserView {
         if let Some(host) = &self.host {
             host.evaluate_script("document.execCommand('selectAll')");
         }
-    }
-
-    /// The address input's context menu or the annotation popover floats
-    /// above the native webview's area, so the app's occlusion sync needs
-    /// to know when either is open.
-    pub fn overlay_open(&self, cx: &App) -> bool {
-        self.address.read(cx).context_menu_open() || self.active_inspection.is_some()
     }
 
     fn toolbar_button(
@@ -1605,19 +1489,9 @@ impl BrowserView {
                 .absolute()
                 .size_full(),
             )
-            .when_some(
-                self.occluded.then(|| self.snapshot.clone()).flatten(),
-                |element, snapshot| {
-                    element.child(
-                        img(snapshot)
-                            .absolute()
-                            .size_full()
-                            .object_fit(ObjectFit::Fill),
-                    )
-                },
-            );
+;
         if let Some(popover) = self.render_annotation_popover(theme, cx) {
-            area = area.child(popover);
+            area = area.child(gpui::deferred(popover));
         }
         area
     }

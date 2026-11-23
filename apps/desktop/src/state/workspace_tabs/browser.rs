@@ -144,13 +144,10 @@ impl ConsoleDesktopApp {
             active_browser_ids.clear();
         }
 
-        let palettes_open = self.any_palette_open(cx);
-
         for (browser_id, view) in &self.browser_views {
             let is_active = active_browser_ids.contains(browser_id);
-            let occluded = palettes_open || view.read(cx).overlay_open(cx);
             view.update(cx, |v, cx| {
-                v.sync_native_state(is_active, occluded, cx);
+                v.sync_native_state(is_active, cx);
             });
         }
 
@@ -180,7 +177,7 @@ impl ConsoleDesktopApp {
         for (path, view) in &self.file_media_views {
             let is_active = active_media_paths.contains(path);
             view.update(cx, |v, cx| {
-                v.sync_native_state(is_active, palettes_open, cx);
+                v.sync_native_state(is_active, cx);
             });
         }
         self.sync_device_webview(cx);

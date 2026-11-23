@@ -41,7 +41,6 @@ pub struct ComputerViewer {
     auth_token: Option<String>,
     loaded_player_base: Option<String>,
     stream_status: Option<String>,
-    occluded: bool,
     was_natively_focused: bool,
     last_window_focus: Option<FocusHandle>,
 }
@@ -57,7 +56,6 @@ impl ComputerViewer {
             auth_token: None,
             loaded_player_base: None,
             stream_status: None,
-            occluded: false,
             was_natively_focused: false,
             last_window_focus: None,
         };
@@ -192,23 +190,14 @@ impl ComputerViewer {
         cx.notify();
     }
 
-    pub fn sync_native_state(
-        &mut self,
-        surface_visible: bool,
-        overlay_open: bool,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn sync_native_state(&mut self, surface_visible: bool, cx: &mut Context<Self>) {
         let Some(host) = self.host.clone() else {
             return;
         };
-        if self.occluded != overlay_open {
-            self.occluded = overlay_open;
-        }
-        let show = surface_visible && !overlay_open;
-        if !show {
+        if !surface_visible {
             self.reclaim_native_keyboard(cx);
         }
-        host.set_visible(show);
+        host.set_visible(surface_visible);
     }
 
     pub fn reclaim_native_keyboard(&mut self, cx: &mut Context<Self>) {
@@ -270,7 +259,6 @@ impl ComputerViewer {
 
     fn render_video_area(&self, theme: Theme) -> AnyElement {
         let host = self.host.clone();
-        let occluded = self.occluded;
         let host_error = self.host_error.clone();
         div()
             .flex_1()
@@ -311,19 +299,7 @@ impl ComputerViewer {
                         ),
                 )
             })
-            .when(occluded, |el| {
-                el.child(
-                    div()
-                        .absolute()
-                        .size_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .bg(theme.canvas)
-                        .text_color(theme.text_tertiary)
-                        .child("Computer hidden while menu is open"),
-                )
-            })
+
             .into_any_element()
     }
 }

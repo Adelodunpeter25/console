@@ -24,8 +24,6 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        console_ui::chat::set_html_overlay_open(self.any_palette_open(cx));
-
         // No chat tab open in this pane — show the centered empty state
         // (no transcript, no composer, no footer) instead of chat chrome.
         if active_tab.is_none() {
@@ -100,9 +98,8 @@ impl ConsoleDesktopApp {
                 window,
                 cx,
             );
-            let occluded = self.any_palette_open(cx) || view.read(cx).overlay_open(cx);
             view.update(cx, |v, cx| {
-                v.sync_native_state(true, occluded, cx);
+                v.sync_native_state(true, cx);
             });
             return div().size_full().child(view).into_any_element();
         }
@@ -132,15 +129,13 @@ impl ConsoleDesktopApp {
 
         if let Some(console_core::WorkspaceTabConfig::Device { .. }) = active_tab {
             let device = self.device_view(window, cx);
-            let occluded = self.any_palette_open(cx);
-            device.update(cx, |view, cx| view.sync_native_state(true, occluded, cx));
+            device.update(cx, |view, cx| view.sync_native_state(true, cx));
             return div().size_full().child(device).into_any_element();
         }
 
         if let Some(console_core::WorkspaceTabConfig::Computer { .. }) = active_tab {
             let computer = self.computer_view(window, cx);
-            let occluded = self.any_palette_open(cx);
-            computer.update(cx, |view, cx| view.sync_native_state(true, occluded, cx));
+            computer.update(cx, |view, cx| view.sync_native_state(true, cx));
             return div().size_full().child(computer).into_any_element();
         }
 
@@ -490,8 +485,7 @@ impl ConsoleDesktopApp {
                     return Self::file_loading_panel("Loading media…", &theme);
                 }
                 let view = self.file_media_views.get(&path).cloned().unwrap();
-                let occluded = self.any_palette_open(cx);
-                view.update(cx, |v, cx| v.sync_native_state(true, occluded, cx));
+                view.update(cx, |v, cx| v.sync_native_state(true, cx));
                 div().size_full().child(view).into_any_element()
             }
             console_core::FileKind::Text => {

@@ -813,27 +813,31 @@ impl Render for ConsoleDesktopApp {
                     ),
             )
             .when_some(self.zoomed_image.clone(), |el, image| {
-                el.child(ImageViewerModal::new(image, "Image preview", {
-                    let entity = entity.clone();
-                    move |_w, cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.zoomed_image = None;
-                                cx.notify();
-                            });
+                el.child(gpui::deferred(ImageViewerModal::new(
+                    image,
+                    "Image preview",
+                    {
+                        let entity = entity.clone();
+                        move |_w, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.zoomed_image = None;
+                                    cx.notify();
+                                });
+                            }
                         }
-                    }
-                }))
+                    },
+                )))
             })
             // Palette overlays (each renders nothing while closed).
-            .child(self.command_palette.clone())
-            .child(self.tab_palette.clone())
-            .child(self.quick_open_palette.clone())
-            .child(self.project_browse_palette.clone())
+            .child(gpui::deferred(self.command_palette.clone()))
+            .child(gpui::deferred(self.tab_palette.clone()))
+            .child(gpui::deferred(self.quick_open_palette.clone()))
+            .child(gpui::deferred(self.project_browse_palette.clone()))
             .when_some(self.floating_composer_view(window, cx), |el, card| {
-                el.child(card)
+                el.child(gpui::deferred(card))
             })
-            .child(self.global_search_panel.clone())
+            .child(gpui::deferred(self.global_search_panel.clone()))
             // Boxed so both render paths share a single return type — the
             // first-run setup branch above returns an AnyElement.
             .into_any_element()

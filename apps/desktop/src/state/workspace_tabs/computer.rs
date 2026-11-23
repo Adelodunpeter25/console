@@ -36,7 +36,7 @@ impl ConsoleDesktopApp {
             });
         if let Some(ref view) = self.computer_view {
             view.update(cx, |view, cx| {
-                view.sync_native_state(visible, false, cx);
+                view.sync_native_state(visible, cx);
             });
         }
     }

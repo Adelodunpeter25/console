@@ -35,9 +35,8 @@ impl ConsoleDesktopApp {
                 )
             });
         if let Some(ref device) = self.device_view {
-            let overlay_open = device.read(cx).overlay_open();
             device.update(cx, |view, cx| {
-                view.sync_native_state(visible, overlay_open, cx);
+                view.sync_native_state(visible, cx);
             });
         }
     }
