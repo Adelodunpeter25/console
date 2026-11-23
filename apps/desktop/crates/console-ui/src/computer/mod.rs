@@ -1,2 +1,2 @@
-pub mod view;
+mod view;
 pub use view::ComputerViewer;
