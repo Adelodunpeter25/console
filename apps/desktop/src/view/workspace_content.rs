@@ -867,7 +867,9 @@ impl ConsoleDesktopApp {
             .changes_review_collapsed
             .get(&tab_id)
             .cloned()
-            .unwrap_or_default();
+            .unwrap_or_else(|| {
+                changes.iter().map(|c| c.path.clone()).collect()
+            });
 
         let entity = cx.entity().downgrade();
         let tab_id_for_collapse = tab_id.clone();
