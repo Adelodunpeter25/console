@@ -91,17 +91,18 @@ impl ConsoleDesktopApp {
                 move |rel_path, line_number, window, cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            let pane_id = this
+                            let source_pane = this
                                 .active_pane_id
                                 .clone()
                                 .unwrap_or_else(|| "pane-main".to_string());
                             let root = this
-                                .selected_project_for_pane(&pane_id)
+                                .selected_project_for_pane(&source_pane)
                                 .map(|project| project.path.clone());
                             let Some(root) = root else { return };
                             let absolute = console_ui::utils::join_path_lexical(&root, rel_path);
+                            let target_pane = this.target_subtab_pane_id();
                             this.open_file_tab_at_line(
-                                &pane_id,
+                                &target_pane,
                                 absolute,
                                 line_number,
                                 Some(window),
