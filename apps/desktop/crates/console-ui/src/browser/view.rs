@@ -1563,7 +1563,7 @@ impl BrowserView {
                         .border_1()
                         .border_color(theme.border)
                         .bg(theme.inset)
-                        .child(img(image).size_full()),
+                        .child(img(image).size_full().object_fit(gpui::ObjectFit::ScaleDown)),
                 )
             })
             .child(div().mt_2().child(self.annotation_input.clone()))
