@@ -379,6 +379,8 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		events.Fail(err)
 		return err
 	}
+	// A real request refreshes the cache itself; drop any pending warm.
+	cancelWarm(req.ConversationID)
 	body := BuildRequestBody(req.Model, req.SystemPrompt, req.Messages, req.Tools, req.CacheRetention, req.ThinkingLevel)
 	AppendTail(body, req.Tail)
 	if userID := metadataUserID(req.ConversationID); userID != "" {
@@ -492,6 +494,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		events.Fail(parseErr)
 		return parseErr
 	}
+	p.scheduleWarm(req, body, usage)
 	events.Complete()
 	return nil
 }
