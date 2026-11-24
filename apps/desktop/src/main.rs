@@ -136,12 +136,13 @@ fn main() {
         if let Err(error) = register_core_fonts(cx) {
             log::warn!("Failed to register bundled fonts: {error}");
         }
+        // Global shortcuts first, so context-scoped bindings registered later
+        // win ties inside their own contexts (GPUI breaks equal-depth ties by
+        // preferring later-registered bindings).
+        keybindings::init(cx);
         editor_ui::init(cx);
         console_ui::theme::init(cx);
         init_input_keybindings(cx);
-        // Global shortcuts last, so context-scoped bindings keep winning ties
-        // inside their own contexts.
-        keybindings::init(cx);
         keybindings::init_handlers(cx);
         app_menu::init(cx);
         console_ui::init_autocomplete_keybindings(cx);
