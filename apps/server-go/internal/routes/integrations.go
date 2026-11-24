@@ -41,6 +41,12 @@ func RegisterIntegrationRoutes(app *fiber.App) {
 	app.Post("/api/integrations/desktop/install", func(c *fiber.Ctx) error {
 		return installIntegration(c, "desktop")
 	})
+
+	// Install Firefox so the desktop's Web Browser menu opens a graphical
+	// browser instead of the terminal fallback.
+	app.Post("/api/integrations/browser/install", func(c *fiber.Ctx) error {
+		return installIntegration(c, "browser")
+	})
 }
 
 // installIntegration dispatches one install request and answers the full row
@@ -52,13 +58,16 @@ func installIntegration(c *fiber.Ctx, id string) error {
 		_, err = integrations.InstallGhCLI(c.Context())
 	case "desktop":
 		_, err = integrations.InstallDesktop(c.Context())
+	case "browser":
+		_, err = integrations.InstallBrowser(c.Context())
 	default:
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "unknown integration"})
 	}
 	if err != nil {
 		status := fiber.StatusBadGateway
 		if errors.Is(err, integrations.ErrGhPlatformUnsupported) ||
-			errors.Is(err, integrations.ErrDesktopPlatformUnsupported) {
+			errors.Is(err, integrations.ErrDesktopPlatformUnsupported) ||
+			errors.Is(err, integrations.ErrBrowserPlatformUnsupported) {
 			status = fiber.StatusBadRequest
 		}
 		return c.Status(status).JSON(fiber.Map{"success": false, "error": err.Error()})

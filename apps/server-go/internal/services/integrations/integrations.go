@@ -43,7 +43,7 @@ type IntegrationInfo struct {
 func ListIntegrations() []IntegrationInfo {
 	items := []IntegrationInfo{CheckGhCLI()}
 	if runtime.GOOS == "linux" {
-		items = append(items, CheckDesktop())
+		items = append(items, CheckDesktop(), CheckBrowser())
 	}
 	return items
 }
