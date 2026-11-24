@@ -56,13 +56,7 @@ pub fn prompt_row(
                 .child(prompt.preview.clone()),
         )
         .when(prompt.created_at > 0, |element| {
-            // "just now" and dates ("Oct 29") already read fine; only "3h" needs "ago".
             let age = crate::utils::format_time_ago(prompt.created_at);
-            let age = if age.contains(' ') {
-                age
-            } else {
-                format!("{age} ago")
-            };
             element.child(
                 div()
                     .flex_none()

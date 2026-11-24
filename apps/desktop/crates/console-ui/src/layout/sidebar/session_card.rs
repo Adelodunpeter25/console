@@ -185,12 +185,7 @@ pub fn render_session_card_content(
     theme: &Theme,
 ) -> AnyElement {
     let created_ago = if created_at > 0 {
-        let rel = format_time_ago(created_at);
-        if rel == "just now" {
-            "just now".to_string()
-        } else {
-            format!("{rel} ago")
-        }
+        format_time_ago(created_at)
     } else {
         "recently".to_string()
     };
@@ -200,7 +195,7 @@ pub fn render_session_card_content(
         if rel == "just now" {
             "updated now".to_string()
         } else {
-            format!("updated {rel} ago")
+            format!("updated {rel}")
         }
     } else {
         "updated recently".to_string()

@@ -94,6 +94,10 @@ name = "api_key_section_test"
 path = "tests/settings/api_key_section_test.rs"
 
 [[test]]
+name = "time_ago_test"
+path = "tests/time_ago_test.rs"
+
+[[test]]
 name = "workspace_test"
 path = "tests/workspace/workspace_test.rs"
 

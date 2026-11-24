@@ -51,8 +51,8 @@ pub fn format_working_elapsed(seconds: u64) -> String {
 }
 
 /// Compact "how long ago" for the sidebar and other history lists: "just now",
-/// then one coarse unit — "5m", "3h", "2d", and a date like "Aug 12" for
-/// anything older than a week.
+/// "5m ago", "3h ago", "2d ago", and a bare date like "Aug 12" for anything
+/// older than a week. The result is a complete phrase — callers use it verbatim.
 ///
 /// Accepts Unix timestamps in **seconds or milliseconds** (the backend sends
 /// milliseconds), normalizing to seconds internally.
@@ -62,14 +62,14 @@ pub fn format_time_ago(timestamp: i64) -> String {
     let seconds = (now - ts).max(0) as u64;
     match seconds {
         0..=59 => "just now".into(),
-        60..=3_599 => format!("{}m", seconds / 60),
-        3_600..=86_399 => format!("{}h", seconds / 3_600),
-        86_400..=604_799 => format!("{}d", seconds / 86_400),
+        60..=3_599 => format!("{}m ago", seconds / 60),
+        3_600..=86_399 => format!("{}h ago", seconds / 3_600),
+        86_400..=604_799 => format!("{}d ago", seconds / 86_400),
         _ => {
             if let Some(dt) = chrono::DateTime::from_timestamp(ts, 0) {
                 dt.format("%b %d").to_string()
             } else {
-                format!("{}d", seconds / 86_400)
+                format!("{}d ago", seconds / 86_400)
             }
         }
     }
