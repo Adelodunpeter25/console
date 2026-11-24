@@ -64,14 +64,18 @@ func ghRow(t *testing.T, out map[string]any) map[string]any {
 		t.Fatalf("missing data envelope: %v", out)
 	}
 	rows, ok := data["integrations"].([]any)
-	if !ok || len(rows) != 1 {
-		t.Fatalf("expected exactly the gh row: %v", data)
+	if !ok {
+		t.Fatalf("missing integrations list: %v", data)
 	}
-	row, ok := rows[0].(map[string]any)
-	if !ok || row["id"] != "gh" {
-		t.Fatalf("expected the gh row: %v", rows)
+	// Linux also reports the desktop row; find gh by id instead of position.
+	for _, entry := range rows {
+		row, ok := entry.(map[string]any)
+		if ok && row["id"] == "gh" {
+			return row
+		}
 	}
-	return row
+	t.Fatalf("expected the gh row: %v", rows)
+	return nil
 }
 
 func TestIntegrationsGhInstalled(t *testing.T) {

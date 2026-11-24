@@ -21,6 +21,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/computer"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
@@ -188,15 +189,16 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 
 	slog.Info("api routes registered")
 	// shutdown stops every process the server owns: in-flight agent runs,
-	// detached background bash jobs, terminal PTYs, and managed project
-	// scripts. Called once, after the HTTP listener drains, so "stop the
-	// server" really means stop everything — not just the API.
+	// detached background bash jobs, terminal PTYs, the headless desktop, and
+	// managed project scripts. Called once, after the HTTP listener drains, so
+	// "stop the server" really means stop everything — not just the API.
 	shutdown := func() {
 		stopAutomationScanner()
 		runSvc.AbortAll()
 		bashJobs.KillAll()
 		ptyManager.KillAll()
 		scriptsSvc.StopAll()
+		computer.Default().Close()
 		fffManager.CloseAll()
 		mcpManager.CloseAll()
 		_ = deviceSvc.Close()

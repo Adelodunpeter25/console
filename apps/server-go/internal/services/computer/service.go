@@ -101,7 +101,9 @@ func (s *Service) Subscribe(ctx context.Context, handler FrameHandler) (func(), 
 			s.session.Close()
 			s.session = nil
 			s.running = false
-			s.displayMgr.Close()
+			// The display and desktop session stay alive: they belong to the
+			// server, so apps survive a client disconnect and a later viewer
+			// finds the same desktop.
 		}
 	}
 

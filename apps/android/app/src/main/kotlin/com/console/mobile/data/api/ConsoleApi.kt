@@ -162,10 +162,10 @@ interface ConsoleApi {
     suspend fun clearSttConfig(): console.v1.SetSttConfigResponse
     /** POST /api/stt/transcribe — one recorded audio clip, multipart `audio`. */
     suspend fun transcribeStt(audio: ByteArray, fileName: String, contentType: String): console.v1.SttTranscript
-    // binary integrations (gh CLI, ...): what the server box has installed
+    // binary integrations (gh CLI, Linux desktop, ...): what the server box has installed
     suspend fun getIntegrations(): console.v1.IntegrationsResponse
-    // install gh the official way for the server's platform; answers the full list
-    suspend fun installGh(): console.v1.IntegrationsResponse
+    // install one integration the official way for the server's platform; answers the full list
+    suspend fun installIntegration(id: String): console.v1.IntegrationsResponse
     suspend fun saveProjectId(provider: String, projectId: String?)
     // assist
     suspend fun listSlashCommands(sessionId: String?): List<console.v1.SlashCommandInfo>

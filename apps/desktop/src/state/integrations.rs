@@ -49,13 +49,13 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Install gh via the server's official per-platform path.
+    /// Install one integration via the server's official per-platform path.
     ///
     /// Shares the refresh busy/error flags: an install in flight makes
     /// Refresh inert too, and a failed install reads like a failed refresh —
     /// both mean "the rows may be stale". Success replaces the rows, so the
     /// button flips to Installed with no extra fetch.
-    pub fn install_gh(&mut self, cx: &mut Context<Self>) {
+    pub fn install_integration(&mut self, id: &str, cx: &mut Context<Self>) {
         if self.integrations_loading {
             return;
         }
@@ -64,8 +64,9 @@ impl ConsoleDesktopApp {
         cx.notify();
 
         let client = self.client.clone();
+        let id = id.to_string();
         cx.spawn(async move |entity, cx| {
-            let result = client.integrations.install_gh().await;
+            let result = client.integrations.install(&id).await;
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {

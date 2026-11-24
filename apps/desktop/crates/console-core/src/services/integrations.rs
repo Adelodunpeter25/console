@@ -45,16 +45,20 @@ impl IntegrationService {
         }
     }
 
-    /// `POST /api/integrations/gh/install` — install gh the official way for
-    /// the server's platform (brew on macOS, release tarball into
-    /// ~/.local/bin on Linux). Only offered when no `gh` resolves; the call
-    /// itself no-ops to current status when one does.
+    /// `POST /api/integrations/{id}/install` — install one integration the
+    /// official way for the server's platform (brew on macOS, release
+    /// tarball into ~/.local/bin on Linux, apt for the Linux desktop). Only
+    /// offered when the row reports missing; the call itself no-ops to
+    /// current status when the tool already resolves.
     ///
     /// Answers the full row list, so callers just replace state. Takes a
-    /// while (download + unpack) — the caller should show busy until it
+    /// while (download, unpack, apt) — the caller should show busy until it
     /// resolves.
-    pub async fn install_gh(&self) -> Result<Vec<IntegrationStatus>> {
-        let url = self.transport.url("/api/integrations/gh/install").await;
+    pub async fn install(&self, id: &str) -> Result<Vec<IntegrationStatus>> {
+        let url = self
+            .transport
+            .url(&format!("/api/integrations/{id}/install"))
+            .await;
         let resp = self
             .transport
             .client()
@@ -62,20 +66,19 @@ impl IntegrationService {
             .headers(self.transport.build_headers().await)
             .send()
             .await
-            .context("Failed to install GitHub CLI")?;
+            .with_context(|| format!("Failed to install integration {id}"))?;
 
         let body: ApiResponse<IntegrationsResponse> = self
             .transport
             .decode_json(resp)
             .await
-            .context("Failed to parse GitHub CLI install response")?;
+            .with_context(|| format!("Failed to parse integration {id} install response"))?;
         if body.success {
             Ok(body.data.unwrap_or_default().integrations)
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to install GitHub CLI".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| format!(
+                "Failed to install integration {id}"
+            ))))
         }
     }
 }
