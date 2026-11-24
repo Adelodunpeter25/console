@@ -24,6 +24,27 @@
   let streamW = 1920, streamH = 1080;
   let needKey = true, currentUrl = null;
 
+  // Modifier keysyms the server may still think are down when focus is lost
+  // (for example Command+Tab on macOS). XFCE binds Super+P to display
+  // settings, so a stuck Super turns a plain "p" into that shortcut.
+  const modifierKeysyms = [0xffe1, 0xffe2, 0xffe3, 0xffe4, 0xffe7, 0xffe8, 0xffe9, 0xffea, 0xffeb, 0xffec, 0xffed, 0xffee];
+  const heldModifiers = new Set();
+
+  function isModifier(keysym) {
+    return modifierKeysyms.indexOf(keysym) !== -1;
+  }
+
+  function releaseModifiers() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      heldModifiers.clear();
+      return;
+    }
+    heldModifiers.forEach((keysym) => {
+      sendInput({ type: 'key', keysym, down: false });
+    });
+    heldModifiers.clear();
+  }
+
   function postStatus(s) {
     if (window.AndroidBridge && window.AndroidBridge.postMessage) {
       try { window.AndroidBridge.postMessage(JSON.stringify({ type: 'status', status: s })); } catch(e) {}
@@ -50,6 +71,10 @@
     canvas.style.height = (streamH * scale) + 'px';
   }
   window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('blur', releaseModifiers);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releaseModifiers();
+  });
 
   function initDecoder() {
     if (decoder && decoder.state !== 'closed') {
@@ -82,6 +107,7 @@
   }
 
   function stop() {
+    releaseModifiers();
     if (retry) { clearTimeout(retry); retry = null; }
     currentUrl = null;
     if (ws) {
@@ -115,6 +141,11 @@
     ws.binaryType = 'arraybuffer';
 
     ws.onopen = () => {
+      heldModifiers.clear();
+      // Clear modifier state a previous session may have left down.
+      modifierKeysyms.forEach((keysym) => {
+        sendInput({ type: 'key', keysym, down: false });
+      });
       setStatus(null, 'waiting for video');
       canvas.focus();
     };
@@ -262,7 +293,7 @@
     if (e.key === 'Shift') return 0xffe1;
     if (e.key === 'Control') return 0xffe3;
     if (e.key === 'Alt') return 0xffe9;
-    if (e.key === 'Meta') return 0xffeb;
+    if (e.key === 'Meta' || e.key === 'OS') return 0xffeb;
     if (e.key.length === 1) return e.key.charCodeAt(0);
     return 0;
   }
@@ -272,17 +303,20 @@
     const keysym = toKeysym(e);
     if (keysym) {
       e.preventDefault();
+      if (isModifier(keysym)) heldModifiers.add(keysym);
       sendInput({ type: 'key', keysym, down: true });
     }
   });
 
   window.addEventListener('keyup', (e) => {
-    if (document.activeElement !== canvas) return;
     const keysym = toKeysym(e);
-    if (keysym) {
-      e.preventDefault();
-      sendInput({ type: 'key', keysym, down: false });
-    }
+    if (!keysym) return;
+    // A modifier release must reach the server even if focus moved before
+    // the key came up; otherwise the X server keeps it held.
+    if (document.activeElement !== canvas && !heldModifiers.has(keysym)) return;
+    e.preventDefault();
+    heldModifiers.delete(keysym);
+    sendInput({ type: 'key', keysym, down: false });
   });
 
   window.__consoleComputer = {
