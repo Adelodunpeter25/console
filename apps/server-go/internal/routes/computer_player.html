@@ -30,8 +30,22 @@
   const modifierKeysyms = [0xffe1, 0xffe2, 0xffe3, 0xffe4, 0xffe7, 0xffe8, 0xffe9, 0xffea, 0xffeb, 0xffec, 0xffed, 0xffee];
   const heldModifiers = new Set();
 
+  // Same story for mouse buttons: a button released after focus moved away
+  // never reaches the canvas, so the server keeps dragging and leaves a
+  // selection highlight on the desktop.
+  let heldButtons = 0;
+  let lastPointer = { x: 0, y: 0 };
+
   function isModifier(keysym) {
     return modifierKeysyms.indexOf(keysym) !== -1;
+  }
+
+  function mouseMask(buttons) {
+    let mask = 0;
+    if (buttons & 1) mask |= 1;
+    if (buttons & 4) mask |= 2;
+    if (buttons & 2) mask |= 4;
+    return mask;
   }
 
   function releaseModifiers() {
@@ -43,6 +57,19 @@
       sendInput({ type: 'key', keysym, down: false });
     });
     heldModifiers.clear();
+  }
+
+  function releaseButtons(force) {
+    if (!force && !heldButtons) return;
+    heldButtons = 0;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      sendInput({ type: 'mouse', x: lastPointer.x, y: lastPointer.y, mask: 0, wheel: 0 });
+    }
+  }
+
+  function releaseInput() {
+    releaseModifiers();
+    releaseButtons(false);
   }
 
   function postStatus(s) {
@@ -71,9 +98,9 @@
     canvas.style.height = (streamH * scale) + 'px';
   }
   window.addEventListener('resize', resizeCanvas);
-  window.addEventListener('blur', releaseModifiers);
+  window.addEventListener('blur', releaseInput);
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) releaseModifiers();
+    if (document.hidden) releaseInput();
   });
 
   function initDecoder() {
@@ -107,7 +134,7 @@
   }
 
   function stop() {
-    releaseModifiers();
+    releaseInput();
     if (retry) { clearTimeout(retry); retry = null; }
     currentUrl = null;
     if (ws) {
@@ -142,10 +169,11 @@
 
     ws.onopen = () => {
       heldModifiers.clear();
-      // Clear modifier state a previous session may have left down.
+      // Clear input state a previous session may have left down.
       modifierKeysyms.forEach((keysym) => {
         sendInput({ type: 'key', keysym, down: false });
       });
+      releaseButtons(true);
       setStatus(null, 'waiting for video');
       canvas.focus();
     };
@@ -215,32 +243,29 @@
 
   canvas.addEventListener('mousemove', (e) => {
     const { x, y } = getCoords(e.clientX, e.clientY);
-    let mask = 0;
-    if (e.buttons & 1) mask |= 1;
-    if (e.buttons & 4) mask |= 2;
-    if (e.buttons & 2) mask |= 4;
-    sendInput({ type: 'mouse', x, y, mask, wheel: 0 });
+    lastPointer = { x, y };
+    heldButtons = mouseMask(e.buttons);
+    sendInput({ type: 'mouse', x, y, mask: heldButtons, wheel: 0 });
   });
 
   canvas.addEventListener('mousedown', (e) => {
     e.preventDefault();
     canvas.focus();
     const { x, y } = getCoords(e.clientX, e.clientY);
-    let mask = 0;
-    if (e.buttons & 1) mask |= 1;
-    if (e.buttons & 4) mask |= 2;
-    if (e.buttons & 2) mask |= 4;
-    sendInput({ type: 'mouse', x, y, mask, wheel: 0 });
+    lastPointer = { x, y };
+    heldButtons = mouseMask(e.buttons);
+    sendInput({ type: 'mouse', x, y, mask: heldButtons, wheel: 0 });
   });
 
-  canvas.addEventListener('mouseup', (e) => {
-    e.preventDefault();
-    const { x, y } = getCoords(e.clientX, e.clientY);
-    let mask = 0;
-    if (e.buttons & 1) mask |= 1;
-    if (e.buttons & 4) mask |= 2;
-    if (e.buttons & 2) mask |= 4;
-    sendInput({ type: 'mouse', x, y, mask, wheel: 0 });
+  // Listen on the window so a button released after the pointer left the
+  // canvas still reaches the server.
+  window.addEventListener('mouseup', (e) => {
+    if (e.target === canvas) {
+      const { x, y } = getCoords(e.clientX, e.clientY);
+      lastPointer = { x, y };
+    }
+    heldButtons = mouseMask(e.buttons);
+    sendInput({ type: 'mouse', x: lastPointer.x, y: lastPointer.y, mask: heldButtons, wheel: 0 });
   });
 
   // Touch support for mobile
@@ -249,6 +274,8 @@
       e.preventDefault();
       const t = e.touches[0];
       const { x, y } = getCoords(t.clientX, t.clientY);
+      lastPointer = { x, y };
+      heldButtons = 1;
       sendInput({ type: 'mouse', x, y, mask: 1, wheel: 0 });
     }
   }, { passive: false });
@@ -258,6 +285,8 @@
       e.preventDefault();
       const t = e.touches[0];
       const { x, y } = getCoords(t.clientX, t.clientY);
+      lastPointer = { x, y };
+      heldButtons = 1;
       sendInput({ type: 'mouse', x, y, mask: 1, wheel: 0 });
     }
   }, { passive: false });
@@ -267,6 +296,8 @@
       e.preventDefault();
       const t = e.changedTouches[0];
       const { x, y } = getCoords(t.clientX, t.clientY);
+      lastPointer = { x, y };
+      heldButtons = 0;
       sendInput({ type: 'mouse', x, y, mask: 0, wheel: 0 });
     }
   }, { passive: false });
