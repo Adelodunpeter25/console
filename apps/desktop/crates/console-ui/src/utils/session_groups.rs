@@ -26,41 +26,36 @@ pub fn partition_settled(
     (active, settled)
 }
 
-/// Bucket item *positions* `0..len` by project section, ordered by each
-/// section's most recent activity (newest section first), positions within a
-/// section sorted most recent first. Sections with no positions are omitted.
+/// Bucket item *positions* `0..len` by project section, keeping sections in
+/// `project_order` (`None` always last) while sorting positions within each
+/// section most recent first. Sections with no positions are omitted.
 /// Callers keep the shared item collection and resolve each position on demand.
 pub fn group_indices_by_project(
     len: usize,
     project_key: impl Fn(usize) -> ProjectSectionKey,
     timestamp: impl Fn(usize) -> i64,
+    project_order: impl Fn(&str) -> usize,
 ) -> Vec<(ProjectSectionKey, Vec<usize>)> {
     use std::collections::HashMap;
     let mut buckets: HashMap<ProjectSectionKey, Vec<usize>> = HashMap::new();
     for index in 0..len {
         buckets.entry(project_key(index)).or_default().push(index);
     }
-    let mut grouped: Vec<(ProjectSectionKey, Vec<usize>, i64)> = buckets
+    let mut grouped: Vec<(ProjectSectionKey, Vec<usize>)> = buckets
         .into_iter()
         .map(|(key, mut positions)| {
             positions.sort_by_key(|&index| std::cmp::Reverse(timestamp(index)));
-            let latest = positions
-                .first()
-                .map(|&index| timestamp(index))
-                .unwrap_or(i64::MIN);
-            (key, positions, latest)
+            (key, positions)
         })
         .collect();
-    // Most recently active section first; `None` (no project) always last.
-    grouped.sort_by(|(key_a, _, latest_a), (key_b, _, latest_b)| {
-        match (key_a.is_none(), key_b.is_none()) {
-            (true, false) => std::cmp::Ordering::Greater,
-            (false, true) => std::cmp::Ordering::Less,
-            _ => latest_b.cmp(latest_a),
+    // Keep project sections in stable order; `None` (no project) always last.
+    grouped.sort_by(|(key_a, _), (key_b, _)| {
+        match (key_a.as_deref(), key_b.as_deref()) {
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (Some(a), Some(b)) => project_order(a).cmp(&project_order(b)).then_with(|| a.cmp(b)),
+            (None, None) => std::cmp::Ordering::Equal,
         }
     });
     grouped
-        .into_iter()
-        .map(|(key, positions, _)| (key, positions))
-        .collect()
 }

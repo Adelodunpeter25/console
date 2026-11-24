@@ -1,4 +1,4 @@
-use console_ui::utils::partition_settled;
+use console_ui::utils::{group_indices_by_project, partition_settled};
 
 #[test]
 fn partition_keeps_active_in_order_and_sorts_settled_newest_first() {
@@ -27,4 +27,38 @@ fn partition_with_all_settled_leaves_active_empty() {
 
     assert!(active.is_empty());
     assert_eq!(settled, vec![1, 0]);
+}
+
+#[test]
+fn group_indices_by_project_sorts_chats_not_projects() {
+    // Project B has a newer chat (9000) than Project A (5000), and None has 9999.
+    // Project order is A (0), B (1), with None always last.
+    let keys = [
+        Some("proj-a".to_string()),
+        Some("proj-b".to_string()),
+        Some("proj-a".to_string()),
+        None,
+    ];
+    let timestamps = [1_000, 9_000, 5_000, 9_999];
+    let order = |id: &str| match id {
+        "proj-a" => 0,
+        "proj-b" => 1,
+        _ => usize::MAX,
+    };
+
+    let grouped = group_indices_by_project(
+        keys.len(),
+        |i| keys[i].clone(),
+        |i| timestamps[i],
+        order,
+    );
+
+    assert_eq!(
+        grouped,
+        vec![
+            (Some("proj-a".to_string()), vec![2, 0]),
+            (Some("proj-b".to_string()), vec![1]),
+            (None, vec![3]),
+        ]
+    );
 }

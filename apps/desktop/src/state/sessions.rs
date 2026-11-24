@@ -973,7 +973,7 @@ impl ConsoleDesktopApp {
         let target_id = resolved.map(|project| {
             match console_core::session_checkout_path(header, Some(&project.path)) {
                 Some(path) => console_core::worktree_workspace_key(&project.id, path),
-                None => project.id.clone(),
+                None => console_core::session_workspace_key(&project.id, &header.id),
             }
         });
         // Same project (worktree or not): the pane's workspace already fits
@@ -1339,6 +1339,12 @@ impl ConsoleDesktopApp {
                         .map(|project| project.id.clone())
                 },
                 timestamp,
+                |id| {
+                    self.projects
+                        .iter()
+                        .position(|project| project.id == id)
+                        .unwrap_or(usize::MAX)
+                },
             );
             for (_, positions) in grouped {
                 for idx in positions {
@@ -1378,6 +1384,12 @@ impl ConsoleDesktopApp {
                     .map(|project| project.id.clone())
             },
             timestamp,
+            |id| {
+                self.projects
+                    .iter()
+                    .position(|project| project.id == id)
+                    .unwrap_or(usize::MAX)
+            },
         );
         for (key, positions) in grouped {
             let collapse_key = key.unwrap_or_else(|| "none".to_string());

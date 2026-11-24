@@ -317,13 +317,23 @@ impl ConsoleDesktopApp {
         // the per-chat switch: every live session opens into its own desk,
         // so close them here on later sweeps.
         if migrated {
-            console_ui::workspace::ops::close_matching_tabs(&mut self.workspace_root, |t| {
-                matches!(t, WorkspaceTabConfig::Chat { .. })
-            });
-            for root in self.project_workspace_roots.values_mut() {
-                console_ui::workspace::ops::close_matching_tabs(root, |t| {
+            let is_bare_project = |key: Option<&str>| {
+                key.is_some_and(|k| {
+                    !console_core::is_session_workspace_key(k)
+                        && !console_core::is_worktree_workspace_key(k)
+                })
+            };
+            if is_bare_project(self.selected_project_id.as_deref()) {
+                console_ui::workspace::ops::close_matching_tabs(&mut self.workspace_root, |t| {
                     matches!(t, WorkspaceTabConfig::Chat { .. })
                 });
+            }
+            for (slot, root) in self.project_workspace_roots.iter_mut() {
+                if is_bare_project(slot.as_deref()) {
+                    console_ui::workspace::ops::close_matching_tabs(root, |t| {
+                        matches!(t, WorkspaceTabConfig::Chat { .. })
+                    });
+                }
             }
         }
 

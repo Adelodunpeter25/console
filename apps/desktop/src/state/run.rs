@@ -616,7 +616,7 @@ impl ConsoleDesktopApp {
             source: None,
         };
         self.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-            t.push_message(user_msg, cx);
+            t.push_message(user_msg.clone(), cx);
             t.begin_streaming(cx);
         });
 
@@ -667,6 +667,7 @@ impl ConsoleDesktopApp {
 
         // Spawn async streaming run
         cx.spawn(async move |entity, cx| {
+            let mut run_pane_id = run_pane_id;
             // Resolve or create session ID
             let (session_id, run_token) = match active_sid {
                 Some(id) => (id, initial_run_token),
@@ -689,6 +690,7 @@ impl ConsoleDesktopApp {
                             let mut new_session = s;
                             new_session.message_count = Some(1);
                             let mut assigned_token = 0;
+                            let mut resolved_pane = run_pane_id.clone();
                             cx.update(|cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
@@ -696,18 +698,35 @@ impl ConsoleDesktopApp {
                                         // transcript, so the chat it was
                                         // showing keeps its position.
                                         this.save_pane_scroll_position(&run_pane_id, cx);
-                                        this.apply_session_header_for_pane(&run_pane_id, &new_session, cx);
-                                        if this.active_pane_id.as_deref() == Some(run_pane_id.as_str()) {
+                                        super::types::rc_slice_edit(&mut this.sessions, |v| v.insert(0, new_session.clone()));
+                                        this.switch_workspace_for_session(&sid, &run_pane_id, cx);
+                                        let target_pane = this
+                                            .active_pane_id
+                                            .clone()
+                                            .unwrap_or_else(|| run_pane_id.clone());
+                                        if target_pane != run_pane_id {
+                                            this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
+                                                t.finish_streaming(cx);
+                                            });
+                                            this.transcript_for_pane(&target_pane).update(cx, |t, cx| {
+                                                t.set_turns(Vec::new(), cx);
+                                                t.push_message(user_msg, cx);
+                                                t.begin_streaming(cx);
+                                            });
+                                        }
+                                        this.apply_session_header_for_pane(&target_pane, &new_session, cx);
+                                        if this.active_pane_id.as_deref() == Some(target_pane.as_str()) {
                                             this.selected_session_id = Some(sid.clone());
                                         }
-                                        super::types::rc_slice_edit(&mut this.sessions, |v| v.insert(0, new_session.clone()));
-                                        this.open_chat_tab_in_pane(&run_pane_id, sid.clone(), new_session.title.clone(), cx);
+                                        this.open_chat_tab_in_pane(&target_pane, sid.clone(), new_session.title.clone(), cx);
                                         this.set_session_running(&sid, Some(run_started_at));
                                         assigned_token = this.next_run_token_for_session(&sid);
+                                        resolved_pane = target_pane;
                                         cx.notify();
                                     });
                                 }
                             });
+                            run_pane_id = resolved_pane;
                             (sid, assigned_token)
                         }
                         Err(error) => {
