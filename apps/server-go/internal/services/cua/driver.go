@@ -580,12 +580,24 @@ type Driver struct {
 	shutdown  bool
 }
 
+// RuntimeAuthorizationOptions configures the driver's runtime permission
+// ceiling (AbiRuntimeAuthorizationOptions in cua_driver_abi.h).
+type RuntimeAuthorizationOptions struct {
+	AllowedModes             []string `json:"allowed_modes,omitempty"`
+	CompatibilityMode        string   `json:"compatibility_mode"`
+	UnrestrictedAcknowledged bool     `json:"unrestricted_acknowledged,omitempty"`
+	MaxSessionTTLSeconds     uint64   `json:"max_session_ttl_seconds"`
+	MaxIdleTTLSeconds        uint64   `json:"max_idle_ttl_seconds"`
+}
+
 // Options are the runtime creation options. Only fields Cua documents are
 // exposed; it fails closed on unknown keys.
 type Options struct {
 	// ClaudeCodeCompatibility reshapes `screenshot` to the Claude Code
 	// computer-use shape. Off by default.
 	ClaudeCodeCompatibility bool
+	// Authorization sets the runtime authorization ceiling.
+	Authorization *RuntimeAuthorizationOptions
 }
 
 // Open loads the library and creates a driver handle.
@@ -593,9 +605,13 @@ func Open(opts Options) (*Driver, error) {
 	if err := Load(); err != nil {
 		return nil, err
 	}
+	EnsureHostEnv()
 	payload := map[string]any{}
 	if opts.ClaudeCodeCompatibility {
 		payload["claude_code_compatibility"] = true
+	}
+	if opts.Authorization != nil {
+		payload["authorization"] = opts.Authorization
 	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {

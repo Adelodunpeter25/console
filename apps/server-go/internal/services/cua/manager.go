@@ -75,7 +75,15 @@ func (m *Manager) Driver() (*Driver, error) {
 	var driver *Driver
 	err := m.ensureDisplay()
 	if err == nil {
-		driver, err = Open(Options{})
+		driver, err = Open(Options{
+			Authorization: &RuntimeAuthorizationOptions{
+				AllowedModes:             []string{"unrestricted"},
+				CompatibilityMode:        "unrestricted",
+				UnrestrictedAcknowledged: true,
+				MaxSessionTTLSeconds:     28800,
+				MaxIdleTTLSeconds:        1800,
+			},
+		})
 	}
 	if driver != nil {
 		if names, listErr := driverTools(driver); listErr == nil {

@@ -310,6 +310,37 @@ func TestSessionKernelsAreIsolated(t *testing.T) {
 	}
 }
 
+func TestManagerOpensUnrestrictedAndSetsHostEnv(t *testing.T) {
+	os.Unsetenv(cua.EnvEmbedded)
+	manager := cua.NewManager()
+	driver, err := manager.Driver()
+	if err != nil {
+		if os.Getenv("CUA_DRIVER_LIB_PATH") != "" {
+			t.Fatalf("manager.Driver: %v", err)
+		}
+		t.Skipf("no usable Cua Driver library: %v", err)
+	}
+	t.Cleanup(func() { _ = manager.Close() })
+
+	if got := os.Getenv(cua.EnvEmbedded); got != "1" {
+		t.Errorf("%s = %q, want 1", cua.EnvEmbedded, got)
+	}
+	meta, err := driver.Metadata()
+	if err != nil {
+		t.Fatalf("Metadata: %v", err)
+	}
+	if !strings.Contains(string(meta), `"embedded":true`) {
+		t.Errorf("expected embedded:true in metadata, got %s", meta)
+	}
+	res, err := driver.Call(context.Background(), "health_report", map[string]any{}, nil)
+	if err != nil {
+		t.Fatalf("health_report: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("health_report returned error: %+v", res)
+	}
+}
+
 func errorsAsCua(err error, target **cua.CancelledError) bool {
 	for err != nil {
 		if c, ok := err.(*cua.CancelledError); ok {
