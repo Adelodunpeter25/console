@@ -887,8 +887,8 @@ func TestWaitBackgroundCancelStopsTheWatcher(t *testing.T) {
 	if done.Status != background.StatusCancelled || done.Summary != "" {
 		t.Fatalf("a cancelled wait must stay cancelled: %#v", done)
 	}
-	if manager.HasUndelivered("caller") {
-		t.Fatal("a cancelled wait must not wake the caller")
+	if !manager.HasUndelivered("caller") {
+		t.Fatal("a user-cancelled wait must notify the caller")
 	}
 }
 

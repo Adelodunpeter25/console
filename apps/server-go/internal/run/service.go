@@ -205,7 +205,7 @@ func (s *Service) backgroundWorkListener(event background.Event) {
 		bus.Push(BackgroundWorkNotification(event.Work.SessionID))
 	}
 	switch event.Work.Status {
-	case background.StatusCompleted, background.StatusFailed, background.StatusTimedOut:
+	case background.StatusCompleted, background.StatusFailed, background.StatusTimedOut, background.StatusCancelled:
 		s.wakeIfIdle(event.Work.SessionID)
 	}
 }

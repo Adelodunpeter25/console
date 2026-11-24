@@ -148,11 +148,18 @@ func (m *Manager) SetCancel(workID string, cancel func()) error {
 // Cancel requests cancellation and records the terminal state. The backend
 // callback may race with its own exit; Complete is idempotent and wins once.
 func (m *Manager) Cancel(workID, sessionID string) (Work, error) {
+	return m.cancel(workID, sessionID, false)
+}
+
+func (m *Manager) cancel(workID, sessionID string, suppressDelivery bool) (Work, error) {
 	m.mu.Lock()
 	rec, err := m.ownedLocked(workID, sessionID)
 	if err != nil {
 		m.mu.Unlock()
 		return Work{}, err
+	}
+	if suppressDelivery {
+		rec.delivered = true
 	}
 	cancel := rec.cancel
 	m.mu.Unlock()
@@ -216,7 +223,7 @@ func (m *Manager) CancelOwnedBy(sessionID string) {
 	}
 	m.mu.Unlock()
 	for _, id := range ids {
-		_, _ = m.Cancel(id, sessionID)
+		_, _ = m.cancel(id, sessionID, true)
 	}
 }
 
@@ -266,8 +273,9 @@ func (m *Manager) TakeCompletions(sessionID string) []Work {
 }
 
 // HasUndelivered reports whether the session has finished work the parent has
-// not seen yet. Cancelled work is ignored: a kill or abort is already known to
-// whoever requested it and must never wake an idle session.
+// not seen yet. Run-abort cancellations (CancelOwnedBy) are marked delivered
+// so aborting a run never wakes an idle session, while user-cancelled work
+// remains undelivered so the agent is notified.
 func (m *Manager) HasUndelivered(sessionID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -276,7 +284,7 @@ func (m *Manager) HasUndelivered(sessionID string) bool {
 			continue
 		}
 		switch rec.work.Status {
-		case StatusCompleted, StatusFailed, StatusTimedOut:
+		case StatusCompleted, StatusFailed, StatusTimedOut, StatusCancelled:
 			return true
 		}
 	}
