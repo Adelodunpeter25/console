@@ -92,6 +92,13 @@ func startGrantPurge(database *db.DB) func() {
 // Run starts the server and blocks until SIGINT/SIGTERM. It returns nil on
 // clean shutdown and a non-nil error when startup fails.
 func Run() error {
+	// A server started from a terminal (make dev-server) writes its logs to
+	// that terminal. When the terminal goes away while the server is still
+	// running, the next write hits EPIPE, which Go's runtime turns into a
+	// fatal SIGPIPE. Keep the process alive instead: losing the log pipe is
+	// not a reason to take the daemon down.
+	signal.Ignore(syscall.SIGPIPE)
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
