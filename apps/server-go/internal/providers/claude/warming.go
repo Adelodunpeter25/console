@@ -18,9 +18,12 @@ import (
 // lifetime. The replay is identical to the real request (same thinking
 // budget and max_tokens, which Anthropic keys the cache on), and the stream is
 // cancelled at message_start, where the cache usage is already reported, so
-// almost no output is generated. Setting CONSOLE_CACHE_WARMING=off disables it.
+// almost no output is generated.
+//
+// Off by default: it sends requests while you are away, which a subscription
+// account may not expect. Set CLAUDE_CACHE_WARMING=on to enable it.
 const (
-	warmingEnv          = "CONSOLE_CACHE_WARMING"
+	warmingEnv          = "CLAUDE_CACHE_WARMING"
 	warmMinPromptTokens = 20_000
 	warmMaxTracked      = 32
 	warmTimeout         = 2 * time.Minute
@@ -47,7 +50,7 @@ var (
 	warmEntries = map[string]*warmEntry{}
 )
 
-func warmingEnabled() bool { return os.Getenv(warmingEnv) != "off" }
+func warmingEnabled() bool { return os.Getenv(warmingEnv) == "on" }
 
 // SetWarmTiming overrides the warming delays and returns a restore function
 // (tests).

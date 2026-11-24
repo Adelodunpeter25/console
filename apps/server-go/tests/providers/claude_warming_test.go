@@ -31,6 +31,7 @@ func (w *warmServer) count() int {
 
 func newWarmServer(t *testing.T, promptTokens int) *warmServer {
 	t.Helper()
+	t.Setenv("CLAUDE_CACHE_WARMING", "on")
 	w := &warmServer{}
 	w.Server = httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
@@ -115,5 +116,15 @@ func TestClaudeWarmingStopsAfterTheIdleLimit(t *testing.T) {
 	time.Sleep(250 * time.Millisecond)
 	if got := srv.count(); got > 3 {
 		t.Fatalf("requests = %d; warming must stop once the idle limit is reached", got)
+	}
+}
+func TestClaudeWarmingIsOffByDefault(t *testing.T) {
+	defer claude.SetWarmTiming(20*time.Millisecond, time.Hour)()
+	srv := newWarmServer(t, 50_000)
+	t.Setenv("CLAUDE_CACHE_WARMING", "")
+	runWarmTurn(t, srv, "conv-default", loop.CacheLong)
+	time.Sleep(150 * time.Millisecond)
+	if got := srv.count(); got != 1 {
+		t.Fatalf("requests = %d; nothing may be sent in the background unless the user opts in", got)
 	}
 }
