@@ -133,7 +133,7 @@ impl ConsoleDesktopApp {
             })));
             s
         });
-        let view = cx.new(|cx| editor_ui::EditorView::new(&state, cx));
+        let view = cx.new(|cx| editor_ui::EditorView::new(&state, cx).with_vim_mode(true));
         if let Some(line) = self.pending_file_line.remove(path) {
             view.update(cx, |view, cx| {
                 view.select_line(line, cx);
