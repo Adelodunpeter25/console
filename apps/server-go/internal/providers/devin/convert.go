@@ -58,6 +58,25 @@ func buildPrompts(messages []any, cascadeID string) []*exav1.ChatMessagePrompt {
 	return prompts
 }
 
+// BuildPromptsWithCache maps history plus the per-request tail onto prompts and
+// marks the last stable message as a cache breakpoint, so the conversation
+// prefix is cached like the system prompt is. The tail sits after the marker:
+// it changes every request and must stay out of the cached prefix.
+func BuildPromptsWithCache(messages []any, cascadeID, tail string, retention loop.CacheRetention) []*exav1.ChatMessagePrompt {
+	prompts := buildPrompts(loop.WithTail(tail, messages), cascadeID)
+	if retention == loop.CacheNone {
+		return prompts
+	}
+	idx := len(prompts) - 1
+	if strings.TrimSpace(tail) != "" {
+		idx--
+	}
+	if idx >= 0 {
+		prompts[idx].PromptCacheOptions = &exav1.PromptCacheOptions{Type: exav1.CacheControlType_CACHE_CONTROL_TYPE_EPHEMERAL}
+	}
+	return prompts
+}
+
 // userPrompt flattens one user turn into a USER prompt with inline images.
 func userPrompt(msg loop.UserMessage, messageID string) *exav1.ChatMessagePrompt {
 	p := &exav1.ChatMessagePrompt{
