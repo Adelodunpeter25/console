@@ -4,6 +4,10 @@
 # resolveUpgradeTarget's CONSOLE_INSTALL_DIR fallback in upgrade.go).
 INSTALL_DIR ?= $(HOME)/.local/bin
 
+# Dev binaries run from the go-build cache or the repo root, not the install
+# dir, so point libvoxl's runtime loader at the copy fetch-voxl-lib.sh stages.
+VOXL_LIB ?= $(CURDIR)/apps/server-go/third_party/voxl/libvoxl.$(if $(filter Darwin,$(shell uname -s)),dylib,so)
+
 # Default target
 .DEFAULT_GOAL := help
 
@@ -25,7 +29,7 @@ REMOTE_PAIR = case "$$(echo $$CONSOLE_REMOTE | tr A-Z a-z)" in 0|off|false|no|di
 dev-server:
 	@CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) go -C apps/server-go run ./cmd/console pair --dev
 	@$(REMOTE_PAIR)
-	CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) \
+	CONSOLE_ENV=dev VOXL_LIB_PATH=$(VOXL_LIB) $(if $(PORT),PORT=$(PORT),) \
 	go -C apps/server-go run ./cmd/server
 
 ## dev-console: Start the console agent as a background daemon (survives closing terminal)
@@ -35,7 +39,7 @@ dev-server:
 ## ~/.console-dev, matching the desktop's separate dev bundle identifier.
 ## Builds the Go binary first.
 dev-console: build-server
-	CONSOLE_ENV=$(if $(PORT),,dev) ./console start -p $(if $(PORT),$(PORT),3000)
+	CONSOLE_ENV=$(if $(PORT),,dev) VOXL_LIB_PATH=$(VOXL_LIB) ./console start -p $(if $(PORT),$(PORT),3000)
 
 ## dev-mobile: Build and run the native Android app in dev mode
 ##   Installs debug APK and launches the app on Android emulator/device
