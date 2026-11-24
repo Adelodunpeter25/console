@@ -458,14 +458,20 @@ impl RenderOnce for SidebarView {
                 None => "No Project".to_string(),
             }
         };
-        let project_order = |id: &str| {
+        let project_created_at = |id: &str| {
             projects
                 .iter()
-                .position(|project| project.id == id)
-                .unwrap_or(usize::MAX)
+                .find(|project| project.id == id)
+                .map(|project| project.created_at)
+                .unwrap_or(i64::MIN)
         };
         let project_sections: Vec<(ProjectSectionKey, String, Vec<usize>)> =
-            group_indices_by_project(sessions.len(), project_key, session_timestamp, project_order)
+            group_indices_by_project(
+                sessions.len(),
+                project_key,
+                session_timestamp,
+                project_created_at,
+            )
                 .into_iter()
                 .map(|(key, positions)| {
                     let filtered: Vec<usize> = positions

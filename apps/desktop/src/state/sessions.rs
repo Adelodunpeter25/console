@@ -1342,8 +1342,9 @@ impl ConsoleDesktopApp {
                 |id| {
                     self.projects
                         .iter()
-                        .position(|project| project.id == id)
-                        .unwrap_or(usize::MAX)
+                        .find(|project| project.id == id)
+                        .map(|project| project.created_at)
+                        .unwrap_or(i64::MIN)
                 },
             );
             for (_, positions) in grouped {
@@ -1387,8 +1388,9 @@ impl ConsoleDesktopApp {
             |id| {
                 self.projects
                     .iter()
-                    .position(|project| project.id == id)
-                    .unwrap_or(usize::MAX)
+                    .find(|project| project.id == id)
+                    .map(|project| project.created_at)
+                    .unwrap_or(i64::MIN)
             },
         );
         for (key, positions) in grouped {

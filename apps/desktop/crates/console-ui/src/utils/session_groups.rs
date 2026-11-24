@@ -26,15 +26,16 @@ pub fn partition_settled(
     (active, settled)
 }
 
-/// Bucket item *positions* `0..len` by project section, keeping sections in
-/// `project_order` (`None` always last) while sorting positions within each
-/// section most recent first. Sections with no positions are omitted.
-/// Callers keep the shared item collection and resolve each position on demand.
+/// Bucket item *positions* `0..len` by project section, ordered by when each
+/// project was added (newest project first, `None` always last), while sorting
+/// positions within each section most recent first. Sections with no positions
+/// are omitted. Callers keep the shared item collection and resolve each
+/// position on demand.
 pub fn group_indices_by_project(
     len: usize,
     project_key: impl Fn(usize) -> ProjectSectionKey,
     timestamp: impl Fn(usize) -> i64,
-    project_order: impl Fn(&str) -> usize,
+    project_created_at: impl Fn(&str) -> i64,
 ) -> Vec<(ProjectSectionKey, Vec<usize>)> {
     use std::collections::HashMap;
     let mut buckets: HashMap<ProjectSectionKey, Vec<usize>> = HashMap::new();
@@ -48,12 +49,14 @@ pub fn group_indices_by_project(
             (key, positions)
         })
         .collect();
-    // Keep project sections in stable order; `None` (no project) always last.
+    // Most recently added project first; `None` (no project) always last.
     grouped.sort_by(|(key_a, _), (key_b, _)| {
         match (key_a.as_deref(), key_b.as_deref()) {
             (None, Some(_)) => std::cmp::Ordering::Greater,
             (Some(_), None) => std::cmp::Ordering::Less,
-            (Some(a), Some(b)) => project_order(a).cmp(&project_order(b)).then_with(|| a.cmp(b)),
+            (Some(a), Some(b)) => project_created_at(b)
+                .cmp(&project_created_at(a))
+                .then_with(|| a.cmp(b)),
             (None, None) => std::cmp::Ordering::Equal,
         }
     });
