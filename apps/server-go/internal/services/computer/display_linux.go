@@ -102,6 +102,23 @@ func (d *displayManager) EnsureDisplay(ctx context.Context) (string, error) {
 	return d.displayNum, nil
 }
 
+// ResolveSessionBus returns the DBUS_SESSION_BUS_ADDRESS to use for the
+// desktop session, preferring an existing address or systemd user bus socket
+// so snap applications can register transient scopes with systemd --user.
+func ResolveSessionBus(current, runtimeDir string) string {
+	if current != "" {
+		return current
+	}
+	if runtimeDir == "" {
+		return ""
+	}
+	busPath := filepath.Join(runtimeDir, "bus")
+	if info, err := os.Stat(busPath); err == nil && info.Mode()&os.ModeSocket != 0 {
+		return "unix:path=" + busPath
+	}
+	return ""
+}
+
 // startSession starts the best desktop session available: XFCE, then the
 // lightweight window managers this package has always supported.
 func (d *displayManager) startSession() {
@@ -110,11 +127,21 @@ func (d *displayManager) startSession() {
 		"XDG_SESSION_TYPE=x11",
 		"XDG_CURRENT_DESKTOP=XFCE",
 	)
-	if os.Getenv("XDG_RUNTIME_DIR") == "" {
-		dir := filepath.Join(os.TempDir(), fmt.Sprintf("runtime-%d", os.Getuid()))
-		if err := os.MkdirAll(dir, 0o700); err == nil {
-			env = append(env, "XDG_RUNTIME_DIR="+dir)
+	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if runtimeDir == "" {
+		userRuntime := fmt.Sprintf("/run/user/%d", os.Getuid())
+		if info, err := os.Stat(userRuntime); err == nil && info.IsDir() {
+			runtimeDir = userRuntime
+		} else {
+			runtimeDir = filepath.Join(os.TempDir(), fmt.Sprintf("runtime-%d", os.Getuid()))
+			_ = os.MkdirAll(runtimeDir, 0o700)
 		}
+		env = append(env, "XDG_RUNTIME_DIR="+runtimeDir)
+	}
+
+	sessionBus := ResolveSessionBus(os.Getenv("DBUS_SESSION_BUS_ADDRESS"), runtimeDir)
+	if sessionBus != "" && os.Getenv("DBUS_SESSION_BUS_ADDRESS") == "" {
+		env = append(env, "DBUS_SESSION_BUS_ADDRESS="+sessionBus)
 	}
 
 	type candidate struct {
@@ -123,16 +150,19 @@ func (d *displayManager) startSession() {
 	}
 	var candidates []candidate
 
+	// Only spawn an isolated dbus-run-session when no user bus exists;
+	// replacing the systemd user bus breaks snap apps (e.g. Chromium).
 	dbusRun, dbusErr := exec.LookPath("dbus-run-session")
+	useDbusRun := sessionBus == "" && dbusErr == nil
 	if startxfce4, err := exec.LookPath("startxfce4"); err == nil {
-		if dbusErr == nil {
+		if useDbusRun {
 			candidates = append(candidates, candidate{dbusRun, []string{"--", startxfce4}})
 		} else {
 			candidates = append(candidates, candidate{startxfce4, nil})
 		}
 	}
 	if xfce4Session, err := exec.LookPath("xfce4-session"); err == nil {
-		if dbusErr == nil {
+		if useDbusRun {
 			candidates = append(candidates, candidate{dbusRun, []string{"--", xfce4Session}})
 		} else {
 			candidates = append(candidates, candidate{xfce4Session, nil})
