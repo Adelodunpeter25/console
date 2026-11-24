@@ -1243,7 +1243,7 @@ impl BrowserView {
                         )
                     })
                     .when_some(self.render_history_suggestions(cx), |element, panel| {
-                        element.child(panel)
+                        element.child(gpui::deferred(panel))
                     }),
             )
             .child(self.toolbar_button(
