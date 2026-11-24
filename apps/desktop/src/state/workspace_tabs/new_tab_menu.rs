@@ -64,9 +64,10 @@ pub(crate) fn new_tab_menu_items(
             }
         };
 
+        // Shortest label first; ties follow the workspace's tab grouping.
         let mut items = vec![
             row(
-                "New Chat",
+                "Chat",
                 IconName::ChatRoundLine,
                 kbd("⌘N", "Ctrl+N"),
                 Rc::new(|this, window, cx| this.open_floating_composer(window, cx)),
@@ -77,41 +78,41 @@ pub(crate) fn new_tab_menu_items(
                 None,
                 Rc::new(|this, _, cx| this.open_file_tree_tab(cx)),
             ),
-            row(
-                "Changes",
-                IconName::FileDiff,
-                None,
-                Rc::new(|this, _, cx| this.open_changes_for_active_pane(cx)),
-            ),
-            row(
-                "Terminal",
-                IconName::Terminal,
-                kbd("⇧⌘T", "Ctrl+Shift+T"),
-                Rc::new(|this, window, cx| this.open_terminal_tab(window, cx)),
-            ),
         ];
-        if !cfg!(target_os = "windows") {
-            items.push(row(
-                "Browser",
-                IconName::Global,
-                kbd("⇧⌘B", "Ctrl+Shift+B"),
-                Rc::new(|this, window, cx| this.open_browser_tab(window, cx)),
-            ));
-        }
-        if cfg!(target_os = "macos") {
-            items.push(row(
-                "Computer",
-                IconName::Terminal,
-                None,
-                Rc::new(|this, _, cx| this.open_computer_tab(cx)),
-            ));
-            items.push(row(
-                "Devices",
-                IconName::Smartphone,
-                None,
-                Rc::new(|this, _, cx| this.open_device_tab(cx)),
-            ));
-        }
+        #[cfg(target_os = "macos")]
+        items.push(row(
+            "Devices",
+            IconName::Smartphone,
+            None,
+            Rc::new(|this, _, cx| this.open_device_tab(cx)),
+        ));
+        items.push(row(
+            "Changes",
+            IconName::FileDiff,
+            None,
+            Rc::new(|this, _, cx| this.open_changes_for_active_pane(cx)),
+        ));
+        // Browser tabs are deferred on Windows.
+        #[cfg(not(target_os = "windows"))]
+        items.push(row(
+            "Browser",
+            IconName::Global,
+            kbd("⇧⌘B", "Ctrl+Shift+B"),
+            Rc::new(|this, window, cx| this.open_browser_tab(window, cx)),
+        ));
+        items.push(row(
+            "Terminal",
+            IconName::Terminal,
+            kbd("⇧⌘T", "Ctrl+Shift+T"),
+            Rc::new(|this, window, cx| this.open_terminal_tab(window, cx)),
+        ));
+        #[cfg(target_os = "macos")]
+        items.push(row(
+            "Computer",
+            IconName::Terminal,
+            None,
+            Rc::new(|this, _, cx| this.open_computer_tab(cx)),
+        ));
         items
     })
 }

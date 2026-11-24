@@ -124,6 +124,18 @@ fn command_palette_entries(
         })
         .icon(IconName::Smartphone),
     );
+    #[cfg(target_os = "macos")]
+    entries.push(
+        PaletteEntry::new("open-computer", "Open Computer", {
+            let entity = entity.clone();
+            move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.open_computer_tab(cx));
+                }
+            }
+        })
+        .icon(IconName::Terminal),
+    );
     // Browser tabs are deferred on Windows.
     #[cfg(not(target_os = "windows"))]
     entries.push(
