@@ -531,6 +531,20 @@ impl ConsoleDesktopApp {
                     .any(|open_tab| matches!(open_tab, WorkspaceTabConfig::Computer { .. }));
                 if !still_open && let Some(view) = self.computer_view.take() {
                     view.update(cx, |view, cx| view.close(cx));
+                    // GPUI focus stays on the dropped viewer's handle, which
+                    // swallows keystrokes meant for the composer.
+                    let entity = cx.entity().downgrade();
+                    cx.defer(move |cx| {
+                        if let Some(window) = cx.active_window() {
+                            let _ = window.update(cx, |_, window, cx| {
+                                if view.focus_handle(cx).is_focused(window)
+                                    && let Some(app) = entity.upgrade()
+                                {
+                                    app.update(cx, |this, cx| this.focus_composer(window, cx));
+                                }
+                            });
+                        }
+                    });
                 }
             }
             WorkspaceTabConfig::FileTree { .. } => {
