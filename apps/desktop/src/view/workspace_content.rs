@@ -1165,7 +1165,11 @@ impl ConsoleDesktopApp {
                     // Status pills float over the transcript's bottom edge rather
                     // than occupying a band of their own; the transcript keeps a
                     // matching bottom inset so the last row can scroll clear.
-                    .when_some(composer_pills_row, |el, pills| el.child(pills)),
+                    // Deferred so they paint on gpui-fast's overlay surface, above an
+                    // expanded inline webview instead of under it.
+                    .when_some(composer_pills_row, |el, pills| {
+                        el.child(gpui::deferred(pills))
+                    }),
             )
             .when_some(
                 snapshot

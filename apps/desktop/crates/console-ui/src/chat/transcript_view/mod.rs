@@ -427,7 +427,7 @@ impl Render for TranscriptView {
                 selection.clone(),
                 cite_origin.clone(),
             ))
-            .child(self.render_scroll_controls(theme, cx));
+            .child(gpui::deferred(self.render_scroll_controls(theme, cx)));
         if let (Some(line), true) = (cite_line, cite_available)
             && let Some(container) = *cite_origin.borrow()
         {
