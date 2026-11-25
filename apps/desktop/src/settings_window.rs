@@ -324,10 +324,15 @@ impl SettingsWindow {
         });
     }
 
-    pub fn set_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
+    pub fn set_tab(
+        &mut self,
+        tab: SettingsTab,
+        client: console_core::ConsoleClient,
+        cx: &mut Context<Self>,
+    ) {
         self.active_tab = tab;
         if tab == SettingsTab::Mcp {
-            self.mcp.fetch_mcp_servers(cx);
+            self.mcp.fetch_mcp_servers_with_client(client, cx);
         }
         cx.notify();
     }

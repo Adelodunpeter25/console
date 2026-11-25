@@ -98,6 +98,14 @@ impl McpTabState {
             return;
         };
         let client = app_entity.read(cx).client.clone();
+        self.fetch_mcp_servers_with_client(client, cx);
+    }
+
+    pub fn fetch_mcp_servers_with_client(
+        &mut self,
+        client: console_core::ConsoleClient,
+        cx: &mut Context<SettingsWindow>,
+    ) {
         cx.spawn(async move |entity, cx| {
             if let Ok(servers) = client.mcp.list_servers().await {
                 let _ = cx.update(|cx| {

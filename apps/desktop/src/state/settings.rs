@@ -139,9 +139,10 @@ impl ConsoleDesktopApp {
         self.refresh_auth_status(cx);
         self.refresh_deleted_sessions(cx);
 
+        let client = self.client.clone();
         let settings_view = self.get_or_create_settings_view(tab, window, cx);
         settings_view.update(cx, |view, cx| {
-            view.set_tab(tab, cx);
+            view.set_tab(tab, client, cx);
         });
 
         self.settings_open = true;
