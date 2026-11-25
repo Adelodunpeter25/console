@@ -38,6 +38,12 @@ pub async fn resolve_html_url(path: &str, is_dark: bool) -> Option<String> {
     Some(client.fs.html_url(path, theme, token.as_deref()).await)
 }
 
+/// A native webview paints above all GPUI content, so it must stop short of
+/// the composer pills and scroll controls that float over the transcript's
+/// bottom edge (31px tall, 10px up) or it hides them.
+#[cfg(target_os = "macos")]
+const OVERLAY_RESERVE: f32 = 48.0;
+
 #[derive(Default)]
 struct CardState {
     collapsed: bool,
@@ -393,7 +399,9 @@ impl RenderOnce for HtmlCard {
                             .child(
                                 canvas(
                                     move |bounds, window, _| {
-                                        let visible = window.content_mask().bounds;
+                                        let mut visible = window.content_mask().bounds;
+                                        visible.size.height =
+                                            (visible.size.height - px(OVERLAY_RESERVE)).max(px(0.0));
                                         host.sync_bounds_clipped(
                                             bounds,
                                             visible,
