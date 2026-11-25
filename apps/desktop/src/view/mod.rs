@@ -812,6 +812,14 @@ impl Render for ConsoleDesktopApp {
                             }),
                     ),
             )
+            // Palette overlays (each renders nothing while closed).
+            .child(gpui::deferred(self.command_palette.clone()))
+            .child(gpui::deferred(self.tab_palette.clone()))
+            .child(gpui::deferred(self.quick_open_palette.clone()))
+            .child(gpui::deferred(self.project_browse_palette.clone()))
+            .when_some(self.floating_composer_view(window, cx), |el, card| {
+                el.child(gpui::deferred(card))
+            })
             .when_some(self.zoomed_image.clone(), |el, image| {
                 el.child(gpui::deferred(ImageViewerModal::new(
                     image,
@@ -828,14 +836,6 @@ impl Render for ConsoleDesktopApp {
                         }
                     },
                 )))
-            })
-            // Palette overlays (each renders nothing while closed).
-            .child(gpui::deferred(self.command_palette.clone()))
-            .child(gpui::deferred(self.tab_palette.clone()))
-            .child(gpui::deferred(self.quick_open_palette.clone()))
-            .child(gpui::deferred(self.project_browse_palette.clone()))
-            .when_some(self.floating_composer_view(window, cx), |el, card| {
-                el.child(gpui::deferred(card))
             })
             .child(gpui::deferred(self.global_search_panel.clone()))
             // Boxed so both render paths share a single return type — the

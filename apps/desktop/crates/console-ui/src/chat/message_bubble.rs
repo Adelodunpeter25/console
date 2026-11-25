@@ -382,7 +382,8 @@ impl RenderOnce for UserMessageBubble {
         let (body_text, file_comments) =
             console_shared::composer::file_comments::split_file_comments(&self.content);
         let (message_text, mentions) = message_text_with_mentions(&body_text, &self.context_files);
-        let has_content = !message_text.is_empty();
+        let has_text = !message_text.is_empty();
+        let has_content = has_text || !file_comments.is_empty();
         let comment_chips = (!file_comments.is_empty()).then(|| {
             div()
                 .max_w(px(540.0))
@@ -419,7 +420,7 @@ impl RenderOnce for UserMessageBubble {
         };
         // Long prompts fold to 8 lines with a Show more/less toggle inside the card,
         // mirroring mobile's 4-line fold.
-        let foldable = has_content && estimated_text_lines(&message_text) > USER_FOLDED_LINES;
+        let foldable = has_text && estimated_text_lines(&message_text) > USER_FOLDED_LINES;
         let folded = foldable && !self.expanded;
         let expanded = self.expanded;
         let expand_toggle = if foldable {
@@ -600,7 +601,7 @@ impl RenderOnce for UserMessageBubble {
                                                 .overflow_hidden()
                                         })
                                         .when_some(comment_chips, |el, chips| el.child(chips))
-                                        .child(message_text_element),
+                                        .when(has_text, |el| el.child(message_text_element)),
                                 )
                                 .when_some(expand_toggle, |card, on_toggle| {
                                     card.child(
