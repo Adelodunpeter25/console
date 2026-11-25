@@ -551,6 +551,34 @@ impl ConsoleDesktopApp {
         {
             return;
         }
+        if self.floating_composer.open {
+            let handle = self.floating_composer.model_menu.clone();
+            if handle.is_open() {
+                handle.close(window, cx);
+                let input = self.floating_composer.input.clone();
+                input.update(cx, |input, cx| {
+                    window.focus(&input.focus_handle(cx), cx);
+                });
+                return;
+            }
+            toggle_popover(&handle, MenuAlign::AboveLeft, window, cx);
+            if !handle.is_open() {
+                return;
+            }
+            // The card's handle has no open observer, so clear the query and
+            // focus the filter box here, after the deferred popover has drawn.
+            let search = self.floating_composer.model_search.clone();
+            search.update(cx, |input, cx| input.clear(cx));
+            let focus = search.read(cx).focus();
+            window.on_next_frame(move |window, _| {
+                window.on_next_frame(move |window, cx| {
+                    if handle.is_open() {
+                        window.focus(&focus, cx);
+                    }
+                });
+            });
+            return;
+        }
         let pane_id = self
             .active_pane_id
             .clone()
@@ -618,6 +646,22 @@ impl ConsoleDesktopApp {
     /// search field. Never opens the picker: when the search field itself
     /// already holds focus the keystroke instead inserts a literal `/`.
     pub fn focus_model_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.floating_composer.open {
+            if !self.floating_composer.model_menu.is_open() {
+                return;
+            }
+            let search = self.floating_composer.model_search.clone();
+            let focus = search.read(cx).focus();
+            if focus.is_focused(window) {
+                search.update(cx, |input, cx| {
+                    let at = input.cursor();
+                    input.replace_range(at..at, "/", cx);
+                });
+                return;
+            }
+            window.focus(&focus, cx);
+            return;
+        }
         let pane_id = self
             .active_pane_id
             .clone()
