@@ -66,6 +66,7 @@ impl ConsoleDesktopApp {
 
         if next_session == previous_session {
             self.refresh_file_tree(cx);
+            self.sync_workspace_webviews(cx);
             cx.notify();
             return;
         }

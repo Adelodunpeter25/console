@@ -734,6 +734,12 @@ mod macos_host {
         }
 
         pub fn focus_parent(&self) {
+            if let Some(window) = self.ns_view().window()
+                && let Some(content_view) = window.contentView()
+            {
+                let _ = window.makeFirstResponder(Some(&content_view));
+                return;
+            }
             let _ = self.webview.focus_parent();
         }
 
@@ -752,6 +758,9 @@ mod macos_host {
 
     impl Drop for WebviewHost {
         fn drop(&mut self) {
+            if self.native_focus_within() {
+                self.focus_parent();
+            }
             unsafe {
                 self.wk.stopLoading();
                 self.wk.setNavigationDelegate(None);

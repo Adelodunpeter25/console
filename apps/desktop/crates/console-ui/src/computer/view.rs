@@ -182,10 +182,11 @@ impl ComputerViewer {
     }
 
     pub fn close(&mut self, cx: &mut Context<Self>) {
-        if let Some(host) = self.host.clone() {
+        if let Some(host) = self.host.take() {
             host.evaluate_script("window.__consoleComputer && window.__consoleComputer.stop()");
-            host.set_visible(false);
             host.focus_parent();
+            host.set_visible(false);
+            cx.defer(move |_cx| drop(host));
         }
         self.stream_status = None;
         cx.notify();
