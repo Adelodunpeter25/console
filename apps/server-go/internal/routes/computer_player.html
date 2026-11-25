@@ -313,7 +313,9 @@
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const { x, y } = getCoords(e.clientX, e.clientY);
-    const wheel = e.deltaY < 0 ? -120 : 120;
+    // The remote X server reads a positive wheel value as wheel-up, so flip
+    // the browser delta to match macOS natural scrolling.
+    const wheel = e.deltaY < 0 ? 120 : -120;
     sendInput({ type: 'mouse', x, y, mask: 0, wheel });
   }, { passive: false });
 
