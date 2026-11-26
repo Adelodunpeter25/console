@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -105,6 +108,7 @@ internal fun formatCiteQuote(text: String): String {
 }
 
 /** Native markdown renderer used by chat, tools, subagents, and the file viewer. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CustomMarkdown(
     content: String,
@@ -121,7 +125,15 @@ fun CustomMarkdown(
     }
     DisposableEffect(toolbar) { onDispose { toolbar.hide() } }
 
-    CompositionLocalProvider(LocalTextToolbar provides toolbar) {
+    val noOpBringIntoView = remember {
+        object : BringIntoViewSpec {
+            override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = 0f
+        }
+    }
+    CompositionLocalProvider(
+        LocalTextToolbar provides toolbar,
+        LocalBringIntoViewSpec provides noOpBringIntoView,
+    ) {
         SelectionContainer(modifier = modifier) {
             // The parser object survives token updates. Streaming updates only replace
             // the unstable tail when possible; completed blocks retain their model.
