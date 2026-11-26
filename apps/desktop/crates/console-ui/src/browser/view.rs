@@ -37,6 +37,7 @@ use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
 const TOOLBAR_HEIGHT: f32 = 42.0;
+const SUGGESTION_LIMIT: usize = 6;
 
 /// A script/driver result plus the live page identity at completion. The
 /// committed tab URL lags behind `pushState` routes, so callers should prefer
@@ -88,6 +89,8 @@ pub struct BrowserView {
     /// Whether the address input currently holds keyboard focus, tracked so
     /// the render can show the history suggestions under the omnibox.
     address_focused: bool,
+    /// Suggestion highlighted with the arrow keys; `None` means the typed text.
+    suggestion_index: Option<usize>,
     was_natively_focused: bool,
     last_window_focus: Option<FocusHandle>,
     /// Whether this view's tab is the visible one in its pane, as last pushed
@@ -155,13 +158,19 @@ impl BrowserView {
             &address,
             move |this: &mut Self, address, event: &ComposerEvent, cx| match event {
                 ComposerEvent::Submit(text, _) => {
-                    this.navigate_to_input(text.clone(), cx);
+                    let picked = this
+                        .suggestion_index
+                        .take()
+                        .and_then(|index| this.suggestions(cx).into_iter().nth(index))
+                        .map(|suggestion| suggestion.url);
+                    this.navigate_to_input(picked.unwrap_or_else(|| text.clone()), cx);
                     let focus = this.focus_handle.clone();
                     let _ = window_handle.update(cx, |_, window, cx| {
                         window.focus(&focus, cx);
                     });
                 }
                 ComposerEvent::Edited => {
+                    this.suggestion_index = None;
                     let shown = this.current_url.as_deref().map(display_url).unwrap_or("");
                     this.address_dirty = address.read(cx).content() != shown;
                 }
@@ -241,6 +250,7 @@ impl BrowserView {
             can_go_forward: false,
             address_dirty: false,
             address_focused: false,
+            suggestion_index: None,
             was_natively_focused: false,
             last_window_focus: None,
             surface_visible: false,
@@ -940,7 +950,32 @@ impl BrowserView {
         cx.notify();
     }
 
+    /// The history matches shown under the omnibox while it holds edits.
+    fn suggestions(&self, cx: &App) -> Vec<super::browser_state::HistorySuggestion> {
+        if !self.address_focused || !self.address_dirty {
+            return Vec::new();
+        }
+        let query = self.address.read(cx).content().to_string();
+        super::browser_state::suggest(&query, SUGGESTION_LIMIT)
+    }
+
+    /// Up/Down walk the suggestions and wrap back to the typed text.
+    fn move_suggestion(&mut self, down: bool, cx: &mut Context<Self>) {
+        let count = self.suggestions(cx).len();
+        if count == 0 {
+            return;
+        }
+        self.suggestion_index = match (self.suggestion_index, down) {
+            (None, true) => Some(0),
+            (None, false) => Some(count - 1),
+            (Some(i), true) => (i + 1 < count).then_some(i + 1),
+            (Some(i), false) => i.checked_sub(1),
+        };
+        cx.notify();
+    }
+
     pub fn restore_address(&mut self, cx: &mut Context<Self>) {
+        self.suggestion_index = None;
         self.address_dirty = false;
         self.echo_page_url(cx);
         cx.notify();
@@ -1212,6 +1247,12 @@ impl BrowserView {
                 div()
                     .id("browser-address-container")
                     .key_context(BROWSER_ADDRESS_KEY_CONTEXT)
+                    .on_action(cx.listener(|this, _: &crate::common::input::Up, _, cx| {
+                        this.move_suggestion(false, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &crate::common::input::Down, _, cx| {
+                        this.move_suggestion(true, cx);
+                    }))
                     .on_action(cx.listener(|this, _: &BrowserAddressCancel, window, cx| {
                         this.restore_address(cx);
                         this.focus_default(window, cx);
@@ -1292,11 +1333,11 @@ impl BrowserView {
         if !self.address_focused || !self.address_dirty {
             return None;
         }
-        let query = self.address.read(cx).content().to_string();
-        let entries = super::browser_state::suggest(&query, 6);
+        let entries = self.suggestions(cx);
         if entries.is_empty() {
             return None;
         }
+        let selected = self.suggestion_index;
         let theme = Theme::current(cx);
         let weak = cx.entity().downgrade();
         Some(
@@ -1312,7 +1353,7 @@ impl BrowserView {
                 .border_color(theme.border)
                 .bg(theme.surface)
                 .overflow_hidden()
-                .children(entries.into_iter().map(|entry| {
+                .children(entries.into_iter().enumerate().map(|(index, entry)| {
                     let weak = weak.clone();
                     let url = entry.url.clone();
                     div()
@@ -1327,6 +1368,7 @@ impl BrowserView {
                         .px(px(10.0))
                         .py(px(6.0))
                         .hover(|s| s.bg(theme.overlay))
+                        .when(selected == Some(index), |s| s.bg(theme.overlay))
                         // On press, not click: the press moves focus off the address
                         // field, which hides this list before a click could finish.
                         .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
