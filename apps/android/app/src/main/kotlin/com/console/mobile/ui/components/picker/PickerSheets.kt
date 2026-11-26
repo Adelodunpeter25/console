@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -347,9 +348,10 @@ fun ModelPickerSheet(
             )
         }
 
+        val pagerHeight = (LocalConfiguration.current.screenHeightDp * 0.52f).dp.coerceIn(320.dp, 520.dp)
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+            modifier = Modifier.fillMaxWidth().height(pagerHeight),
             verticalAlignment = Alignment.Top,
         ) { page ->
             if (page == 0) {
