@@ -1,7 +1,8 @@
 package com.console.mobile.ui.navigation
 
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -54,12 +55,18 @@ import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.X
 
-private const val PAGE_ENTER_MS = 240
-private const val PAGE_EXIT_MS = 200
 // Fractions of the screen width: the incoming page travels further than the
 // outgoing one, which gives the push its depth.
-private const val PAGE_ENTER_SHIFT = 0.3f
-private const val PAGE_EXIT_SHIFT = 0.15f
+private const val PAGE_ENTER_SHIFT = 0.28f
+private const val PAGE_EXIT_SHIFT = 0.12f
+private val PageSlideSpring = spring<IntOffset>(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMediumLow,
+)
+private val PageFadeSpring = spring<Float>(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMedium,
+)
 
 @Composable
 fun AppNavGraph() {
@@ -172,20 +179,20 @@ fun AppNavGraph() {
             // Forward pushes the new screen in from the right while the old
             // one drifts left; back is the same motion reversed.
             enterTransition = {
-                slideInHorizontally(tween(PAGE_ENTER_MS, easing = LinearOutSlowInEasing)) { (it * PAGE_ENTER_SHIFT).toInt() } +
-                    fadeIn(tween(PAGE_ENTER_MS, easing = LinearOutSlowInEasing))
+                slideInHorizontally(PageSlideSpring) { (it * PAGE_ENTER_SHIFT).toInt() } +
+                    fadeIn(PageFadeSpring)
             },
             exitTransition = {
-                slideOutHorizontally(tween(PAGE_EXIT_MS, easing = LinearOutSlowInEasing)) { -(it * PAGE_EXIT_SHIFT).toInt() } +
-                    fadeOut(tween(PAGE_EXIT_MS, easing = LinearOutSlowInEasing))
+                slideOutHorizontally(PageSlideSpring) { -(it * PAGE_EXIT_SHIFT).toInt() } +
+                    fadeOut(PageFadeSpring)
             },
             popEnterTransition = {
-                slideInHorizontally(tween(PAGE_ENTER_MS, easing = LinearOutSlowInEasing)) { -(it * PAGE_EXIT_SHIFT).toInt() } +
-                    fadeIn(tween(PAGE_ENTER_MS, easing = LinearOutSlowInEasing))
+                slideInHorizontally(PageSlideSpring) { -(it * PAGE_EXIT_SHIFT).toInt() } +
+                    fadeIn(PageFadeSpring)
             },
             popExitTransition = {
-                slideOutHorizontally(tween(PAGE_EXIT_MS, easing = LinearOutSlowInEasing)) { (it * PAGE_ENTER_SHIFT).toInt() } +
-                    fadeOut(tween(PAGE_EXIT_MS, easing = LinearOutSlowInEasing))
+                slideOutHorizontally(PageSlideSpring) { (it * PAGE_ENTER_SHIFT).toInt() } +
+                    fadeOut(PageFadeSpring)
             },
         ) {
             composable<RouteHome> {

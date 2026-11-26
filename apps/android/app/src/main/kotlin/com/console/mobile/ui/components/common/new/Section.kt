@@ -1,6 +1,7 @@
 package com.console.mobile.ui.components.common.new
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -42,7 +44,10 @@ fun Section(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Text(
-        title, color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+        title,
+        color = NewTheme.Accent,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
         modifier = modifier.padding(start = 12.dp, top = 22.dp, bottom = 8.dp),
     )
     SectionCard(content = content)
@@ -57,8 +62,13 @@ fun SectionCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val shape = RoundedCornerShape(NewTheme.CardRadius)
     Column(
-        modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(NewTheme.Card)
+            .border(1.dp, NewTheme.CardBorder, shape),
         content = content,
     )
 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -79,8 +80,7 @@ fun PageHeader(
                 Text(
                     text = title,
                     color = NewTheme.TextPrimary,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleLarge,
                     textAlign = TextAlign.Start,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -89,7 +89,7 @@ fun PageHeader(
                     Text(
                         text = subtitle,
                         color = NewTheme.TextSecondary,
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.labelMedium,
                         textAlign = TextAlign.Start,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

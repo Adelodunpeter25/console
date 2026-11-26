@@ -1,7 +1,12 @@
 package com.console.mobile.ui.components.common.new
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -15,13 +20,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import com.console.mobile.ui.theme.ConsoleMotion
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -67,7 +77,12 @@ fun BaseSheet(
 /** Title of a [BaseSheet]. Public so a sheet that supplies its own layout can still match. */
 @Composable
 fun SheetTitle(title: String) {
-    Text(title, color = NewTheme.TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+    Text(
+        title,
+        color = NewTheme.TextPrimary,
+        style = MaterialTheme.typography.titleLarge,
+        modifier = Modifier.padding(start = 4.dp, bottom = 10.dp),
+    )
 }
 
 /**
@@ -125,10 +140,34 @@ fun TabPill(
     leading: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(NewTheme.ChipRadius)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = ConsoleMotion.FastSpatial,
+        label = "tabPillScale",
+    )
+    val bg by animateColorAsState(
+        targetValue = if (selected) NewTheme.Accent.copy(alpha = 0.18f) else NewTheme.Card,
+        animationSpec = ConsoleMotion.FastEffects,
+        label = "tabPillBg",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) NewTheme.Accent.copy(alpha = 0.35f) else NewTheme.CardBorder,
+        animationSpec = ConsoleMotion.FastEffects,
+        label = "tabPillBorder",
+    )
     Row(
-        modifier = modifier.clip(RoundedCornerShape(NewTheme.ChipRadius))
-            .background(if (selected) NewTheme.Accent.copy(alpha = 0.18f) else NewTheme.Card)
-            .clickable(onClick = onClick)
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
+            .background(bg)
+            .border(1.dp, borderColor, shape)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -149,10 +188,35 @@ fun IconTabPill(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(NewTheme.ChipRadius)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.93f else 1f,
+        animationSpec = ConsoleMotion.FastSpatial,
+        label = "iconTabPillScale",
+    )
+    val bg by animateColorAsState(
+        targetValue = if (selected) NewTheme.Accent.copy(alpha = 0.18f) else NewTheme.Card,
+        animationSpec = ConsoleMotion.FastEffects,
+        label = "iconTabPillBg",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) NewTheme.Accent.copy(alpha = 0.35f) else NewTheme.CardBorder,
+        animationSpec = ConsoleMotion.FastEffects,
+        label = "iconTabPillBorder",
+    )
     Box(
-        modifier = modifier.size(38.dp).clip(RoundedCornerShape(NewTheme.ChipRadius))
-            .background(if (selected) NewTheme.Accent.copy(alpha = 0.18f) else NewTheme.Card)
-            .clickable(onClick = onClick),
+        modifier = modifier
+            .size(38.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
+            .background(bg)
+            .border(1.dp, borderColor, shape)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = contentDescription, tint = if (selected) NewTheme.Accent else NewTheme.TextSecondary, modifier = Modifier.size(18.dp))

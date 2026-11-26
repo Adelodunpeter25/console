@@ -21,7 +21,11 @@ object NewTheme {
     val Raised = Color(0xFF2A2A2D)
     /** Inputs sitting on top of a card or the background. */
     val Field = Color(0xFF121316)
+    val SurfaceContainerLow = Color(0xFF141416)
+    val SurfaceContainerHighest = Color(0xFF343438)
     val Divider = Color.White.copy(alpha = 0.06f)
+    /** Subtle 1dp hairline for cards, pills, and floating controls on dark surfaces. */
+    val CardBorder = Color.White.copy(alpha = 0.07f)
     /** Placeholder blocks while content loads: a step lighter than [Card] so they read on it. */
     val Skeleton = Raised
 
@@ -37,6 +41,7 @@ object NewTheme {
     // ---- Brand
     /** Desktop's accent, the orange-brown (theme.accent, dark). Category headings, links. */
     val Accent = Color(0xFFE2795B)
+    val AccentWash = Accent.copy(alpha = 0.14f)
 
     /** True black, for screens that should sit on nothing (the file browser). */
     val Black = Color(0xFF000000)
@@ -83,6 +88,18 @@ object NewTheme {
     /** Standalone text inputs (search, answer box): one point tighter than [FieldRadius], which buttons and banners share. */
     val InputRadius = 15.dp
     val ChipRadius = 12.dp
+}
+
+/** Expressive spring specs shared across buttons, pills, and transitions. */
+object ConsoleMotion {
+    val FastSpatial = androidx.compose.animation.core.spring<Float>(
+        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium,
+    )
+    val FastEffects = androidx.compose.animation.core.spring<androidx.compose.ui.graphics.Color>(
+        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium,
+    )
 }
 
 /** Colour for a usage meter of this severity. */

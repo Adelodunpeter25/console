@@ -1,7 +1,11 @@
 package com.console.mobile.ui.components.common.new
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -14,11 +18,17 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
+import androidx.compose.ui.graphics.StrokeCap
+import com.console.mobile.ui.theme.ConsoleMotion
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -59,15 +69,38 @@ fun ActionButton(
         kind == ActionButtonKind.Danger -> NewTheme.Danger
         else -> NewTheme.TextPrimary
     }
+    val shape = RoundedCornerShape(if (compact) NewTheme.ChipRadius else NewTheme.FieldRadius)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && enabled && !loading) 0.96f else 1f,
+        animationSpec = ConsoleMotion.FastSpatial,
+        label = "actionButtonScale",
+    )
     Row(
-        modifier = modifier.clip(RoundedCornerShape(if (compact) NewTheme.ChipRadius else NewTheme.FieldRadius)).background(fill)
-            .clickable(enabled = enabled && !loading, onClick = onClick)
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
+            .background(fill)
+            .then(
+                if (kind != ActionButtonKind.Primary) Modifier.border(1.dp, NewTheme.CardBorder, shape)
+                else Modifier
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(color = content),
+                enabled = enabled && !loading,
+                onClick = onClick,
+            )
             .padding(horizontal = if (compact) 14.dp else 20.dp, vertical = if (compact) 9.dp else 15.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
         when {
-            loading -> CircularProgressIndicator(color = content, strokeWidth = 2.dp, modifier = Modifier.size(if (compact) 13.dp else 16.dp))
+            loading -> CircularProgressIndicator(color = content, strokeWidth = 2.dp, strokeCap = StrokeCap.Round, modifier = Modifier.size(if (compact) 13.dp else 16.dp))
             icon != null -> Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(if (compact) 14.dp else 18.dp))
         }
         if (loading || icon != null) Spacer(Modifier.size(8.dp))
@@ -86,9 +119,30 @@ fun CircleIconButton(
     background: Color = NewTheme.Card,
     enabled: Boolean = true,
 ) {
-    IconButton(onClick = onClick, enabled = enabled, modifier = modifier.size(40.dp)) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && enabled) 0.92f else 1f,
+        animationSpec = ConsoleMotion.FastSpatial,
+        label = "circleIconScale",
+    )
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        interactionSource = interactionSource,
+        modifier = modifier
+            .size(40.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+    ) {
         Box(
-            modifier = Modifier.size(40.dp).clip(CircleShape).background(background),
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(background)
+                .border(1.dp, NewTheme.CardBorder, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = contentDescription, tint = if (enabled) tint else NewTheme.TextMuted)
