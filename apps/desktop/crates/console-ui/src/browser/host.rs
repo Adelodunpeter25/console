@@ -737,7 +737,25 @@ mod macos_host {
             if let Some(window) = self.ns_view().window()
                 && let Some(content_view) = window.contentView()
             {
-                let _ = window.makeFirstResponder(Some(&content_view));
+                // GPUI takes keystrokes on its own view, the content view's
+                // child that hosts this webview. Handing the keyboard to the
+                // content view itself leaves every key with nowhere to go.
+                // SAFETY: plain AppKit view-hierarchy reads on the main thread.
+                let gpui_view = unsafe {
+                    let mut target = self.ns_view().superview();
+                    let mut found = None;
+                    while let Some(view) = target {
+                        let parent = view.superview();
+                        if parent.as_deref() == Some(&*content_view) {
+                            found = Some(view);
+                            break;
+                        }
+                        target = parent;
+                    }
+                    found
+                };
+                let responder = gpui_view.as_deref().unwrap_or(&content_view);
+                let _ = window.makeFirstResponder(Some(responder));
                 return;
             }
             let _ = self.webview.focus_parent();
