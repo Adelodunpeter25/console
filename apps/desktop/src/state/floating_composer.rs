@@ -527,7 +527,14 @@ impl ConsoleDesktopApp {
             let entity = entity.clone();
             move |_window: &mut Window, cx: &mut App| {
                 if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| this.close_floating_composer(cx));
+                    app.update(cx, |this, cx| {
+                        // Escape belongs to the image preview while it is open.
+                        if this.zoomed_image.take().is_some() {
+                            cx.notify();
+                        } else {
+                            this.close_floating_composer(cx);
+                        }
+                    });
                 }
             }
         })

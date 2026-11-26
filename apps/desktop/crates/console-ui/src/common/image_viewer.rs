@@ -34,6 +34,7 @@ impl RenderOnce for ImageViewerModal {
 
         div()
             .id("image-viewer-modal")
+            .occlude()
             .absolute()
             .inset_0()
             .bg(gpui::hsla(0.0, 0.0, 0.0, 0.85))
@@ -43,7 +44,10 @@ impl RenderOnce for ImageViewerModal {
             .p(px(24.0))
             .on_mouse_down(MouseButton::Left, {
                 let close = self.on_close;
-                move |_, window, cx| (close)(window, cx)
+                move |_, window, cx| {
+                    cx.stop_propagation();
+                    (close)(window, cx)
+                }
             })
             // Close × button
             .child(
