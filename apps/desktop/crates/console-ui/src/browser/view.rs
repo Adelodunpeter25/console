@@ -101,6 +101,10 @@ pub struct BrowserView {
     annotation_input: Entity<ComposerInput>,
     /// Base64 PNG of the picked element, filled asynchronously after pick.
     annotation_screenshot: Option<String>,
+    /// Whether Attach sends the screenshot along. Off by default: the element's
+    /// selector and HTML already identify it, and the image costs tokens on
+    /// every turn it stays in history. Kept across picks.
+    annotation_include_screenshot: bool,
     /// Focus the annotation input on the next render after a pick.
     annotation_focus_pending: bool,
     /// Refocus the page itself on the next render after an Attach, so the
@@ -244,6 +248,7 @@ impl BrowserView {
             active_inspection: None,
             annotation_input,
             annotation_screenshot: None,
+            annotation_include_screenshot: false,
             annotation_focus_pending: false,
             refocus_page_pending: false,
             annotation_capture_failed: false,
@@ -521,9 +526,11 @@ impl BrowserView {
             return;
         };
         let trimmed = comment.trim().to_string();
-        if trimmed.is_empty() || self.annotation_screenshot.is_none() {
-            // The screenshot has not landed yet (or failed): keep the
-            // popover open rather than staging a text-only annotation.
+        if trimmed.is_empty()
+            || (self.annotation_include_screenshot && self.annotation_screenshot.is_none())
+        {
+            // The screenshot was requested but has not landed yet (or failed):
+            // keep the popover open rather than staging it without the image.
             self.active_inspection = Some(inspection);
             return;
         }
@@ -546,7 +553,10 @@ impl BrowserView {
             accessible_name: inspection.accessible_name.clone(),
             computed_styles: inspection.computed_styles,
             user_comment: trimmed,
-            screenshot_base64: self.annotation_screenshot.clone(),
+            screenshot_base64: self
+                .annotation_include_screenshot
+                .then(|| self.annotation_screenshot.clone())
+                .flatten(),
         };
         self.annotation_screenshot = None;
         self.annotation_focus_pending = false;
@@ -1538,8 +1548,11 @@ impl BrowserView {
                 bytes,
             )))
         });
+        let include_screenshot = self.annotation_include_screenshot;
+        let can_attach = !include_screenshot || self.annotation_screenshot.is_some();
         let entity = cx.entity().downgrade();
         let entity2 = entity.clone();
+        let entity3 = entity.clone();
         let popover = div()
             .absolute()
             .left(px(left))
@@ -1581,6 +1594,38 @@ impl BrowserView {
             .child(div().mt_2().child(self.annotation_input.clone()))
             .child(
                 div()
+                    .id("browser-annotation-include-screenshot")
+                    .mt_2()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .cursor_default()
+                    .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                        if let Some(view) = entity3.upgrade() {
+                            view.update(cx, |this, cx| {
+                                this.annotation_include_screenshot =
+                                    !this.annotation_include_screenshot;
+                                cx.notify();
+                            });
+                        }
+                    })
+                    .child(
+                        div()
+                            .size(px(14.0))
+                            .rounded(px(4.0))
+                            .border_1()
+                            .border_color(theme.border)
+                            .when(include_screenshot, |box_| box_.bg(theme.accent)),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(theme.text_secondary)
+                            .child("Send with screenshot"),
+                    ),
+            )
+            .child(
+                div()
                     .mt_2()
                     .flex()
                     .items_center()
@@ -1611,7 +1656,7 @@ impl BrowserView {
                             .px(px(10.0))
                             .py(px(5.0))
                             .rounded(px(6.0))
-                            .bg(if self.annotation_screenshot.is_some() {
+                            .bg(if can_attach {
                                 theme.accent
                             } else {
                                 theme.text_tertiary
@@ -1619,13 +1664,7 @@ impl BrowserView {
                             .text_size(px(12.0))
                             .text_color(theme.on_inverse)
                             .cursor_default()
-                            .hover(|s| {
-                                if self.annotation_screenshot.is_some() {
-                                    s.opacity(0.9)
-                                } else {
-                                    s
-                                }
-                            })
+                            .hover(|s| if can_attach { s.opacity(0.9) } else { s })
                             .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                                 if let Some(view) = entity2.upgrade() {
                                     view.update(cx, |this, cx| {
@@ -1635,7 +1674,7 @@ impl BrowserView {
                                     });
                                 }
                             })
-                            .child(if self.annotation_screenshot.is_some() {
+                            .child(if can_attach {
                                 "Attach to Chat"
                             } else if self.annotation_capture_failed {
                                 "Capture failed — Esc"
