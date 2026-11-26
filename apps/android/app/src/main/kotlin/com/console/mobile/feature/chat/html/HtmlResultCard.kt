@@ -51,7 +51,13 @@ fun HtmlResultCard(
     // Sized to the page so it never scrolls inside the card; the hint is only
     // used until the page reports its real height.
     var frameHeight by remember(artifact.path) {
-        mutableStateOf(if (artifact.height > 0) artifact.height.coerceIn(120, 4000) else 320)
+        val cached = InlineWebViewCache.cachedHeight(artifact.path)
+        val initial = when {
+            cached != null -> cached.coerceIn(80, 6000)
+            artifact.height > 0 -> artifact.height.coerceIn(120, 4000)
+            else -> 320
+        }
+        mutableStateOf(initial)
     }
 
     Surface(
