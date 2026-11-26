@@ -1,4 +1,5 @@
 pub mod attachment;
+pub(crate) mod image_hover;
 pub mod autocomplete;
 pub mod composer_pills;
 pub mod composer_view;

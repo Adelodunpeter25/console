@@ -137,6 +137,11 @@ pub(crate) struct InlineFileMentionText {
     selection: Option<(TranscriptSelection, TextKey)>,
     /// Opens the picture behind an `[Image N]` chip (1-based) when it is clicked.
     on_image_click: Option<Rc<dyn Fn(usize, &mut Window, &mut App)>>,
+    /// Hover state for `[Image N]` chips plus the images their cards show.
+    image_hover: Option<(
+        gpui::Entity<crate::common::image_hover::ImageChipHover>,
+        Vec<console_core::ImageAttachment>,
+    )>,
 }
 
 impl InlineFileMentionText {
@@ -146,7 +151,17 @@ impl InlineFileMentionText {
             mentions,
             selection: None,
             on_image_click: None,
+            image_hover: None,
         }
+    }
+
+    pub(crate) fn image_hover(
+        mut self,
+        state: gpui::Entity<crate::common::image_hover::ImageChipHover>,
+        attachments: Vec<console_core::ImageAttachment>,
+    ) -> Self {
+        self.image_hover = Some((state, attachments));
+        self
     }
 
     pub(crate) fn on_image_click(
@@ -369,6 +384,38 @@ impl Element for InlineFileMentionText {
                 |window| mention_icon.icon.prepaint(window, cx),
             );
         }
+
+        if let Some((state, attachments)) = &self.image_hover
+            && let Some(number) = state.read(cx).shown
+            && let Some(rect) = layout_state
+                .mention_icons
+                .iter()
+                .find(|m| m.image_number == Some(number))
+                .and_then(|m| range_rects(&layout, &m.chip_range, 0.0, 2.0).first().copied())
+            && let Some(attachment) = attachments.get(number.wrapping_sub(1))
+        {
+            let cached = state
+                .read(cx)
+                .cache
+                .as_ref()
+                .filter(|(n, len, _)| *n == number && *len == attachment.data.len())
+                .map(|(_, _, image)| image.clone());
+            let image = cached.or_else(|| {
+                let image = crate::common::attachment_image(attachment)?;
+                state.update(cx, |s, _| {
+                    s.cache = Some((number, attachment.data.len(), image.clone()));
+                });
+                Some(image)
+            });
+            if let Some(image) = image {
+                let card = crate::common::image_hover::image_hover_card(
+                    image,
+                    rect,
+                    Theme::current(cx),
+                );
+                window.defer_draw(card, gpui::Point::default(), 100, None);
+            }
+        }
     }
 
     fn paint(
@@ -436,7 +483,7 @@ impl Element for InlineFileMentionText {
             mention_icon.icon.paint(window, cx);
         }
 
-        if let Some(handler) = self.on_image_click.clone() {
+        if self.on_image_click.is_some() || self.image_hover.is_some() {
             let chips: Vec<(usize, Vec<Bounds<gpui::Pixels>>)> = layout_state
                 .mention_icons
                 .iter()
@@ -454,17 +501,80 @@ impl Element for InlineFileMentionText {
             {
                 window.set_window_cursor_style(gpui::CursorStyle::PointingHand);
             }
-            window.on_mouse_event(move |event: &gpui::MouseDownEvent, phase, window, cx| {
-                if phase != gpui::DispatchPhase::Bubble || event.button != gpui::MouseButton::Left {
-                    return;
-                }
-                if let Some((number, _)) = chips
-                    .iter()
-                    .find(|(_, rects)| rects.iter().any(|r| r.contains(&event.position)))
-                {
-                    handler(*number, window, cx);
-                }
-            });
+            if let Some(handler) = self.on_image_click.clone() {
+                let state = self.image_hover.as_ref().map(|(state, _)| state.clone());
+                let chips = chips.clone();
+                window.on_mouse_event(move |event: &gpui::MouseDownEvent, phase, window, cx| {
+                    if phase != gpui::DispatchPhase::Bubble
+                        || event.button != gpui::MouseButton::Left
+                    {
+                        return;
+                    }
+                    if let Some((number, _)) = chips
+                        .iter()
+                        .find(|(_, rects)| rects.iter().any(|r| r.contains(&event.position)))
+                    {
+                        if let Some(state) = &state {
+                            state.update(cx, |s, cx| {
+                                s.shown = None;
+                                cx.notify();
+                            });
+                        }
+                        handler(*number, window, cx);
+                    }
+                });
+            }
+            if let Some((state, _)) = self.image_hover.clone() {
+                let scroll_state = state.clone();
+                window.on_mouse_event(move |event: &gpui::MouseMoveEvent, phase, _window, cx| {
+                    if phase != gpui::DispatchPhase::Bubble {
+                        return;
+                    }
+                    let hovered = chips
+                        .iter()
+                        .find(|(_, rects)| rects.iter().any(|r| r.contains(&event.position)))
+                        .map(|(number, _)| *number);
+                    state.update(cx, |s, cx| {
+                        if s.hovered == hovered {
+                            return;
+                        }
+                        s.hovered = hovered;
+                        s.shown = None;
+                        s.generation += 1;
+                        let generation = s.generation;
+                        cx.notify();
+                        if let Some(number) = hovered {
+                            cx.spawn(async move |this, cx| {
+                                cx.background_executor()
+                                    .timer(crate::common::image_hover::IMAGE_HOVER_DELAY)
+                                    .await;
+                                let _ = this.update(cx, |s, cx| {
+                                    if s.generation == generation && s.hovered == Some(number) {
+                                        s.shown = Some(number);
+                                        cx.notify();
+                                    }
+                                });
+                            })
+                            .detach();
+                        }
+                    });
+                });
+                // The transcript scrolls under a still pointer, which sends no
+                // move event; close the card so it never hangs over other text.
+                window.on_mouse_event(move |_: &gpui::ScrollEvent, phase, _window, cx| {
+                    if phase != gpui::DispatchPhase::Bubble {
+                        return;
+                    }
+                    scroll_state.update(cx, |s, cx| {
+                        if s.shown.is_some() || s.hovered.is_some() {
+                            s.shown = None;
+                            s.hovered = None;
+                            s.generation += 1;
+                            cx.notify();
+                        }
+                    });
+                });
+            }
         }
     }
 }

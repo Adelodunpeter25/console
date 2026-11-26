@@ -434,6 +434,16 @@ impl RenderOnce for UserMessageBubble {
             Some(handler) => message_text_element.on_image_click(handler),
             None => message_text_element,
         };
+        let message_text_element = if self.attachments.is_empty() {
+            message_text_element
+        } else {
+            let hover = _window.use_keyed_state(
+                ElementId::Name(format!("user-image-hover-{}", self.selection_row).into()),
+                cx,
+                |_, _| crate::common::image_hover::ImageChipHover::default(),
+            );
+            message_text_element.image_hover(hover, self.attachments.clone())
+        };
         // Long prompts fold to 8 lines with a Show more/less toggle inside the card,
         // mirroring mobile's 4-line fold.
         let foldable = has_text && estimated_text_lines(&message_text) > USER_FOLDED_LINES;

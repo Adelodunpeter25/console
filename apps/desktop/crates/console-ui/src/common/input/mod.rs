@@ -323,6 +323,8 @@ pub struct ComposerInput {
     pub(crate) vertical_navigation: Option<VerticalNavigation>,
     pub(crate) is_selecting: bool,
     pub(crate) hovered_mention: Option<usize>,
+    /// The hovered image chip's card is open (set after a short delay).
+    pub(crate) image_hover_shown: bool,
     pub(crate) selected_word_range: Option<Range<usize>>,
     pub(crate) history: EditHistory,
     pub(crate) prompt_history: PromptHistory,
@@ -394,6 +396,7 @@ impl ComposerInput {
             vertical_navigation: None,
             is_selecting: false,
             hovered_mention: None,
+            image_hover_shown: false,
             selected_word_range: None,
             history: EditHistory::default(),
             prompt_history: PromptHistory::default(),
@@ -1687,6 +1690,7 @@ impl ComposerInput {
                 return;
             }
             if let Some(number) = mention.image_number() {
+                self.image_hover_shown = false;
                 cx.emit(ComposerImagePreview(number));
                 return;
             }
@@ -1824,6 +1828,9 @@ impl ComposerInput {
         if self.mode != FieldMode::Composer {
             return None;
         }
+        if !self.image_hover_shown {
+            return None;
+        }
         let mention = self.mentions.get(self.hovered_mention?)?;
         let number = mention.image_number()?;
         let attachment = self.image_attachments.get(number.checked_sub(1)?)?;
@@ -1843,33 +1850,7 @@ impl ComposerInput {
         };
         let layout = self.last_layout.as_ref()?;
         let rect = *crate::markdown::render::range_rects(layout, &range, 3.0, 1.0).first()?;
-        let card = div()
-            .id("composer-image-hover-card")
-            .p(px(4.0))
-            .rounded(px(10.0))
-            .bg(theme.raised)
-            .border_1()
-            .border_color(theme.border_strong)
-            .shadow_lg()
-            .child(
-                div().rounded(px(7.0)).overflow_hidden().child(
-                    gpui::img(image)
-                        .max_w(px(320.0))
-                        .max_h(px(240.0))
-                        .object_fit(gpui::ObjectFit::ScaleDown),
-                ),
-            );
-        Some(
-            gpui::deferred(crate::primitives::menu::FloatingSurface::new(
-                card.into_any_element(),
-                rect,
-                crate::primitives::menu::MenuAlign::AboveLeft,
-                px(6.0),
-                px(8.0),
-            ))
-            .with_priority(100)
-            .into_any_element(),
-        )
+        Some(crate::common::image_hover::image_hover_card(image, rect, theme))
     }
 
     /// The mention chip under `position`, and whether the point is on its
