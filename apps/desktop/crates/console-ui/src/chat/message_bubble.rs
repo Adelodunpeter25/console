@@ -462,14 +462,12 @@ impl RenderOnce for UserMessageBubble {
                     .gap(px(8.0))
                     .when(!self.annotations.is_empty(), |element| {
                         element.child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .flex_wrap()
-                                .justify_end()
-                                .gap(px(8.0))
-                                .children(self.annotations.iter().cloned().enumerate().map(
-                                    |(index, ann)| {
+                            div().flex().flex_col().items_end().gap(px(6.0)).children(
+                                self.annotations
+                                    .iter()
+                                    .cloned()
+                                    .enumerate()
+                                    .map(|(index, ann)| {
                                         let label =
                                             match (&ann.component_name, &ann.source_location) {
                                                 (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
@@ -481,6 +479,17 @@ impl RenderOnce for UserMessageBubble {
                                                     )
                                                 }
                                             };
+                                        let comment = ann.user_comment.trim().to_string();
+                                        let chip_text = if comment.is_empty() {
+                                            label.clone()
+                                        } else {
+                                            format!("{label}  \"{comment}\"")
+                                        };
+                                        let tooltip = if comment.is_empty() {
+                                            label.clone()
+                                        } else {
+                                            format!("{label}\n{comment}")
+                                        };
                                         let thumb =
                                             ann.screenshot_base64.as_ref().and_then(|b64| {
                                                 let bytes =
@@ -496,42 +505,78 @@ impl RenderOnce for UserMessageBubble {
                                                 )))
                                             });
                                         let on_preview = preview_handler.clone();
+                                        let (chip_bg, chip_border, chip_text_color) =
+                                            crate::common::file_mention_colors(theme);
                                         div()
-                                            .id(ElementId::Name(
-                                                format!("user-annotation-{index}").into(),
-                                            ))
-                                            .size(px(80.0))
-                                            .rounded(px(9.0))
-                                            .overflow_hidden()
-                                            .border_1()
-                                            .border_color(theme.user_bubble_border)
-                                            .bg(theme.overlay)
-                                            .cursor_default()
                                             .flex()
                                             .flex_col()
-                                            .when_some(thumb.clone(), |tile, image| {
-                                                tile.child(img(image).size_full())
-                                            })
-                                            .when(thumb.is_none(), |tile| {
-                                                tile.child(
+                                            .items_end()
+                                            .gap(px(4.0))
+                                            .when_some(thumb, |column, image| {
+                                                column.child(
                                                     div()
-                                                        .p(px(6.0))
-                                                        .text_size(px(10.5))
-                                                        .text_color(theme.text_secondary)
-                                                        .child(label.clone()),
+                                                        .id(ElementId::Name(
+                                                            format!("user-annotation-{index}")
+                                                                .into(),
+                                                        ))
+                                                        .size(px(80.0))
+                                                        .rounded(px(9.0))
+                                                        .overflow_hidden()
+                                                        .border_1()
+                                                        .border_color(theme.user_bubble_border)
+                                                        .bg(theme.overlay)
+                                                        .cursor_default()
+                                                        .child(img(image.clone()).size_full())
+                                                        .when_some(
+                                                            on_preview,
+                                                            |tile, on_preview| {
+                                                                tile.on_click(
+                                                                    move |_, window, cx| {
+                                                                        (on_preview)(
+                                                                            image.clone(),
+                                                                            window,
+                                                                            cx,
+                                                                        );
+                                                                        cx.stop_propagation();
+                                                                    },
+                                                                )
+                                                            },
+                                                        ),
                                                 )
                                             })
-                                            .when_some(on_preview, |tile, on_preview| {
-                                                let image = thumb.clone();
-                                                tile.on_click(move |_, window, cx| {
-                                                    if let Some(image) = image.clone() {
-                                                        (on_preview)(image, window, cx);
-                                                    }
-                                                    cx.stop_propagation();
-                                                })
-                                            })
-                                    },
-                                )),
+                                            .child(
+                                                div()
+                                                    .id(ElementId::Name(
+                                                        format!("user-annotation-chip-{index}")
+                                                            .into(),
+                                                    ))
+                                                    .max_w(px(540.0))
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap(px(4.0))
+                                                    .px(px(6.0))
+                                                    .py(px(1.0))
+                                                    .rounded(px(crate::common::FILE_MENTION_RADIUS))
+                                                    .border_1()
+                                                    .border_color(chip_border)
+                                                    .bg(chip_bg)
+                                                    .tooltip(Tooltip::text(tooltip))
+                                                    .child(app_icon(
+                                                        IconName::Inspector,
+                                                        crate::common::FILE_MENTION_ICON_SIZE,
+                                                        chip_text_color,
+                                                    ))
+                                                    .child(
+                                                        div()
+                                                            .min_w_0()
+                                                            .truncate()
+                                                            .text_size(px(12.5))
+                                                            .text_color(chip_text_color)
+                                                            .child(chip_text),
+                                                    ),
+                                            )
+                                    }),
+                            ),
                         )
                     })
                     .when(has_content, |element| {
