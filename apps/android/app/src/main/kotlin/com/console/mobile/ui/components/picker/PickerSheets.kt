@@ -19,8 +19,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -446,6 +447,7 @@ fun ThinkingLevelPickerSheet(
  * branch switch mid-stream would only land on the next turn, and a worktree
  * can only be attached to a message-less session.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BranchPickerSheet(
     branches: List<console.v1.GitBranchInfo>?,
@@ -504,7 +506,7 @@ fun BranchPickerSheet(
                             title = b.name,
                             selected = if (selectedName != null) b.name == selectedName else b.current,
                             trailing = if (switchingTo == b.name) {
-                                { CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(18.dp)) }
+                                { LoadingIndicator(color = NewTheme.TextMuted, modifier = Modifier.size(20.dp)) }
                             } else null,
                         ) { if (!locked && switchingTo == null) onSelect(b.name) }
                         if (index < branches.lastIndex) SectionDivider()
