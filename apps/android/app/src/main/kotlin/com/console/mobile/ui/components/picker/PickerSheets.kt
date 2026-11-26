@@ -14,6 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -227,13 +231,38 @@ fun ModelPickerSheet(
     val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var search by remember { mutableStateOf("") }
-    var showFavorites by remember { mutableStateOf(false) }
-    var activeProvider by remember(providerState.providers) {
-        mutableStateOf(selectedProvider ?: providerState.providers.firstOrNull()?.name)
+    val providers = providerState.providers
+    val pageCount = 1 + providers.size
+    val initialPage = remember(providers, selectedProvider) {
+        if (providers.isEmpty()) 0
+        else {
+            val idx = selectedProvider?.let { sel -> providers.indexOfFirst { it.name == sel } } ?: -1
+            if (idx >= 0) idx + 1 else 1
+        }
     }
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { pageCount })
+    var didSnapInitial by remember { mutableStateOf(false) }
+    LaunchedEffect(providers.size) {
+        if (!didSnapInitial && providers.isNotEmpty()) {
+            didSnapInitial = true
+            val idx = selectedProvider?.let { sel -> providers.indexOfFirst { it.name == sel } } ?: -1
+            val target = if (idx >= 0) idx + 1 else 1
+            if (pagerState.currentPage != target) pagerState.scrollToPage(target)
+        }
+    }
+    val tabListState = rememberLazyListState()
+    val showFavorites = pagerState.currentPage == 0
+    val activeProvider = if (pagerState.currentPage in 1..providers.size) providers[pagerState.currentPage - 1].name else null
+
     LaunchedEffect(Unit) {
         AppContainer.providerRepository.loadProviders()
         AppContainer.providerRepository.loadFavorites()
+    }
+    // Keep the selected tab pill scrolled into view when swiping between pages.
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage < pageCount) {
+            tabListState.animateScrollToItem(pagerState.currentPage)
+        }
     }
     // Load the models for whichever provider tab is showing. Without this the
     // provider tabs never fetch anything — only the favourites tab does, which
@@ -244,7 +273,7 @@ fun ModelPickerSheet(
     // Favourite rows can live under any provider, so load them all before the
     // favourites tab can render an empty list it does not deserve.
     LaunchedEffect(showFavorites) {
-        if (showFavorites) providerState.providers.forEach { AppContainer.providerRepository.loadModels(it.name) }
+        if (showFavorites) providers.forEach { AppContainer.providerRepository.loadModels(it.name) }
     }
 
     val modelsByProvider = providerState.modelsByProvider
@@ -266,17 +295,24 @@ fun ModelPickerSheet(
 
     // The list scrolls itself (LazyColumn), so the sheet must not also scroll.
     BaseSheet(onDismiss = onDismiss, title = title, scrollable = false) {
-        if (providerState.providers.isNotEmpty()) {
-            LazyRow(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (providers.isNotEmpty()) {
+            LazyRow(
+                state = tabListState,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 // Favourites tab: a star ahead of the provider tabs, matching the desktop's tab bar.
-                item { IconTabPill(TablerIcons.Outline.Star, "Favorites", selected = showFavorites) { showFavorites = true } }
-                items(providerState.providers) { p ->
+                item {
+                    IconTabPill(TablerIcons.Outline.Star, "Favorites", selected = showFavorites) {
+                        scope.launch { pagerState.animateScrollToPage(0) }
+                    }
+                }
+                itemsIndexed(providers, key = { _, p -> p.name }) { index, p ->
                     TabPill(
                         label = p.display_name.ifBlank { p.name },
-                        selected = !showFavorites && p.name == activeProvider,
+                        selected = pagerState.currentPage == index + 1,
                     ) {
-                        showFavorites = false
-                        activeProvider = p.name
+                        scope.launch { pagerState.animateScrollToPage(index + 1) }
                     }
                 }
             }
@@ -311,37 +347,45 @@ fun ModelPickerSheet(
             )
         }
 
-        if (showFavorites) {
-            val visibleFavorites = if (q.isEmpty()) favoriteEntries else favoriteEntries.filter { it.model.id.lowercase().contains(q) }
-            when {
-                (providerState.loadingFavorites || anyModelLoading) && favoriteEntries.isEmpty() -> LoadingState()
-                visibleFavorites.isEmpty() -> ModelPlaceholder(if (search.isNotEmpty()) "No matching favorites" else "No favorites yet — tap a star to pin a model")
-                else -> ModelListCard(visibleFavorites, key = { favoriteKey(it.provider, it.model.id) }) { entry ->
-                    OptionRow(
-                        title = formatModelName(entry.model.id),
-                        // Provider is not shown as a tab here, so it belongs on the row (desktop parity).
-                        subtitle = "${entry.providerLabel} · ${formatContextWindow(entry.model.context_window)} context",
-                        selected = entry.model.id == selectedModel && entry.provider == selectedProvider,
-                        trailing = { starFor(entry.provider, entry.model.id) },
-                    ) { onSelect(entry.model.id, entry.provider) }
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+            verticalAlignment = Alignment.Top,
+        ) { page ->
+            if (page == 0) {
+                val visibleFavorites = if (q.isEmpty()) favoriteEntries else favoriteEntries.filter { it.model.id.lowercase().contains(q) }
+                when {
+                    (providerState.loadingFavorites || anyModelLoading || bootstrapping) && favoriteEntries.isEmpty() -> LoadingState()
+                    visibleFavorites.isEmpty() -> ModelPlaceholder(if (search.isNotEmpty()) "No matching favorites" else "No favorites yet — tap a star to pin a model")
+                    else -> ModelListCard(visibleFavorites, key = { favoriteKey(it.provider, it.model.id) }) { entry ->
+                        OptionRow(
+                            title = formatModelName(entry.model.id),
+                            // Provider is not shown as a tab here, so it belongs on the row (desktop parity).
+                            subtitle = "${entry.providerLabel} · ${formatContextWindow(entry.model.context_window)} context",
+                            selected = entry.model.id == selectedModel && entry.provider == selectedProvider,
+                            trailing = { starFor(entry.provider, entry.model.id) },
+                        ) { onSelect(entry.model.id, entry.provider) }
+                    }
                 }
-            }
-        } else {
-            val models: List<Model> = activeProvider?.let { providerState.modelsByProvider[it] } ?: emptyList()
-            val filtered = if (q.isEmpty()) models else models.filter { it.id.lowercase().contains(q) }
-            when {
-                (activeLoading || bootstrapping) && models.isEmpty() -> LoadingState()
-                filtered.isEmpty() -> ModelPlaceholder(if (search.isNotEmpty()) "No matching models found" else "No models available")
-                else -> ModelListCard(filtered.take(100), key = { it.id }) { m ->
-                    val providerId = activeProvider.orEmpty()
-                    OptionRow(
-                        title = formatModelName(m.id),
-                        // The formatted name is already the row title, so the id under it
-                        // repeated itself — the context window is the useful second line.
-                        subtitle = "${formatContextWindow(m.context_window)} context",
-                        selected = m.id == selectedModel,
-                        trailing = { starFor(providerId, m.id) },
-                    ) { onSelect(m.id, activeProvider) }
+            } else {
+                val pageProvider = providers.getOrNull(page - 1)?.name
+                val models: List<Model> = pageProvider?.let { providerState.modelsByProvider[it] } ?: emptyList()
+                val pageLoading = pageProvider?.let { providerState.loadingModels[it] } == true || providerState.loadingProviders
+                val filtered = if (q.isEmpty()) models else models.filter { it.id.lowercase().contains(q) }
+                when {
+                    (pageLoading || bootstrapping) && models.isEmpty() -> LoadingState()
+                    filtered.isEmpty() -> ModelPlaceholder(if (search.isNotEmpty()) "No matching models found" else "No models available")
+                    else -> ModelListCard(filtered.take(100), key = { it.id }) { m ->
+                        val providerId = pageProvider.orEmpty()
+                        OptionRow(
+                            title = formatModelName(m.id),
+                            // The formatted name is already the row title, so the id under it
+                            // repeated itself — the context window is the useful second line.
+                            subtitle = "${formatContextWindow(m.context_window)} context",
+                            selected = m.id == selectedModel,
+                            trailing = { starFor(providerId, m.id) },
+                        ) { onSelect(m.id, pageProvider) }
+                    }
                 }
             }
         }
@@ -354,9 +398,9 @@ fun ModelPickerSheet(
  * provider lists (antigravity) with no way to reach the overflow items.
  */
 @Composable
-private fun <T> ColumnScope.ModelListCard(items: List<T>, key: (T) -> Any, row: @Composable (T) -> Unit) {
+private fun <T> ModelListCard(items: List<T>, key: (T) -> Any, row: @Composable (T) -> Unit) {
     LazyColumn(
-        modifier = Modifier.fillMaxWidth().weight(1f, fill = false)
+        modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card),
     ) {
         itemsIndexed(items, key = { _, item -> key(item) }) { index, item ->
