@@ -1317,7 +1317,10 @@ impl BrowserView {
                         .px(px(10.0))
                         .py(px(6.0))
                         .hover(|s| s.bg(theme.overlay))
-                        .on_click(move |_event, window, cx| {
+                        // On press, not click: the press moves focus off the address
+                        // field, which hides this list before a click could finish.
+                        .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                            cx.stop_propagation();
                             let _ = weak.update(cx, |this, cx| {
                                 this.address.update(cx, |address, cx| {
                                     address.set_content(url.clone(), cx);
