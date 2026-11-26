@@ -110,7 +110,18 @@ internal fun rememberChatTranscriptScroll(
     // Only trust the remembered position when the messages are still loaded;
     // otherwise a fresh load should start at the bottom as usual.
     val restored = remember(sessionId) { ScrollMemory.get(sessionId) }
-    val listState = key(sessionId) { rememberLazyListState() }
+    val listState = key(sessionId) {
+        val initialIndex = when {
+            restored != null && !restored.atEnd -> restored.index
+            displaySize > 0 -> (displaySize - 1).coerceAtLeast(0)
+            else -> 0
+        }
+        val initialOffset = if (restored != null && !restored.atEnd) restored.offset else 0
+        rememberLazyListState(
+            initialFirstVisibleItemIndex = initialIndex,
+            initialFirstVisibleItemScrollOffset = initialOffset,
+        )
+    }
     val scroll = remember(sessionId, listState) {
         ChatTranscriptScroll(
             listState = listState,
@@ -119,9 +130,8 @@ internal fun rememberChatTranscriptScroll(
         )
     }
 
-    // Record the position as it moves. Saving only on dispose would race the
-    // next screen: during a navigation transition both are composed, so the
-    // incoming chat could read a stale entry.
+    // Record the position as it moves, but only after the initial position has
+    // settled so an unmeasured (0, 0) frame never clobbers the saved position.
     LaunchedEffect(sessionId, scroll) {
         snapshotFlow {
             Triple(
@@ -130,7 +140,9 @@ internal fun rememberChatTranscriptScroll(
                 !scroll.listState.canScrollForward,
             )
         }.collect { (index, offset, atEnd) ->
-            ScrollMemory.save(sessionId, index, offset, atEnd)
+            if (scroll.settledInitialPage) {
+                ScrollMemory.save(sessionId, index, offset, atEnd)
+            }
         }
     }
 
