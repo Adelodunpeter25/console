@@ -119,6 +119,21 @@ impl DeviceViewer {
             _subscriptions: Vec::new(),
         };
         this.build_webview(window, cx);
+        let weak = cx.entity().downgrade();
+        let focus_out = window.on_focus_out(&this.focus_handle, cx, move |_, window, cx| {
+            let focused_elsewhere = window.is_window_active() && window.focused(cx).is_some();
+            let _ = weak.update(cx, |this, cx| {
+                if focused_elsewhere
+                    && this
+                        .host
+                        .as_ref()
+                        .is_some_and(|host| host.native_focus_within())
+                {
+                    this.reclaim_native_keyboard(cx);
+                }
+            });
+        });
+        this._subscriptions.push(focus_out);
         this.refresh(window, cx);
         this
     }
