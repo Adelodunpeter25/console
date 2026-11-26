@@ -407,6 +407,18 @@ impl RenderOnce for UserMessageBubble {
         });
         // The bubble's text joins the transcript's selection registry, so
         // prompts are highlightable (and citable) like assistant replies.
+        let on_image_click: Option<Rc<dyn Fn(usize, &mut Window, &mut App)>> =
+            preview_handler.clone().map(|on_preview| {
+                let attachments = self.attachments.clone();
+                Rc::new(move |number: usize, window: &mut Window, cx: &mut App| {
+                    if let Some(image) = attachments
+                        .get(number.wrapping_sub(1))
+                        .and_then(attachment_image)
+                    {
+                        (on_preview)(image, window, cx);
+                    }
+                }) as Rc<dyn Fn(usize, &mut Window, &mut App)>
+            });
         let message_text_element = match &self.selection {
             Some(selection) => InlineFileMentionText::new(message_text.clone(), mentions)
                 .with_selection(
@@ -417,6 +429,10 @@ impl RenderOnce for UserMessageBubble {
                     ),
                 ),
             None => InlineFileMentionText::new(message_text.clone(), mentions),
+        };
+        let message_text_element = match on_image_click {
+            Some(handler) => message_text_element.on_image_click(handler),
+            None => message_text_element,
         };
         // Long prompts fold to 8 lines with a Show more/less toggle inside the card,
         // mirroring mobile's 4-line fold.
@@ -444,43 +460,6 @@ impl RenderOnce for UserMessageBubble {
                     .flex_col()
                     .items_end()
                     .gap(px(8.0))
-                    .when(!self.attachments.is_empty(), |element| {
-                        element.child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .flex_wrap()
-                                .justify_end()
-                                .gap(px(8.0))
-                                .children(self.attachments.iter().cloned().enumerate().filter_map(
-                                    |(index, attachment)| {
-                                        let image = attachment_image(&attachment)?;
-                                        let on_preview = preview_handler.clone();
-                                        Some(
-                                            div()
-                                                .id(ElementId::Name(
-                                                    format!("user-attachment-{index}").into(),
-                                                ))
-                                                .size(px(80.0))
-                                                .rounded(px(9.0))
-                                                .overflow_hidden()
-                                                .border_1()
-                                                .border_color(theme.user_bubble_border)
-                                                .bg(gpui::rgb(0x000000))
-                                                .cursor_default()
-                                                .when_some(on_preview, |tile, on_preview| {
-                                                    let image = image.clone();
-                                                    tile.on_click(move |_, window, cx| {
-                                                        (on_preview)(image.clone(), window, cx);
-                                                        cx.stop_propagation();
-                                                    })
-                                                })
-                                                .child(img(image).size_full()),
-                                        )
-                                    },
-                                )),
-                        )
-                    })
                     .when(!self.annotations.is_empty(), |element| {
                         element.child(
                             div()

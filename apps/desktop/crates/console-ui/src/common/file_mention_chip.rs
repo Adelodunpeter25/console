@@ -104,6 +104,8 @@ pub(crate) struct InlineFileMention {
 }
 
 struct MentionIconLayout {
+    /// Set for an `[Image N]` chip, so a click can open that image.
+    image_number: Option<usize>,
     spacer_range: Range<usize>,
     chip_range: Range<usize>,
     icon: gpui::AnyElement,
@@ -133,6 +135,8 @@ pub(crate) struct InlineFileMentionText {
     /// shared selection state plus this element's registry key. `None` for
     /// surfaces without selection (the composer's own field).
     selection: Option<(TranscriptSelection, TextKey)>,
+    /// Opens the picture behind an `[Image N]` chip (1-based) when it is clicked.
+    on_image_click: Option<Rc<dyn Fn(usize, &mut Window, &mut App)>>,
 }
 
 impl InlineFileMentionText {
@@ -141,7 +145,16 @@ impl InlineFileMentionText {
             text: text.into(),
             mentions,
             selection: None,
+            on_image_click: None,
         }
+    }
+
+    pub(crate) fn on_image_click(
+        mut self,
+        handler: Rc<dyn Fn(usize, &mut Window, &mut App)>,
+    ) -> Self {
+        self.on_image_click = Some(handler);
+        self
     }
 
     /// Make this text selectable inside the transcript: its flat text and
@@ -276,6 +289,10 @@ impl Element for InlineFileMentionText {
             let layout_id = icon.request_layout(window, cx);
             child_layout_ids.push(layout_id);
             mention_icons.push(MentionIconLayout {
+                image_number: m
+                    .path
+                    .strip_prefix(console_shared::composer::mentions::IMAGE_PATH_PREFIX)
+                    .and_then(|n| n.parse().ok()),
                 spacer_range: m.spacer_range,
                 chip_range: m.chip_range,
                 icon,
@@ -417,6 +434,35 @@ impl Element for InlineFileMentionText {
         );
         for mention_icon in &mut layout_state.mention_icons {
             mention_icon.icon.paint(window, cx);
+        }
+
+        if let Some(handler) = self.on_image_click.clone() {
+            let chips: Vec<(usize, Vec<Bounds<gpui::Pixels>>)> = layout_state
+                .mention_icons
+                .iter()
+                .filter_map(|m| {
+                    Some((m.image_number?, range_rects(&layout, &m.chip_range, 0.0, 2.0)))
+                })
+                .collect();
+            let mouse = window.mouse_position();
+            if chips
+                .iter()
+                .any(|(_, rects)| rects.iter().any(|r| r.contains(&mouse)))
+            {
+                window.set_window_cursor_style(gpui::CursorStyle::PointingHand);
+            }
+            window.on_mouse_event(move |event: &gpui::MouseDownEvent, phase, window, cx| {
+                if phase != gpui::DispatchPhase::Bubble || event.button != gpui::MouseButton::Left
+                {
+                    return;
+                }
+                if let Some((number, _)) = chips
+                    .iter()
+                    .find(|(_, rects)| rects.iter().any(|r| r.contains(&event.position)))
+                {
+                    handler(*number, window, cx);
+                }
+            });
         }
     }
 }
