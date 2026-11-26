@@ -757,6 +757,8 @@ impl ConsoleDesktopApp {
         answer: serde_json::Value,
         cx: &mut Context<Self>,
     ) {
+        self.answered_question_ids
+            .insert(question.request_id.clone());
         self.clear_question_selected_for_session(&session_id);
         self.clear_question_inputs_for_session(&session_id, cx);
         self.clear_error_for_session(&session_id, cx);
@@ -1791,7 +1793,11 @@ impl ConsoleDesktopApp {
                                 );
                                 this.set_queue_from_server(&session_id, bootstrap.queued_prompts);
                                 this.adopt_bootstrap_draft(bootstrap.draft, cx);
-                                if let Some(q) = bootstrap.pending_questions.first() {
+                                if let Some(q) = bootstrap
+                                    .pending_questions
+                                    .iter()
+                                    .find(|q| !this.answered_question_ids.contains(&q.request_id))
+                                {
                                     this.set_pending_question_for_session(
                                         &session_id,
                                         Some(console_core::AskQuestionRequest::from_proto(q)),

@@ -250,6 +250,9 @@ pub struct ConsoleDesktopApp {
     /// pane to another chat surfaces that chat's state instead of leaking the
     /// background run's state onto it.
     pub pending_questions: std::collections::HashMap<String, AskQuestionRequest>,
+    /// Request ids already answered locally. A bootstrap fetched before the
+    /// answer landed can still list the question and must not revive it.
+    pub answered_question_ids: std::collections::HashSet<String>,
     pub question_selected: std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub todo_items: std::collections::HashMap<String, Vec<TodoItem>>,
     /// Staged next-turn prompt per session, persisted on the server and

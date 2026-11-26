@@ -60,6 +60,9 @@ class ChatRepository(
 ) {
     private val controllers = mutableMapOf<String, RunStreamController>()
 
+    // A bootstrap fetched before an answer landed can still list the question.
+    private val answeredQuestionIds = mutableSetOf<String>()
+
     /** Prompts shown only after the server accepts the run POST; see startRun. */
     private val pendingRuns = mutableMapOf<String, PendingRun>()
 
@@ -184,6 +187,7 @@ class ChatRepository(
         setSuggestions(sessionId, if (chats.get(sessionId).running) emptyList() else b.suggestions)
         val bootstrapQuestions = b.pendingQuestions
             .filter { it.request_id.isNotBlank() && it.question.isNotBlank() }
+            .filter { it.request_id !in answeredQuestionIds }
             .map { PendingQuestion(it.toUi()) }
         chats.update(sessionId) {
             val mergedQuestions = (it.pendingQuestions + bootstrapQuestions)
@@ -847,6 +851,7 @@ class ChatRepository(
     }
 
     fun answerQuestion(sessionId: String, requestId: String, answer: JsonElement) {
+        answeredQuestionIds.add(requestId)
         scope.launch {
             try {
                 withContext(Dispatchers.IO) {
