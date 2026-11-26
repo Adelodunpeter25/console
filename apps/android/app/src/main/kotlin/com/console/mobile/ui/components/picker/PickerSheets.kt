@@ -350,7 +350,7 @@ fun ModelPickerSheet(
                             title = formatModelName(entry.model.id),
                             // Provider is not shown as a tab here, so it belongs on the row (desktop parity).
                             subtitle = "${entry.providerLabel} · ${formatContextWindow(entry.model.context_window)} context",
-                            titleBadge = if (isSelected) { { TintPill("Active", NewTheme.Accent) } } else null,
+                            titleBadge = if (isSelected) { { TintPill("Active", NewTheme.Accent, horizontalPadding = 12.dp, verticalPadding = 2.dp) } } else null,
                             trailing = { starFor(entry.provider, entry.model.id) },
                         ) { onSelect(entry.model.id, entry.provider) }
                     }
@@ -371,7 +371,7 @@ fun ModelPickerSheet(
                             // The formatted name is already the row title, so the id under it
                             // repeated itself — the context window is the useful second line.
                             subtitle = "${formatContextWindow(m.context_window)} context",
-                            titleBadge = if (isSelected) { { TintPill("Active", NewTheme.Accent) } } else null,
+                            titleBadge = if (isSelected) { { TintPill("Active", NewTheme.Accent, horizontalPadding = 12.dp, verticalPadding = 2.dp) } } else null,
                             trailing = { starFor(providerId, m.id) },
                         ) { onSelect(m.id, pageProvider) }
                     }

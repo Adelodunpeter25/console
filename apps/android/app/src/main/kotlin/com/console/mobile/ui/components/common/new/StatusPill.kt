@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.data.model.SessionStatus
@@ -51,6 +52,8 @@ fun TintPill(
     tint: Color,
     modifier: Modifier = Modifier,
     pulsingDot: Boolean = false,
+    horizontalPadding: Dp = 10.dp,
+    verticalPadding: Dp = 4.dp,
 ) {
     val shape = RoundedCornerShape(999.dp)
     Row(
@@ -58,7 +61,7 @@ fun TintPill(
             .clip(shape)
             .background(tint.copy(alpha = 0.14f))
             .border(1.dp, tint.copy(alpha = 0.25f), shape)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -78,7 +81,7 @@ fun TintPill(
                     .background(tint),
             )
         }
-        Text(text, color = tint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(text, color = tint, fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
