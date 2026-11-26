@@ -19,7 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,7 +66,7 @@ fun SettingsScreen(
     startSection: SettingsSection? = null,
     openedFromSetup: Boolean = false,
 ) {
-    var section by remember { mutableStateOf<SettingsSection?>(startSection) }
+    var section by rememberSaveable { mutableStateOf<SettingsSection?>(startSection) }
     // From setup there is no landing list to fall back to, so back leaves
     // Settings entirely rather than unwinding an internal section.
     BackHandler(enabled = section != null && !openedFromSetup) { section = null }
