@@ -2,6 +2,7 @@ package com.console.mobile.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.console.mobile.core.util.ScrollMemory
 import com.console.mobile.data.api.ConsoleJson
 import com.console.mobile.data.store.Environment
 import kotlinx.serialization.Serializable
@@ -15,6 +16,8 @@ data class PersistedEnvironments(
 class PreferencesStore(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("console_prefs", Context.MODE_PRIVATE)
+    private val scrollPrefs: SharedPreferences =
+        context.getSharedPreferences("console_transcript_scroll", Context.MODE_PRIVATE)
 
     var backendUrl: String?
         get() = prefs.getString(KEY_BACKEND_URL, null)
@@ -47,6 +50,7 @@ class PreferencesStore(context: Context) {
 
     fun clearAll() {
         prefs.edit().clear().apply()
+        scrollPrefs.edit().clear().apply()
     }
 
     /**
@@ -88,6 +92,22 @@ class PreferencesStore(context: Context) {
 
     fun saveCollapsedSections(sections: Set<String>) {
         prefs.edit().putStringSet(KEY_COLLAPSED_SECTIONS, sections).apply()
+    }
+
+    internal fun loadTranscriptScroll(sessionId: String): ScrollMemory.Position? {
+        val raw = scrollPrefs.getString(sessionId, null) ?: return null
+        val parts = raw.split(':')
+        if (parts.size != 3) return null
+        val index = parts[0].toIntOrNull() ?: return null
+        val offset = parts[1].toIntOrNull() ?: return null
+        val atEnd = parts[2].toBooleanStrictOrNull() ?: return null
+        return ScrollMemory.Position(index = index, offset = offset, atEnd = atEnd)
+    }
+
+    internal fun saveTranscriptScroll(sessionId: String, position: ScrollMemory.Position) {
+        scrollPrefs.edit()
+            .putString(sessionId, "${position.index}:${position.offset}:${position.atEnd}")
+            .apply()
     }
 
     companion object {

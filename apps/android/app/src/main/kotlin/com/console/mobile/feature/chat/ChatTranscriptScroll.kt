@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import com.console.mobile.AppContainer
 import com.console.mobile.core.util.ScrollMemory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.drop
@@ -107,9 +108,12 @@ internal fun rememberChatTranscriptScroll(
     isStreaming: Boolean,
     onDragStarted: () -> Unit,
 ): ChatTranscriptScroll {
-    // Only trust the remembered position when the messages are still loaded;
-    // otherwise a fresh load should start at the bottom as usual.
-    val restored = remember(sessionId) { ScrollMemory.get(sessionId) }
+    val restored = remember(sessionId) {
+        ScrollMemory.get(sessionId)
+            ?: AppContainer.preferencesStore.loadTranscriptScroll(sessionId)?.also {
+                ScrollMemory.save(sessionId, it.index, it.offset, it.atEnd)
+            }
+    }
     val listState = key(sessionId) {
         val initialIndex = when {
             restored != null && !restored.atEnd -> restored.index
@@ -142,6 +146,10 @@ internal fun rememberChatTranscriptScroll(
         }.collect { (index, offset, atEnd) ->
             if (scroll.settledInitialPage) {
                 ScrollMemory.save(sessionId, index, offset, atEnd)
+                AppContainer.preferencesStore.saveTranscriptScroll(
+                    sessionId,
+                    ScrollMemory.Position(index, offset, atEnd),
+                )
             }
         }
     }
