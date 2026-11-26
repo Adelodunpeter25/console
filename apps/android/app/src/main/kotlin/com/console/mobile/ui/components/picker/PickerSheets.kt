@@ -161,7 +161,7 @@ private fun GithubPickerSection(
 
     fun clone(repo: GithubRepo) {
         if (cloningRepo != null) return
-        cloningRepo = repo.name
+        cloningRepo = repo.fullName.ifBlank { repo.name }
         cloneError = null
         scope.launch {
             try {
@@ -192,9 +192,10 @@ private fun GithubPickerSection(
             repos?.isEmpty() == true -> Note("No repositories found")
             else -> {
                 repos?.take(20)?.forEach { repo ->
-                    val busy = cloningRepo == repo.name
+                    val label = repo.fullName.ifBlank { repo.name }
+                    val busy = cloningRepo == label
                     OptionRow(
-                        title = if (busy) "Cloning ${repo.name}…" else repo.name,
+                        title = if (busy) "Cloning $label…" else label,
                         subtitle = repo.description ?: if (repo.private) "Private" else null,
                     ) {
                         if (cloningRepo == null) clone(repo)
