@@ -23,8 +23,8 @@
 
 use console_core::{ConsoleClient, FsTreeEntry};
 use gpui::{
-    div, px, App, Context, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyDownEvent,
-    MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, Window,
+    App, Context, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyDownEvent,
+    MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, Window, div, px,
 };
 use std::rc::Rc;
 
@@ -261,12 +261,7 @@ impl Render for FileBrowser {
                             }),
                     )
                     .child(build_list(
-                        parent,
-                        selected,
-                        entries,
-                        loading,
-                        entity,
-                        &theme,
+                        parent, selected, entries, loading, entity, &theme,
                     )),
             )
             .child(

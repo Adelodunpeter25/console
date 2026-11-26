@@ -472,17 +472,17 @@ impl RenderOnce for SidebarView {
                 session_timestamp,
                 project_created_at,
             )
-                .into_iter()
-                .map(|(key, positions)| {
-                    let filtered: Vec<usize> = positions
-                        .into_iter()
-                        .filter(|idx| visible_positions.contains(idx))
-                        .collect();
-                    let name = project_name_for(&key);
-                    (key, name, filtered)
-                })
-                .filter(|(_, _, positions)| !positions.is_empty())
-                .collect();
+            .into_iter()
+            .map(|(key, positions)| {
+                let filtered: Vec<usize> = positions
+                    .into_iter()
+                    .filter(|idx| visible_positions.contains(idx))
+                    .collect();
+                let name = project_name_for(&key);
+                (key, name, filtered)
+            })
+            .filter(|(_, _, positions)| !positions.is_empty())
+            .collect();
         let collapse_key = |key: &ProjectSectionKey| -> String {
             key.clone().unwrap_or_else(|| NO_PROJECT_KEY.to_string())
         };

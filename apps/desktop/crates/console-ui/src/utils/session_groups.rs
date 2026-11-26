@@ -50,15 +50,15 @@ pub fn group_indices_by_project(
         })
         .collect();
     // Most recently added project first; `None` (no project) always last.
-    grouped.sort_by(|(key_a, _), (key_b, _)| {
-        match (key_a.as_deref(), key_b.as_deref()) {
+    grouped.sort_by(
+        |(key_a, _), (key_b, _)| match (key_a.as_deref(), key_b.as_deref()) {
             (None, Some(_)) => std::cmp::Ordering::Greater,
             (Some(_), None) => std::cmp::Ordering::Less,
             (Some(a), Some(b)) => project_created_at(b)
                 .cmp(&project_created_at(a))
                 .then_with(|| a.cmp(b)),
             (None, None) => std::cmp::Ordering::Equal,
-        }
-    });
+        },
+    );
     grouped
 }

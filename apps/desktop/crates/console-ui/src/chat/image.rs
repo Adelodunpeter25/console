@@ -104,9 +104,10 @@ pub fn resolve_workspace_path(path: &str, cwd: Option<&str>) -> String {
             p = home;
         }
     } else if let Some(rest) = p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\"))
-        && let Some(home) = dirs_home() {
-            p = format!("{home}/{rest}");
-        }
+        && let Some(home) = dirs_home()
+    {
+        p = format!("{home}/{rest}");
+    }
     let candidate = if Path::new(&p).is_absolute() {
         p
     } else if let Some(cwd) = cwd.filter(|c| !c.is_empty()) {
@@ -130,12 +131,14 @@ fn percent_decode(s: &str) -> String {
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len()
-            && let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
-                out.push(v);
-                i += 3;
-                continue;
-            }
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16)
+        {
+            out.push(v);
+            i += 3;
+            continue;
+        }
         out.push(bytes[i]);
         i += 1;
     }

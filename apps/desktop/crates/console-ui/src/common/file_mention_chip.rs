@@ -441,7 +441,10 @@ impl Element for InlineFileMentionText {
                 .mention_icons
                 .iter()
                 .filter_map(|m| {
-                    Some((m.image_number?, range_rects(&layout, &m.chip_range, 0.0, 2.0)))
+                    Some((
+                        m.image_number?,
+                        range_rects(&layout, &m.chip_range, 0.0, 2.0),
+                    ))
                 })
                 .collect();
             let mouse = window.mouse_position();
@@ -452,8 +455,7 @@ impl Element for InlineFileMentionText {
                 window.set_window_cursor_style(gpui::CursorStyle::PointingHand);
             }
             window.on_mouse_event(move |event: &gpui::MouseDownEvent, phase, window, cx| {
-                if phase != gpui::DispatchPhase::Bubble || event.button != gpui::MouseButton::Left
-                {
+                if phase != gpui::DispatchPhase::Bubble || event.button != gpui::MouseButton::Left {
                     return;
                 }
                 if let Some((number, _)) = chips
