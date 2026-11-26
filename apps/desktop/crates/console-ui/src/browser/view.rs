@@ -37,7 +37,7 @@ use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
 const TOOLBAR_HEIGHT: f32 = 42.0;
-const SUGGESTION_LIMIT: usize = 6;
+const SUGGESTION_LIMIT: usize = 10;
 
 /// A script/driver result plus the live page identity at completion. The
 /// committed tab URL lags behind `pushState` routes, so callers should prefer
