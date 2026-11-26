@@ -201,7 +201,8 @@ impl BrowserView {
             move |_, _, cx| {
                 let _ = view.update(cx, |this: &mut Self, cx| {
                     this.address_focused = false;
-                    cx.notify();
+                    // Abandoned edits must not freeze the bar on stale text.
+                    this.restore_address(cx);
                 });
             }
         });
@@ -717,6 +718,11 @@ impl BrowserView {
         if self.page_title != title {
             self.page_title = title;
             cx.notify();
+        }
+        // pushState routes never fire a load-finish, but they retitle the page.
+        if let Some(url) = self.host.as_ref().and_then(|host| host.current_url()) {
+            self.commit_navigated_url(url);
+            self.echo_page_url(cx);
         }
     }
 
