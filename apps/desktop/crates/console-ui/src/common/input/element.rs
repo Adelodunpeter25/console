@@ -567,29 +567,16 @@ impl Element for InputElement {
                 if input.read(cx).hovered_mention != hovered {
                     input.update(cx, |input, cx| {
                         input.hovered_mention = hovered;
-                        input.image_hover_shown = false;
                         cx.notify();
-                        let is_image = hovered
+                        let image = hovered
                             .and_then(|index| input.mentions.get(index))
-                            .is_some_and(|m| m.is_image());
-                        if is_image {
-                            cx.spawn(async move |this, cx| {
-                                cx.background_executor()
-                                    .timer(crate::common::image_hover::IMAGE_HOVER_DELAY)
-                                    .await;
-                                let _ = this.update(cx, |input, cx| {
-                                    if input.hovered_mention == hovered {
-                                        input.image_hover_shown = true;
-                                        cx.notify();
-                                    }
-                                });
-                            })
-                            .detach();
-                        }
+                            .and_then(|m| m.image_number());
+                        input.image_hover.update(cx, |hover, cx| hover.hover(image, cx));
                     });
                 }
             }
         });
+        crate::common::image_hover::dismiss_on_scroll(window, input.image_hover.clone());
         let theme = Theme::current(cx);
         // The cursor style may only be set while painting, not from the move handler.
         if let Some((_, true)) = input.mention_chip_at(window.mouse_position()) {

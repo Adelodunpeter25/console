@@ -323,8 +323,8 @@ pub struct ComposerInput {
     pub(crate) vertical_navigation: Option<VerticalNavigation>,
     pub(crate) is_selecting: bool,
     pub(crate) hovered_mention: Option<usize>,
-    /// The hovered image chip's card is open (set after a short delay).
-    pub(crate) image_hover_shown: bool,
+    /// Hover state of the `[Image N]` chips: delay, card and picture cache.
+    pub(crate) image_hover: Entity<crate::common::image_hover::ImageChipHover>,
     pub(crate) selected_word_range: Option<Range<usize>>,
     pub(crate) history: EditHistory,
     pub(crate) prompt_history: PromptHistory,
@@ -336,8 +336,6 @@ pub struct ComposerInput {
     pub(crate) image_attachments: Rc<[console_core::ImageAttachment]>,
     /// Image numbers whose chips an edit dropped, until the edit's owner is told.
     pub(crate) pending_removed_images: Vec<usize>,
-    /// The decoded picture the hover card last showed: (number, payload length).
-    pub(crate) hover_image_cache: Option<(usize, usize, std::sync::Arc<gpui::Image>)>,
     /// Whether the field held focus when it last rendered, so an image added
     /// from outside (picker, drop) lands at the caret only if you were typing.
     pub(crate) rendered_focused: bool,
@@ -396,7 +394,7 @@ impl ComposerInput {
             vertical_navigation: None,
             is_selecting: false,
             hovered_mention: None,
-            image_hover_shown: false,
+            image_hover: cx.new(|_| crate::common::image_hover::ImageChipHover::default()),
             selected_word_range: None,
             history: EditHistory::default(),
             prompt_history: PromptHistory::default(),
@@ -420,7 +418,6 @@ impl ComposerInput {
             context_files: Vec::new(),
             image_attachments: Rc::from([]),
             pending_removed_images: Vec::new(),
-            hover_image_cache: None,
             rendered_focused: false,
             window_active_for_blink: window.is_window_active(),
             blink_cursor,
@@ -1690,7 +1687,7 @@ impl ComposerInput {
                 return;
             }
             if let Some(number) = mention.image_number() {
-                self.image_hover_shown = false;
+                self.image_hover.update(cx, |hover, cx| hover.dismiss(cx));
                 cx.emit(ComposerImagePreview(number));
                 return;
             }
@@ -1824,33 +1821,25 @@ impl ComposerInput {
     }
 
     /// The picture card shown above a hovered `[Image N]` chip.
-    fn image_hover_card(&mut self, theme: Theme) -> Option<gpui::AnyElement> {
+    fn image_hover_card(&mut self, cx: &mut Context<Self>, theme: Theme) -> Option<gpui::AnyElement> {
         if self.mode != FieldMode::Composer {
             return None;
         }
-        if !self.image_hover_shown {
-            return None;
-        }
-        let mention = self.mentions.get(self.hovered_mention?)?;
-        let number = mention.image_number()?;
-        let attachment = self.image_attachments.get(number.checked_sub(1)?)?;
-        let range = mention.range.clone();
-        let cached = self
-            .hover_image_cache
-            .as_ref()
-            .filter(|(n, len, _)| *n == number && *len == attachment.data.len())
-            .map(|(_, _, image)| image.clone());
-        let image = match cached {
-            Some(image) => image,
-            None => {
-                let image = crate::common::attachment_image(attachment)?;
-                self.hover_image_cache = Some((number, attachment.data.len(), image.clone()));
-                image
-            }
-        };
         let layout = self.last_layout.as_ref()?;
-        let rect = *crate::markdown::render::range_rects(layout, &range, 3.0, 1.0).first()?;
-        Some(crate::common::image_hover::image_hover_card(image, rect, theme))
+        let mentions = &self.mentions;
+        let attachments = self.image_attachments.clone();
+        self.image_hover.clone().update(cx, |hover, _| {
+            hover.card(
+                &attachments,
+                |number| {
+                    let mention = mentions.iter().find(|m| m.image_number() == Some(number))?;
+                    crate::markdown::render::range_rects(layout, &mention.range, 3.0, 1.0)
+                        .first()
+                        .copied()
+                },
+                theme,
+            )
+        })
     }
 
     /// The mention chip under `position`, and whether the point is on its
@@ -1999,7 +1988,7 @@ impl Render for ComposerInput {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::current(cx);
         self.rendered_focused = self.focus_handle.is_focused(window);
-        let image_hover_card = self.image_hover_card(theme);
+        let image_hover_card = self.image_hover_card(cx, theme);
         let input = cx.entity();
         let context_menu_input = input.clone();
         let scroll_handle = self.scroll_handle.clone();
