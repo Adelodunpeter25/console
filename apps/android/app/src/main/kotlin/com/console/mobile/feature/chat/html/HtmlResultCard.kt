@@ -34,6 +34,7 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Code
 import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
 import io.github.lyxnx.compose.ui.tablericons.outline.Globe
+import io.github.lyxnx.compose.ui.tablericons.outline.Maximize
 
 /**
  * Transcript card for a `render` tool result. Renders the page live in a
@@ -109,7 +110,7 @@ fun HtmlResultCard(
                         )
                         OverflowMenuItem(
                             label = "Open full screen",
-                            icon = TablerIcons.Outline.Globe,
+                            icon = TablerIcons.Outline.Maximize,
                             onClick = {
                                 menuOpen = false
                                 onOpenPreview(artifact)
