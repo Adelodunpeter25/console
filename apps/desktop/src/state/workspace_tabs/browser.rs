@@ -286,8 +286,12 @@ impl ConsoleDesktopApp {
                 pane_id: String,
             },
         }
-        let target = if let Some(pane_id) = active_chat_pane {
-            Target::Active { pane_id }
+        let target = if active_chat_pane.is_some() {
+            // The right-hand split, like every other subtab, so the chat stays
+            // where it is and the page appears beside it.
+            Target::Active {
+                pane_id: self.target_subtab_pane_id(),
+            }
         } else {
             let mut stashed = None;
             for (key, root) in self.project_workspace_roots.iter() {
