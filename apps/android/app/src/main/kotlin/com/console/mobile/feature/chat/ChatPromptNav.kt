@@ -48,9 +48,9 @@ internal fun ChatScrollPill(
     onScrollToBottom: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(17.dp)
+    val shape = RoundedCornerShape(18.5.dp)
     Row(
-        modifier = modifier.height(34.dp).clip(shape).background(NewTheme.Raised)
+        modifier = modifier.height(37.dp).clip(shape).background(NewTheme.Raised)
             .border(1.dp, Color.White.copy(alpha = 0.1f), shape),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -65,7 +65,7 @@ internal fun ChatScrollPill(
 @Composable
 private fun PillSection(icon: ImageVector, description: String, onClick: () -> Unit) {
     Box(
-        modifier = Modifier.width(38.dp).height(34.dp).clickable(onClick = onClick),
+        modifier = Modifier.width(38.dp).height(37.dp).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = description, tint = NewTheme.TextSecondary, modifier = Modifier.size(15.dp))
