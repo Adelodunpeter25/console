@@ -340,7 +340,7 @@ impl RenderOnce for WorkspaceTabBar {
                                 )
                                 .into_any_element(),
                                 console_core::WorkspaceTabConfig::Computer { .. } => app_icon(
-                                    IconName::Terminal,
+                                    IconName::Computer,
                                     11.0,
                                     if is_active {
                                         theme.text

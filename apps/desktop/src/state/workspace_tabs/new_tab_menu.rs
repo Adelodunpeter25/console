@@ -109,7 +109,7 @@ pub(crate) fn new_tab_menu_items(
         #[cfg(target_os = "macos")]
         items.push(row(
             "Computer",
-            IconName::Terminal,
+            IconName::Computer,
             None,
             Rc::new(|this, _, cx| this.open_computer_tab(cx)),
         ));

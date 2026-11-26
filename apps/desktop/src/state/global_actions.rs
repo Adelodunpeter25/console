@@ -134,7 +134,7 @@ fn command_palette_entries(
                 }
             }
         })
-        .icon(IconName::Terminal),
+        .icon(IconName::Computer),
     );
     // Browser tabs are deferred on Windows.
     #[cfg(not(target_os = "windows"))]
