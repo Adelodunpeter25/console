@@ -211,12 +211,7 @@ impl BrowserView {
             move |_, window, cx| {
                 let focused_elsewhere = window.is_window_active() && window.focused(cx).is_some();
                 let _ = view.update(cx, |this: &mut Self, cx| {
-                    if focused_elsewhere
-                        && this
-                            .host
-                            .as_ref()
-                            .is_some_and(|host| host.native_focus_within())
-                    {
+                    if focused_elsewhere {
                         this.reclaim_native_keyboard(cx);
                     }
                 });
@@ -412,7 +407,11 @@ impl BrowserView {
                 self.notify_user_focus(cx);
             }
             let address_focused = self.address.read(cx).focus().is_focused(window);
-            if address_focused && !user_gesture {
+            let focus_elsewhere =
+                !self.focus_handle.is_focused(window) && window.focused(cx).is_some();
+            // A page that grabs the responder on its own (load finishing,
+            // autofocus) must not pull the keyboard off the composer.
+            if !user_gesture && (address_focused || focus_elsewhere) {
                 self.reclaim_native_keyboard(cx);
             } else {
                 window.focus(&self.focus_handle, cx);
@@ -1563,7 +1562,11 @@ impl BrowserView {
                         .border_1()
                         .border_color(theme.border)
                         .bg(theme.inset)
-                        .child(img(image).size_full().object_fit(gpui::ObjectFit::ScaleDown)),
+                        .child(
+                            img(image)
+                                .size_full()
+                                .object_fit(gpui::ObjectFit::ScaleDown),
+                        ),
                 )
             })
             .child(div().mt_2().child(self.annotation_input.clone()))
