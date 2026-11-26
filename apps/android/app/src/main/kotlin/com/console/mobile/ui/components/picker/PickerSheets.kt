@@ -234,23 +234,7 @@ fun ModelPickerSheet(
     var search by remember { mutableStateOf("") }
     val providers = providerState.providers
     val pageCount = 1 + providers.size
-    val initialPage = remember(providers, selectedProvider) {
-        if (providers.isEmpty()) 0
-        else {
-            val idx = selectedProvider?.let { sel -> providers.indexOfFirst { it.name == sel } } ?: -1
-            if (idx >= 0) idx + 1 else 1
-        }
-    }
-    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { pageCount })
-    var didSnapInitial by remember { mutableStateOf(false) }
-    LaunchedEffect(providers.size) {
-        if (!didSnapInitial && providers.isNotEmpty()) {
-            didSnapInitial = true
-            val idx = selectedProvider?.let { sel -> providers.indexOfFirst { it.name == sel } } ?: -1
-            val target = if (idx >= 0) idx + 1 else 1
-            if (pagerState.currentPage != target) pagerState.scrollToPage(target)
-        }
-    }
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { pageCount })
     val tabListState = rememberLazyListState()
     val showFavorites = pagerState.currentPage == 0
     val activeProvider = if (pagerState.currentPage in 1..providers.size) providers[pagerState.currentPage - 1].name else null
