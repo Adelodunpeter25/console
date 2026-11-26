@@ -89,15 +89,20 @@ impl TranscriptView {
             let _ = this.update(cx, |this, cx| {
                 this.fetching_results.remove(&call_id);
                 let Some(full) = full else { return };
-                for turn in this.turns.iter_mut() {
+                let mut updated_turn = None;
+                for (turn_index, turn) in this.turns.iter_mut().enumerate() {
                     if let Some(run) = turn.run.as_mut()
                         && let Some(ActivityEvent::ToolCall(entry)) = run.events.iter_mut().find(|event| {
                             matches!(event, ActivityEvent::ToolCall(e) if e.call.id == call_id)
                         })
                     {
                         entry.result = Some(full);
+                        updated_turn = Some(turn_index);
                         break;
                     }
+                }
+                if let Some(turn_index) = updated_turn {
+                    this.remeasure_turn(turn_index);
                 }
                 this.refresh_list();
                 cx.notify();

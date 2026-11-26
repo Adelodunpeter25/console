@@ -303,7 +303,8 @@ impl ToolCalls {
     ) -> AnyElement {
         let call_id = entry.call.id.clone();
         let open = self.state.borrow().expanded_calls.contains(&call_id);
-        let summary = Self::argument_summary(&entry.call);
+        let label = Self::call_label(&entry.call);
+        let summary = Self::argument_summary(&entry.call).filter(|s| s != &label);
         let (status_icon, status_color) = Self::status_icon(&entry, &theme);
         let call_id_for_action = call_id.clone();
         let is_edit = entry.call.is_edit();
@@ -396,7 +397,7 @@ impl ToolCalls {
                             .text_size(px(12.0))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme.text_secondary)
-                            .child(Self::call_label(&entry.call)),
+                            .child(label),
                     )
                     .when_some(summary, |element, summary| {
                         element.child(
@@ -513,6 +514,14 @@ impl ToolCalls {
                         element.child(self.section(&call_id, "Arguments", arguments, theme))
                     })
                     .when_some(entry.result, |element, result| {
+                        if result.omitted_size > 0 && result.content.is_null() {
+                            let placeholder = if result.result_message_id.is_some() {
+                                "Loading…".to_owned()
+                            } else {
+                                format!("Result omitted ({} bytes)", result.omitted_size)
+                            };
+                            return element.child(self.section(&call_id, "Result", placeholder, theme));
+                        }
                         let raw = Self::formatted_result(&result);
                         if entry.call.is_read() {
                             element.child(self.read_file_section(
