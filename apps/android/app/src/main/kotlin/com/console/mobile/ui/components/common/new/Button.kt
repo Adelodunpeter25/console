@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
-import com.console.mobile.ui.theme.ConsoleMotion
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -44,6 +46,7 @@ enum class ActionButtonKind { Primary, Secondary, Danger }
  *
  * [compact] is the small inline size for buttons that sit inside a row.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ActionButton(
     text: String,
@@ -72,7 +75,7 @@ fun ActionButton(
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed && enabled && !loading) 0.96f else 1f,
-        animationSpec = ConsoleMotion.FastSpatial,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "actionButtonScale",
     )
     Row(
@@ -98,7 +101,7 @@ fun ActionButton(
         horizontalArrangement = Arrangement.Center,
     ) {
         when {
-            loading -> ExpressiveLoadingIndicator(color = content, modifier = Modifier.size(if (compact) 15.dp else 18.dp))
+            loading -> LoadingIndicator(color = content, modifier = Modifier.size(if (compact) 16.dp else 20.dp))
             icon != null -> Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(if (compact) 14.dp else 18.dp))
         }
         if (loading || icon != null) Spacer(Modifier.size(8.dp))
@@ -107,6 +110,7 @@ fun ActionButton(
 }
 
 /** A round, card-coloured icon button: the back button, "+" and settings cog in headers. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun CircleIconButton(
     icon: ImageVector,
@@ -121,7 +125,7 @@ fun CircleIconButton(
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed && enabled) 0.92f else 1f,
-        animationSpec = ConsoleMotion.FastSpatial,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "circleIconScale",
     )
     IconButton(

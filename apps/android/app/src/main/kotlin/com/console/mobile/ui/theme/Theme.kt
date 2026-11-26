@@ -1,7 +1,9 @@
 package com.console.mobile.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -39,6 +41,7 @@ private val ConsoleDarkScheme = darkColorScheme(
     scrim = Color.Black.copy(alpha = 0.55f),
 )
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ConsoleTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -46,8 +49,9 @@ fun ConsoleTheme(
 ) {
     // Console is dark; ignore light for now but keep param for previews/tests.
     val scheme = ConsoleDarkScheme
-    MaterialTheme(
+    MaterialExpressiveTheme(
         colorScheme = scheme,
+        motionScheme = MotionScheme.expressive(),
         typography = ConsoleTypography,
         content = content,
     )

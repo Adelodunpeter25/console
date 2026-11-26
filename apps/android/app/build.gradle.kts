@@ -194,7 +194,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3:1.5.0-alpha15")
     implementation("androidx.browser:browser:1.8.0")
     implementation("io.github.lyxnx.compose.ui:tabler-icons-android:3.31.0")
     implementation("com.valentinilk.shimmer:compose-shimmer:1.4.0")

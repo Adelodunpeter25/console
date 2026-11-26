@@ -19,8 +19,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import com.console.mobile.ui.theme.ConsoleMotion
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -132,6 +132,7 @@ fun OptionRow(
  * A pill in a horizontal tab row (the provider tabs). The selected one takes the
  * accent; [leading] is an optional glyph before the label.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun TabPill(
     label: String,
@@ -145,17 +146,17 @@ fun TabPill(
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.95f else 1f,
-        animationSpec = ConsoleMotion.FastSpatial,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "tabPillScale",
     )
     val bg by animateColorAsState(
         targetValue = if (selected) NewTheme.Accent.copy(alpha = 0.18f) else NewTheme.Card,
-        animationSpec = ConsoleMotion.FastEffects,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "tabPillBg",
     )
     val borderColor by animateColorAsState(
         targetValue = if (selected) NewTheme.Accent.copy(alpha = 0.35f) else NewTheme.CardBorder,
-        animationSpec = ConsoleMotion.FastEffects,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "tabPillBorder",
     )
     Row(
@@ -180,6 +181,7 @@ fun TabPill(
 }
 
 /** A square tab with just an icon (the favourites tab). */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun IconTabPill(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -193,17 +195,17 @@ fun IconTabPill(
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.93f else 1f,
-        animationSpec = ConsoleMotion.FastSpatial,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "iconTabPillScale",
     )
     val bg by animateColorAsState(
         targetValue = if (selected) NewTheme.Accent.copy(alpha = 0.18f) else NewTheme.Card,
-        animationSpec = ConsoleMotion.FastEffects,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "iconTabPillBg",
     )
     val borderColor by animateColorAsState(
         targetValue = if (selected) NewTheme.Accent.copy(alpha = 0.35f) else NewTheme.CardBorder,
-        animationSpec = ConsoleMotion.FastEffects,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "iconTabPillBorder",
     )
     Box(
