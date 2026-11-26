@@ -1656,8 +1656,22 @@ impl BrowserView {
                             .size(px(14.0))
                             .rounded(px(4.0))
                             .border_1()
-                            .border_color(theme.border)
-                            .when(include_screenshot, |box_| box_.bg(theme.accent)),
+                            .border_color(if include_screenshot {
+                                theme.accent
+                            } else {
+                                theme.text_ghost
+                            })
+                            .bg(if include_screenshot {
+                                theme.accent
+                            } else {
+                                gpui::transparent_black()
+                            })
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .when(include_screenshot, |box_| {
+                                box_.child(app_icon(IconName::Check, 9.0, theme.on_inverse))
+                            }),
                     )
                     .child(
                         div()
