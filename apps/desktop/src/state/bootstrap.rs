@@ -53,6 +53,18 @@ impl ConsoleDesktopApp {
                 cx.notify();
             },
         ));
+        self._subscriptions.push(cx.subscribe(
+            &input,
+            |this, _input, event: &console_ui::input::ComposerImagesRemoved, cx| {
+                this.remove_images_by_number(FLOATING_KEY, &event.0, cx);
+            },
+        ));
+        self._subscriptions.push(cx.subscribe(
+            &input,
+            |this, _input, event: &console_ui::input::ComposerImagePreview, cx| {
+                this.preview_attachment(FLOATING_KEY, event.0 - 1, cx);
+            },
+        ));
     }
 
     pub(crate) fn wire_palette_callbacks(&mut self, cx: &mut Context<Self>) {

@@ -144,6 +144,15 @@ pub enum ComposerEvent {
     },
 }
 
+/// Image chips that an edit removed, by their 1-based number. The owner drops
+/// the matching attachments and renumbers the chips left behind.
+#[derive(Clone)]
+pub struct ComposerImagesRemoved(pub Vec<usize>);
+
+/// A click on an image chip, by its 1-based number: the owner opens the preview.
+#[derive(Clone)]
+pub struct ComposerImagePreview(pub usize);
+
 /// Clipboard payloads whose primary representation is an image or file list.
 /// The owning composer persists them and presents them as attachment chips;
 /// code/search fields continue using their ordinary text paste behavior.
@@ -321,6 +330,15 @@ pub struct ComposerInput {
     pub(crate) context_menu: ContextMenuHandle,
     pub(crate) mentions: Vec<ComposerMention>,
     pub(crate) context_files: Vec<String>,
+    /// The owner's staged images, so a hovered image chip can show its picture.
+    pub(crate) image_attachments: Rc<[console_core::ImageAttachment]>,
+    /// Image numbers whose chips an edit dropped, until the edit's owner is told.
+    pub(crate) pending_removed_images: Vec<usize>,
+    /// The decoded picture the hover card last showed: (number, payload length).
+    pub(crate) hover_image_cache: Option<(usize, usize, std::sync::Arc<gpui::Image>)>,
+    /// Whether the field held focus when it last rendered, so an image added
+    /// from outside (picker, drop) lands at the caret only if you were typing.
+    pub(crate) rendered_focused: bool,
     /// Tracks `window.is_window_active()` at the last activation change, so
     /// focus handling can skip starting the blink loop for a backgrounded
     /// window whose caret is never painted.
@@ -397,6 +415,10 @@ impl ComposerInput {
             },
             mentions: Vec::new(),
             context_files: Vec::new(),
+            image_attachments: Rc::from([]),
+            pending_removed_images: Vec::new(),
+            hover_image_cache: None,
+            rendered_focused: false,
             window_active_for_blink: window.is_window_active(),
             blink_cursor,
             _subscriptions,
@@ -751,11 +773,115 @@ impl ComposerInput {
     /// or drops mentions touched by the edit, and `reconcile_mentions` is the
     /// final net that drops any mention whose text no longer matches.
     fn apply_text_splice(&mut self, range: &Range<usize>, text: &str) {
+        let images_before = self.image_numbers();
         self.adjust_mentions(range, text.len());
         self.content =
             (self.content[..range.start].to_owned() + text + &self.content[range.end..]).into();
         self.reconcile_mentions();
+        self.note_removed_images(images_before);
         self.refresh_highlight();
+    }
+
+    fn image_numbers(&self) -> Vec<usize> {
+        self.mentions
+            .iter()
+            .filter_map(ComposerMention::image_number)
+            .collect()
+    }
+
+    fn note_removed_images(&mut self, before: Vec<usize>) {
+        let after = self.image_numbers();
+        self.pending_removed_images
+            .extend(before.into_iter().filter(|n| !after.contains(n)));
+    }
+
+    /// Tell the owner which image chips the last edit dropped, so it can drop
+    /// their attachments and call [`Self::renumber_images`].
+    pub(crate) fn flush_removed_images(&mut self, cx: &mut Context<Self>) {
+        if self.pending_removed_images.is_empty() {
+            return;
+        }
+        let mut removed = std::mem::take(&mut self.pending_removed_images);
+        removed.sort_unstable();
+        removed.dedup();
+        cx.emit(ComposerImagesRemoved(removed));
+    }
+
+    /// Put an `[Image N]` chip in the prompt: at the caret when the field has
+    /// focus (you are typing), at the end otherwise (picker, drop, screenshot).
+    pub fn insert_image_chip(&mut self, number: usize, cx: &mut Context<Self>) {
+        let at = if self.rendered_focused {
+            self.cursor_offset().min(self.content.len())
+        } else {
+            self.content.len()
+        };
+        let chip = ComposerMention::image(0..0, number);
+        self.insert_mention_chip(at..at, chip.label, chip.path, cx);
+    }
+
+    /// The staged images the hover card draws from.
+    pub fn set_image_attachments(&mut self, attachments: Rc<[console_core::ImageAttachment]>) {
+        if !Rc::ptr_eq(&self.image_attachments, &attachments) {
+            self.image_attachments = attachments;
+        }
+    }
+
+    /// After attachments `removed` (1-based) were dropped, rewrite each
+    /// remaining chip to its new position so `[Image N]` keeps matching the
+    /// Nth attachment.
+    pub fn renumber_images(&mut self, removed: &[usize], cx: &mut Context<Self>) {
+        // (old range, new label) for every image chip, in text order.
+        let mut swaps: Vec<(Range<usize>, String)> = self
+            .mentions
+            .iter()
+            .filter_map(|m| {
+                let number = m.image_number()?;
+                let shifted = number - removed.iter().filter(|&&r| r < number).count();
+                Some((m.range.clone(), ComposerMention::image(0..0, shifted).label))
+            })
+            .collect();
+        swaps.sort_by_key(|(range, _)| range.start);
+        if swaps.is_empty() {
+            return;
+        }
+        let mut content = String::with_capacity(self.content.len());
+        let mut copied = 0;
+        for (range, label) in &swaps {
+            content.push_str(&self.content[copied..range.start]);
+            content.push_str(label);
+            copied = range.end;
+        }
+        content.push_str(&self.content[copied..]);
+        // Where an old offset lands once every earlier chip changed length.
+        let map = |offset: usize| -> usize {
+            let mut mapped = offset as isize;
+            for (range, label) in &swaps {
+                if range.end <= offset {
+                    mapped += label.len() as isize - range.len() as isize;
+                }
+            }
+            mapped.max(0) as usize
+        };
+        for mention in &mut self.mentions {
+            let start = map(mention.range.start);
+            let mut end = map(mention.range.end);
+            if let Some(number) = mention.image_number() {
+                let shifted = number - removed.iter().filter(|&&r| r < number).count();
+                let chip = ComposerMention::image(0..0, shifted);
+                end = start + chip.label.len();
+                mention.label = chip.label;
+                mention.path = chip.path;
+            }
+            mention.range = start..end;
+        }
+        let cursor = map(self.cursor_offset());
+        self.content = content.into();
+        self.selected_range = cursor..cursor;
+        self.selection_reversed = false;
+        self.history = EditHistory::default();
+        self.refresh_highlight();
+        cx.emit(ComposerEvent::Edited);
+        cx.notify();
     }
 
     /// Splice `text` over `range` and put the caret after it. This is the
@@ -788,6 +914,7 @@ impl ComposerInput {
         self.history.seal();
         self.pause_blink_cursor(cx);
         cx.emit(ComposerEvent::Edited);
+        self.flush_removed_images(cx);
         cx.notify();
     }
 
@@ -1535,9 +1662,12 @@ impl ComposerInput {
         self.marked_range = None;
         self.vertical_navigation = None;
         self.refresh_highlight();
+        let images_before = self.image_numbers();
         self.reconcile_mentions();
+        self.note_removed_images(images_before);
         self.pause_blink_cursor(cx);
         cx.emit(ComposerEvent::Edited);
+        self.flush_removed_images(cx);
         cx.notify();
     }
 
@@ -1548,12 +1678,18 @@ impl ComposerInput {
         cx: &mut Context<Self>,
     ) {
         if event.click_count == 1
-            && let Some((index, true)) = self.mention_chip_at(event.position)
+            && let Some((index, on_icon)) = self.mention_chip_at(event.position)
             && let Some(mention) = self.mentions.get(index).cloned()
         {
-            self.hovered_mention = None;
-            self.remove_mention_atom(mention, cx);
-            return;
+            if on_icon {
+                self.hovered_mention = None;
+                self.remove_mention_atom(mention, cx);
+                return;
+            }
+            if let Some(number) = mention.image_number() {
+                cx.emit(ComposerImagePreview(number));
+                return;
+            }
         }
         self.vertical_navigation = None;
         self.is_selecting = true;
@@ -1681,6 +1817,59 @@ impl ComposerInput {
                 execute_native_action(action);
             }
         }
+    }
+
+    /// The picture card shown above a hovered `[Image N]` chip.
+    fn image_hover_card(&mut self, theme: Theme) -> Option<gpui::AnyElement> {
+        if self.mode != FieldMode::Composer {
+            return None;
+        }
+        let mention = self.mentions.get(self.hovered_mention?)?;
+        let number = mention.image_number()?;
+        let attachment = self.image_attachments.get(number.checked_sub(1)?)?;
+        let range = mention.range.clone();
+        let cached = self
+            .hover_image_cache
+            .as_ref()
+            .filter(|(n, len, _)| *n == number && *len == attachment.data.len())
+            .map(|(_, _, image)| image.clone());
+        let image = match cached {
+            Some(image) => image,
+            None => {
+                let image = crate::common::attachment_image(attachment)?;
+                self.hover_image_cache = Some((number, attachment.data.len(), image.clone()));
+                image
+            }
+        };
+        let layout = self.last_layout.as_ref()?;
+        let rect = *crate::markdown::render::range_rects(layout, &range, 3.0, 1.0).first()?;
+        let card = div()
+            .id("composer-image-hover-card")
+            .p(px(4.0))
+            .rounded(px(10.0))
+            .bg(theme.raised)
+            .border_1()
+            .border_color(theme.border_strong)
+            .shadow_lg()
+            .child(
+                div().rounded(px(7.0)).overflow_hidden().child(
+                    gpui::img(image)
+                        .max_w(px(320.0))
+                        .max_h(px(240.0))
+                        .object_fit(gpui::ObjectFit::ScaleDown),
+                ),
+            );
+        Some(
+            gpui::deferred(crate::primitives::menu::FloatingSurface::new(
+                card.into_any_element(),
+                rect,
+                crate::primitives::menu::MenuAlign::AboveLeft,
+                px(6.0),
+                px(8.0),
+            ))
+            .with_priority(100)
+            .into_any_element(),
+        )
     }
 
     /// The mention chip under `position`, and whether the point is on its
@@ -1821,11 +2010,15 @@ impl ComposerInput {
 
 impl EventEmitter<ComposerEvent> for ComposerInput {}
 impl EventEmitter<ComposerAttachmentPaste> for ComposerInput {}
+impl EventEmitter<ComposerImagesRemoved> for ComposerInput {}
+impl EventEmitter<ComposerImagePreview> for ComposerInput {}
 impl EventEmitter<ComposerLargePaste> for ComposerInput {}
 
 impl Render for ComposerInput {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::current(cx);
+        self.rendered_focused = self.focus_handle.is_focused(window);
+        let image_hover_card = self.image_hover_card(theme);
         let input = cx.entity();
         let context_menu_input = input.clone();
         let scroll_handle = self.scroll_handle.clone();
@@ -1897,7 +2090,11 @@ impl Render for ComposerInput {
             .child(InputElement { input });
 
         context_menu(
-            div().w_full().child(field).children(scrollbar),
+            div()
+                .w_full()
+                .child(field)
+                .children(scrollbar)
+                .children(image_hover_card),
             "composer-context-menu",
             &self.context_menu,
             move |cx| {

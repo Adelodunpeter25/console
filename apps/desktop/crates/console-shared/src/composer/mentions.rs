@@ -19,7 +19,31 @@ pub const SKILL_PATH_PREFIX: &str = "skill:";
 /// in the path so the chip survives as a confirmed mention.
 pub const CHAT_PATH_PREFIX: &str = "chat:";
 
+/// `path` prefix marking a mention as an image chip. The chip's text is the
+/// `[Image N]` marker the model reads; N is the 1-based position of the
+/// matching attachment, so the marker travels with the prompt text and the
+/// images keep their order.
+pub const IMAGE_PATH_PREFIX: &str = "image:";
+
 impl ComposerMention {
+    /// An image chip over `range`, whose text is `[Image <number>]`.
+    pub fn image(range: Range<usize>, number: usize) -> Self {
+        Self {
+            range,
+            path: format!("{IMAGE_PATH_PREFIX}{number}"),
+            label: format!("[Image {number}]"),
+        }
+    }
+
+    pub fn is_image(&self) -> bool {
+        self.path.starts_with(IMAGE_PATH_PREFIX)
+    }
+
+    /// The 1-based attachment number, when this is an image chip.
+    pub fn image_number(&self) -> Option<usize> {
+        self.path.strip_prefix(IMAGE_PATH_PREFIX)?.parse().ok()
+    }
+
     /// A skill chip over `range`, whose text is `/<name>`.
     pub fn skill(range: Range<usize>, name: &str) -> Self {
         Self {
@@ -98,12 +122,12 @@ pub fn parse_chat_refs(text: &str) -> Vec<ChatRef> {
     refs
 }
 
-/// Paths of the file mentions only: skills and chat refs are text the
-/// agent reads, not context files to attach.
+/// Paths of the file mentions only: skills, chat refs and image markers are
+/// text the agent reads, not context files to attach.
 pub fn context_file_paths(mentions: &[ComposerMention]) -> Vec<String> {
     mentions
         .iter()
-        .filter(|mention| !mention.is_skill() && !mention.is_chat())
+        .filter(|mention| !mention.is_skill() && !mention.is_chat() && !mention.is_image())
         .map(|mention| mention.path.clone())
         .collect()
 }
@@ -125,6 +149,8 @@ pub fn mention_label(path: &str) -> String {
         format!("/{name}")
     } else if let Some(slug) = path.strip_prefix(CHAT_PATH_PREFIX) {
         format!("${slug}")
+    } else if let Some(number) = path.strip_prefix(IMAGE_PATH_PREFIX) {
+        format!("[Image {number}]")
     } else {
         let clean = path.trim_end_matches(['/', '\\']);
         std::path::Path::new(clean)

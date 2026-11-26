@@ -76,6 +76,8 @@ pub(crate) fn mention_icon(path: &str, size: f32, theme: Theme) -> gpui::AnyElem
     } else if path.starts_with(console_shared::composer::mentions::SKILL_PATH_PREFIX) {
         crate::primitives::app_icon(crate::primitives::IconName::Sparkle, size, theme.accent)
             .into_any_element()
+    } else if path.starts_with(console_shared::composer::mentions::IMAGE_PATH_PREFIX) {
+        crate::primitives::file_type_icon("image.png", size).into_any_element()
     } else if path.ends_with('/') || path.ends_with('\\') || std::path::Path::new(path).is_dir() {
         crate::primitives::app_icon(crate::primitives::IconName::Folder, size, theme.accent)
             .into_any_element()

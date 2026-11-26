@@ -18,7 +18,6 @@ use gpui::{
 };
 
 use super::BranchChoice;
-use crate::common::composer_view::composer_attachment_row;
 use crate::common::plan_mode_stripes;
 use crate::common::{
     AutocompleteConfirm, AutocompleteDismiss, AutocompleteNext, AutocompletePrevious,
@@ -647,14 +646,6 @@ impl FloatingComposerView {
             .child(div().text_size(px(11.0)).text_color(hint_color).child("↵"));
 
         // ---- staged images ----
-        let attachments = (!data.attachments.is_empty()).then(|| {
-            composer_attachment_row(
-                data.attachments.clone(),
-                self.on_remove_attachment.clone(),
-                self.on_preview_attachment.clone(),
-                theme,
-            )
-        });
 
         // ---- attach button ----
         let on_pick = self.on_pick_image.clone();
@@ -759,7 +750,6 @@ impl FloatingComposerView {
                             .child(div().flex_1()),
                     )
                     // staged images
-                    .when_some(attachments, |el, attachments| el.child(attachments))
                     // prompt
                     .child(
                         div()

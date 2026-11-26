@@ -76,6 +76,7 @@ impl EntityInputHandler for ComposerInput {
         self.pause_blink_cursor(cx);
         if previous != self.content {
             cx.emit(ComposerEvent::Edited);
+            self.flush_removed_images(cx);
         }
         cx.notify();
     }
@@ -128,6 +129,7 @@ impl EntityInputHandler for ComposerInput {
         self.pause_blink_cursor(cx);
         if previous != self.content {
             cx.emit(ComposerEvent::Edited);
+            self.flush_removed_images(cx);
         }
         cx.notify();
     }

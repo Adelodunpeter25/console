@@ -448,6 +448,9 @@ impl ConsoleDesktopApp {
             return None;
         }
         let attachments = self.attachments_for_pane(FLOATING_KEY);
+        self.floating_composer
+            .input
+            .update(cx, |input, _| input.set_image_attachments(attachments.clone()));
         self.floating_composer.set_attachments(attachments);
         let query = self
             .floating_composer

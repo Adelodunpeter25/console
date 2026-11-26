@@ -479,15 +479,6 @@ pub fn composer_attachment_row(
 }
 
 impl ComposerView {
-    fn render_attachments(
-        attachments: Rc<[ImageAttachment]>,
-        on_remove: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
-        on_preview: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
-        theme: Theme,
-    ) -> impl IntoElement {
-        composer_attachment_row(attachments, on_remove, on_preview, theme)
-    }
-
     fn render_comments(comments: Rc<[ComposerComment]>, theme: Theme) -> impl IntoElement {
         div()
             .w_full()
@@ -699,17 +690,6 @@ impl RenderOnce for ComposerView {
             || !self.attachments.is_empty()
             || !self.comments.is_empty()
             || !self.annotations.is_empty();
-        let attachment_data = self.attachments.clone();
-        let attachment_on_remove = self.on_remove_attachment.clone();
-        let attachment_on_preview = self.on_preview_attachment.clone();
-        let attachments = (!attachment_data.is_empty()).then(|| {
-            Self::render_attachments(
-                attachment_data,
-                attachment_on_remove,
-                attachment_on_preview,
-                theme,
-            )
-        });
         let comments = (!self.comments.is_empty())
             .then(|| Self::render_comments(self.comments.clone(), theme));
         let annotations = (!self.annotations.is_empty()).then(|| {
@@ -874,9 +854,6 @@ impl RenderOnce for ComposerView {
                             .when_some(comments, |element, comments| element.child(comments))
                             .when_some(annotations, |element, annotations| {
                                 element.child(annotations)
-                            })
-                            .when_some(attachments, |element, attachments| {
-                                element.child(attachments)
                             })
                             .child(
                                 div()

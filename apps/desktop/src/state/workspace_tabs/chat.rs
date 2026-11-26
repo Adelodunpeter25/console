@@ -261,6 +261,20 @@ impl ConsoleDesktopApp {
                 this.stage_clipboard_attachments(&paste_pane_id, event.0.clone(), cx);
             },
         ));
+        let removed_pane_id = pane_id.to_string();
+        self._subscriptions.push(cx.subscribe(
+            &composer_input,
+            move |this, _input, event: &console_ui::input::ComposerImagesRemoved, cx| {
+                this.remove_images_by_number(&removed_pane_id, &event.0, cx);
+            },
+        ));
+        let preview_pane_id = pane_id.to_string();
+        self._subscriptions.push(cx.subscribe(
+            &composer_input,
+            move |this, _input, event: &console_ui::input::ComposerImagePreview, cx| {
+                this.preview_attachment(&preview_pane_id, event.0 - 1, cx);
+            },
+        ));
         let large_paste_pane_id = pane_id.to_string();
         self._subscriptions.push(cx.subscribe(
             &composer_input,

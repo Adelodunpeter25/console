@@ -81,9 +81,7 @@ impl ConsoleDesktopApp {
         }
 
         if !staged.is_empty() {
-            self.append_attachments_for_pane(pane_id, staged);
-            self.save_pane_draft(pane_id, cx);
-            cx.notify();
+            self.stage_images(pane_id, staged, cx);
         }
         if !paths.is_empty() {
             let entity = cx.entity().downgrade();
@@ -101,9 +99,7 @@ impl ConsoleDesktopApp {
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            this.append_attachments_for_pane(&pane_id, attachments);
-                            this.save_pane_draft(&pane_id, cx);
-                            cx.notify();
+                            this.stage_images(&pane_id, attachments, cx);
                         });
                     }
                 });
@@ -143,9 +139,7 @@ impl ConsoleDesktopApp {
             cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.append_attachments_for_pane(&pane_id, attachments);
-                        this.save_pane_draft(&pane_id, cx);
-                        cx.notify();
+                        this.stage_images(&pane_id, attachments, cx);
                     });
                 }
             });
@@ -181,11 +175,7 @@ impl ConsoleDesktopApp {
             cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| match attachment {
-                        Some(attachment) => {
-                            this.append_attachments_for_pane(&pane_id, vec![attachment]);
-                            this.save_pane_draft(&pane_id, cx);
-                            cx.notify();
-                        }
+                        Some(attachment) => this.stage_images(&pane_id, vec![attachment], cx),
                         None => this.set_error("That file is not a supported image.", cx),
                     });
                 }
@@ -215,8 +205,64 @@ impl ConsoleDesktopApp {
             data: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes),
             mime_type: "image/png".to_string(),
         };
-        self.append_attachments_for_pane(&pane_id, vec![attachment]);
-        self.save_pane_draft(&pane_id, cx);
+        self.stage_images(&pane_id, vec![attachment], cx);
+    }
+
+    /// Stage images and put an `[Image N]` chip for each in the prompt text,
+    /// so the model sees where in the message each picture belongs.
+    pub(crate) fn stage_images(
+        &mut self,
+        key: &str,
+        items: Vec<ImageAttachment>,
+        cx: &mut Context<Self>,
+    ) {
+        if items.is_empty() {
+            return;
+        }
+        let first = self.attachments_for_pane(key).len() + 1;
+        let count = items.len();
+        self.append_attachments_for_pane(key, items);
+        self.composer_for_attachment_key(key).update(cx, |input, cx| {
+            for number in first..first + count {
+                input.insert_image_chip(number, cx);
+            }
+        });
+        self.save_pane_draft(key, cx);
+        cx.notify();
+    }
+
+    fn composer_for_attachment_key(&self, key: &str) -> gpui::Entity<console_ui::ComposerInput> {
+        if key == super::floating_composer::FLOATING_KEY {
+            self.floating_composer.input.clone()
+        } else {
+            self.composer_for_pane(key)
+        }
+    }
+
+    /// Drop the attachments whose chips an edit deleted (1-based numbers) and
+    /// renumber the chips left, so `[Image N]` keeps matching the Nth image.
+    pub(crate) fn remove_images_by_number(
+        &mut self,
+        key: &str,
+        removed: &[usize],
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(staged) = self.attachments.get_mut(key) {
+            super::types::rc_slice_edit(staged, |v| {
+                for &number in removed.iter().rev() {
+                    if number >= 1 && number <= v.len() {
+                        v.remove(number - 1);
+                    }
+                }
+            });
+            if staged.is_empty() {
+                self.attachments.remove(key);
+            }
+        }
+        let removed = removed.to_vec();
+        self.composer_for_attachment_key(key)
+            .update(cx, |input, cx| input.renumber_images(&removed, cx));
+        self.save_pane_draft(key, cx);
         cx.notify();
     }
 

@@ -465,6 +465,18 @@ impl ConsoleDesktopApp {
                 },
             ),
             cx.subscribe(
+                &composer_input,
+                |this, _input, event: &console_ui::input::ComposerImagesRemoved, cx| {
+                    this.remove_images_by_number("pane-main", &event.0, cx);
+                },
+            ),
+            cx.subscribe(
+                &composer_input,
+                |this, _input, event: &console_ui::input::ComposerImagePreview, cx| {
+                    this.preview_attachment("pane-main", event.0 - 1, cx);
+                },
+            ),
+            cx.subscribe(
                 &question_input,
                 |this, _input, event: &ComposerEvent, cx| match event {
                     // Typing is repainted by the input entity itself; a full
