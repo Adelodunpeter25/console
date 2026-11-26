@@ -14,12 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
-import androidx.compose.ui.graphics.StrokeCap
 import com.console.mobile.ui.theme.ConsoleMotion
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -100,7 +98,7 @@ fun ActionButton(
         horizontalArrangement = Arrangement.Center,
     ) {
         when {
-            loading -> CircularProgressIndicator(color = content, strokeWidth = 2.dp, strokeCap = StrokeCap.Round, modifier = Modifier.size(if (compact) 13.dp else 16.dp))
+            loading -> ExpressiveLoadingIndicator(color = content, modifier = Modifier.size(if (compact) 15.dp else 18.dp))
             icon != null -> Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(if (compact) 14.dp else 18.dp))
         }
         if (loading || icon != null) Spacer(Modifier.size(8.dp))
