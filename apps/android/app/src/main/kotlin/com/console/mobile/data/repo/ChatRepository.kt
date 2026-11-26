@@ -93,6 +93,7 @@ class ChatRepository(
             "$current$separator$quote"
         }
         setInput(sessionId, next)
+        chats.update(sessionId) { it.copy(focusRequest = it.focusRequest + 1) }
     }
 
     // --- Synced drafts -----------------------------------------------------

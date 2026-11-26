@@ -320,6 +320,7 @@ fun Composer(
     }
     LaunchedEffect(focusRequest) {
         if (focusRequest > 0) {
+            fieldValue = fieldValue.copy(selection = TextRange(fieldValue.text.length))
             wantsOpen = true
             // The chip row is removed in the same state update that bumps this
             // counter; request focus after that composition settles.
@@ -594,7 +595,8 @@ private fun ComposerInput(
     // expanded, growing to the same maximum as before as you type.
     val fieldMinHeight = androidx.compose.ui.unit.lerp(lineDp, lineDp * 2, expansion)
     val fieldMaxHeight = androidx.compose.ui.unit.lerp(lineDp, maxOf(80.dp, lineDp * 2), expansion)
-    // Collapsed, the send button sits at the end of the same row, so text must stop short of it.
+    // Collapsed, the attach (+) button sits at the start and send sits at the end of the same row.
+    val fieldStartPad = androidx.compose.ui.unit.lerp(SEND_SIZE + 4.dp, 8.dp, expansion)
     val fieldEndPad = androidx.compose.ui.unit.lerp(SEND_SIZE + 4.dp, 8.dp, expansion)
     // Pill when collapsed, the rounded rect when expanded; radii larger than half
     // the height are clamped, so 26dp reads as a full pill at any font scale.
@@ -621,7 +623,7 @@ private fun ComposerInput(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 8.dp, end = fieldEndPad, top = fieldVPad, bottom = fieldVPad)
+                .padding(start = fieldStartPad, end = fieldEndPad, top = fieldVPad, bottom = fieldVPad)
                 .heightIn(min = fieldMinHeight, max = fieldMaxHeight)
                 .onGloballyPositioned { fieldHeightPx = it.size.height }
                 .clipToBounds(),
@@ -716,19 +718,15 @@ private fun ComposerInput(
                 }
             }
         }
-            // Attach and the chips only exist once expanded; the send button below is
-            // the one control that is always there, so it lives outside this row.
+            // Chips only exist once expanded; attach (+) and send/mic are pinned
+            // to the bottom corners so they stay visible when collapsed too.
             Collapsible(progress = expansion, modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(
-                        modifier = Modifier.size(SEND_SIZE).clip(CircleShape).clickable(onClickLabel = "Attach image", onClick = attach),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(20.dp))
-                    }
+                    // Reserves the slot the pinned attach (+) button floats over.
+                    Spacer(Modifier.size(SEND_SIZE))
                     // Fills the gap so the chips stay clear of the pinned mic and
                     // send buttons; the model chip truncates rather than pushing
                     // anything off a narrow screen.
@@ -756,6 +754,21 @@ private fun ComposerInput(
         // rides its bottom edge, so it slides into place with no separate animation.
         // The mic pins just left of send in BOTH states — never floating over
         // the model picker (which is pushed aside by the row's reservations).
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .size(SEND_SIZE)
+                .clip(CircleShape)
+                .clickable(onClickLabel = "Attach image", onClick = attach),
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.material3.Icon(
+                TablerIcons.Outline.Plus,
+                contentDescription = "Attach",
+                tint = NewTheme.TextSecondary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
         DictationButton(
                 enabled = dictationEnabled,
                 recording = dictationRecording,
