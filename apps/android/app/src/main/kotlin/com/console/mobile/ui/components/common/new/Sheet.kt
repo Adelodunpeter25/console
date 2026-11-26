@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -98,6 +99,7 @@ fun OptionRow(
     selected: Boolean = false,
     monoSubtitle: Boolean = false,
     leading: (@Composable () -> Unit)? = null,
+    titleBadge: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
@@ -110,7 +112,20 @@ fun OptionRow(
             Spacer(modifier = Modifier.size(14.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    title,
+                    color = NewTheme.TextPrimary,
+                    fontSize = 17.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (titleBadge != null) titleBadge()
+            }
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     subtitle, color = NewTheme.TextMuted, fontSize = if (monoSubtitle) 12.sp else 13.sp,

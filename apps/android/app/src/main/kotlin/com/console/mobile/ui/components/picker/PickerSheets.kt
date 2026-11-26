@@ -69,6 +69,7 @@ import com.console.mobile.ui.components.common.new.OptionRow
 import com.console.mobile.ui.components.common.new.SearchInput
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.TabPill
+import com.console.mobile.ui.components.common.new.TintPill
 import com.console.mobile.ui.components.common.new.LoadingState
 import com.console.mobile.ui.theme.NewTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -344,11 +345,12 @@ fun ModelPickerSheet(
                     (providerState.loadingFavorites || anyModelLoading || bootstrapping) && favoriteEntries.isEmpty() -> LoadingState()
                     visibleFavorites.isEmpty() -> ModelPlaceholder(if (search.isNotEmpty()) "No matching favorites" else "No favorites yet — tap a star to pin a model")
                     else -> ModelListCard(visibleFavorites, key = { favoriteKey(it.provider, it.model.id) }) { entry ->
+                        val isSelected = entry.model.id == selectedModel && entry.provider == selectedProvider
                         OptionRow(
                             title = formatModelName(entry.model.id),
                             // Provider is not shown as a tab here, so it belongs on the row (desktop parity).
                             subtitle = "${entry.providerLabel} · ${formatContextWindow(entry.model.context_window)} context",
-                            selected = entry.model.id == selectedModel && entry.provider == selectedProvider,
+                            titleBadge = if (isSelected) { { TintPill("Active", NewTheme.Accent) } } else null,
                             trailing = { starFor(entry.provider, entry.model.id) },
                         ) { onSelect(entry.model.id, entry.provider) }
                     }
@@ -363,12 +365,13 @@ fun ModelPickerSheet(
                     filtered.isEmpty() -> ModelPlaceholder(if (search.isNotEmpty()) "No matching models found" else "No models available")
                     else -> ModelListCard(filtered.take(100), key = { it.id }) { m ->
                         val providerId = pageProvider.orEmpty()
+                        val isSelected = m.id == selectedModel
                         OptionRow(
                             title = formatModelName(m.id),
                             // The formatted name is already the row title, so the id under it
                             // repeated itself — the context window is the useful second line.
                             subtitle = "${formatContextWindow(m.context_window)} context",
-                            selected = m.id == selectedModel,
+                            titleBadge = if (isSelected) { { TintPill("Active", NewTheme.Accent) } } else null,
                             trailing = { starFor(providerId, m.id) },
                         ) { onSelect(m.id, pageProvider) }
                     }
