@@ -15,11 +15,9 @@ import com.console.mobile.ui.components.common.new.OverflowMenuItem
 import com.console.mobile.ui.components.common.new.PageHeader
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.BrandGit
-import io.github.lyxnx.compose.ui.tablericons.outline.DeviceDesktop
 import io.github.lyxnx.compose.ui.tablericons.outline.DeviceMobile
 import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
 import io.github.lyxnx.compose.ui.tablericons.outline.Folder
-import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Rocket
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 
@@ -57,14 +55,6 @@ internal fun ChatHeader(
                             onOpenChanges()
                         },
                     )
-                    OverflowMenuItem(
-                        label = "Open ports",
-                        icon = TablerIcons.Outline.PlugConnected,
-                        onClick = {
-                            overflowMenu = false
-                            onOpenPorts()
-                        },
-                    )
                     if (scriptsAvailable) {
                         OverflowMenuItem(
                             label = "Run scripts",
@@ -89,14 +79,6 @@ internal fun ChatHeader(
                         onClick = {
                             overflowMenu = false
                             onOpenTerminal()
-                        },
-                    )
-                    OverflowMenuItem(
-                        label = "Open computer",
-                        icon = TablerIcons.Outline.DeviceDesktop,
-                        onClick = {
-                            overflowMenu = false
-                            onOpenComputer()
                         },
                     )
                 }
