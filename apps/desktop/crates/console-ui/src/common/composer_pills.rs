@@ -31,10 +31,10 @@ pub(crate) type ActionHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'stat
 /// Every pill in the row, status and suggestion alike, is this tall so they
 /// read as one set and match the 31px scroll controls.
 const PILL_HEIGHT: f32 = 31.0;
-/// The changed-files ring: 16px with a 2px stroke, gaps and minimum arcs in
+/// The changed-files ring: 16px with a 2.5px stroke, gaps and minimum arcs in
 /// fractions of the circle so a small share of either side stays visible.
 const CHANGES_RING_SIZE: f32 = 16.0;
-const CHANGES_RING_STROKE: f32 = 2.0;
+const CHANGES_RING_STROKE: f32 = 2.5;
 const CHANGES_RING_GAP: f32 = 0.06;
 const CHANGES_RING_MIN: f32 = 0.06;
 /// A suggestion chip truncates at this width; hovering it floats an identical
