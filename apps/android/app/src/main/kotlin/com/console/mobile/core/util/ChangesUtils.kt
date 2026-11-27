@@ -4,7 +4,7 @@ import console.v1.SessionFileChange
 
 sealed interface ChangesRow {
     data class Folder(val key: String, val name: String, val additions: Int, val deletions: Int, val count: Int) : ChangesRow
-    data class File(val key: String, val path: String, val name: String, val rel: String, val status: String, val additions: Int, val deletions: Int, val reviewed: Boolean = false, val turnIndex: Int = 0) : ChangesRow
+    data class File(val key: String, val path: String, val name: String, val rel: String, val status: String, val additions: Int, val deletions: Int, val turnIndex: Int = 0) : ChangesRow
 }
 
 fun dirOf(path: String): String {
@@ -105,7 +105,7 @@ fun buildRows(files: List<SessionFileChange>, collapsed: Set<String>, repoPath: 
         out.add(ChangesRow.Folder("dir:$dir", dir, fs.sumOf { it.additions }, fs.sumOf { it.deletions }, fs.size))
         if (collapsed.contains(dir)) continue
         for (f in fs.sortedBy { it.path }) {
-            out.add(ChangesRow.File("file:${f.path}", f.path, baseOf(f.path), stripRepoPrefix(f.path, repoPath), f.status, f.additions, f.deletions, f.reviewed, f.turn_index))
+            out.add(ChangesRow.File("file:${f.path}", f.path, baseOf(f.path), stripRepoPrefix(f.path, repoPath), f.status, f.additions, f.deletions, f.turn_index))
         }
     }
     return out
