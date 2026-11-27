@@ -37,11 +37,11 @@ const CHANGES_RING_SIZE: f32 = 16.0;
 const CHANGES_RING_STROKE: f32 = 2.0;
 const CHANGES_RING_GAP: f32 = 0.06;
 const CHANGES_RING_MIN: f32 = 0.06;
-/// A suggestion chip truncates at this width; hovering it floats a wrapped
-/// copy of the full text over the chip, growing upward, so nothing in the row
-/// shifts or needs scrolling.
+/// A suggestion chip truncates at this width; hovering it floats an identical
+/// chip over it that extends to the right to show more of the text, so nothing
+/// in the row shifts or needs scrolling.
 const SUGGESTION_COLLAPSED_WIDTH: f32 = 260.0;
-const SUGGESTION_EXPANDED_MAX_WIDTH: f32 = 480.0;
+const SUGGESTION_EXPANDED_MAX_WIDTH: f32 = 560.0;
 type PickHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 
 /// Follow-up prompts that fill the rest of the row and scroll sideways.
@@ -525,16 +525,13 @@ fn suggestion_pill(
         let full = div()
             .min_w(chip.size.width)
             .max_w(px(SUGGESTION_EXPANDED_MAX_WIDTH))
-            .min_h(px(PILL_HEIGHT))
+            .h(px(PILL_HEIGHT))
             .flex()
-            .items_start()
+            .items_center()
             .gap(px(7.0))
             .pl(px(4.0))
-            .pr(px(12.0))
-            .py(px(5.5))
-            .rounded(px(16.0))
-            .border_1()
-            .border_color(theme.border_strong)
+            .pr(px(10.0))
+            .rounded_full()
             .bg(theme.raised.blend(theme.overlay_strong))
             .child(
                 div()
@@ -550,16 +547,16 @@ fn suggestion_pill(
             .child(
                 div()
                     .min_w(px(0.0))
-                    .pt(px(2.0))
                     .text_size(px(12.0))
                     .font_weight(FontWeight::MEDIUM)
-                    .text_color(theme.text)
+                    .text_color(theme.text_secondary)
+                    .truncate()
                     .child(text.clone()),
             );
         deferred(
             anchored()
-                .position(chip.bottom_left())
-                .anchor(Anchor::BottomLeft)
+                .position(chip.origin)
+                .anchor(Anchor::TopLeft)
                 .snap_to_window_with_margin(px(8.0))
                 .child(full),
         )
