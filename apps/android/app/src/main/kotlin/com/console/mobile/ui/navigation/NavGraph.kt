@@ -3,10 +3,13 @@ package com.console.mobile.ui.navigation
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -20,6 +23,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -414,9 +418,16 @@ fun AppNavGraph() {
                 )
             }
         }
-        if (activeNavTab != null) {
+        var lastNavTab by remember { androidx.compose.runtime.mutableStateOf(FloatingNavTab.Chats) }
+        if (activeNavTab != null) lastNavTab = activeNavTab
+        AnimatedVisibility(
+            visible = activeNavTab != null,
+            enter = slideInVertically(PageSlideSpring) { it } + fadeIn(PageFadeSpring),
+            exit = slideOutVertically(PageSlideSpring) { it } + fadeOut(PageFadeSpring),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
             FloatingNavBar(
-                activeTab = activeNavTab,
+                activeTab = activeNavTab ?: lastNavTab,
                 onSelectTab = { tab ->
                     when (tab) {
                         FloatingNavTab.Chats -> {
@@ -443,7 +454,6 @@ fun AppNavGraph() {
                     AppContainer.appStateHolder.openChatSession(id)
                     navController.navigate(RouteChat) { launchSingleTop = true }
                 },
-                modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
         }
