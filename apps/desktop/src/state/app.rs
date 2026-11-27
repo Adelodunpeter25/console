@@ -640,7 +640,6 @@ impl ConsoleDesktopApp {
             file_tree_selected_path: None,
             session_subagents: std::collections::HashMap::new(),
             session_background_work: std::collections::HashMap::new(),
-            preview_tab: None,
             open_file_contents: std::collections::HashMap::new(),
             open_file_errors: std::collections::HashMap::new(),
             open_image_contents: std::collections::HashMap::new(),

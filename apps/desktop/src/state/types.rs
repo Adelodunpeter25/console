@@ -369,7 +369,6 @@ pub struct ConsoleDesktopApp {
     /// run stream and hydrated from the work list endpoint.
     pub session_background_work:
         std::collections::HashMap<String, Rc<[console_core::BackgroundWork]>>,
-    pub preview_tab: Option<(String, std::time::Instant)>,
     pub open_file_contents: std::collections::HashMap<String, String>,
     /// Why a file tab could not load, by path. A path in here is not asked
     /// for again until the tab is reopened, so a missing file shows its error

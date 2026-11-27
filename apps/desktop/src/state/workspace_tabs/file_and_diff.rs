@@ -163,14 +163,6 @@ impl ConsoleDesktopApp {
             .unwrap_or(&path)
             .to_string();
 
-        let preview_target = self.preview_tab.as_ref().and_then(|(tab_id, opened_at)| {
-            if opened_at.elapsed() < std::time::Duration::from_secs(600) {
-                Some(tab_id.clone())
-            } else {
-                None
-            }
-        });
-
         let tab = WorkspaceTabConfig::File {
             path: path.clone(),
             title,
@@ -178,21 +170,8 @@ impl ConsoleDesktopApp {
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
 
-        let new_tab_id = workspace_ops::replace_or_open_tab(
-            &mut self.workspace_root,
-            pane_id,
-            preview_target.as_deref(),
-            tab,
-        );
+        workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
 
-        let created_at = self
-            .preview_tab
-            .as_ref()
-            .filter(|(tid, _)| preview_target.as_deref() == Some(tid.as_str()))
-            .map(|(_, instant)| *instant)
-            .unwrap_or_else(std::time::Instant::now);
-
-        self.preview_tab = Some((new_tab_id, created_at));
         self.active_pane_id = Some(pane_id.to_string());
         self.file_tree_selected_path = Some(path.clone());
         self.trim_file_caches(cx);
@@ -540,14 +519,6 @@ impl ConsoleDesktopApp {
                 .unwrap_or(&path)
         );
 
-        let preview_target = self.preview_tab.as_ref().and_then(|(tab_id, opened_at)| {
-            if opened_at.elapsed() < std::time::Duration::from_secs(600) {
-                Some(tab_id.clone())
-            } else {
-                None
-            }
-        });
-
         let tab = WorkspaceTabConfig::Diff {
             path: path.clone(),
             title,
@@ -555,21 +526,8 @@ impl ConsoleDesktopApp {
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
 
-        let new_tab_id = workspace_ops::replace_or_open_tab(
-            &mut self.workspace_root,
-            pane_id,
-            preview_target.as_deref(),
-            tab,
-        );
+        workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
 
-        let created_at = self
-            .preview_tab
-            .as_ref()
-            .filter(|(tid, _)| preview_target.as_deref() == Some(tid.as_str()))
-            .map(|(_, instant)| *instant)
-            .unwrap_or_else(std::time::Instant::now);
-
-        self.preview_tab = Some((new_tab_id, created_at));
         self.active_pane_id = Some(pane_id.to_string());
         self.file_tree_selected_path = Some(path.clone());
         self.trim_file_caches(cx);
