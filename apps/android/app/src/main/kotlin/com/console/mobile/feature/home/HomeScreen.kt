@@ -64,8 +64,7 @@ import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.common.new.PageHeaderHeight
-import com.console.mobile.ui.components.common.new.SectionCard
-import com.console.mobile.ui.components.common.new.SectionDivider
+import androidx.compose.foundation.lazy.items
 import com.console.mobile.ui.components.common.new.hideKeyboardOnScroll
 import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionHeader
@@ -248,50 +247,61 @@ fun HomeScreen(
                         contentPadding = PaddingValues(top = PageHeaderHeight, bottom = 96.dp),
                         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).hideKeyboardOnScroll(),
                     ) {
-                        sections.forEachIndexed { sIdx, section ->
-                            val isSearchSection = section.projectId == "search"
-                            val sectionKey = sectionCollapseKey(section)
-                            val collapsed = !isSearchSection && sectionKey in collapsedSections
-                            item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
-                                SessionSectionHeader(
-                                    section = section,
-                                    isFirst = sIdx == 0,
-                                    collapsed = collapsed,
-                                    onToggle = { if (!isSearchSection) toggleSection(sectionKey) },
-                                    onNewChat = if (!isSearchSection && section.projectId != null && section.projectId != "pinned" && section.projectId != "settled") {
-                                        { startChat(section.projectId) }
-                                    } else {
-                                        null
-                                    },
+                        val isSearching = searchQuery.trim().isNotEmpty()
+                        val workspacesCollapsed = !isSearching && "workspaces" in collapsedSections
+                        if (!isSearching && sections.isNotEmpty()) {
+                            item(key = "workspaces-label") {
+                                WorkspacesLabel(
+                                    collapsed = workspacesCollapsed,
+                                    onToggle = { toggleSection("workspaces") },
                                 )
                             }
-                            if (!collapsed) {
-                                item(key = "card-${section.projectId ?: section.projectName}-$sIdx") {
-                                    SectionCard(modifier = Modifier.padding(bottom = 10.dp)) {
-                                        section.data.forEachIndexed { index, session ->
-                                            val draft = chatSessions[session.id]
-                                            val isDraft = draft != null && isDraftSession(draft)
-                                            val preview = if (isDraft) draftPreview(draft) else null
-                                            val status: SessionStatus? = sessionStatuses[session.id]
-                                                ?: SessionStatus.fromValue(session.status)
-                                            SessionRow(
-                                                session = session,
-                                                projectName = projectNameFor(session),
-                                                branch = branchFor(session),
-                                                status = status,
-                                                isDraft = isDraft,
-                                                draftPreview = preview,
-                                                hasAutomation = session.id in automationSessionIds,
-                                                hasWebhook = session.id in webhookSessionIds,
-                                                onClick = {
-                                                    scope.launch { AppContainer.sessionRepository.loadDetail(session.id) }
-                                                    AppContainer.appStateHolder.openChatSession(session.id)
-                                                    onOpenChat(session.id)
-                                                },
-                                                onLongPress = { activeSession = session },
-                                            )
-                                            if (index < section.data.lastIndex) SectionDivider()
-                                        }
+                        }
+                        if (!workspacesCollapsed) {
+                            sections.forEachIndexed { sIdx, section ->
+                                val isSearchSection = section.projectId == "search"
+                                val sectionKey = sectionCollapseKey(section)
+                                val collapsed = !isSearchSection && sectionKey in collapsedSections
+                                item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
+                                    SessionSectionHeader(
+                                        section = section,
+                                        isFirst = sIdx == 0,
+                                        collapsed = collapsed,
+                                        onToggle = { if (!isSearchSection) toggleSection(sectionKey) },
+                                        onNewChat = if (!isSearchSection && section.projectId != null && section.projectId != "pinned" && section.projectId != "settled") {
+                                            { startChat(section.projectId) }
+                                        } else {
+                                            null
+                                        },
+                                    )
+                                }
+                                if (!collapsed) {
+                                    items(
+                                        items = section.data,
+                                        key = { session -> "row-${section.projectId ?: section.projectName}-${session.id}" },
+                                    ) { session ->
+                                        val draft = chatSessions[session.id]
+                                        val isDraft = draft != null && isDraftSession(draft)
+                                        val preview = if (isDraft) draftPreview(draft) else null
+                                        val status: SessionStatus? = sessionStatuses[session.id]
+                                            ?: SessionStatus.fromValue(session.status)
+                                        SessionRow(
+                                            session = session,
+                                            projectName = projectNameFor(session),
+                                            branch = branchFor(session),
+                                            status = status,
+                                            isDraft = isDraft,
+                                            draftPreview = preview,
+                                            hasAutomation = session.id in automationSessionIds,
+                                            hasWebhook = session.id in webhookSessionIds,
+                                            indented = !isSearchSection,
+                                            onClick = {
+                                                scope.launch { AppContainer.sessionRepository.loadDetail(session.id) }
+                                                AppContainer.appStateHolder.openChatSession(session.id)
+                                                onOpenChat(session.id)
+                                            },
+                                            onLongPress = { activeSession = session },
+                                        )
                                     }
                                 }
                             }
