@@ -54,12 +54,15 @@ impl ConsoleDesktopApp {
     }
 
     /// Refetch the tree and git status and reconcile the watch streams with
-    /// what is on screen. Cheap to call: it does nothing unless a Files tab
-    /// is active, and drops the streams (closing their SSE connections) then.
+    /// what is on screen. Without an active Files tab only the git watcher
+    /// stays up, since it also keeps the branch pickers current.
     pub fn refresh_file_tree(&mut self, cx: &mut Context<Self>) {
         if !self.file_tree_tab_active() {
             self.file_tree_fs_watch = None;
-            self.file_tree_git_watch = None;
+            if self.active_pane_target().1.is_none() {
+                self.file_tree_git_watch = None;
+            }
+            self.ensure_file_tree_git_watcher(cx);
             return;
         }
         let (_, cwd) = self.active_pane_target();
