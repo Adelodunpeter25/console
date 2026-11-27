@@ -444,7 +444,7 @@ fn changes_pill(
             element.child(
                 div()
                     .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
+                    .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.success)
                     .child(format!("+{}", format_compact_count(summary.additions))),
             )
@@ -453,7 +453,7 @@ fn changes_pill(
             element.child(
                 div()
                     .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
+                    .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.danger)
                     .child(format!("-{}", format_compact_count(summary.deletions))),
             )
