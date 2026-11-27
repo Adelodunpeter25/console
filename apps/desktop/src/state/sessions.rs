@@ -1413,10 +1413,31 @@ impl ConsoleDesktopApp {
         ids
     }
 
-    /// Browser-tab style jump: 0..7 go to nth visible session, index 8 goes
-    /// to the last one when there are more than nine. No-op when empty.
+    fn project_id_for_session(&self, session: &SessionHeader) -> Option<&str> {
+        self.projects
+            .iter()
+            .find(|project| project.matches_session(session))
+            .map(|project| project.id.as_str())
+    }
+
+    /// Browser-tab style jump within the active session's project (or within
+    /// "No project"): 0..7 go to nth visible session, index 8 goes to the
+    /// last one when there are more than nine. No-op when empty.
     pub fn select_session_by_visible_index(&mut self, index: usize, cx: &mut Context<Self>) {
-        let ids = self.visible_session_ids();
+        let active_project = self
+            .selected_session_id
+            .as_deref()
+            .and_then(|id| self.sessions.iter().find(|s| s.id == id))
+            .map(|session| self.project_id_for_session(session));
+        let mut ids = self.visible_session_ids();
+        if let Some(active_project) = active_project {
+            ids.retain(|id| {
+                self.sessions
+                    .iter()
+                    .find(|s| &s.id == id)
+                    .is_some_and(|s| self.project_id_for_session(s) == active_project)
+            });
+        }
         if ids.is_empty() {
             return;
         }
