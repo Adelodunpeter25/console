@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -23,6 +25,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,6 +45,7 @@ import com.console.mobile.core.util.ChangesRow
 import com.console.mobile.core.util.buildRows
 import com.console.mobile.core.util.changeSummary
 import com.console.mobile.core.util.gitBadgeColor
+import com.console.mobile.core.util.parentLabel
 import com.console.mobile.core.util.statusLetter
 import com.console.mobile.feature.chat.DiffSummaryBadge
 import com.console.mobile.feature.chat.DiffView
@@ -52,8 +56,6 @@ import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.Note
 import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.common.new.PageHeaderHeight
-import com.console.mobile.ui.components.common.new.SectionCard
-import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.SectionSkeleton
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.Dispatchers
@@ -82,7 +84,6 @@ fun ChangesScreen(onBack: () -> Unit) {
     val files = sessionId?.let { sessionChanges[it].orEmpty() }.orEmpty()
     var loading by remember(sessionId) { mutableStateOf(true) }
     var error by remember(sessionId) { mutableStateOf<String?>(null) }
-    var collapsed by remember(sessionId) { mutableStateOf(setOf<String>()) }
     // Every file starts closed; this holds the paths the user has opened.
     var expanded by remember(sessionId) { mutableStateOf(setOf<String>()) }
     val diffCache = remember(sessionId) { mutableMapOf<String, String>() }
@@ -108,7 +109,7 @@ fun ChangesScreen(onBack: () -> Unit) {
     }
 
     val totals = changeSummary(files)
-    val rows = buildRows(files, collapsed, repoPath)
+    val rows = buildRows(files, repoPath)
     val allPaths = files.distinctBy { it.path }.map { it.path }
 
     Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
@@ -124,39 +125,25 @@ fun ChangesScreen(onBack: () -> Unit) {
                     .padding(horizontal = 16.dp)
                     .padding(top = PageHeaderHeight, bottom = 24.dp),
             ) {
-                // One card per folder: the folder is the heading, its files are the rows.
-                // The rows arrive flat (Folder, File, File, Folder, …), so regroup them.
-                var i = 0
-                while (i < rows.size) {
-                    val folder = rows[i] as? ChangesRow.Folder
-                    if (folder == null) { i++; continue }
-                    val folderFiles = mutableListOf<ChangesRow.File>()
-                    var j = i + 1
-                    while (j < rows.size && rows[j] is ChangesRow.File) { folderFiles += rows[j] as ChangesRow.File; j++ }
-                    val isCollapsed = collapsed.contains(folder.name)
-                    FolderHeading(
-                        name = folder.name, count = folder.count, collapsed = isCollapsed,
-                        additions = folder.additions, deletions = folder.deletions,
-                        onToggle = { collapsed = if (isCollapsed) collapsed - folder.name else collapsed + folder.name },
-                    )
-                    if (!isCollapsed && folderFiles.isNotEmpty()) {
-                        SectionCard {
-                            folderFiles.forEachIndexed { index, row ->
-                                val isOpen = expanded.contains(row.path)
-                                FileChangeRow(
-                                    row = row,
-                                    open = isOpen,
-                                    onToggle = { expanded = if (isOpen) expanded - row.path else expanded + row.path },
-                                )
-                                if (isOpen) {
-                                    val inline = files.firstOrNull { it.path == row.path && it.turn_index == row.turnIndex }?.diff_text
-                                    FileDiffBody(sessionId = sessionId, row = row, inlineDiff = inline, cache = diffCache)
-                                }
-                                if (index < folderFiles.lastIndex) SectionDivider(startInset = 56.dp)
-                            }
+                // Flat, borderless list: a soft surface with one line per file.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(NewTheme.CardRadius))
+                        .background(NewTheme.Card),
+                ) {
+                    rows.forEach { row ->
+                        val isOpen = expanded.contains(row.path)
+                        FileChangeRow(
+                            row = row,
+                            open = isOpen,
+                            onToggle = { expanded = if (isOpen) expanded - row.path else expanded + row.path },
+                        )
+                        if (isOpen) {
+                            val inline = files.firstOrNull { it.path == row.path && it.turn_index == row.turnIndex }?.diff_text
+                            FileDiffBody(sessionId = sessionId, row = row, inlineDiff = inline, cache = diffCache)
                         }
                     }
-                    i = j
                 }
             }
         }
@@ -181,37 +168,33 @@ fun ChangesScreen(onBack: () -> Unit) {
     }
 }
 
-/** A folder's heading above its card: chevron, accent name and count, and its +/- totals. */
+/** One line per file: status, icon, name with a dim parent-folder hint, +/-, chevron. */
 @Composable
-private fun FolderHeading(name: String, count: Int, collapsed: Boolean, additions: Int, deletions: Int, onToggle: () -> Unit) {
+private fun FileChangeRow(row: ChangesRow, open: Boolean, onToggle: () -> Unit) {
+    val hint = parentLabel(row.rel)
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(start = 8.dp, end = 12.dp, top = 22.dp, bottom = 8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 40.dp)
+            .clickable(onClick = onToggle)
+            .padding(start = 12.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(if (collapsed) TablerIcons.Outline.ChevronRight else TablerIcons.Outline.ChevronUp, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(16.dp))
-        Text("$name · $count", color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 6.dp))
-        DiffSummaryBadge(addedCount = additions, removedCount = deletions)
-    }
-}
-
-@Composable
-private fun FileChangeRow(row: ChangesRow.File, open: Boolean, onToggle: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(start = 18.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(statusLetter(row.status), color = gitBadgeColor(row.status), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(14.dp))
-        Box(modifier = Modifier.padding(start = 6.dp)) { FileIcon(filename = row.name, sizeDp = 20) }
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-            Text(row.name, color = NewTheme.TextPrimary, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(row.rel, color = NewTheme.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(statusLetter(row.status), color = gitBadgeColor(row.status), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(14.dp))
+        Box(modifier = Modifier.padding(start = 6.dp)) { FileIcon(filename = row.name, sizeDp = 18) }
+        // The name keeps priority; the folder hint gives way first.
+        Row(modifier = Modifier.weight(1f).padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(row.name, color = NewTheme.TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(2f, fill = false))
+            if (hint.isNotEmpty()) {
+                Text(hint, color = NewTheme.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).padding(start = 7.dp))
+            }
         }
         DiffSummaryBadge(addedCount = row.additions, removedCount = row.deletions)
         Icon(
             if (open) TablerIcons.Outline.ChevronDown else TablerIcons.Outline.ChevronRight,
             contentDescription = if (open) "Collapse" else "Expand",
             tint = NewTheme.TextMuted,
-            modifier = Modifier.padding(start = 8.dp).size(18.dp),
+            modifier = Modifier.padding(start = 6.dp).size(16.dp),
         )
     }
 }
@@ -222,7 +205,7 @@ private fun FileChangeRow(row: ChangesRow.File, open: Boolean, onToggle: () -> U
  * Uses the diff the changes list already carried, else fetches it once.
  */
 @Composable
-private fun FileDiffBody(sessionId: String, row: ChangesRow.File, inlineDiff: String?, cache: MutableMap<String, String>) {
+private fun FileDiffBody(sessionId: String, row: ChangesRow, inlineDiff: String?, cache: MutableMap<String, String>) {
     var text by remember(row.path) { mutableStateOf(inlineDiff?.takeIf { it.isNotEmpty() } ?: cache[row.path]) }
     var loading by remember(row.path) { mutableStateOf(text == null) }
     var error by remember(row.path) { mutableStateOf<String?>(null) }

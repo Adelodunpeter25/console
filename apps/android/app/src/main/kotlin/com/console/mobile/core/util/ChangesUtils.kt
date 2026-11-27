@@ -2,10 +2,17 @@ package com.console.mobile.core.util
 
 import console.v1.SessionFileChange
 
-sealed interface ChangesRow {
-    data class Folder(val key: String, val name: String, val additions: Int, val deletions: Int, val count: Int) : ChangesRow
-    data class File(val key: String, val path: String, val name: String, val rel: String, val status: String, val additions: Int, val deletions: Int, val turnIndex: Int = 0) : ChangesRow
-}
+/** One changed file in the flat changes list. */
+data class ChangesRow(
+    val key: String,
+    val path: String,
+    val name: String,
+    val rel: String,
+    val status: String,
+    val additions: Int,
+    val deletions: Int,
+    val turnIndex: Int = 0,
+)
 
 fun dirOf(path: String): String {
     val i = path.lastIndexOf('/')
@@ -89,24 +96,22 @@ fun splitRing(weights: List<Float>, gap: Float, min: Float): List<RingSpan> {
     return spans
 }
 
-fun buildRows(files: List<SessionFileChange>, collapsed: Set<String>, repoPath: String?): List<ChangesRow> {
-    // One row per file across the whole session: the server returns rows
-    // newest-first, so keeping the first for a path shows the latest turn's
-    // diff — the same choice the desktop's All Turns scope makes.
-    val unique = files.distinctBy { it.path }
-    val groups = linkedMapOf<String, MutableList<SessionFileChange>>()
-    for (c in unique) {
-        val d = dirOf(c.path).ifEmpty { "." }
-        groups.getOrPut(d) { mutableListOf() }.add(c)
-    }
-    val out = mutableListOf<ChangesRow>()
-    for (dir in groups.keys.sorted()) {
-        val fs = groups[dir]!!
-        out.add(ChangesRow.Folder("dir:$dir", dir, fs.sumOf { it.additions }, fs.sumOf { it.deletions }, fs.size))
-        if (collapsed.contains(dir)) continue
-        for (f in fs.sortedBy { it.path }) {
-            out.add(ChangesRow.File("file:${f.path}", f.path, baseOf(f.path), stripRepoPrefix(f.path, repoPath), f.status, f.additions, f.deletions, f.turn_index))
+/**
+ * The changes list: one row per file across the whole session, flat and
+ * sorted by path so files from one folder still sit together. The server
+ * returns rows newest-first, so keeping the first for a path shows the
+ * latest turn's diff, the same choice the desktop's All Turns scope makes.
+ */
+fun buildRows(files: List<SessionFileChange>, repoPath: String?): List<ChangesRow> =
+    files.distinctBy { it.path }
+        .sortedBy { it.path }
+        .map { f ->
+            ChangesRow("file:${f.path}", f.path, baseOf(f.path), stripRepoPrefix(f.path, repoPath), f.status, f.additions, f.deletions, f.turn_index)
         }
-    }
-    return out
+
+/** The last two folders of a repo-relative path, for the dim hint beside a file name; "" at the repo root. */
+fun parentLabel(rel: String): String {
+    val dir = dirOf(rel)
+    if (dir.isEmpty()) return ""
+    return dir.split('/').takeLast(2).joinToString("/") + "/"
 }
