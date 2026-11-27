@@ -107,7 +107,7 @@ internal fun SessionRow(
                     Text(
                         "Generating title" + ".".repeat(dots),
                         color = NewTheme.TextMuted,
-                        fontSize = 15.sp,
+                        fontSize = 17.sp,
                         fontStyle = FontStyle.Italic,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -117,7 +117,7 @@ internal fun SessionRow(
                     Text(
                         session.title,
                         color = NewTheme.TextPrimary,
-                        fontSize = 15.sp,
+                        fontSize = 17.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
@@ -152,7 +152,7 @@ internal fun SessionRow(
                 "provisioning" -> Text(
                     "Creating worktree…",
                     color = NewTheme.Accent,
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
@@ -160,7 +160,7 @@ internal fun SessionRow(
                 "failed" -> Text(
                     "Worktree failed",
                     color = NewTheme.Danger,
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
@@ -169,7 +169,7 @@ internal fun SessionRow(
                     Text(
                         draftPreview,
                         color = NewTheme.Warning,
-                        fontSize = 12.sp,
+                        fontSize = 14.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp),
@@ -179,7 +179,7 @@ internal fun SessionRow(
         }
 
         val ts = if (session.updated_at > 0) session.updated_at else session.created_at
-        Text(shortRelative(ts), color = NewTheme.TextMuted, fontSize = 12.sp)
+        Text(shortRelative(ts), color = NewTheme.TextMuted, fontSize = 14.sp)
     }
 }
 

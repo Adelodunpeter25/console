@@ -62,7 +62,7 @@ internal fun WorkspacesLabel(
         Text(
             "My workspaces",
             color = NewTheme.TextMuted,
-            fontSize = 13.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
         )
         Icon(
@@ -129,7 +129,7 @@ internal fun SessionSectionHeader(
             Text(
                 section.projectName,
                 color = if (isSearch) NewTheme.TextPrimary else NewTheme.TextSecondary,
-                fontSize = 15.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
