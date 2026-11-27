@@ -69,8 +69,7 @@ private fun SkeletonSessionRow() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 10.dp)
-            .padding(horizontal = 10.dp, vertical = 11.dp),
+            .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(

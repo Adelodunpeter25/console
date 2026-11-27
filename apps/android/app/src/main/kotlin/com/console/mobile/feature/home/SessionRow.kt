@@ -59,10 +59,9 @@ internal fun SessionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = if (indented) 10.dp else 0.dp)
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongPress)
-            .padding(horizontal = 10.dp, vertical = 11.dp),
+            .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Leading status mark, matching desktop's sidebar row.
