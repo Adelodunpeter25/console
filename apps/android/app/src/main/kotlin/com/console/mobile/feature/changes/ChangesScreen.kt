@@ -161,7 +161,7 @@ private fun FileChangeRow(row: ChangesRow, open: Boolean, onToggle: () -> Unit) 
             .fillMaxWidth()
             .heightIn(min = 40.dp)
             .clickable(onClick = onToggle)
-            .padding(start = 16.dp, end = 14.dp),
+            .padding(start = 10.dp, end = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(statusLetter(row.status), color = gitBadgeColor(row.status), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(14.dp))
