@@ -283,8 +283,8 @@ private fun ChangesPill(changes: ChangeTotals, onClick: () -> Unit) {
             .padding(start = 11.dp, end = 13.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Canvas(modifier = Modifier.size(17.dp)) {
-            val stroke = 3.dp.toPx()
+        Canvas(modifier = Modifier.size(16.dp)) {
+            val stroke = 2.dp.toPx()
             val inset = stroke / 2
             val arcSize = Size(size.width - stroke, size.height - stroke)
             listOf(addColor, delColor).zip(spans).forEach { (color, span) ->
@@ -299,7 +299,7 @@ private fun ChangesPill(changes: ChangeTotals, onClick: () -> Unit) {
                 color = addColor,
                 fontSize = 13.sp,
                 fontFamily = ConsoleMonoFamily,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 modifier = Modifier.padding(start = 8.dp),
             )
@@ -310,7 +310,7 @@ private fun ChangesPill(changes: ChangeTotals, onClick: () -> Unit) {
                 color = delColor,
                 fontSize = 13.sp,
                 fontFamily = ConsoleMonoFamily,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 modifier = Modifier.padding(start = 6.dp),
             )
