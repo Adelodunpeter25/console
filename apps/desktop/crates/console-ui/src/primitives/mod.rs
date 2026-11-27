@@ -10,6 +10,7 @@ pub mod file_icons;
 pub mod icons;
 pub mod menu;
 pub mod motion;
+pub mod ring;
 pub mod scrollbar;
 pub mod text_field;
 pub mod tooltip;
@@ -33,6 +34,7 @@ pub use menu::{
     ContextMenuHandle, MENU_CONTEXT, MenuAlign, MenuItem, dropdown_menu, popover, toggle_dropdown,
     toggle_popover,
 };
+pub use ring::{RingArc, ring_chart, split_arcs};
 pub use scrollbar::ScrollbarState;
 pub use text_field::TextField;
 pub use transparency::transparency_grid;

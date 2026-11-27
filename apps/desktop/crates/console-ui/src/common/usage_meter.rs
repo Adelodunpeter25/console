@@ -5,12 +5,11 @@
 use console_core::{ContextSnapshot, UsageLimit, UsageReport};
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, Hsla, InteractiveElement, IntoElement, ParentElement, PathBuilder, RenderOnce, Styled,
-    Window, canvas, div, point, px,
+    App, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px,
 };
 
 use crate::common::UsagePanel;
-use crate::primitives::{ContextMenuHandle, MenuAlign, popover};
+use crate::primitives::{ContextMenuHandle, MenuAlign, RingArc, popover, ring_chart};
 use crate::theme::Theme;
 
 #[derive(IntoElement)]
@@ -98,73 +97,18 @@ impl RenderOnce for UsageMeter {
 /// The circular progress gauge glyph: a 13px ring whose arc fills clockwise
 /// from 12 o'clock, over a faint track ring.
 fn circular_progress_gauge(percent: Option<f64>, track: Hsla, fill: Hsla) -> impl IntoElement {
-    const SIZE: f32 = 13.0;
-    const STROKE: f32 = 2.5;
-
-    canvas(
-        |_, _, _| (),
-        move |bounds, _, window, _| {
-            let center = bounds.center();
-            let radius = px((SIZE - STROKE) / 2.0);
-
-            // A full circle is two 180° arcs
-            let full_circle = |builder: &mut PathBuilder| {
-                builder.move_to(point(center.x + radius, center.y));
-                builder.arc_to(
-                    point(radius, radius),
-                    px(0.0),
-                    false,
-                    true,
-                    point(center.x - radius, center.y),
-                );
-                builder.arc_to(
-                    point(radius, radius),
-                    px(0.0),
-                    false,
-                    true,
-                    point(center.x + radius, center.y),
-                );
-                builder.close();
-            };
-
-            let mut track_builder = PathBuilder::stroke(px(STROKE));
-            full_circle(&mut track_builder);
-            if let Ok(path) = track_builder.build() {
-                window.paint_path(path, track);
-            }
-
-            let Some(percent) = percent else {
-                return;
-            };
-
-            // Keep a visible sliver for a nearly-empty context
+    // Keep a visible sliver for a nearly-empty context
+    let arcs = percent
+        .map(|percent| {
             let fraction = ((percent / 100.0) as f32).clamp(0.0, 1.0).max(0.05);
-            let mut arc_builder = PathBuilder::stroke(px(STROKE));
-            if fraction >= 0.999 {
-                full_circle(&mut arc_builder);
-            } else {
-                let start = -std::f32::consts::FRAC_PI_2;
-                let angle = start + fraction * std::f32::consts::TAU;
-                arc_builder.move_to(point(center.x, center.y - radius));
-                arc_builder.arc_to(
-                    point(radius, radius),
-                    px(0.0),
-                    fraction > 0.5,
-                    true,
-                    point(
-                        center.x + radius * angle.cos(),
-                        center.y + radius * angle.sin(),
-                    ),
-                );
-            }
-            if let Ok(path) = arc_builder.build() {
-                window.paint_path(path, fill);
-            }
-        },
-    )
-    .w(px(SIZE))
-    .h(px(SIZE))
-    .flex_none()
+            vec![RingArc {
+                start: 0.0,
+                len: fraction,
+                color: fill,
+            }]
+        })
+        .unwrap_or_default();
+    ring_chart(13.0, 2.5, Some(track), arcs)
 }
 
 fn resolve_used_percent(limit: &UsageLimit) -> f64 {

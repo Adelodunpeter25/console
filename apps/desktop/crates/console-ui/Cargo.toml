@@ -98,6 +98,14 @@ name = "time_ago_test"
 path = "tests/time_ago_test.rs"
 
 [[test]]
+name = "ring_split_test"
+path = "tests/primitives/ring_split_test.rs"
+
+[[test]]
+name = "compact_count_test"
+path = "tests/utils/compact_count_test.rs"
+
+[[test]]
 name = "workspace_test"
 path = "tests/workspace/workspace_test.rs"
 

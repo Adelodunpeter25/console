@@ -20,8 +20,10 @@ use crate::common::pill_popovers::{
     automations_popover, shells_popover, subagents_popover, tasks_popover,
 };
 use crate::primitives::menu::{ContextMenuHandle, MenuAlign, MenuItem, context_menu, popover};
-use crate::primitives::{IconName, app_icon};
+use crate::primitives::tooltip::Tooltip;
+use crate::primitives::{IconName, RingArc, app_icon, ring_chart, split_arcs};
 use crate::theme::Theme;
+use crate::utils::format_compact_count;
 
 type ClickHandler = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
 pub(crate) type StopHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
@@ -29,6 +31,12 @@ pub(crate) type ActionHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'stat
 /// Every pill in the row, status and suggestion alike, is this tall so they
 /// read as one set and match the 31px scroll controls.
 const PILL_HEIGHT: f32 = 31.0;
+/// The changed-files ring: 16px with a 3px stroke, gaps and minimum arcs in
+/// fractions of the circle so a small share of either side stays visible.
+const CHANGES_RING_SIZE: f32 = 16.0;
+const CHANGES_RING_STROKE: f32 = 3.0;
+const CHANGES_RING_GAP: f32 = 0.06;
+const CHANGES_RING_MIN: f32 = 0.06;
 /// Hover widens a suggestion chip so its full text is readable.
 const SUGGESTION_COLLAPSED_WIDTH: f32 = 260.0;
 const SUGGESTION_EXPANDED_WIDTH: f32 = 420.0;
@@ -371,22 +379,42 @@ pub fn composer_pills(
     )
 }
 
-/// The changed-files pill: icon, "N files changed", and the colored `+N -N`
-/// totals. Clicking opens the changes review for the session.
+/// The changed-files pill: a ring split by lines added and removed, then the
+/// compact `+N -N` totals. The file count is in the tooltip. Clicking opens
+/// the changes review for the session.
 fn changes_pill(
     id: String,
     summary: ChangesSummary,
     on_click: Option<ClickHandler>,
     theme: Theme,
 ) -> Stateful<Div> {
+    let tooltip = format!(
+        "{} file{} changed, +{} -{}",
+        summary.files,
+        if summary.files == 1 { "" } else { "s" },
+        summary.additions,
+        summary.deletions
+    );
+    let spans = split_arcs(
+        &[summary.additions as f32, summary.deletions as f32],
+        CHANGES_RING_GAP,
+        CHANGES_RING_MIN,
+    );
+    let arcs = [theme.success, theme.danger]
+        .into_iter()
+        .zip(spans)
+        .map(|(color, (start, len))| RingArc { start, len, color })
+        .collect::<Vec<_>>();
+
     div()
         .id(ElementId::Name(id.into()))
         .flex_none()
         .flex()
         .items_center()
-        .gap(px(6.0))
+        .gap(px(7.0))
         .h(px(PILL_HEIGHT))
-        .px(px(10.0))
+        .pl(px(9.0))
+        .pr(px(11.0))
         .rounded_full()
         .bg(theme.raised)
         .cursor_pointer()
@@ -394,37 +422,32 @@ fn changes_pill(
         // meant to sit on a surface, so blend it onto raised.
         .hover(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
         .active(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
+        .tooltip(Tooltip::text(tooltip))
         .when_some(on_click, |element, handler| {
             element.on_click(move |_, window, cx| (handler)(window, cx))
         })
-        .child(app_icon(IconName::FileDiff, 13.0, theme.text_tertiary))
-        .child(
-            div()
-                .text_size(px(12.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(theme.text_secondary)
-                .child(format!(
-                    "{} file{} changed",
-                    summary.files,
-                    if summary.files == 1 { "" } else { "s" }
-                )),
-        )
+        .child(ring_chart(
+            CHANGES_RING_SIZE,
+            CHANGES_RING_STROKE,
+            None,
+            arcs,
+        ))
         .when(summary.additions > 0, |element| {
             element.child(
                 div()
-                    .text_size(px(12.0))
+                    .text_size(px(12.5))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.success)
-                    .child(format!("+{}", summary.additions)),
+                    .child(format!("+{}", format_compact_count(summary.additions))),
             )
         })
         .when(summary.deletions > 0, |element| {
             element.child(
                 div()
-                    .text_size(px(12.0))
+                    .text_size(px(12.5))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.danger)
-                    .child(format!("-{}", summary.deletions)),
+                    .child(format!("-{}", format_compact_count(summary.deletions))),
             )
         })
 }
