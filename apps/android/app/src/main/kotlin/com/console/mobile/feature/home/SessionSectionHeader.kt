@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,7 +102,7 @@ internal fun SessionSectionHeader(
             .clip(shape)
             .then(
                 if (!isSearch) {
-                    Modifier.background(NewTheme.SurfaceContainerLow)
+                    Modifier.background(Color(0xFF111113))
                 } else {
                     Modifier
                 }

@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.console.mobile.ui.components.common.new.SkeletonBlock
 import com.console.mobile.ui.theme.NewTheme
@@ -43,7 +44,7 @@ internal fun HomeSkeleton(sections: List<Int> = listOf(3, 2)) {
                     .padding(top = if (sIdx == 0) 4.dp else 10.dp, bottom = 4.dp)
                     .height(40.dp)
                     .clip(headerShape)
-                    .background(NewTheme.SurfaceContainerLow)
+                    .background(Color(0xFF111113))
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
