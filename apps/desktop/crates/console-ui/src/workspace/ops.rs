@@ -49,6 +49,20 @@ pub fn active_leaf<'a>(
     }
 }
 
+/// Whether a changes review for [session_id] is the active tab of some pane,
+/// so it is on screen right now. A review tab left open behind another tab in
+/// its pane does not count.
+pub fn changes_review_visible(root: &WorkspaceNode, session_id: &str) -> bool {
+    root.leaves().into_iter().any(|leaf| {
+        leaf.tabs.iter().any(|tab| {
+            matches!(
+                tab,
+                WorkspaceTabConfig::ChangesReview { session_id: sid, .. } if sid == session_id
+            ) && leaf.active_tab_id.as_deref() == Some(tab.id().as_str())
+        })
+    })
+}
+
 /// Open a tab in the given pane (creating the pane when needed). If the tab
 /// is already open there, it is only activated.
 pub fn open_tab(root: &mut WorkspaceNode, pane_id: &str, tab: console_core::WorkspaceTabConfig) {

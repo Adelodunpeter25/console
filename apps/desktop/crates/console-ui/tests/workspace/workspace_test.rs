@@ -538,3 +538,57 @@ fn test_a_new_desk_starts_on_its_own_pane() {
     );
     assert!(desk_b.leaves()[0].tabs.is_empty());
 }
+
+fn chat_tab(session_id: &str) -> WorkspaceTabConfig {
+    WorkspaceTabConfig::Chat {
+        session_id: session_id.into(),
+        title: "Chat".into(),
+        provider: None,
+        project_id: None,
+        last_active_at_ms: None,
+    }
+}
+
+fn review_tab(session_id: &str) -> WorkspaceTabConfig {
+    WorkspaceTabConfig::ChangesReview {
+        session_id: session_id.into(),
+        scope: console_core::types::ChangesScope::AllTurns,
+        title: "Changes: All Turns".into(),
+        project_id: None,
+        last_active_at_ms: None,
+    }
+}
+
+#[test]
+fn changes_review_is_visible_only_while_it_is_the_active_tab() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(&mut root, "pane-main", chat_tab("s1"));
+    assert!(!ops::changes_review_visible(&root, "s1"));
+
+    ops::open_tab(&mut root, "pane-main", review_tab("s1"));
+    assert!(ops::changes_review_visible(&root, "s1"));
+
+    // Switching back to the chat leaves the review open but out of sight.
+    ops::open_tab(&mut root, "pane-main", chat_tab("s1"));
+    assert_eq!(root.leaves()[0].tabs.len(), 2);
+    assert!(!ops::changes_review_visible(&root, "s1"));
+}
+
+#[test]
+fn changes_review_visibility_is_per_session() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(&mut root, "pane-main", review_tab("s1"));
+
+    assert!(ops::changes_review_visible(&root, "s1"));
+    assert!(!ops::changes_review_visible(&root, "s2"));
+}
+
+#[test]
+fn changes_review_in_another_pane_counts_as_visible() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(&mut root, "pane-main", chat_tab("s1"));
+    ops::move_tab_to_horizontal_split(&mut root, None, "pane-main", review_tab("s1"), false)
+        .expect("split creates new pane");
+
+    assert!(ops::changes_review_visible(&root, "s1"));
+}

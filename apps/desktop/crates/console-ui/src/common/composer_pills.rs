@@ -31,10 +31,10 @@ pub(crate) type ActionHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'stat
 /// Every pill in the row, status and suggestion alike, is this tall so they
 /// read as one set and match the 31px scroll controls.
 const PILL_HEIGHT: f32 = 31.0;
-/// The changed-files ring: 16px with a 3px stroke, gaps and minimum arcs in
+/// The changed-files ring: 16px with a 2px stroke, gaps and minimum arcs in
 /// fractions of the circle so a small share of either side stays visible.
 const CHANGES_RING_SIZE: f32 = 16.0;
-const CHANGES_RING_STROKE: f32 = 3.0;
+const CHANGES_RING_STROKE: f32 = 2.0;
 const CHANGES_RING_GAP: f32 = 0.06;
 const CHANGES_RING_MIN: f32 = 0.06;
 /// Hover widens a suggestion chip so its full text is readable.
@@ -436,7 +436,7 @@ fn changes_pill(
             element.child(
                 div()
                     .text_size(px(12.5))
-                    .font_weight(FontWeight::SEMIBOLD)
+                    .font_weight(FontWeight::MEDIUM)
                     .text_color(theme.success)
                     .child(format!("+{}", format_compact_count(summary.additions))),
             )
@@ -445,7 +445,7 @@ fn changes_pill(
             element.child(
                 div()
                     .text_size(px(12.5))
-                    .font_weight(FontWeight::SEMIBOLD)
+                    .font_weight(FontWeight::MEDIUM)
                     .text_color(theme.danger)
                     .child(format!("-{}", format_compact_count(summary.deletions))),
             )

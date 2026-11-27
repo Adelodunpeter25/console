@@ -1010,7 +1010,15 @@ impl ConsoleDesktopApp {
 
         let pane_session_id = snapshot.session_id.clone();
         let selected_sid = pane_session_id.clone();
-        let changes_summary = pane_transcript.read(cx).changes_summary();
+        // The pill only opens the review, so it steps aside while that review
+        // is already on screen.
+        let changes_on_screen = pane_session_id.as_deref().is_some_and(|session_id| {
+            console_ui::workspace::ops::changes_review_visible(&self.workspace_root, session_id)
+        });
+        let changes_summary = pane_transcript
+            .read(cx)
+            .changes_summary()
+            .filter(|_| !changes_on_screen);
         let on_open_changes: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>> =
             pane_session_id.as_ref().map(|session_id| {
                 let entity = entity.clone();
