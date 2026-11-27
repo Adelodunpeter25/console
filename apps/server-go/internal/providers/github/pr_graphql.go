@@ -227,6 +227,7 @@ func FetchPRDetail(ctx context.Context, token, owner, repo string, number uint32
 						Author      *struct{ Login string }
 						State       string
 						SubmittedAt string
+						Body        string
 					} `json:"nodes"`
 				} `json:"reviews"`
 				Comments struct {
@@ -236,8 +237,8 @@ func FetchPRDetail(ctx context.Context, token, owner, repo string, number uint32
 						CreatedAt string
 					} `json:"nodes"`
 					PageInfo struct {
-						EndCursor   string
-						HasNextPage bool
+						StartCursor     string
+						HasPreviousPage bool
 					} `json:"pageInfo"`
 				} `json:"comments"`
 			} `json:"pullRequest"`
@@ -262,9 +263,9 @@ func FetchPRDetail(ctx context.Context, token, owner, repo string, number uint32
 						} }
 					}
 				} } }
-				reviews(last: 100) { nodes { author { login } state submittedAt } }
+				reviews(last: 100) { nodes { author { login } state submittedAt body } }
 				comments(last: 30) { nodes { author { login } body createdAt }
-					pageInfo { endCursor hasNextPage } }
+					pageInfo { startCursor hasPreviousPage } }
 			}
 		}
 	}`, prSummaryFields)
@@ -322,7 +323,7 @@ func FetchPRDetail(ctx context.Context, token, owner, repo string, number uint32
 	}
 	for _, r := range pr.Reviews.Nodes {
 		detail.Reviews = append(detail.Reviews, ReviewData{
-			Author: loginOf(r.Author), State: r.State, SubmittedAt: r.SubmittedAt,
+			Author: loginOf(r.Author), State: r.State, SubmittedAt: r.SubmittedAt, Body: r.Body,
 		})
 	}
 	for _, c := range pr.Comments.Nodes {
@@ -330,8 +331,8 @@ func FetchPRDetail(ctx context.Context, token, owner, repo string, number uint32
 			Author: loginOf(c.Author), Body: c.Body, CreatedAt: c.CreatedAt,
 		})
 	}
-	detail.CommentsCursor = pr.Comments.PageInfo.EndCursor
-	detail.CommentsHasMore = pr.Comments.PageInfo.HasNextPage
+	detail.CommentsCursor = pr.Comments.PageInfo.StartCursor
+	detail.CommentsHasMore = pr.Comments.PageInfo.HasPreviousPage
 	return detail, nil
 }
 

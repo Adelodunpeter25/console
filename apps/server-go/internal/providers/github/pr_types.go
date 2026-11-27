@@ -41,6 +41,7 @@ type ReviewData struct {
 	Author      string
 	State       string
 	SubmittedAt string
+	Body        string
 }
 
 // CommentData is one top-level issue comment.
@@ -48,6 +49,35 @@ type CommentData struct {
 	Author    string
 	Body      string
 	CreatedAt string
+}
+
+// CommentsPage is one page of top-level comments, oldest first. Cursor is
+// passed back as "before" to load the page older than this one.
+type CommentsPage struct {
+	Comments []CommentData
+	Cursor   string
+	HasMore  bool
+}
+
+// ThreadCommentData is one comment inside an inline review thread.
+type ThreadCommentData struct {
+	Author    string
+	Body      string
+	CreatedAt string
+}
+
+// ThreadData is an inline conversation anchored to a line of a changed file.
+type ThreadData struct {
+	ID         string
+	Path       string
+	Line       uint32
+	HasLine    bool
+	StartLine  uint32
+	HasStart   bool
+	Side       string // RIGHT | LEFT
+	IsResolved bool
+	IsOutdated bool
+	Comments   []ThreadCommentData
 }
 
 // DetailData is a PR's full read: the summary fields plus everything the

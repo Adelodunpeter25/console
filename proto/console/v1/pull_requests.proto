@@ -66,6 +66,8 @@ message PullRequestReview {
   string state = 2;
   // ISO 8601 timestamp.
   string submitted_at = 3;
+  // The review's summary text; empty for a bare approve or an inline-only review.
+  string body = 4;
 }
 
 message PullRequestComment {
@@ -77,6 +79,46 @@ message PullRequestComment {
 
 // One changed file of a PR, without its patch. Patches load one file at a
 // time through PullRequestFileDiffResponse.
+// One page of top-level discussion comments, oldest first.
+message PullRequestCommentsResponse {
+  repeated PullRequestComment comments = 1;
+  // Pass as `before` to load the page older than this one.
+  string cursor = 2;
+  // True when older comments exist.
+  bool has_more = 3;
+}
+
+// One comment inside an inline review thread.
+message PullRequestThreadComment {
+  string author = 1;
+  string body = 2;
+  // ISO 8601 timestamp.
+  string created_at = 3;
+}
+
+// An inline conversation anchored to a line of a changed file, with its
+// replies in order. The first comment starts the thread.
+message PullRequestThread {
+  string id = 1;
+  string path = 2;
+  // Line in the new file (right side) or old file (left side); absent when
+  // the thread is outdated and GitHub can no longer place it.
+  optional uint32 line = 3;
+  // First line of a multi-line comment; absent for a single line.
+  optional uint32 start_line = 4;
+  // RIGHT (added or unchanged lines) | LEFT (removed lines).
+  string side = 5;
+  bool is_resolved = 6;
+  // The code the thread was written on has since changed.
+  bool is_outdated = 7;
+  repeated PullRequestThreadComment comments = 8;
+}
+
+// Inline review threads, optionally for one file.
+message PullRequestThreadsResponse {
+  repeated PullRequestThread threads = 1;
+}
+
 message PullRequestFile {
   string filename = 1;
   // added | removed | modified | renamed | changed | copied
@@ -118,10 +160,13 @@ message PullRequestDetail {
 	repeated PullRequestCheck checks = 7;
 	// Latest review per reviewer.
 	repeated PullRequestReview reviews = 8;
-	// Last page of top-level comments (no inline review threads in v1).
+	// The newest page of top-level discussion comments, oldest first. Older
+	// ones load through GET .../comments?before=comments_cursor. Inline
+	// comments on files are separate: see PullRequestThreadsResponse.
 	repeated PullRequestComment comments = 9;
-	// More comments exist past this cursor when has_more is true.
+	// Pass as `before` to load the comments older than this page.
 	string comments_cursor = 10;
+	// True when older comments exist before comments_cursor.
 	bool comments_has_more = 11;
 }
 

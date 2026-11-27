@@ -155,8 +155,23 @@ const prDetailResponse = `{"data": {"repository": {"pullRequest": {
 	"mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN",
 	"reviews": {"nodes": [{"author": {"login": "octocat"}, "state": "APPROVED", "submittedAt": "2026-11-01T11:00:00Z"}]},
 	"comments": {"nodes": [{"author": {"login": "octocat"}, "body": "LGTM", "createdAt": "2026-11-01T12:00:00Z"}],
-		"pageInfo": {"endCursor": "cur1", "hasNextPage": false}}
+		"pageInfo": {"startCursor": "cur1", "hasPreviousPage": false}}
 }}}}`
+
+const prThreadsResponse = `{"data": {"repository": {"pullRequest": {"reviewThreads": {
+	"nodes": [
+		{"id": "T1", "path": "src/retry.go", "line": 2, "startLine": null, "diffSide": "RIGHT", "isResolved": false, "isOutdated": false,
+		 "comments": {"nodes": [
+			{"author": {"login": "reviewer"}, "body": "Why retry here?", "createdAt": "2026-11-01T13:00:00Z"},
+			{"author": {"login": "octocat"}, "body": "Flaky upstream.", "createdAt": "2026-11-01T13:05:00Z"}]}},
+		{"id": "T2", "path": "README.md", "line": null, "startLine": null, "diffSide": "LEFT", "isResolved": true, "isOutdated": true,
+		 "comments": {"nodes": [{"author": null, "body": "Typo", "createdAt": "2026-11-01T14:00:00Z"}]}}
+	],
+	"pageInfo": {"endCursor": "t2", "hasNextPage": false}}}}}}`
+
+const prCommentsPageResponse = `{"data": {"repository": {"pullRequest": {"comments": {
+	"nodes": [{"author": {"login": "octocat"}, "body": "first!", "createdAt": "2026-10-30T09:00:00Z"}],
+	"pageInfo": {"startCursor": "c0", "hasPreviousPage": false}}}}}}`
 
 const prRestRepoResponse = `{"allow_merge_commit": true, "allow_squash_merge": true, "allow_rebase_merge": false}`
 
@@ -177,6 +192,10 @@ func newFakeGitHub(t *testing.T, detail string) (*fiber.App, *pullrequest.Servic
 				return okReply(prSearchResponse)
 			case strings.Contains(query, "review-requested:@me"):
 				return okReply(prSearchResponse)
+			case strings.Contains(query, "reviewThreads("):
+				return okReply(prThreadsResponse)
+			case strings.Contains(query, "$before"):
+				return okReply(prCommentsPageResponse)
 			case strings.Contains(query, "pullRequest(number:"):
 				return okReply(detail)
 			case strings.Contains(query, "pullRequests(states:"):
@@ -508,6 +527,61 @@ func TestPullRequestsFilesListAndSingleDiff(t *testing.T) {
 	code, _ = do(t, app, "GET", "/api/pull-requests/octo/hello/12/files/nope.go", "")
 	if code != http.StatusBadRequest {
 		t.Fatalf("unknown file: %d", code)
+	}
+}
+
+func TestPullRequestsOlderCommentsPage(t *testing.T) {
+	app, _ := newFakeGitHub(t, prDetailResponse)
+
+	code, out := do(t, app, "GET", "/api/pull-requests/octo/hello/12/comments?before=cur1", "")
+	if code != http.StatusOK {
+		t.Fatalf("comments page: %d %v", code, out)
+	}
+	data := out["data"].(map[string]any)
+	comments, _ := data["comments"].([]any)
+	if len(comments) != 1 || comments[0].(map[string]any)["body"] != "first!" {
+		t.Fatalf("comments page body: %v", data)
+	}
+	if data["cursor"] != "c0" {
+		t.Fatalf("cursor: %v", data)
+	}
+	// protojson omits false, so has_more is absent on the last page.
+	if more, present := data["hasMore"]; present && more != false {
+		t.Fatalf("hasMore on the oldest page: %v", data)
+	}
+}
+
+func TestPullRequestsInlineThreads(t *testing.T) {
+	app, _ := newFakeGitHub(t, prDetailResponse)
+
+	code, out := do(t, app, "GET", "/api/pull-requests/octo/hello/12/threads", "")
+	if code != http.StatusOK {
+		t.Fatalf("threads: %d %v", code, out)
+	}
+	threads, _ := out["data"].(map[string]any)["threads"].([]any)
+	if len(threads) != 2 {
+		t.Fatalf("want 2 threads, got %v", out)
+	}
+	first := threads[0].(map[string]any)
+	if first["path"] != "src/retry.go" || first["line"] != float64(2) || first["side"] != "RIGHT" {
+		t.Fatalf("first thread anchor: %v", first)
+	}
+	if replies, _ := first["comments"].([]any); len(replies) != 2 {
+		t.Fatalf("thread must carry its replies: %v", first)
+	}
+	// An outdated thread GitHub can no longer place has no line.
+	second := threads[1].(map[string]any)
+	if _, has := second["line"]; has || second["isOutdated"] != true || second["isResolved"] != true {
+		t.Fatalf("outdated thread: %v", second)
+	}
+
+	// path narrows to one file.
+	code, out = do(t, app, "GET", "/api/pull-requests/octo/hello/12/threads?path=README.md", "")
+	if code != http.StatusOK {
+		t.Fatalf("threads by path: %d %v", code, out)
+	}
+	if got, _ := out["data"].(map[string]any)["threads"].([]any); len(got) != 1 {
+		t.Fatalf("path filter: %v", out)
 	}
 }
 

@@ -129,6 +129,48 @@ func (r *Runtime) prRead(ctx context.Context, args map[string]any) (*jskernel.Re
 	return marshalProtoResult(detail)
 }
 
+func (r *Runtime) prComments(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+	pulls, err := r.prService()
+	if err != nil {
+		return nil, err
+	}
+	owner, repo, err := r.prRepo(args)
+	if err != nil {
+		return nil, err
+	}
+	number, err := prNumberArg(args)
+	if err != nil {
+		return nil, err
+	}
+	before, _ := args["before"].(string)
+	page, err := pulls.Comments(ctx, owner, repo, number, before)
+	if err != nil {
+		return nil, err
+	}
+	return marshalProtoResult(page)
+}
+
+func (r *Runtime) prThreads(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+	pulls, err := r.prService()
+	if err != nil {
+		return nil, err
+	}
+	owner, repo, err := r.prRepo(args)
+	if err != nil {
+		return nil, err
+	}
+	number, err := prNumberArg(args)
+	if err != nil {
+		return nil, err
+	}
+	path, _ := args["path"].(string)
+	threads, err := pulls.Threads(ctx, owner, repo, number, path)
+	if err != nil {
+		return nil, err
+	}
+	return marshalProtoResult(threads)
+}
+
 func (r *Runtime) prCreate(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 	pulls, err := r.prService()
 	if err != nil {

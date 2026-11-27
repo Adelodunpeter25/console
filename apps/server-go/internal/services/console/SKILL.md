@@ -52,3 +52,4 @@ Namespaces: `ports`, `scripts`, `sessions`, `projects`, `automation`, `webhooks`
 - MCP config writes (`mcp.add`, `mcp.update`, `mcp.remove`) require
   full-access; they affect every session and project.
 - Pull requests: `pr.create` starts a draft; never merge right after creating. `pr.merge` refuses a moved head or a draft, so re-read with `pr.read` instead of retrying.
+- `pr.read` shows the newest discussion comments only. Use `pr.comments` for older ones and `pr.threads` for inline comments on files, which `pr.read` never includes.

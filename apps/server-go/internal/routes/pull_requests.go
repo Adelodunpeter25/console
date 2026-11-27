@@ -56,6 +56,36 @@ func RegisterPullRequestRoutes(app *fiber.App, svc *pullrequest.Service) {
 		return ok(c, detail)
 	})
 
+	// GET /api/pull-requests/:owner/:repo/:number/comments?before=<cursor> —
+	// one page of discussion comments, oldest first; the detail carries the
+	// newest page and its cursor.
+	app.Get("/api/pull-requests/:owner/:repo/:number/comments", func(c *fiber.Ctx) error {
+		number, err := prNumber(c)
+		if err != nil {
+			return fail(c, err)
+		}
+		page, err := svc.Comments(c.Context(), c.Params("owner"), c.Params("repo"), number, c.Query("before"))
+		if err != nil {
+			return fail(c, err)
+		}
+		return ok(c, page)
+	})
+
+	// GET /api/pull-requests/:owner/:repo/:number/threads?path= — inline
+	// review conversations on lines of the changed files; path narrows to one
+	// file.
+	app.Get("/api/pull-requests/:owner/:repo/:number/threads", func(c *fiber.Ctx) error {
+		number, err := prNumber(c)
+		if err != nil {
+			return fail(c, err)
+		}
+		threads, err := svc.Threads(c.Context(), c.Params("owner"), c.Params("repo"), number, c.Query("path"))
+		if err != nil {
+			return fail(c, err)
+		}
+		return ok(c, threads)
+	})
+
 	// GET /api/pull-requests/:owner/:repo/:number/files
 	app.Get("/api/pull-requests/:owner/:repo/:number/files", func(c *fiber.Ctx) error {
 		number, err := prNumber(c)

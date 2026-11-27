@@ -213,7 +213,7 @@ func prDetailToProto(detail *github.DetailData, methods []string) *consolev1.Pul
 	}
 	for _, r := range detail.Reviews {
 		out.Reviews = append(out.Reviews, &consolev1.PullRequestReview{
-			Author: r.Author, State: r.State, SubmittedAt: r.SubmittedAt,
+			Author: r.Author, State: r.State, SubmittedAt: r.SubmittedAt, Body: r.Body,
 		})
 	}
 	for _, c := range detail.Comments {

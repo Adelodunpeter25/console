@@ -232,6 +232,12 @@ func consoleCatalog() []methodDef {
 			"draft":      str(false, "filter drafts when given"),
 		}, handler: (*Runtime).prList},
 		{name: "pr.read", description: "One pull request's full detail, including merge_blocker and allowed_merge_methods.", args: prTarget(true, nil), handler: (*Runtime).prRead},
+		{name: "pr.comments", description: "One page of a pull request's discussion comments, oldest first; pass the returned cursor as before for older ones.", args: prTarget(true, map[string]ArgSpec{
+			"before": str(false, "cursor from a previous page or pr.read's comments_cursor"),
+		}), handler: (*Runtime).prComments},
+		{name: "pr.threads", description: "Inline review conversations on lines of the changed files, replies included.", args: prTarget(true, map[string]ArgSpec{
+			"path": str(false, "only threads on this file"),
+		}), handler: (*Runtime).prThreads},
 		{name: "pr.create", description: "Open a pull request; it starts as a draft unless draft is false.", args: prTarget(false, map[string]ArgSpec{
 			"project_id": str(false, "project whose repository to use"),
 			"title":      str(true, "pull request title"),

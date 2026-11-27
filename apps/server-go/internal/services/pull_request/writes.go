@@ -175,6 +175,8 @@ func (s *Service) invalidate(owner, repo string) {
 	for key := range s.cache {
 		if strings.HasPrefix(key, "list|") ||
 			strings.HasPrefix(key, "detail|"+prefix) ||
+			strings.HasPrefix(key, "comments|"+prefix) ||
+			strings.HasPrefix(key, "threads|"+prefix) ||
 			strings.HasPrefix(key, "files|"+prefix) {
 			delete(s.cache, key)
 		}
