@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -97,6 +98,7 @@ internal fun SessionSectionHeader(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = if (isFirst) 4.dp else 10.dp, bottom = 4.dp)
+            .height(40.dp)
             .clip(shape)
             .then(
                 if (!isSearch) {
@@ -108,7 +110,7 @@ internal fun SessionSectionHeader(
                 }
             )
             .clickable(enabled = !isSearch, onClick = onToggle)
-            .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+            .padding(start = 12.dp, end = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
