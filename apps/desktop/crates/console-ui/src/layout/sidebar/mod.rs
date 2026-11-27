@@ -545,7 +545,7 @@ impl RenderOnce for SidebarView {
                 list_rows.extend(matching_positions.into_iter().map(SidebarRow::Session));
             }
         } else {
-            if has_pinned || !project_sections.is_empty() {
+            if has_pinned || has_settled || !project_sections.is_empty() {
                 list_rows.push(SidebarRow::WorkspacesLabel);
             }
             if !workspaces_collapsed {
@@ -567,13 +567,14 @@ impl RenderOnce for SidebarView {
                         list_rows.extend(positions.into_iter().map(SidebarRow::Session));
                     }
                 }
-            }
-            // Settled chats always come last, in their own collapsed-by-default
-            // section, most recently settled first.
-            if has_settled {
-                list_rows.push(SidebarRow::SettledHeader);
-                if !self.settled_collapsed {
-                    list_rows.extend(settled_positions.iter().copied().map(SidebarRow::Session));
+                // Settled chats always come last, in their own collapsed-by-default
+                // section, most recently settled first.
+                if has_settled {
+                    list_rows.push(SidebarRow::SettledHeader);
+                    if !self.settled_collapsed {
+                        list_rows
+                            .extend(settled_positions.iter().copied().map(SidebarRow::Session));
+                    }
                 }
             }
         }
