@@ -1,6 +1,8 @@
 package com.console.mobile.feature.home
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -90,13 +92,23 @@ internal fun SessionSectionHeader(
         targetValue = if (collapsed) -90f else 0f,
         label = "sectionChevron",
     )
+    val shape = RoundedCornerShape(12.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = if (isFirst) 2.dp else 8.dp, bottom = 2.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .padding(top = if (isFirst) 4.dp else 10.dp, bottom = 4.dp)
+            .clip(shape)
+            .then(
+                if (!isSearch) {
+                    Modifier
+                        .background(NewTheme.SurfaceContainerLow)
+                        .border(1.dp, NewTheme.CardBorder, shape)
+                } else {
+                    Modifier
+                }
+            )
             .clickable(enabled = !isSearch, onClick = onToggle)
-            .padding(start = 8.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
