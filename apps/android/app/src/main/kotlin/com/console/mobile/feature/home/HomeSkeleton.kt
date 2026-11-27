@@ -1,7 +1,6 @@
 package com.console.mobile.feature.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,7 +44,6 @@ internal fun HomeSkeleton(sections: List<Int> = listOf(3, 2)) {
                     .height(40.dp)
                     .clip(headerShape)
                     .background(NewTheme.SurfaceContainerLow)
-                    .border(1.dp, NewTheme.CardBorder, headerShape)
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

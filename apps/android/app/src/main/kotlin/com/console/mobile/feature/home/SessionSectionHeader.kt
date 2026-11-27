@@ -2,7 +2,6 @@ package com.console.mobile.feature.home
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -102,9 +101,7 @@ internal fun SessionSectionHeader(
             .clip(shape)
             .then(
                 if (!isSearch) {
-                    Modifier
-                        .background(NewTheme.SurfaceContainerLow)
-                        .border(1.dp, NewTheme.CardBorder, shape)
+                    Modifier.background(NewTheme.SurfaceContainerLow)
                 } else {
                     Modifier
                 }
