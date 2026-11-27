@@ -1,10 +1,11 @@
-// Device simulator routes. Logic lives in services.DeviceService; this file
+// Device simulator routes. Logic lives in device.Service; this file
 // only parses requests, maps errors to status codes, and adapts fasthttp's
-// websocket to services.StreamConn.
+// websocket to device.StreamConn.
 package routes
 
 import (
 	"errors"
+	device "github.com/Adelodunpeter25/console/apps/server-go/internal/services/device"
 	"github.com/MoeForge/moego/json"
 	"log/slog"
 	"time"
@@ -14,7 +15,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 const (
@@ -24,11 +24,11 @@ const (
 
 func deviceStatus(err error) int {
 	switch {
-	case errors.Is(err, services.ErrDeviceInvalidPlatform), errors.Is(err, services.ErrDeviceBadRequest):
+	case errors.Is(err, device.ErrInvalidPlatform), errors.Is(err, device.ErrBadRequest):
 		return fiber.StatusBadRequest
-	case errors.Is(err, services.ErrDeviceNotFound):
+	case errors.Is(err, device.ErrNotFound):
 		return fiber.StatusNotFound
-	case errors.Is(err, services.ErrDeviceUnsupported):
+	case errors.Is(err, device.ErrUnsupported):
 		return fiber.StatusNotImplemented
 	}
 	return fiber.StatusBadGateway
@@ -42,7 +42,7 @@ func deviceOK(c *fiber.Ctx, data any) error {
 	return c.JSON(fiber.Map{"success": true, "data": data})
 }
 
-func registerDeviceRoutes(app *fiber.App, svc *services.DeviceService) {
+func registerDeviceRoutes(app *fiber.App, svc *device.Service) {
 	h := app.Group("/api/devices")
 
 	// The stream player page. Clients load the child webview from this URL
@@ -99,7 +99,7 @@ func registerDeviceRoutes(app *fiber.App, svc *services.DeviceService) {
 	h.Post("/:id/open-app", func(c *fiber.Ctx) error {
 		var body consolev1.DeviceOpenAppRequest
 		if err := protoUnmarshal.Unmarshal(c.Body(), &body); err != nil {
-			return deviceFail(c, errors.Join(services.ErrDeviceBadRequest, err))
+			return deviceFail(c, errors.Join(device.ErrBadRequest, err))
 		}
 		out, err := svc.OpenApp(c.Context(), c.Query("platform"), c.Params("id"), body.GetApp())
 		if err != nil {
@@ -115,7 +115,7 @@ func registerDeviceRoutes(app *fiber.App, svc *services.DeviceService) {
 	h.Post("/:id/interact", func(c *fiber.Ctx) error {
 		var action consolev1.DeviceActionRequest
 		if err := protoUnmarshal.Unmarshal(c.Body(), &action); err != nil {
-			return deviceFail(c, errors.Join(services.ErrDeviceBadRequest, err))
+			return deviceFail(c, errors.Join(device.ErrBadRequest, err))
 		}
 		if err := svc.Interact(c.Context(), c.Query("platform"), c.Params("id"), &action); err != nil {
 			return deviceFail(c, err)
@@ -145,26 +145,26 @@ func registerDeviceRoutes(app *fiber.App, svc *services.DeviceService) {
 					slog.Error("device stream panic", "panic", r)
 				}
 			}()
-			services.PumpStream(newDeviceWSConn(conn), st)
+			device.PumpStream(newDeviceWSConn(conn), st)
 		})
 		if wsErr != nil {
 			_ = st.Close()
-			return deviceFail(c, errors.Join(services.ErrDeviceBadRequest, wsErr))
+			return deviceFail(c, errors.Join(device.ErrBadRequest, wsErr))
 		}
 		return nil
 	})
 }
 
-// deviceWSConn adapts fasthttp/websocket to services.StreamConn.
+// deviceWSConn adapts fasthttp/websocket to device.StreamConn.
 type deviceWSConn struct {
 	conn *websocket.Conn
 }
 
 func newDeviceWSConn(conn *websocket.Conn) *deviceWSConn {
 	conn.SetReadLimit(deviceMaxInput)
-	_ = conn.SetReadDeadline(time.Now().Add(services.DeviceStreamPongTTL))
+	_ = conn.SetReadDeadline(time.Now().Add(device.DeviceStreamPongTTL))
 	conn.SetPongHandler(func(string) error {
-		return conn.SetReadDeadline(time.Now().Add(services.DeviceStreamPongTTL))
+		return conn.SetReadDeadline(time.Now().Add(device.DeviceStreamPongTTL))
 	})
 	return &deviceWSConn{conn: conn}
 }
@@ -212,7 +212,7 @@ func (w *deviceWSConn) ReadText() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		_ = w.conn.SetReadDeadline(time.Now().Add(services.DeviceStreamPongTTL))
+		_ = w.conn.SetReadDeadline(time.Now().Add(device.DeviceStreamPongTTL))
 		if typ == websocket.TextMessage {
 			return data, nil
 		}

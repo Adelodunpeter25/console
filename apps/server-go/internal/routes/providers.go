@@ -4,6 +4,7 @@ package routes
 
 import (
 	"errors"
+	favorite "github.com/Adelodunpeter25/console/apps/server-go/internal/services/favorite"
 	"github.com/MoeForge/moego/json"
 	"os"
 	"strings"
@@ -16,7 +17,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/apikeys"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/devin"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -64,7 +64,7 @@ func encodeModelsResponse(c *fiber.Ctx, provider string, models []types.Model) e
 	return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 }
 
-func registerProviderRoutes(app *fiber.App, favorites *services.FavoriteService) {
+func registerProviderRoutes(app *fiber.App, favorites *favorite.Service) {
 	RegisterProviderCredentialRoutes(app)
 	app.Get("/api/providers", func(c *fiber.Ctx) error {
 		entries := providers.ListProvidersWithContext(c.Context())
@@ -229,7 +229,7 @@ func envKeySource(provider string) string {
 
 // withFavorites orders favorited models first when the favorite list
 // loads; a favorites read failure leaves the provider order untouched.
-func withFavorites(models []types.Model, favorites *services.FavoriteService) []types.Model {
+func withFavorites(models []types.Model, favorites *favorite.Service) []types.Model {
 	favs, err := favorites.List()
 	if err != nil {
 		return models

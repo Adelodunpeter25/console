@@ -1,5 +1,5 @@
 // Model favorites against the global DB.
-package services
+package favorite
 
 import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
@@ -7,15 +7,15 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
-type FavoriteService struct {
+type Service struct {
 	manager *db.DB
 }
 
-func NewFavoriteService(manager *db.DB) *FavoriteService {
-	return &FavoriteService{manager: manager}
+func NewService(manager *db.DB) *Service {
+	return &Service{manager: manager}
 }
 
-func (s *FavoriteService) List() ([]types.ModelFavorite, error) {
+func (s *Service) List() ([]types.ModelFavorite, error) {
 	rows, err := s.manager.Global().Query(
 		`SELECT provider, model_id FROM model_favorites ORDER BY created_at ASC`)
 	if err != nil {
@@ -33,7 +33,7 @@ func (s *FavoriteService) List() ([]types.ModelFavorite, error) {
 	return out, rows.Err()
 }
 
-func (s *FavoriteService) Set(f types.ModelFavorite, isFavorite bool) error {
+func (s *Service) Set(f types.ModelFavorite, isFavorite bool) error {
 	if isFavorite {
 		_, err := s.manager.Global().Exec(`
 			INSERT INTO model_favorites (provider, model_id, created_at)

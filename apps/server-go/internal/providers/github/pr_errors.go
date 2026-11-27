@@ -4,8 +4,8 @@
 package github
 
 import (
-	"github.com/MoeForge/moego/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"net/http"
 	"time"
 )

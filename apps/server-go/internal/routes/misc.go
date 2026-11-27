@@ -2,11 +2,10 @@
 package routes
 
 import (
+	notification "github.com/Adelodunpeter25/console/apps/server-go/internal/services/notification"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 var approvalModes = []fiber.Map{
@@ -14,7 +13,7 @@ var approvalModes = []fiber.Map{
 	{"value": "full-access", "label": "Full Access", "description": "Run everything without asking"},
 }
 
-func registerMiscRoutes(app *fiber.App, notifications *services.NotificationService) {
+func registerMiscRoutes(app *fiber.App, notifications *notification.Service) {
 	app.Get("/api/config/approval-modes", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"success": true, "data": approvalModes})
 	})

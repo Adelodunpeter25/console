@@ -2,17 +2,17 @@
 package tests
 
 import (
+	settings "github.com/Adelodunpeter25/console/apps/server-go/internal/services/settings"
+	skills "github.com/Adelodunpeter25/console/apps/server-go/internal/services/skills"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 func TestSettingsPatchSemantics(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CONSOLE_SETTINGS_PATH", filepath.Join(dir, "settings.json"))
-	settings := services.NewSettingsService()
+	settings := settings.NewService()
 
 	// Defaults on missing file.
 	if roles := settings.Load().ModelRoles; len(roles) != 0 {
@@ -65,7 +65,7 @@ func TestSettingsVisionKillSwitchSurvivesPatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("CONSOLE_SETTINGS_PATH", path)
-	settings := services.NewSettingsService()
+	settings := settings.NewService()
 
 	if settings.Load().Vision.DescribeImagesEnabled() {
 		t.Fatal("disabled switch must load as disabled")
@@ -93,7 +93,7 @@ func TestSettingsVisionKillSwitchSurvivesPatch(t *testing.T) {
 }
 
 func TestSkillDiscovery(t *testing.T) {
-	skills := services.NewSkillsService()
+	skills := skills.NewService()
 	root := t.TempDir()
 	projectSkills := filepath.Join(root, ".agents", "skills")
 	if err := os.MkdirAll(filepath.Join(projectSkills, "deploy"), 0o755); err != nil {

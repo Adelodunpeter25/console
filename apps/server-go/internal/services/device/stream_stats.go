@@ -1,4 +1,4 @@
-package services
+package device
 
 import (
 	"github.com/MoeForge/moego/json"

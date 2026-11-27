@@ -9,13 +9,13 @@ package routes
 
 import (
 	"fmt"
+	favorite "github.com/Adelodunpeter25/console/apps/server-go/internal/services/favorite"
 	"github.com/MoeForge/moego/json"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -43,7 +43,7 @@ func marshalFavoriteList(list []*consolev1.ModelFavorite) (json.RawMessage, erro
 	return json.Marshal(items)
 }
 
-func RegisterFavoriteRoutes(app *fiber.App, favorites *services.FavoriteService) {
+func RegisterFavoriteRoutes(app *fiber.App, favorites *favorite.Service) {
 	app.Get("/api/model-favorites", func(c *fiber.Ctx) error {
 		list, err := favorites.List()
 		if err != nil {

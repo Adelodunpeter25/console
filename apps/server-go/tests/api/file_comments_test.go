@@ -2,6 +2,7 @@
 package tests
 
 import (
+	filecomment "github.com/Adelodunpeter25/console/apps/server-go/internal/services/file_comment"
 	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http/httptest"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 func fileCommentCall(t *testing.T, app *fiber.App, method, url, body string) (int, json.RawMessage) {
@@ -38,7 +38,7 @@ func TestFileCommentsCRUD(t *testing.T) {
 	}
 	t.Cleanup(manager.Close)
 	app := fiber.New()
-	routes.RegisterFileCommentRoutes(app, services.NewFileCommentService(manager))
+	routes.RegisterFileCommentRoutes(app, filecomment.NewService(manager))
 
 	status, data := fileCommentCall(t, app, "POST", "/api/projects/p1/comments",
 		`{"path":"src/a.rs","side":"FILE_COMMENT_SIDE_OLD","startLine":3,"endLine":5,"text":"  rename  ","snippet":"fn a()"}`)

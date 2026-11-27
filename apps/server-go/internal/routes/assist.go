@@ -4,6 +4,7 @@
 package routes
 
 import (
+	skills "github.com/Adelodunpeter25/console/apps/server-go/internal/services/skills"
 	"github.com/MoeForge/moego/json"
 	"os"
 	"strings"
@@ -22,7 +23,7 @@ const (
 	initCommandDescription = "Generate a console.toml with project run scripts for the Run tab"
 )
 
-func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *fssvc.FsService, skills *services.SkillsService) {
+func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *fssvc.FsService, skills *skills.Service) {
 	handleCommands := func(c *fiber.Ctx) error {
 		cwd := resolveSessionCwd(c, sessions)
 		commands := []*consolev1.SlashCommandInfo{
@@ -95,7 +96,7 @@ func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs 
 
 // RegisterAssistRoutes exposes the assist routes for tests, following the
 // same pattern as RegisterMCPRoutes.
-func RegisterAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *fssvc.FsService, skills *services.SkillsService) {
+func RegisterAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *fssvc.FsService, skills *skills.Service) {
 	registerAssistRoutes(app, sessions, fs, skills)
 }
 

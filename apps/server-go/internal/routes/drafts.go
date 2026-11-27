@@ -4,16 +4,16 @@
 package routes
 
 import (
+	draft "github.com/Adelodunpeter25/console/apps/server-go/internal/services/draft"
 	"github.com/MoeForge/moego/json"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
-func RegisterDraftRoutes(app *fiber.App, drafts *services.DraftService) {
+func RegisterDraftRoutes(app *fiber.App, drafts *draft.Service) {
 	app.Get("/api/drafts", func(c *fiber.Ctx) error {
 		ids, err := drafts.ListSessionIDs()
 		if err != nil {

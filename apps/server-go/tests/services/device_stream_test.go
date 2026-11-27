@@ -2,12 +2,11 @@ package tests
 
 import (
 	"bytes"
+	device "github.com/Adelodunpeter25/console/apps/server-go/internal/services/device"
 	"log/slog"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 func TestStreamStatsLogWindowAndClientReport(t *testing.T) {
@@ -16,7 +15,7 @@ func TestStreamStatsLogWindowAndClientReport(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
 	defer slog.SetDefault(prev)
 
-	s := services.NewStreamStatsForTest("iPhone 17")
+	s := device.NewStreamStatsForTest("iPhone 17")
 	s.Frame(true, 5000, 12*time.Millisecond, time.Millisecond, 3)
 	s.Frame(false, 1000, 8*time.Millisecond, 2*time.Millisecond, 1)
 	s.Frame(false, 1000, 0, time.Millisecond, 0) // replayed: no age
@@ -31,13 +30,13 @@ func TestStreamStatsLogWindowAndClientReport(t *testing.T) {
 	}
 
 	buf.Reset()
-	if !services.LogClientStatsForTest("iPhone 17", []byte(`{"type":"stats","frames":30,"decodeAvgMs":4.5,"paintAvgMs":1.2,"backlogSkips":2}`)) {
+	if !device.LogClientStatsForTest("iPhone 17", []byte(`{"type":"stats","frames":30,"decodeAvgMs":4.5,"paintAvgMs":1.2,"backlogSkips":2}`)) {
 		t.Fatal("stats message must be consumed")
 	}
 	if !strings.Contains(buf.String(), `"device player stats"`) || !strings.Contains(buf.String(), `"backlog_skips":2`) {
 		t.Fatalf("client log: %s", buf.String())
 	}
-	if services.LogClientStatsForTest("x", []byte(`{"type":"touch","action":"down"}`)) {
+	if device.LogClientStatsForTest("x", []byte(`{"type":"touch","action":"down"}`)) {
 		t.Fatal("input must not be treated as stats")
 	}
 }

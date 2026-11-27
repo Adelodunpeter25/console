@@ -82,10 +82,10 @@ type Manager struct {
 
 func NewManager(database *db.DB, issuer *TokenIssuer) *Manager {
 	return &Manager{
-		DB:           database,
-		Issuer:       issuer,
+		DB:            database,
+		Issuer:        issuer,
 		touchThrottle: time.Minute,
-		lastTouch:    map[string]time.Time{},
+		lastTouch:     map[string]time.Time{},
 	}
 }
 

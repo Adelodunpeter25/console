@@ -372,4 +372,3 @@ func TestWorktreeAddRejectsNonExistentRemoteBranch(t *testing.T) {
 		t.Fatalf("expected error for non-existent remote branch, got nil")
 	}
 }
-

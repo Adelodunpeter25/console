@@ -1,5 +1,5 @@
 // Per-chat composer drafts against the global DB.
-package services
+package draft
 
 import (
 	"database/sql"
@@ -19,17 +19,17 @@ import (
 // device could overwrite until their clocks caught up.
 const maxDraftClockSkew = time.Minute
 
-type DraftService struct {
+type Service struct {
 	manager *db.DB
 }
 
-func NewDraftService(manager *db.DB) *DraftService {
-	return &DraftService{manager: manager}
+func NewService(manager *db.DB) *Service {
+	return &Service{manager: manager}
 }
 
 // ListSessionIDs returns session IDs that currently have a non-empty draft
 // (excluding the reserved __floating__ key).
-func (s *DraftService) ListSessionIDs() ([]string, error) {
+func (s *Service) ListSessionIDs() ([]string, error) {
 	rows, err := s.manager.Global().Query(
 		`SELECT session_id, body FROM chat_drafts WHERE session_id != '__floating__' ORDER BY updated_at DESC`)
 	if err != nil {
@@ -55,7 +55,7 @@ func (s *DraftService) ListSessionIDs() ([]string, error) {
 }
 
 // Get returns the stored draft, or nil when the chat has none.
-func (s *DraftService) Get(sessionID string) (*consolev1.ChatDraft, error) {
+func (s *Service) Get(sessionID string) (*consolev1.ChatDraft, error) {
 	var body string
 	err := s.manager.Global().QueryRow(
 		`SELECT body FROM chat_drafts WHERE session_id = ?`, sessionID).Scan(&body)
@@ -77,7 +77,7 @@ func (s *DraftService) Get(sessionID string) (*consolev1.ChatDraft, error) {
 // A cleared draft is stored as an empty one rather than deleted: its
 // updatedAt is the tombstone that stops a device holding an older draft from
 // pushing it back after another device sent it.
-func (s *DraftService) Put(draft *consolev1.ChatDraft) (bool, *consolev1.ChatDraft, error) {
+func (s *Service) Put(draft *consolev1.ChatDraft) (bool, *consolev1.ChatDraft, error) {
 	if draft.SessionId == "" {
 		return false, nil, fmt.Errorf("sessionId is required.")
 	}

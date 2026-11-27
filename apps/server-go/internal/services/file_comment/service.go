@@ -1,5 +1,5 @@
 // Durable file comments against the global DB.
-package services
+package filecomment
 
 import (
 	"database/sql"
@@ -14,14 +14,14 @@ import (
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 )
 
-var ErrFileCommentNotFound = errors.New("comment not found")
+var ErrNotFound = errors.New("comment not found")
 
-type FileCommentService struct {
+type Service struct {
 	manager *db.DB
 }
 
-func NewFileCommentService(manager *db.DB) *FileCommentService {
-	return &FileCommentService{manager: manager}
+func NewService(manager *db.DB) *Service {
+	return &Service{manager: manager}
 }
 
 const diffCommentColumns = `id, project_id, path, side, start_line, end_line, text, snippet, created_at, updated_at`
@@ -42,7 +42,7 @@ func scanFileComment(row rowScanner) (*consolev1.FileComment, error) {
 }
 
 // List returns a project's comments, oldest first. An empty path means every file.
-func (s *FileCommentService) List(projectID, path string) ([]*consolev1.FileComment, error) {
+func (s *Service) List(projectID, path string) ([]*consolev1.FileComment, error) {
 	query := `SELECT ` + diffCommentColumns + ` FROM file_comments WHERE project_id = ?`
 	args := []any{projectID}
 	if path != "" {
@@ -65,7 +65,7 @@ func (s *FileCommentService) List(projectID, path string) ([]*consolev1.FileComm
 	return out, rows.Err()
 }
 
-func (s *FileCommentService) Create(projectID string, req *consolev1.CreateFileCommentRequest) (*consolev1.FileComment, error) {
+func (s *Service) Create(projectID string, req *consolev1.CreateFileCommentRequest) (*consolev1.FileComment, error) {
 	text := strings.TrimSpace(req.Text)
 	switch {
 	case projectID == "":
@@ -100,7 +100,7 @@ func (s *FileCommentService) Create(projectID string, req *consolev1.CreateFileC
 	return c, nil
 }
 
-func (s *FileCommentService) UpdateText(id, text string) (*consolev1.FileComment, error) {
+func (s *Service) UpdateText(id, text string) (*consolev1.FileComment, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return nil, fmt.Errorf("text is required.")
@@ -112,23 +112,23 @@ func (s *FileCommentService) UpdateText(id, text string) (*consolev1.FileComment
 		return nil, err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return nil, ErrFileCommentNotFound
+		return nil, ErrNotFound
 	}
 	c, err := scanFileComment(s.manager.Global().QueryRow(
 		`SELECT `+diffCommentColumns+` FROM file_comments WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrFileCommentNotFound
+		return nil, ErrNotFound
 	}
 	return c, err
 }
 
-func (s *FileCommentService) Delete(id string) error {
+func (s *Service) Delete(id string) error {
 	res, err := s.manager.Global().Exec(`DELETE FROM file_comments WHERE id = ?`, id)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrFileCommentNotFound
+		return ErrNotFound
 	}
 	return nil
 }

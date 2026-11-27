@@ -1,6 +1,6 @@
 // Skill discovery from `skills/` config dirs (flat .md and <name>/SKILL.md).
 // User dirs (~/.console|agent|agents) then project ancestors (closest wins).
-package services
+package skills
 
 import (
 	"os"
@@ -17,12 +17,12 @@ type Skill struct {
 	Hide        bool
 }
 
-type SkillsService struct{}
+type Service struct{}
 
-func NewSkillsService() *SkillsService { return &SkillsService{} }
+func NewService() *Service { return &Service{} }
 
 // Discover lists non-hidden skills applicable to cwd (user + ancestors).
-func (s *SkillsService) Discover(cwd string) []Skill {
+func (s *Service) Discover(cwd string) []Skill {
 	byName := map[string]Skill{}
 
 	home, _ := os.UserHomeDir()

@@ -2,6 +2,7 @@
 package tests
 
 import (
+	favorite "github.com/Adelodunpeter25/console/apps/server-go/internal/services/favorite"
 	"github.com/MoeForge/moego/json"
 	"os"
 	"testing"
@@ -17,7 +18,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
-func newTestManager(t *testing.T) (*db.DB, *services.SessionService, *projectssvc.ProjectService, *services.FavoriteService) {
+func newTestManager(t *testing.T) (*db.DB, *services.SessionService, *projectssvc.ProjectService, *favorite.Service) {
 	t.Helper()
 	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
 	if err != nil {
@@ -27,7 +28,7 @@ func newTestManager(t *testing.T) (*db.DB, *services.SessionService, *projectssv
 	return manager,
 		services.NewSessionService(manager),
 		projectssvc.NewProjectService(manager),
-		services.NewFavoriteService(manager)
+		favorite.NewService(manager)
 }
 
 func TestProjectsCRUD(t *testing.T) {

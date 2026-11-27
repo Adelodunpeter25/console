@@ -7,8 +7,8 @@ package github
 import (
 	"bytes"
 	"context"
-	"github.com/MoeForge/moego/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"net/url"

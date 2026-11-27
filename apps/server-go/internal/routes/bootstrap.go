@@ -1,6 +1,7 @@
 package routes
 
 import (
+	draft "github.com/Adelodunpeter25/console/apps/server-go/internal/services/draft"
 	"github.com/MoeForge/moego/json"
 	"strings"
 
@@ -47,7 +48,7 @@ func backgroundWorkToProto(w background.Work) *consolev1.BackgroundWork {
 // RegisterBootstrapRoutes serves the single request a client makes when it
 // opens a chat: header, first message page, and every side panel in one
 // response, so opening a session is one round trip instead of six.
-func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, runs *run.Service, drafts *services.DraftService) {
+func RegisterBootstrapRoutes(app *fiber.App, sessions *services.SessionService, runs *run.Service, drafts *draft.Service) {
 	app.Get("/api/sessions/:id/bootstrap", func(c *fiber.Ctx) error {
 		id := c.Params("id")
 

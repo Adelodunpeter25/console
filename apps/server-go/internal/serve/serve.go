@@ -5,6 +5,7 @@ package serve
 
 import (
 	"context"
+	notification "github.com/Adelodunpeter25/console/apps/server-go/internal/services/notification"
 	"log/slog"
 	"net"
 	"net/http"
@@ -25,7 +26,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel"
@@ -138,7 +138,7 @@ func Run() error {
 	ports := terminal.NewPortRegistry()
 	defer ports.CloseAll()
 	ports.StartReaper(5 * time.Second)
-	notifications := services.NewNotificationService()
+	notifications := notification.NewService()
 
 	// Plain HTTP serves the API. Encrypted remote access is provided by the
 	// OpenTunnel/relay TLS reverse proxy below, not by this listener.

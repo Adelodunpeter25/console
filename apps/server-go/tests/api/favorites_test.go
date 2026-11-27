@@ -4,6 +4,7 @@
 package tests
 
 import (
+	favorite "github.com/Adelodunpeter25/console/apps/server-go/internal/services/favorite"
 	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http/httptest"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -42,7 +42,7 @@ func TestFavoritesProtoMatchesLegacyShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(manager.Close)
-	svc := services.NewFavoriteService(manager)
+	svc := favorite.NewService(manager)
 	for _, f := range list {
 		if err := svc.Set(f, true); err != nil {
 			t.Fatal(err)
@@ -101,7 +101,7 @@ func TestFavoritesValidationAndTolerance(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(manager.Close)
-	routes.RegisterFavoriteRoutes(app, services.NewFavoriteService(manager))
+	routes.RegisterFavoriteRoutes(app, favorite.NewService(manager))
 
 	put := func(body string) int {
 		req := httptest.NewRequest("PUT", "/api/model-favorites", strings.NewReader(body))

@@ -7,6 +7,7 @@
 package tests
 
 import (
+	notification "github.com/Adelodunpeter25/console/apps/server-go/internal/services/notification"
 	"net/http"
 	"testing"
 	"time"
@@ -16,10 +17,9 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
-func debugTestApp(t *testing.T) (*fiber.App, string, *services.NotificationService) {
+func debugTestApp(t *testing.T) (*fiber.App, string, *notification.Service) {
 	t.Helper()
 	database, err := db.Open(db.OpenOptions{Path: ":memory:"})
 	if err != nil {
@@ -38,7 +38,7 @@ func debugTestApp(t *testing.T) (*fiber.App, string, *services.NotificationServi
 		t.Fatal(err)
 	}
 
-	notifications := services.NewNotificationService()
+	notifications := notification.NewService()
 	app := fiber.New()
 	app.Use(routes.RequireDeviceToken(manager))
 	routes.RegisterDebugRoutes(app, notifications)

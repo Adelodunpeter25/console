@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	settings "github.com/Adelodunpeter25/console/apps/server-go/internal/services/settings"
 	"log/slog"
 	"strings"
 	"time"
@@ -17,7 +18,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/vision"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -133,7 +133,7 @@ func (s *Service) imageDescriber(model types.Model, providerID string, pins *acc
 	if model.SupportsImages && DeliversToolResultImages(providerID) {
 		return nil
 	}
-	if !services.NewSettingsService().Load().Vision.DescribeImagesEnabled() {
+	if !settings.NewService().Load().Vision.DescribeImagesEnabled() {
 		return nil
 	}
 	if _, ok := s.resolveVision(model); !ok {
@@ -170,7 +170,7 @@ func (d *visionDescriber) Describe(ctx context.Context, mime string, data []byte
 
 // roleRef reads one configured model-role reference from settings.
 func (s *Service) roleRef(role string) string {
-	return services.NewSettingsService().Load().ModelRoles[role]
+	return settings.NewService().Load().ModelRoles[role]
 }
 
 // compactionHooks builds the per-turn context management hooks: payload

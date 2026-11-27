@@ -1,5 +1,5 @@
 // Model-role settings persisted to settings.json (load/save/patch semantics).
-package services
+package settings
 
 import (
 	"github.com/MoeForge/moego/json"
@@ -29,9 +29,9 @@ type Settings struct {
 	Vision     VisionSettings    `json:"vision"`
 }
 
-type SettingsService struct{}
+type Service struct{}
 
-func NewSettingsService() *SettingsService { return &SettingsService{} }
+func NewService() *Service { return &Service{} }
 
 func settingsPath() string {
 	if p := os.Getenv("CONSOLE_SETTINGS_PATH"); p != "" {
@@ -40,7 +40,7 @@ func settingsPath() string {
 	return filepath.Join(utils.ConsoleStorageDir(), "settings.json")
 }
 
-func (s *SettingsService) Load() Settings {
+func (s *Service) Load() Settings {
 	data, err := os.ReadFile(settingsPath())
 	if err != nil {
 		return Settings{ModelRoles: map[string]string{}}
@@ -74,7 +74,7 @@ func IsModelRole(role string) bool {
 
 // Patch merges the patch onto current roles: mentioned roles are set
 // (empty/null clears), unmentioned roles are left untouched.
-func (s *SettingsService) Patch(patch map[string]*string) (Settings, error) {
+func (s *Service) Patch(patch map[string]*string) (Settings, error) {
 	current := s.Load()
 	merged := map[string]string{}
 	for k, v := range current.ModelRoles {

@@ -6,6 +6,7 @@ package run
 import (
 	"context"
 	"errors"
+	notification "github.com/Adelodunpeter25/console/apps/server-go/internal/services/notification"
 	pullrequest "github.com/Adelodunpeter25/console/apps/server-go/internal/services/pull_request"
 	"log/slog"
 	"sync"
@@ -81,7 +82,7 @@ type Service struct {
 	pending    map[string]Prompt
 	sessions   *services.SessionService
 	decisions  *Decisions
-	notify     *services.NotificationService
+	notify     *notification.Service
 	memories   *memory.Registry
 	bashJobs   *terminalsvc.BashJobManager
 	background *background.Manager
@@ -147,7 +148,7 @@ func NewService(sessions *services.SessionService) *Service {
 
 // SetNotifications attaches the bus for attention/done banners (nil-safe
 // when unset).
-func (s *Service) SetNotifications(n *services.NotificationService) {
+func (s *Service) SetNotifications(n *notification.Service) {
 	s.mu.Lock()
 	s.notify = n
 	s.mu.Unlock()
@@ -308,7 +309,7 @@ func (s *Service) mcpManager() *mcp.Manager {
 	return s.mcp
 }
 
-func (s *Service) notifier() *services.NotificationService {
+func (s *Service) notifier() *notification.Service {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.notify

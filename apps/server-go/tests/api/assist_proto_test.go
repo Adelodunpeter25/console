@@ -5,6 +5,7 @@ package tests
 
 import (
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
+	skills "github.com/Adelodunpeter25/console/apps/server-go/internal/services/skills"
 	"github.com/MoeForge/moego/json"
 	"net/http/httptest"
 	"os"
@@ -105,7 +106,7 @@ func TestAssistSearchRouteEmitsProto(t *testing.T) {
 	}
 	app := fiber.New()
 	var sessions *services.SessionService
-	routes.RegisterAssistRoutes(app, sessions, fssvc.NewFsService(), services.NewSkillsService())
+	routes.RegisterAssistRoutes(app, sessions, fssvc.NewFsService(), skills.NewService())
 
 	resp, err := app.Test(httptest.NewRequest("GET", "/api/assist/search?q=&root="+dir, nil), 10000)
 	if err != nil {
@@ -159,7 +160,7 @@ func TestAssistSearchSurfacesGitignoredFiles(t *testing.T) {
 
 	app := fiber.New()
 	var sessions *services.SessionService
-	routes.RegisterAssistRoutes(app, sessions, fssvc.NewFsService(), services.NewSkillsService())
+	routes.RegisterAssistRoutes(app, sessions, fssvc.NewFsService(), skills.NewService())
 
 	service := fssvc.NewFsService()
 	items, err := service.SearchFiles(dir, "env", 50, false)

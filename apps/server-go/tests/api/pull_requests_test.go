@@ -7,6 +7,7 @@ package tests
 
 import (
 	"encoding/json"
+	pullrequest "github.com/Adelodunpeter25/console/apps/server-go/internal/services/pull_request"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -25,7 +26,6 @@ import (
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	prv "github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 )
 
@@ -50,7 +50,7 @@ func rateLimitedReply(body string) graphqlReply {
 // REST reads, points the provider package at it, stores a token, registers
 // one project whose origin is github.com/octo/hello, and returns a Fiber
 // app with only the pull-request routes plus the service (for tunables).
-func newPullRequestEnv(t *testing.T, graphql func(query string) graphqlReply, rest func(path, body string) graphqlReply) (*fiber.App, *services.PullRequestService) {
+func newPullRequestEnv(t *testing.T, graphql func(query string) graphqlReply, rest func(path, body string) graphqlReply) (*fiber.App, *pullrequest.Service) {
 	t.Helper()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -108,7 +108,7 @@ func newPullRequestEnv(t *testing.T, graphql func(query string) graphqlReply, re
 		t.Fatal(err)
 	}
 
-	svc := services.NewPullRequestService(projects)
+	svc := pullrequest.NewService(projects)
 	svc.RetryDelay = time.Millisecond
 	app := fiber.New()
 	routes.RegisterPullRequestRoutes(app, svc)
@@ -168,7 +168,7 @@ const prRestFilesResponse = `[
 
 // newFakeGitHub wires the standard fake: GraphQL dispatched on query shape,
 // REST on path.
-func newFakeGitHub(t *testing.T, detail string) (*fiber.App, *services.PullRequestService) {
+func newFakeGitHub(t *testing.T, detail string) (*fiber.App, *pullrequest.Service) {
 	t.Helper()
 	return newPullRequestEnv(t,
 		func(query string) graphqlReply {
@@ -553,7 +553,7 @@ func TestParseGitHubRemote(t *testing.T) {
 		{"https://github.com/octo", "", "", false},
 	}
 	for _, tc := range cases {
-		owner, repo, ok := services.ParseGitHubRemote(tc.remote)
+		owner, repo, ok := pullrequest.ParseGitHubRemote(tc.remote)
 		if ok != tc.ok || owner != tc.owner || repo != tc.repo {
 			t.Errorf("ParseGitHubRemote(%q) = %q, %q, %v", tc.remote, owner, repo, ok)
 		}

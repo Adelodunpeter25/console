@@ -4,12 +4,12 @@ package tests
 
 import (
 	"context"
+	favorite "github.com/Adelodunpeter25/console/apps/server-go/internal/services/favorite"
 	"path/filepath"
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -128,7 +128,7 @@ func TestCatalogFavoritesEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(manager.Close)
-	favorites := services.NewFavoriteService(manager)
+	favorites := favorite.NewService(manager)
 	if err := favorites.Set(types.ModelFavorite{Provider: "codex", ModelID: "gpt-5.4-mini"}, true); err != nil {
 		t.Fatal(err)
 	}

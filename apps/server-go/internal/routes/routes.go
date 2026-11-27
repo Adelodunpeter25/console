@@ -2,8 +2,15 @@
 package routes
 
 import (
+	device "github.com/Adelodunpeter25/console/apps/server-go/internal/services/device"
+	draft "github.com/Adelodunpeter25/console/apps/server-go/internal/services/draft"
+	favorite "github.com/Adelodunpeter25/console/apps/server-go/internal/services/favorite"
+	filecomment "github.com/Adelodunpeter25/console/apps/server-go/internal/services/file_comment"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
+	notification "github.com/Adelodunpeter25/console/apps/server-go/internal/services/notification"
 	pullrequest "github.com/Adelodunpeter25/console/apps/server-go/internal/services/pull_request"
+	settings "github.com/Adelodunpeter25/console/apps/server-go/internal/services/settings"
+	skills "github.com/Adelodunpeter25/console/apps/server-go/internal/services/skills"
 	"log/slog"
 	"strings"
 	"time"
@@ -35,7 +42,7 @@ type Config struct {
 	DB            *db.DB
 	Watch         *fs.FsWatchService
 	Ports         *terminal.PortRegistry
-	Notifications *services.NotificationService
+	Notifications *notification.Service
 	// TokenIssuer mints the device tokens the pairing flow hands out.
 	// Nil builds one internally (persistent secret, ephemeral fallback).
 	TokenIssuer *auth.TokenIssuer
@@ -101,12 +108,12 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	RegisterPairingRoutes(app, authManager)
 	app.Use(RequireDeviceToken(authManager))
 
-	RegisterFavoriteRoutes(app, services.NewFavoriteService(cfg.DB))
-	draftService := services.NewDraftService(cfg.DB)
+	RegisterFavoriteRoutes(app, favorite.NewService(cfg.DB))
+	draftService := draft.NewService(cfg.DB)
 	RegisterDraftRoutes(app, draftService)
-	RegisterFileCommentRoutes(app, services.NewFileCommentService(cfg.DB))
+	RegisterFileCommentRoutes(app, filecomment.NewService(cfg.DB))
 	RegisterPortRoutes(app, cfg.Ports)
-	RegisterSettingsRoutes(app, services.NewSettingsService())
+	RegisterSettingsRoutes(app, settings.NewService())
 	RegisterFsRoutes(app, fs.NewFsService(), cfg.Watch)
 	gitSvc := git.NewGitService()
 	RegisterGitRoutes(app, gitSvc, cfg.Watch)
@@ -139,7 +146,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	RegisterIntegrationRoutes(app)
 	RegisterSttRoutes(app, stt.NewClient(""))
 	RegisterGitHubRoutes(app)
-	registerProviderRoutes(app, services.NewFavoriteService(cfg.DB))
+	registerProviderRoutes(app, favorite.NewService(cfg.DB))
 	runSvc = run.NewService(services.NewSessionService(cfg.DB))
 	runSvc.SetNotifications(cfg.Notifications)
 	runSvc.SetMemories(memory.NewRegistry(""))
@@ -186,9 +193,9 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	RegisterRunRoutes(app, runSvc)
 	RegisterPasteRoutes(app, runSvc)
 	registerMiscRoutes(app, cfg.Notifications)
-	deviceSvc := services.NewDeviceService()
+	deviceSvc := device.NewService()
 	registerDeviceRoutes(app, deviceSvc)
-	registerAssistRoutes(app, services.NewSessionService(cfg.DB), fs.NewFsService(), services.NewSkillsService())
+	registerAssistRoutes(app, services.NewSessionService(cfg.DB), fs.NewFsService(), skills.NewService())
 	registerChromeImportRoutes(app)
 
 	slog.Info("api routes registered")

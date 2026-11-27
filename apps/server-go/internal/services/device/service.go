@@ -2,7 +2,7 @@
 // sim-go SDK. Owns state mapping, action dispatch, and the live stream pump.
 // The pump is transport-agnostic (StreamConn); routes adapt fasthttp's
 // websocket to it.
-package services
+package device
 
 import (
 	"context"
@@ -24,10 +24,10 @@ import (
 )
 
 var (
-	ErrDeviceInvalidPlatform = sdk.ErrInvalidPlatform
-	ErrDeviceNotFound        = sdk.ErrDeviceNotFound
-	ErrDeviceUnsupported     = errors.New("action not supported")
-	ErrDeviceBadRequest      = errors.New("bad request")
+	ErrInvalidPlatform = sdk.ErrInvalidPlatform
+	ErrNotFound        = sdk.ErrDeviceNotFound
+	ErrUnsupported     = errors.New("action not supported")
+	ErrBadRequest      = errors.New("bad request")
 )
 
 const (
@@ -40,16 +40,16 @@ const (
 	deviceReaderWait = 5 * time.Second
 )
 
-type DeviceService struct {
+type Service struct {
 	client *sdk.Client
 }
 
-func NewDeviceService() *DeviceService {
-	return &DeviceService{client: sdk.New()}
+func NewService() *Service {
+	return &Service{client: sdk.New()}
 }
 
 // Close tears down pooled helpers (idb companions, stream sessions).
-func (s *DeviceService) Close() error { return s.client.Close() }
+func (s *Service) Close() error { return s.client.Close() }
 
 func deviceState(d sdk.Device) string {
 	switch d.State {
@@ -69,7 +69,7 @@ func toDescriptor(d sdk.Device) *consolev1.DeviceDescriptor {
 	return out
 }
 
-func (s *DeviceService) List(ctx context.Context) ([]*consolev1.DeviceDescriptor, error) {
+func (s *Service) List(ctx context.Context) ([]*consolev1.DeviceDescriptor, error) {
 	devs, err := s.client.ListAll(ctx)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (s *DeviceService) List(ctx context.Context) ([]*consolev1.DeviceDescriptor
 	return out, nil
 }
 
-func (s *DeviceService) Diagnostics(ctx context.Context) *consolev1.DeviceDiagnostics {
+func (s *Service) Diagnostics(ctx context.Context) *consolev1.DeviceDiagnostics {
 	d := s.client.Doctor(ctx)
 	out := &consolev1.DeviceDiagnostics{
 		XcodeInstalled:     d.XcodeInstalled,
@@ -116,9 +116,9 @@ const defaultAndroidRAMMB = "6144"
 // Boot validates the platform, then boots in the background: Android waits
 // for boot_completed (minutes), so callers poll List instead of blocking.
 // Devices are slimmed as part of boot to keep the simulator lightweight.
-func (s *DeviceService) Boot(platform, id string) error {
+func (s *Service) Boot(platform, id string) error {
 	if _, err := s.client.Driver(platform); err != nil {
-		return fmt.Errorf("%w: %v", ErrDeviceInvalidPlatform, err)
+		return fmt.Errorf("%w: %v", ErrInvalidPlatform, err)
 	}
 	if platform == "android" {
 		if _, ok := os.LookupEnv("SIM_GO_ANDROID_RAM_MB"); !ok {
@@ -135,12 +135,12 @@ func (s *DeviceService) Boot(platform, id string) error {
 	return nil
 }
 
-func (s *DeviceService) Shutdown(ctx context.Context, platform, id string) error {
+func (s *Service) Shutdown(ctx context.Context, platform, id string) error {
 	return s.client.Shutdown(ctx, platform, id)
 }
 
 // ShutdownAll powers off every booted device on every platform.
-func (s *DeviceService) ShutdownAll(ctx context.Context) error {
+func (s *Service) ShutdownAll(ctx context.Context) error {
 	devs, err := s.client.ListAll(ctx)
 	if err != nil {
 		return err
@@ -158,9 +158,9 @@ func (s *DeviceService) ShutdownAll(ctx context.Context) error {
 }
 
 // OpenApp installs a package path (.apk/.app) or launches a bundle/package id.
-func (s *DeviceService) OpenApp(ctx context.Context, platform, id, app string) (string, error) {
+func (s *Service) OpenApp(ctx context.Context, platform, id, app string) (string, error) {
 	if app == "" {
-		return "", fmt.Errorf("%w: app is required", ErrDeviceBadRequest)
+		return "", fmt.Errorf("%w: app is required", ErrBadRequest)
 	}
 	if strings.HasSuffix(app, ".apk") || strings.HasSuffix(app, ".app") {
 		return "", s.client.Install(ctx, platform, id, app)
@@ -177,7 +177,7 @@ func pixel(v *float64) int {
 
 // Interact dispatches a one-shot REST action. Unknown actions are treated
 // as hardware buttons (home, back, power, volume_up, ...).
-func (s *DeviceService) Interact(ctx context.Context, platform, id string, a *consolev1.DeviceActionRequest) error {
+func (s *Service) Interact(ctx context.Context, platform, id string, a *consolev1.DeviceActionRequest) error {
 	switch a.Action {
 	case "tap":
 		return s.client.Tap(ctx, platform, id, pixel(a.X), pixel(a.Y))
@@ -206,17 +206,17 @@ func (s *DeviceService) Interact(ctx context.Context, platform, id string, a *co
 			}
 		}
 		if mode != "dark" && mode != "light" {
-			return fmt.Errorf("%w: appearance must be dark or light", ErrDeviceBadRequest)
+			return fmt.Errorf("%w: appearance must be dark or light", ErrBadRequest)
 		}
 		return s.client.SetAppearance(ctx, platform, id, mode)
 	case "":
-		return fmt.Errorf("%w: action is required", ErrDeviceBadRequest)
+		return fmt.Errorf("%w: action is required", ErrBadRequest)
 	}
 	return s.client.Press(ctx, platform, id, strings.ReplaceAll(a.Action, "_", "-"))
 }
 
 // Screenshot returns the current screen as PNG bytes.
-func (s *DeviceService) Screenshot(ctx context.Context, platform, id string) ([]byte, error) {
+func (s *Service) Screenshot(ctx context.Context, platform, id string) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "console-shot-*")
 	if err != nil {
 		return nil, err
@@ -234,7 +234,7 @@ func (s *DeviceService) Screenshot(ctx context.Context, platform, id string) ([]
 //
 // quality only applies when this viewer starts the device session; later
 // viewers join the running one as-is.
-func (s *DeviceService) OpenStream(ctx context.Context, platform, id string, quality sdk.StreamQuality) (*sdk.Stream, error) {
+func (s *Service) OpenStream(ctx context.Context, platform, id string, quality sdk.StreamQuality) (*sdk.Stream, error) {
 	return s.client.StreamWith(ctx, platform, id, quality)
 }
 

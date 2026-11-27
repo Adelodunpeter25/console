@@ -3,6 +3,7 @@
 package tests
 
 import (
+	draft "github.com/Adelodunpeter25/console/apps/server-go/internal/services/draft"
 	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http/httptest"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 type draftEnvelope struct {
@@ -41,7 +41,7 @@ func draftApp(t *testing.T) *fiber.App {
 	}
 	t.Cleanup(manager.Close)
 	app := fiber.New()
-	routes.RegisterDraftRoutes(app, services.NewDraftService(manager))
+	routes.RegisterDraftRoutes(app, draft.NewService(manager))
 	return app
 }
 

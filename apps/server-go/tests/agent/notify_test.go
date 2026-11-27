@@ -3,6 +3,7 @@
 package tests
 
 import (
+	notification "github.com/Adelodunpeter25/console/apps/server-go/internal/services/notification"
 	"github.com/MoeForge/moego/json"
 	"strings"
 	"testing"
@@ -12,11 +13,10 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
-func collectNotifications(t *testing.T, bus *services.NotificationService, stop <-chan struct{}) chan *consolev1.NotificationEvent {
+func collectNotifications(t *testing.T, bus *notification.Service, stop <-chan struct{}) chan *consolev1.NotificationEvent {
 	t.Helper()
 	out := make(chan *consolev1.NotificationEvent, 16)
 	ch := bus.Subscribe()
@@ -55,7 +55,7 @@ func waitNotification(t *testing.T, ch chan *consolev1.NotificationEvent, kind s
 func TestNotifyDone(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	bus := services.NewNotificationService()
+	bus := notification.NewService()
 	svc.SetNotifications(bus)
 	stop := make(chan struct{})
 	defer close(stop)
@@ -85,7 +85,7 @@ func TestNotifyDone(t *testing.T) {
 func TestNotifySilentOnAbort(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	bus := services.NewNotificationService()
+	bus := notification.NewService()
 	svc.SetNotifications(bus)
 	stop := make(chan struct{})
 	defer close(stop)

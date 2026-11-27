@@ -4,6 +4,7 @@
 package tests
 
 import (
+	draft "github.com/Adelodunpeter25/console/apps/server-go/internal/services/draft"
 	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http/httptest"
@@ -31,7 +32,7 @@ func TestSessionBootstrapRoute(t *testing.T) {
 	header := helpers.CreateRunSession(t, sessions)
 	runs := run.NewService(sessions)
 	app := fiber.New()
-	routes.RegisterBootstrapRoutes(app, sessions, runs, services.NewDraftService(manager))
+	routes.RegisterBootstrapRoutes(app, sessions, runs, draft.NewService(manager))
 
 	req := httptest.NewRequest("GET", "/api/sessions/"+header.ID+"/bootstrap", nil)
 	req.Header.Set("Accept", "application/json")
@@ -86,7 +87,7 @@ func TestSessionBootstrapBinary(t *testing.T) {
 	header := helpers.CreateRunSession(t, sessions)
 	runs := run.NewService(sessions)
 	app := fiber.New()
-	routes.RegisterBootstrapRoutes(app, sessions, runs, services.NewDraftService(manager))
+	routes.RegisterBootstrapRoutes(app, sessions, runs, draft.NewService(manager))
 
 	req := httptest.NewRequest("GET", "/api/sessions/"+header.ID+"/bootstrap", nil)
 	req.Header.Set("Accept", "application/x-protobuf")

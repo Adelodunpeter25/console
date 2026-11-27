@@ -4,6 +4,7 @@ package tests
 
 import (
 	"context"
+	notification "github.com/Adelodunpeter25/console/apps/server-go/internal/services/notification"
 	"github.com/MoeForge/moego/json"
 	"net/http/httptest"
 	"os"
@@ -90,7 +91,7 @@ func runForSuggestions(t *testing.T, assistant, reply string) (chan *consolev1.N
 	t.Helper()
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	bus := services.NewNotificationService()
+	bus := notification.NewService()
 	svc.SetNotifications(bus)
 	stop := make(chan struct{})
 	t.Cleanup(func() { close(stop) })
@@ -181,7 +182,7 @@ func TestSuggestionsDiscardedWhenNewRunStarts(t *testing.T) {
 	setSmolRole(t, "codex/gpt-5.5")
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	bus := services.NewNotificationService()
+	bus := notification.NewService()
 	svc.SetNotifications(bus)
 	stop := make(chan struct{})
 	defer close(stop)
@@ -221,7 +222,7 @@ func TestSuggestionsStoredUntilNextRun(t *testing.T) {
 	setSmolRole(t, "codex/gpt-5.5")
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	bus := services.NewNotificationService()
+	bus := notification.NewService()
 	svc.SetNotifications(bus)
 	stop := make(chan struct{})
 	defer close(stop)

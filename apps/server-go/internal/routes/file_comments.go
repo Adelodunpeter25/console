@@ -2,15 +2,15 @@
 package routes
 
 import (
+	filecomment "github.com/Adelodunpeter25/console/apps/server-go/internal/services/file_comment"
 	"github.com/MoeForge/moego/json"
 
 	"github.com/gofiber/fiber/v2"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
-func RegisterFileCommentRoutes(app *fiber.App, comments *services.FileCommentService) {
+func RegisterFileCommentRoutes(app *fiber.App, comments *filecomment.Service) {
 	encode := func(c *fiber.Ctx, msg *consolev1.FileComment) error {
 		raw, err := protoMarshal.Marshal(msg)
 		if err != nil {
@@ -19,7 +19,7 @@ func RegisterFileCommentRoutes(app *fiber.App, comments *services.FileCommentSer
 		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	}
 	failFor := func(c *fiber.Ctx, err error) error {
-		if err == services.ErrFileCommentNotFound {
+		if err == filecomment.ErrNotFound {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": err.Error()})
 		}
 		return fail400(c, err)

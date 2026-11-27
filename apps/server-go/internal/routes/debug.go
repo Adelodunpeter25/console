@@ -8,6 +8,7 @@
 package routes
 
 import (
+	notification "github.com/Adelodunpeter25/console/apps/server-go/internal/services/notification"
 	"runtime"
 	"strings"
 	"time"
@@ -15,12 +16,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 // RegisterDebugRoutes wires /api/debug/*. Statistics are plain process
 // snapshots; the WT session counters went away with WebTransport.
-func RegisterDebugRoutes(app *fiber.App, notifications *services.NotificationService) {
+func RegisterDebugRoutes(app *fiber.App, notifications *notification.Service) {
 	h := app.Group("/api/debug")
 
 	h.Get("/stats", func(c *fiber.Ctx) error {

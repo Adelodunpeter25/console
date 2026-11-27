@@ -5,6 +5,7 @@ package tests
 
 import (
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
+	skills "github.com/Adelodunpeter25/console/apps/server-go/internal/services/skills"
 	"github.com/MoeForge/moego/json"
 	"net/http/httptest"
 	"testing"
@@ -21,7 +22,7 @@ func assistCommands(t *testing.T) []map[string]any {
 	// Sessions and fs are untouched on the param-less route: no session id
 	// means no session lookup, and file search is a different endpoint.
 	var sessions *services.SessionService
-	routes.RegisterAssistRoutes(app, sessions, fssvc.NewFsService(), services.NewSkillsService())
+	routes.RegisterAssistRoutes(app, sessions, fssvc.NewFsService(), skills.NewService())
 	req := httptest.NewRequest("GET", "/api/assist/commands", nil)
 	resp, err := app.Test(req, 10000)
 	if err != nil {

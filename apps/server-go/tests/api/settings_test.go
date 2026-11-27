@@ -4,6 +4,7 @@
 package tests
 
 import (
+	settings "github.com/Adelodunpeter25/console/apps/server-go/internal/services/settings"
 	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http/httptest"
@@ -15,7 +16,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 func settingsFixture(t *testing.T, name string) string {
@@ -31,7 +31,7 @@ func settingsApp(t *testing.T, settingsFile string) *fiber.App {
 	t.Helper()
 	t.Setenv("CONSOLE_SETTINGS_PATH", settingsFile)
 	app := fiber.New()
-	routes.RegisterSettingsRoutes(app, services.NewSettingsService())
+	routes.RegisterSettingsRoutes(app, settings.NewService())
 	return app
 }
 

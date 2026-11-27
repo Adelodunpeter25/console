@@ -720,14 +720,16 @@ func TestCodeModePropagatesHtmlArtifact(t *testing.T) {
 	registry := tools.NewRegistry()
 	registry.Add(tools.NewTool("render", "Render HTML", tools.TierRead, func(_ context.Context, in struct {
 		HTML string `json:"html"`
-	}) (any, error) { return tools.Envelope{
-		Content: "Rendered page.",
-		Html: &tools.HtmlArtifact{
-			Path:   "/workspace/page.html",
-			Title:  "My Page",
-			Height: 400,
-		},
-	}, nil }))
+	}) (any, error) {
+		return tools.Envelope{
+			Content: "Rendered page.",
+			Html: &tools.HtmlArtifact{
+				Path:   "/workspace/page.html",
+				Title:  "My Page",
+				Height: 400,
+			},
+		}, nil
+	}))
 	exec := loop.NewExecutor(registry, permissions.FullAccess)
 	exec.Guard = permissions.NewGuard(t.TempDir())
 	rt, err := codemode.NewRuntime(exec, codemode.Options{})
