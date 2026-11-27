@@ -36,7 +36,6 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import io.github.lyxnx.compose.ui.tablericons.outline.Package
 import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
-import io.github.lyxnx.compose.ui.tablericons.outline.TrendingUp
 import io.github.lyxnx.compose.ui.tablericons.outline.UserCircle
 import io.github.lyxnx.compose.ui.tablericons.outline.Wifi
 import com.console.mobile.AppContainer
@@ -46,7 +45,7 @@ import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.common.new.PageHeaderHeight
 
-enum class SettingsSection { Servers, Providers, Usage, Models, Integrations, Projects, DeletedChats, Mcp }
+enum class SettingsSection { Servers, Providers, Models, Integrations, Projects, DeletedChats, Mcp }
 
 /**
  * Port of screens/settings/settings-screen.tsx.
@@ -89,7 +88,6 @@ fun SettingsScreen(
                 // returns to the Settings landing list.
                 if (openedFromSetup) onBackToHome() else section = null
             })
-            SettingsSection.Usage -> UsageSettings(onBack = { section = null })
             SettingsSection.Models -> ModelsSettings(onBack = { section = null })
             SettingsSection.Integrations -> IntegrationsSettings(onBack = { section = null })
             SettingsSection.Projects -> ProjectsSettings(onBack = { section = null }, onAddProject = onAddProject)
@@ -112,7 +110,6 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
             Section("Connections") {
                 NavRow(icon = TablerIcons.Outline.Wifi, title = "Servers") { onOpen(SettingsSection.Servers) }
                 NavRow(icon = TablerIcons.Outline.UserCircle, title = "Providers") { onOpen(SettingsSection.Providers) }
-                NavRow(icon = TablerIcons.Outline.TrendingUp, title = "Usage") { onOpen(SettingsSection.Usage) }
             }
             Section("AI & tools") {
                 NavRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models") { onOpen(SettingsSection.Models) }

@@ -62,7 +62,7 @@ import com.console.mobile.ui.components.common.new.SectionSkeleton
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UsageSettings(onBack: () -> Unit) {
+fun UsageSettings(onBack: (() -> Unit)? = null) {
     val usageState by AppContainer.usageStateHolder.state.collectAsStateWithLifecycle()
     val authState by AppContainer.authStateHolder.state.collectAsStateWithLifecycle()
     var refreshing by remember { mutableStateOf(false) }

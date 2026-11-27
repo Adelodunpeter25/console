@@ -53,6 +53,7 @@ import com.console.mobile.feature.onboarding.SetupStep
 import com.console.mobile.feature.ports.PortsScreen
 import com.console.mobile.feature.settings.AddProjectScreen
 import com.console.mobile.feature.settings.SettingsScreen
+import com.console.mobile.feature.settings.UsageSettings
 import com.console.mobile.feature.terminal.TerminalScreen
 import com.console.mobile.ui.components.common.new.ConfirmPromptHost
 import com.console.mobile.ui.components.common.new.FloatingNavBar
@@ -177,7 +178,7 @@ fun AppNavGraph() {
     CompositionLocalProvider(LocalUriHandler provides linkHandler) {
     val currentRoute = backStackEntry?.destination?.route.orEmpty()
     val activeNavTab = when {
-        currentRoute.contains("RouteSettingsUsage", ignoreCase = true) -> FloatingNavTab.Usage
+        currentRoute.contains("RouteUsage", ignoreCase = true) -> FloatingNavTab.Usage
         currentRoute.contains("RouteSettings", ignoreCase = true) &&
             !currentRoute.contains("RouteSettingsFromSetup", ignoreCase = true) &&
             !currentRoute.contains("RouteSettingsProviders", ignoreCase = true) -> FloatingNavTab.Settings
@@ -347,18 +348,8 @@ fun AppNavGraph() {
                     onAddProject = { navController.navigate(RouteAddProject) },
                 )
             }
-            composable<RouteSettingsUsage> {
-                SettingsScreen(
-                    onBackToHome = {
-                        AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
-                        navController.navigate(RouteHome) {
-                            launchSingleTop = true
-                            popUpTo(RouteHome)
-                        }
-                    },
-                    onAddProject = { navController.navigate(RouteAddProject) },
-                    startSection = com.console.mobile.feature.settings.SettingsSection.Usage,
-                )
+            composable<RouteUsage> {
+                UsageSettings(onBack = null)
             }
             // Same screen, but it knows the first-run panel sent it here, so
             // back returns to that panel instead of the Settings landing list.
@@ -441,7 +432,7 @@ fun AppNavGraph() {
                             // No-op for now.
                         }
                         FloatingNavTab.Usage -> {
-                            navController.navigate(RouteSettingsUsage) { launchSingleTop = true }
+                            navController.navigate(RouteUsage) { launchSingleTop = true }
                         }
                         FloatingNavTab.Settings -> {
                             navController.navigate(RouteSettings) { launchSingleTop = true }
