@@ -420,6 +420,7 @@ fun AppNavGraph() {
             FloatingNavBar(
                 activeTab = activeNavTab ?: lastNavTab,
                 onSelectTab = { tab ->
+                    if (tab == activeNavTab) return@FloatingNavBar
                     when (tab) {
                         FloatingNavTab.Chats -> {
                             AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
