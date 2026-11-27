@@ -115,7 +115,7 @@ fun UsageSettings(onBack: () -> Unit) {
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {
-                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
+                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 96.dp)) {
                     Text("Remaining quota for your signed-in providers. Pull to refresh.", color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp))
                     cards.forEach { card ->
                         UsageProviderCard(
