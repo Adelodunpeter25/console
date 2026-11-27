@@ -185,6 +185,49 @@ func TestCodemodeShellCommand(t *testing.T) {
 	}
 }
 
+func TestCodemodeShellTemplateEscapingAndQuoting(t *testing.T) {
+	tmpDir := t.TempDir()
+	exec := newTestExecutor(t, tmpDir)
+
+	rt, err := codemode.NewRuntime(exec, codemode.Options{})
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+
+	run := func(script string) string {
+		t.Helper()
+		res, err := rt.Eval(context.Background(), script, 10*time.Second)
+		if err != nil {
+			t.Fatalf("eval: %v", err)
+		}
+		env := res.(tools.Envelope)
+		if env.IsError {
+			t.Fatalf("script failed: %v", env.Content)
+		}
+		return env.Content.(string)
+	}
+
+	// \1 is an invalid JS escape: the cooked string is undefined, the raw one is intact.
+	if out := run("const r = await $`echo abc | sed -E 's/(b)/[\\1]/'`; log(r.text());"); !strings.Contains(out, "a[b]c") {
+		t.Fatalf("backslash escape lost, got: %q", out)
+	}
+
+	// An interpolated value with spaces and quotes stays one argument.
+	if out := run("const v = \"it's a b\"; const r = await $`printf '%s|' ${v}`; log(r.text());"); !strings.Contains(out, "it's a b|") {
+		t.Fatalf("interpolated value not quoted, got: %q", out)
+	}
+
+	// A script interpolated into bash -c arrives as a single argument.
+	if out := run("const c = \"for t in a b; do printf '%s,' $t; done\"; const r = await $`bash -c ${c}`; log(r.text());"); !strings.Contains(out, "a,b,") {
+		t.Fatalf("bash -c script split into words, got: %q", out)
+	}
+
+	// Arrays expand to separate quoted words.
+	if out := run("const xs = [\"a b\", \"c\"]; const r = await $`printf '%s|' ${xs}`; log(r.text());"); !strings.Contains(out, "a b|c|") {
+		t.Fatalf("array not expanded to words, got: %q", out)
+	}
+}
+
 func TestCodemodeToolDiscoveryAndGenericCall(t *testing.T) {
 	tmpDir := t.TempDir()
 	exec := newTestExecutor(t, tmpDir)

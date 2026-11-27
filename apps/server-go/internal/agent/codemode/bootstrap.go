@@ -325,14 +325,24 @@ const bootstrapScript = `
         }
     };
 
-    // Command runner: $(cmd) or tagged template
+    // Command runner: $(cmd) or tagged template. Interpolated values are
+    // shell-quoted; use the $("...") string form to splice raw shell.
+    function shellQuote(v) {
+        if (Array.isArray(v)) return v.map(shellQuote).join(" ");
+        const s = String(v);
+        if (/^[A-Za-z0-9_\/.:=@%+,-]+$/.test(s)) return s;
+        return "'" + s.replace(/'/g, "'\\''") + "'";
+    }
+
     function buildCmd(strings, values) {
         if (Array.isArray(strings)) {
+            // .raw: a cooked string turns an invalid escape like \1 into undefined.
+            const parts = strings.raw || strings;
             let res = "";
-            for (let i = 0; i < strings.length; i++) {
-                res += strings[i];
+            for (let i = 0; i < parts.length; i++) {
+                res += parts[i];
                 if (i < values.length) {
-                    res += values[i];
+                    res += shellQuote(values[i]);
                 }
             }
             return res;

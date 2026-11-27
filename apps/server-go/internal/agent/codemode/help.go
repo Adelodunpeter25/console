@@ -24,7 +24,7 @@ type builtinDoc struct {
 // namespace help({group}) filters on.
 var builtinCatalog = []builtinDoc{
 	// Shell
-	{name: "$", group: "shell", signature: "$`cmd` | $(\"cmd\") | $({cwd:\"dir\", background:true})`cmd`", doc: "Run a shell command. For dev servers and long builds use $({background:true})`cmd`: it returns the job text (with a jobId) immediately and you are notified when the job finishes; never start them with & or nohup. Returns {code, exitCode, stdout, stderr, ok, durationMs, text(), json()}. Throws on non-zero exit unless .nothrow() is called: (await $`git status`).nothrow()"},
+	{name: "$", group: "shell", signature: "$`cmd` | $(\"cmd\") | $({cwd:\"dir\", background:true})`cmd`", doc: "Run a shell command. For dev servers and long builds use $({background:true})`cmd`: it returns the job text (with a jobId) immediately and you are notified when the job finishes; never start them with & or nohup. In the tagged form, ${values} are shell-quoted (arrays become space-separated words) and backslashes pass through untouched; use $(\"...\") to splice raw shell. Returns {code, exitCode, stdout, stderr, ok, durationMs, text(), json()}. Throws on non-zero exit unless .nothrow() is called: (await $`git status`).nothrow()"},
 
 	{name: "bashJob", group: "shell", signature: "bashJob(action, [jobId], [opts])", doc: "Manage background jobs started with $({background:true}). action is output (peek at partial output; opts {cursor, limit}), kill, or list. Returns text."},
 
