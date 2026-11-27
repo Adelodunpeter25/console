@@ -102,7 +102,7 @@ internal fun SessionSectionHeader(
             .clip(shape)
             .then(
                 if (!isSearch) {
-                    Modifier.background(Color(0xFF111113))
+                    Modifier.background(Color(0xFF131315))
                 } else {
                     Modifier
                 }

@@ -44,7 +44,7 @@ internal fun HomeSkeleton(sections: List<Int> = listOf(3, 2)) {
                     .padding(top = if (sIdx == 0) 4.dp else 10.dp, bottom = 4.dp)
                     .height(40.dp)
                     .clip(headerShape)
-                    .background(Color(0xFF111113))
+                    .background(Color(0xFF131315))
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
