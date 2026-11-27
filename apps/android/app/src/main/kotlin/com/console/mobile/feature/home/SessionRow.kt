@@ -74,22 +74,22 @@ internal fun SessionRow(
                     color = NewTheme.Accent,
                     strokeWidth = 2.dp,
                     strokeCap = StrokeCap.Round,
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(15.dp),
                 )
                 status == SessionStatus.NeedsAttention -> Box(
-                    modifier = Modifier.size(8.dp).clip(CircleShape).background(NewTheme.Danger),
+                    modifier = Modifier.size(9.dp).clip(CircleShape).background(NewTheme.Danger),
                 )
                 showsUnreadDot(session, status) -> Box(
-                    modifier = Modifier.size(8.dp).clip(CircleShape).background(NewTheme.Accent),
+                    modifier = Modifier.size(9.dp).clip(CircleShape).background(NewTheme.Accent),
                 )
                 status == SessionStatus.Done -> Icon(
                     TablerIcons.Outline.Check,
                     contentDescription = "Ready",
                     tint = NewTheme.Success,
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(15.dp),
                 )
                 else -> Box(
-                    modifier = Modifier.size(6.dp).clip(CircleShape).background(NewTheme.TextGhost),
+                    modifier = Modifier.size(7.dp).clip(CircleShape).background(NewTheme.TextGhost),
                 )
             }
         }
@@ -107,7 +107,7 @@ internal fun SessionRow(
                     Text(
                         "Generating title" + ".".repeat(dots),
                         color = NewTheme.TextMuted,
-                        fontSize = 17.sp,
+                        fontSize = 16.sp,
                         fontStyle = FontStyle.Italic,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -117,7 +117,7 @@ internal fun SessionRow(
                     Text(
                         session.title,
                         color = NewTheme.TextPrimary,
-                        fontSize = 17.sp,
+                        fontSize = 16.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
@@ -152,7 +152,7 @@ internal fun SessionRow(
                 "provisioning" -> Text(
                     "Creating worktree…",
                     color = NewTheme.Accent,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
@@ -160,7 +160,7 @@ internal fun SessionRow(
                 "failed" -> Text(
                     "Worktree failed",
                     color = NewTheme.Danger,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
@@ -169,7 +169,7 @@ internal fun SessionRow(
                     Text(
                         draftPreview,
                         color = NewTheme.Warning,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp),
@@ -179,7 +179,7 @@ internal fun SessionRow(
         }
 
         val ts = if (session.updated_at > 0) session.updated_at else session.created_at
-        Text(shortRelative(ts), color = NewTheme.TextMuted, fontSize = 14.sp)
+        Text(shortRelative(ts), color = NewTheme.TextMuted, fontSize = 13.sp)
     }
 }
 
