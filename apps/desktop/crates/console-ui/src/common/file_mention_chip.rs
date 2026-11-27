@@ -400,7 +400,16 @@ impl Element for InlineFileMentionText {
                     theme,
                 )
             });
-            if let Some(card) = card {
+            if let Some(mut card) = card {
+                // `defer_draw` expects a laid-out element; a bare one panics in prepaint.
+                card.layout_as_root(
+                    gpui::size(
+                        gpui::AvailableSpace::Definite(window.viewport_size().width),
+                        gpui::AvailableSpace::Definite(window.viewport_size().height),
+                    ),
+                    window,
+                    cx,
+                );
                 window.defer_draw(card, gpui::Point::default(), 100, None);
             }
         }

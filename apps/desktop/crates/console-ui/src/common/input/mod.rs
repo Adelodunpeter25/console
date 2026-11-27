@@ -1828,7 +1828,7 @@ impl ComposerInput {
         let layout = self.last_layout.as_ref()?;
         let mentions = &self.mentions;
         let attachments = self.image_attachments.clone();
-        self.image_hover.clone().update(cx, |hover, _| {
+        let card = self.image_hover.clone().update(cx, |hover, _| {
             hover.card(
                 &attachments,
                 |number| {
@@ -1839,7 +1839,8 @@ impl ComposerInput {
                 },
                 theme,
             )
-        })
+        })?;
+        Some(gpui::deferred(card).with_priority(100).into_any_element())
     }
 
     /// The mention chip under `position`, and whether the point is on its

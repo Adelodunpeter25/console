@@ -6,7 +6,7 @@ use std::time::Duration;
 use console_core::ImageAttachment;
 use gpui::{
     AnyElement, Context, Entity, InteractiveElement, IntoElement, ParentElement, Styled,
-    StyledImage, Window, deferred, div, img, px,
+    StyledImage, Window, div, img, px,
 };
 
 use crate::primitives::menu::{FloatingSurface, MenuAlign};
@@ -102,8 +102,8 @@ pub(crate) fn dismiss_on_scroll(window: &mut Window, state: Entity<ImageChipHove
     });
 }
 
-/// The card, anchored above `chip`. Deferred so it paints over everything,
-/// including an expanded inline webview.
+/// The card, anchored above `chip`. Callers defer it so it paints over
+/// everything, including an expanded inline webview.
 pub(crate) fn image_hover_card(
     image: Arc<gpui::Image>,
     chip: gpui::Bounds<gpui::Pixels>,
@@ -125,13 +125,12 @@ pub(crate) fn image_hover_card(
                     .object_fit(gpui::ObjectFit::ScaleDown),
             ),
         );
-    deferred(FloatingSurface::new(
+    FloatingSurface::new(
         card.into_any_element(),
         chip,
         MenuAlign::AboveLeft,
         px(6.0),
         px(8.0),
-    ))
-    .with_priority(100)
+    )
     .into_any_element()
 }
