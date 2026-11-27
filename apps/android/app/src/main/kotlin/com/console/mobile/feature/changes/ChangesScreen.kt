@@ -160,7 +160,8 @@ private fun FileChangeRow(row: ChangesRow, open: Boolean, onToggle: () -> Unit) 
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 40.dp)
-            .clickable(onClick = onToggle),
+            .clickable(onClick = onToggle)
+            .padding(start = 16.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(statusLetter(row.status), color = gitBadgeColor(row.status), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(14.dp))
@@ -209,7 +210,7 @@ private fun FileDiffBody(sessionId: String, row: ChangesRow, inlineDiff: String?
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().background(NewTheme.Card)) {
+    Column(modifier = Modifier.fillMaxWidth().background(NewTheme.Black)) {
         val body = text
         when {
             loading -> Text("Loading diff…", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
