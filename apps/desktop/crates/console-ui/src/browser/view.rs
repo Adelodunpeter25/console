@@ -463,6 +463,14 @@ impl BrowserView {
                     self.apply_native_visibility();
                     cx.notify();
                 }
+                InspectorIpcMessage::UrlChanged => {
+                    if let Some(url) = self.host.as_ref().and_then(|host| host.current_url()) {
+                        self.commit_navigated_url(url);
+                        self.refresh_navigation_state();
+                        self.echo_page_url(cx);
+                        cx.notify();
+                    }
+                }
                 InspectorIpcMessage::InspectCancelled => {
                     self.inspecting = false;
                     self.active_inspection = None;

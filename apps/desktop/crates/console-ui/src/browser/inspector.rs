@@ -37,6 +37,8 @@ pub enum InspectorIpcMessage {
     ElementInspected(BrowserElementInspection),
     #[serde(rename = "inspect_cancelled")]
     InspectCancelled,
+    #[serde(rename = "url_changed")]
+    UrlChanged,
     /// Result of an agent-run script, keyed by the request id it was sent with.
     #[serde(rename = "script_result")]
     ScriptResult {

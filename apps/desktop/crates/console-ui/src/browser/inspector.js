@@ -551,4 +551,17 @@
 
   window.__consoleSetInspectMode = setInspectActive;
   window.__consoleSetInspectPaused = setInspectPaused;
+
+  // SPA route changes fire no native load or title event, so report them.
+  const notifyUrl = () => post({ type: 'url_changed' });
+  for (const method of ['pushState', 'replaceState']) {
+    const original = history[method];
+    history[method] = function() {
+      const result = original.apply(this, arguments);
+      notifyUrl();
+      return result;
+    };
+  }
+  window.addEventListener('popstate', notifyUrl);
+  window.addEventListener('hashchange', notifyUrl);
 })();
