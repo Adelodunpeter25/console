@@ -9,7 +9,7 @@ package console
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"

@@ -1,7 +1,7 @@
 package antigravity
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"log/slog"
 	"os"
 	"path/filepath"

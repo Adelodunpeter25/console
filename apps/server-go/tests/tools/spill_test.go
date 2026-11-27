@@ -4,7 +4,7 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -106,7 +106,7 @@ func TestWebFetchSpillsLargeBody(t *testing.T) {
 func TestBashJobSpillsRingBufferDrops(t *testing.T) {
 	jobs := terminal.NewBashJobManager(nil)
 	snap, err := jobs.Start(terminal.StartBashJobOptions{
-		Command:  "for i in $(seq 1 40000); do echo \"line $i\"; done; echo JOB-DONE",
+		Command:   "for i in $(seq 1 40000); do echo \"line $i\"; done; echo JOB-DONE",
 		TimeoutMs: 60_000,
 	})
 	if err != nil {

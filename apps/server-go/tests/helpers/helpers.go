@@ -5,7 +5,7 @@ package helpers
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"path/filepath"
 	"testing"
 	"time"

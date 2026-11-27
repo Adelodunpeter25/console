@@ -5,9 +5,9 @@ package routes
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"

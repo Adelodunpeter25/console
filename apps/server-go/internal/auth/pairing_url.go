@@ -28,8 +28,8 @@ package auth
 
 import (
 	"fmt"
+	"github.com/MoeForge/moego/regexp"
 	"net/url"
-	"regexp"
 	"strings"
 )
 

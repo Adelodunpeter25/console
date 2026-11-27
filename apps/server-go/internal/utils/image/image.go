@@ -4,8 +4,8 @@ package imageutil
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
+	"github.com/MoeForge/moego/base64"
 	"image"
 	_ "image/gif"
 	"image/jpeg"

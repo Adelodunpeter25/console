@@ -5,8 +5,8 @@
 package tests
 
 import (
-	"encoding/json"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http/httptest"
 	"os"

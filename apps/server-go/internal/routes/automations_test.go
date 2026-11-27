@@ -2,7 +2,7 @@ package routes
 
 import (
 	"bufio"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"net"
 	"net/http"
 	"net/http/httptest"

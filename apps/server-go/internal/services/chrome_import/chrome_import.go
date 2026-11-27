@@ -10,8 +10,8 @@
 package chromeimport
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 	"sort"

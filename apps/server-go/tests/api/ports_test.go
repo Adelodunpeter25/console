@@ -5,9 +5,9 @@
 package tests
 
 import (
-	"encoding/json"
 	"fmt"
 	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net"
 	"net/http/httptest"

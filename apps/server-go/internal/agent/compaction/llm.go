@@ -6,8 +6,8 @@ package compaction
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"

@@ -10,7 +10,7 @@
 package run
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"

@@ -2,8 +2,8 @@
 package shared
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"strings"
 )

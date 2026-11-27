@@ -6,9 +6,9 @@ package shared
 import (
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/base64"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"net/url"

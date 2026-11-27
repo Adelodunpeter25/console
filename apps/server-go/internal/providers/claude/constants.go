@@ -2,8 +2,8 @@
 package claude
 
 import (
+	"github.com/MoeForge/moego/regexp"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"

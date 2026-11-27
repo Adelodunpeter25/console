@@ -3,8 +3,8 @@ package loop
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )

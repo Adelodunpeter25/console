@@ -6,9 +6,9 @@ package run
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"log/slog"
 	"strings"
 	"time"

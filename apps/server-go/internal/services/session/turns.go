@@ -5,8 +5,8 @@ package session
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
+	"github.com/MoeForge/moego/json"
 	"strconv"
 	"strings"
 

@@ -4,7 +4,7 @@
 package tests
 
 import (
-	"encoding/base64"
+	"github.com/MoeForge/moego/base64"
 	"os"
 	"path/filepath"
 	"strings"

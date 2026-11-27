@@ -3,8 +3,8 @@ package loop
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"

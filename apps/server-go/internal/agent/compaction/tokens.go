@@ -4,7 +4,7 @@
 package compaction
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"math"
 	"unicode/utf8"
 

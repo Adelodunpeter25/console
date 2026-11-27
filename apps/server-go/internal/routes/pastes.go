@@ -11,10 +11,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/MoeForge/moego/regexp"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 

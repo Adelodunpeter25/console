@@ -2,8 +2,8 @@ package console
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
+	"github.com/MoeForge/moego/json"
 	"path/filepath"
 	"testing"
 	"time"

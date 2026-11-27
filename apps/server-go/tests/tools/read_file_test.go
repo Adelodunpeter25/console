@@ -4,9 +4,9 @@ package tests
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/base64"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 	"strings"

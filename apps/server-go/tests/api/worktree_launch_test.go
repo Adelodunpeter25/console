@@ -6,8 +6,8 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http/httptest"
 	"os"
@@ -23,8 +23,8 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )

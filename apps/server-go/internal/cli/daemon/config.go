@@ -2,7 +2,7 @@
 package daemon
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"os"
 )
 

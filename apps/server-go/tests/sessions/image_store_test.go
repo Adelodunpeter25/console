@@ -4,8 +4,8 @@ package tests
 
 import (
 	"database/sql"
-	"encoding/base64"
-	"encoding/json"
+	"github.com/MoeForge/moego/base64"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 	"strings"

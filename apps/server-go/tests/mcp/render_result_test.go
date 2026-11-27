@@ -6,7 +6,7 @@ package tests
 
 import (
 	"context"
-	"encoding/base64"
+	"github.com/MoeForge/moego/base64"
 	"strings"
 	"testing"
 

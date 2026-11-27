@@ -3,7 +3,7 @@
 package tests
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http/httptest"
 	"strconv"

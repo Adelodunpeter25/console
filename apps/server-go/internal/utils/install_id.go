@@ -3,9 +3,9 @@
 package utils
 
 import (
+	"github.com/MoeForge/moego/regexp"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 )

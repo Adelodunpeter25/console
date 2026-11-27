@@ -6,7 +6,7 @@ package webhooks
 import (
 	"database/sql"
 	"errors"
-	"regexp"
+	"github.com/MoeForge/moego/regexp"
 	"sync"
 )
 

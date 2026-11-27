@@ -8,7 +8,7 @@
 package loop
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"math"
 	"strings"
 	"unicode/utf8"

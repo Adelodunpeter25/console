@@ -5,10 +5,10 @@ package tools
 import (
 	"context"
 	"fmt"
+	"github.com/MoeForge/moego/regexp"
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 

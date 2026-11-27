@@ -2,7 +2,7 @@
 package routes
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"

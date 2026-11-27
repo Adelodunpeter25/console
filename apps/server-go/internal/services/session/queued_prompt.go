@@ -4,7 +4,7 @@ package session
 
 import (
 	"database/sql"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -122,7 +122,7 @@ func (s *Service) ListQueuedPrompts(sessionID string) ([]types.QueuedPrompt, err
 			ID: row.queueID, SessionID: sessionID, Prompt: row.prompt,
 			ModelID: row.modelID.String, Provider: row.provider.String,
 			ApprovalMode: row.approvalMode.String, Source: row.source.String,
-			CreatedAt:    time.UnixMilli(row.createdAt).UTC().Format(time.RFC3339),
+			CreatedAt: time.UnixMilli(row.createdAt).UTC().Format(time.RFC3339),
 		}
 		if row.attachments.Valid && row.attachments.String != "" {
 			if err := json.Unmarshal([]byte(row.attachments.String), &qp.Attachments); err != nil {

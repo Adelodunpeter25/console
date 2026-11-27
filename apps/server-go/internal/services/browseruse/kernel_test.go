@@ -5,10 +5,10 @@ package browseruse
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
+	"github.com/MoeForge/moego/regexp"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"

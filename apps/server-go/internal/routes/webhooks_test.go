@@ -6,7 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"

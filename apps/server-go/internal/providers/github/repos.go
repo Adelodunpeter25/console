@@ -7,9 +7,9 @@ package github
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"strings"

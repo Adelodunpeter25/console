@@ -3,7 +3,7 @@ package session
 
 import (
 	"database/sql"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 )
 
 // projectIDBySession returns the project id for a session and whether the

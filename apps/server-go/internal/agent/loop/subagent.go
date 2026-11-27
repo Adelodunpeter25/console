@@ -6,9 +6,9 @@ package loop
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"

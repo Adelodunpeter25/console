@@ -2,7 +2,7 @@
 package tests
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"strings"
 	"testing"
 

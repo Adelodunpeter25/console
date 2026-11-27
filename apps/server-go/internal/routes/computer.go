@@ -3,9 +3,9 @@
 package routes
 
 import (
-	_ "embed"
 	"context"
-	"encoding/json"
+	_ "embed"
+	"github.com/MoeForge/moego/json"
 	"log/slog"
 	"sync"
 

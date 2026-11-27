@@ -2,8 +2,8 @@ package codemode
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"

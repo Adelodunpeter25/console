@@ -2,9 +2,9 @@ package htmlrender
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/base64"
+	"github.com/MoeForge/moego/json"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"

@@ -41,10 +41,10 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
+	"github.com/MoeForge/moego/regexp"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"

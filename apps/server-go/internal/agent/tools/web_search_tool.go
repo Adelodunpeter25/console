@@ -5,13 +5,13 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
+	"github.com/MoeForge/moego/regexp"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 )

@@ -3,8 +3,8 @@
 package tests
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"strings"
 	"testing"
 

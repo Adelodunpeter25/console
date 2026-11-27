@@ -2,7 +2,7 @@
 package antigravity
 
 import (
-	"encoding/base64"
+	"github.com/MoeForge/moego/base64"
 	"os"
 	"runtime"
 )

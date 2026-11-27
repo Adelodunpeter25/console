@@ -4,7 +4,7 @@ package session
 
 import (
 	"database/sql"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )

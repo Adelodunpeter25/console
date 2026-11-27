@@ -3,8 +3,8 @@
 package routes
 
 import (
-	"encoding/json"
 	"errors"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"strings"
 	"time"

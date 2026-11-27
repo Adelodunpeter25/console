@@ -9,9 +9,9 @@
 package stt
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,12 +36,12 @@ const (
 var (
 	// ErrNotConfigured is returned before any network call so an unconfigured
 	// server reports the fixable problem instead of an opaque upstream 401.
-	ErrNotConfigured  = errors.New("speech-to-text is not configured; add a Cloudflare account ID and API token")
+	ErrNotConfigured      = errors.New("speech-to-text is not configured; add a Cloudflare account ID and API token")
 	ErrEmptyAccountID     = errors.New("a Cloudflare account ID is required")
 	ErrEmptyAPIToken      = errors.New("a Cloudflare API token is required")
 	ErrSwappedCredentials = errors.New("that looks like a Cloudflare API token in the account ID field — swap the account ID and API token")
-	ErrEmptyAudio     = errors.New("audio is required")
-	ErrAudioTooLarge  = fmt.Errorf("audio must be %d MB or smaller", MaxAudioBytes>>20)
+	ErrEmptyAudio         = errors.New("audio is required")
+	ErrAudioTooLarge      = fmt.Errorf("audio must be %d MB or smaller", MaxAudioBytes>>20)
 )
 
 // Stored is the on-disk credential. The token never leaves this file except on

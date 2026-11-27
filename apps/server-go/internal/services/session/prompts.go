@@ -2,7 +2,7 @@ package session
 
 import (
 	"database/sql"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"strings"
 )
 

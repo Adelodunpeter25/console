@@ -200,10 +200,10 @@ import "C"
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoeForge/moego/base64"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 	"runtime"

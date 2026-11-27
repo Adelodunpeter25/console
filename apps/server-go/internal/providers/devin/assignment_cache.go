@@ -1,8 +1,8 @@
 package devin
 
 import (
-	"encoding/base64"
-	"encoding/json"
+	"github.com/MoeForge/moego/base64"
+	"github.com/MoeForge/moego/json"
 	"strings"
 	"sync"
 	"time"

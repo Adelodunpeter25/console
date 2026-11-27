@@ -5,9 +5,9 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
+	"github.com/MoeForge/moego/json"
 	"strings"
 	"testing"
 	"time"

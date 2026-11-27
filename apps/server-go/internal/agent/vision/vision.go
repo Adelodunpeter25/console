@@ -5,7 +5,7 @@ package vision
 
 import (
 	"context"
-	"encoding/base64"
+	"github.com/MoeForge/moego/base64"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"

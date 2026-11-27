@@ -13,11 +13,11 @@ package jskernel
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
+	"github.com/MoeForge/moego/base64"
+	"github.com/MoeForge/moego/json"
+	"github.com/MoeForge/moego/regexp"
 	"strings"
 	"sync"
 	"time"

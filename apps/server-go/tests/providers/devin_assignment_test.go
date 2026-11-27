@@ -3,8 +3,8 @@
 package tests
 
 import (
-	"encoding/base64"
 	"fmt"
+	"github.com/MoeForge/moego/base64"
 	"testing"
 	"time"
 

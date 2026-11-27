@@ -5,9 +5,9 @@ package tools
 import (
 	"context"
 	"fmt"
+	"github.com/MoeForge/moego/regexp"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 

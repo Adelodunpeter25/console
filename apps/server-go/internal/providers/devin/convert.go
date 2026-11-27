@@ -7,8 +7,8 @@ package devin
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"

@@ -12,10 +12,10 @@ package integrations
 import (
 	"context"
 	"errors"
+	"github.com/MoeForge/moego/regexp"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"

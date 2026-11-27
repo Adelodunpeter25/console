@@ -6,6 +6,7 @@ require (
 	github.com/Adelodunpeter25/iroh-go v0.0.0-20261107173249-9605c02ec0fb
 	github.com/Adelodunpeter25/sim-go v0.0.0-20261113115339-d943d8632ca3
 	github.com/BurntSushi/toml v1.6.0
+	github.com/MoeForge/moego v0.1.0-alpha.5
 	github.com/MoeForge/moejs v0.1.0
 	github.com/creack/pty v1.1.24
 	github.com/fasthttp/websocket v1.5.12
@@ -25,7 +26,6 @@ require (
 )
 
 require (
-	github.com/MoeForge/moego v0.1.0-alpha.1 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect

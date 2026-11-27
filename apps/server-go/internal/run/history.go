@@ -5,7 +5,7 @@
 package run
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"log/slog"
 	"strings"
 
