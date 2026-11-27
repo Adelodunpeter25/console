@@ -54,7 +54,6 @@ var builtinCatalog = []builtinDoc{
 	// Artifacts and context
 	{name: "render", group: "artifacts", signature: "render({html|path, title?, height?})", doc: "Publish an interactive HTML page inline in the chat."},
 	{name: "renderPreview", group: "artifacts", signature: "renderPreview({html|path, appearance?, click?, type?})", doc: "Verify an HTML page in the desktop browser and return a screenshot + console errors."},
-	{name: "preview", group: "artifacts", signature: "preview(data)", doc: "Preview arbitrary data in the chat."},
 	{name: "readChat", group: "artifacts", signature: "readChat(ref, [limit]) | readChat(ref, {limit, before})", doc: "Read a previous chat transcript, most recent first; pass the returned cursor as before to read older messages."},
 	{name: "readSkill", group: "skills", signature: "readSkill([name], [{cwd}])", doc: "Read a skill's full instructions before first use; cwd sets where project-level skills are discovered."},
 	{name: "writePlan", group: "plan", signature: "writePlan(name, content)", doc: "Save a Markdown design plan to docs/plan/<name>.md (plan mode)."},

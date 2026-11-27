@@ -106,13 +106,6 @@ func NewRuntime(caller Caller, opts Options) (*Runtime, error) {
 				return r.getStore(ctx, args)
 			},
 		},
-		{
-			Name: "preview",
-			Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
-				raw, _ := json.Marshal(args["data"])
-				return &jskernel.Result{StructuredContent: raw}, nil
-			},
-		},
 	}
 
 	kernelOpts := jskernel.Options{

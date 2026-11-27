@@ -318,15 +318,11 @@ const bootstrapScript = `
         return await bridge.load({ key: String(key) });
     };
 
-    // Narration and preview
+    // Narration
     globalThis.log = function(...args) {
         if (typeof print === "function") {
             print(...args);
         }
-    };
-
-    globalThis.preview = function(data) {
-        return bridge.preview({ data: data });
     };
 
     // Command runner: $(cmd) or tagged template
