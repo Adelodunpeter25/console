@@ -457,6 +457,10 @@ mod macos_host {
                 return;
             }
             self.visible.set(visible);
+            // A hidden view that keeps the first responder swallows every key.
+            if !visible && self.native_focus_within() {
+                self.focus_parent();
+            }
             let _ = self
                 .surface
                 .platform_surface()

@@ -12,7 +12,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 
 use console_core::{ConsoleClient, HtmlArtifact};
 use gpui::{
-    App, ElementId, HitboxBehavior, ImageFormat, InteractiveElement, IntoElement, MouseButton,
+    App, DispatchPhase, ElementId, HitboxBehavior, MouseDownEvent, ImageFormat, InteractiveElement, IntoElement, MouseButton,
     ObjectFit, ParentElement, RenderOnce, Styled, Window, canvas, div, img, prelude::*, px,
 };
 
@@ -381,6 +381,7 @@ impl RenderOnce for HtmlCard {
                     if let Some(host) = ensure_host(&self.row, u, self.on_wheel.clone(), window, cx)
                     {
                         let guarded = host.clone();
+                        let paint_host = host.clone();
                         let _ = window.use_keyed_state(
                             ElementId::Name(format!("html-host-guard-{}", self.row).into()),
                             cx,
@@ -401,7 +402,21 @@ impl RenderOnce for HtmlCard {
                                         );
                                         window.insert_hitbox(bounds, HitboxBehavior::Normal)
                                     },
-                                    move |_, _hitbox, _window, _| {},
+                                    move |bounds, _hitbox, window, _| {
+                                        // The webview keeps the first responder after a
+                                        // click elsewhere unless we take it back.
+                                        let paint_host = paint_host.clone();
+                                        window.on_mouse_event(
+                                            move |event: &MouseDownEvent, phase, _, _| {
+                                                if phase == DispatchPhase::Capture
+                                                    && !bounds.contains(&event.position)
+                                                    && paint_host.native_focus_within()
+                                                {
+                                                    paint_host.focus_parent();
+                                                }
+                                            },
+                                        );
+                                    },
                                 )
                                 .absolute()
                                 .size_full(),
