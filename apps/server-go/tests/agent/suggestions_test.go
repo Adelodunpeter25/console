@@ -23,6 +23,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
@@ -33,7 +34,7 @@ func TestSuggestionsParse(t *testing.T) {
 		`["a","A","b","c"]`:                     {"a", "b"},
 		`[]`:                                    nil,
 		`not json`:                              nil,
-		`["` + strings.Repeat("x", 80) + `","Short one"]`: {"Short one"},
+		`["` + strings.Repeat("x", 90) + `","Short one"]`: {"Short one"},
 		`["  ", ""]`: nil,
 	}
 	for in, want := range cases {
@@ -43,21 +44,12 @@ func TestSuggestionsParse(t *testing.T) {
 	}
 }
 
-func TestSuggestionsEndsWithQuestion(t *testing.T) {
-	if !suggestions.EndsWithQuestion("Which one do you prefer?  \n") {
-		t.Fatal("trailing question must be detected")
-	}
-	if suggestions.EndsWithQuestion("All done.") {
-		t.Fatal("statement is not a question")
-	}
-}
-
 // suggestingProvider answers the suggestion call (recognised by its system
 // prompt) with reply, and every other call with a plain assistant text.
 type suggestingProvider struct {
 	assistant string
 	reply     string
-	calls     chan struct{}
+	calls     chan loop.TurnRequest
 }
 
 func (p *suggestingProvider) RunTurn(ctx context.Context, req loop.TurnRequest, s *stream.Stream[loop.Event]) error {
@@ -65,7 +57,7 @@ func (p *suggestingProvider) RunTurn(ctx context.Context, req loop.TurnRequest, 
 	if strings.Contains(req.SystemPrompt, "what the user might say next") {
 		text = p.reply
 		select {
-		case p.calls <- struct{}{}:
+		case p.calls <- req:
 		default:
 		}
 	}
@@ -96,7 +88,7 @@ func runForSuggestions(t *testing.T, assistant, reply string) (chan *consolev1.N
 	stop := make(chan struct{})
 	t.Cleanup(func() { close(stop) })
 	notes := collectNotifications(t, bus, stop)
-	prov := &suggestingProvider{assistant: assistant, reply: reply, calls: make(chan struct{}, 4)}
+	prov := &suggestingProvider{assistant: assistant, reply: reply, calls: make(chan loop.TurnRequest, 4)}
 	svc.Lookup = func(id string) (loop.Provider, error) { return prov, nil }
 	header := helpers.CreateRunSession(t, sessions)
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "fix it", Provider: "mock", ModelID: "m"})
@@ -126,10 +118,17 @@ func TestSuggestionsOffWithoutSmolRole(t *testing.T) {
 	expectNoSuggestions(t, notes, prov, false)
 }
 
-func TestSuggestionsSkippedAfterQuestion(t *testing.T) {
+func TestSuggestionsDeliveredAfterQuestion(t *testing.T) {
 	setSmolRole(t, "codex/gpt-5.5")
-	notes, prov, _, _ := runForSuggestions(t, "Should I also update the docs?", `["Yes please"]`)
-	expectNoSuggestions(t, notes, prov, false)
+	notes, prov, _, _ := runForSuggestions(t, "Should I also update the docs?", `["Yes, update the docs"]`)
+	ev := waitNotification(t, notes, "suggestions")
+	if !reflect.DeepEqual(ev.GetItems(), []string{"Yes, update the docs"}) {
+		t.Fatalf("items: %v", ev.GetItems())
+	}
+	req := <-prov.calls
+	if req.ThinkingLevel != "none" {
+		t.Fatalf("ThinkingLevel = %q, want none", req.ThinkingLevel)
+	}
 }
 
 func TestSuggestionsDroppedWhenMalformed(t *testing.T) {
@@ -227,7 +226,7 @@ func TestSuggestionsStoredUntilNextRun(t *testing.T) {
 	stop := make(chan struct{})
 	defer close(stop)
 	notes := collectNotifications(t, bus, stop)
-	prov := &suggestingProvider{assistant: "Fixed the parser.", reply: `["Run the tests"]`, calls: make(chan struct{}, 4)}
+	prov := &suggestingProvider{assistant: "Fixed the parser.", reply: `["Run the tests"]`, calls: make(chan loop.TurnRequest, 4)}
 	svc.Lookup = func(id string) (loop.Provider, error) { return prov, nil }
 	header := helpers.CreateRunSession(t, sessions)
 
@@ -296,5 +295,45 @@ func TestSuggestionsRoute(t *testing.T) {
 	}
 	if got := get(); len(got) != 0 {
 		t.Fatalf("cleared: %v", got)
+	}
+}
+
+func TestSuggestionsIncludeTodosAndContext(t *testing.T) {
+	setSmolRole(t, "codex/gpt-5.5")
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	bus := notification.NewService()
+	svc.SetNotifications(bus)
+	stop := make(chan struct{})
+	defer close(stop)
+	notes := collectNotifications(t, bus, stop)
+	prov := &suggestingProvider{assistant: "Updated auth.go.", reply: `["Write tests"]`, calls: make(chan loop.TurnRequest, 4)}
+	svc.Lookup = func(id string) (loop.Provider, error) { return prov, nil }
+	header := helpers.CreateRunSession(t, sessions)
+
+	if err := sessions.SaveSessionTodos(header.ID, []types.TodoItem{
+		{ID: 1, Content: "Fix login", Status: "completed"},
+		{ID: 2, Content: "Add unit tests", Status: "pending"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "fix auth", Provider: "mock", ModelID: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	helpers.WaitSettled(t, hub)
+	waitNotification(t, notes, "suggestions")
+
+	req := <-prov.calls
+	userMsg, ok := req.Messages[0].(loop.UserMessage)
+	if !ok {
+		t.Fatalf("expected UserMessage, got %T", req.Messages[0])
+	}
+	if !strings.Contains(userMsg.Content, "Open tasks:") || !strings.Contains(userMsg.Content, "[pending] Add unit tests") {
+		t.Fatalf("expected open todo in prompt, got:\n%s", userMsg.Content)
+	}
+	if strings.Contains(userMsg.Content, "Fix login") {
+		t.Fatalf("completed todo should not be in prompt, got:\n%s", userMsg.Content)
 	}
 }

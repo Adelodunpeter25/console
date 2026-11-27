@@ -13,25 +13,27 @@ import (
 
 const (
 	MaxItems   = 2
-	maxRunes   = 60
+	maxRunes   = 80
 	systemText = "You suggest what the user might say next in a coding-agent chat. " +
 		"Reply with only a JSON array of at most 2 strings. Each string is a short, concrete " +
-		"follow-up the user could send, under 60 characters, written in the user's voice " +
-		"(imperative, no quotes or markdown). If the assistant asked the user a question that " +
-		"they must answer, or nothing useful follows, reply with []."
+		"follow-up the user could send, under 80 characters, written in the user's voice " +
+		"(imperative or direct reply, no quotes or markdown). " +
+		"If the assistant offered an action or asked a yes/no or choice question (e.g. \"Want me to run the tests?\"), " +
+		"suggest concrete replies (e.g. \"Yes, run the tests\"). " +
+		"Only reply with [] if the assistant is asking for open-ended information only the user knows, or nothing useful follows."
 )
 
-// Input is the minimal context the model sees.
-type Input struct {
+// Turn is one user/assistant exchange in the recent conversation.
+type Turn struct {
 	UserText      string
 	AssistantText string
-	ToolDigest    string
 }
 
-// EndsWithQuestion reports an assistant reply that waits on the user's
-// answer, where a canned follow-up would be noise.
-func EndsWithQuestion(assistantText string) bool {
-	return strings.HasSuffix(strings.TrimSpace(assistantText), "?")
+// Input is the context the suggestion model sees.
+type Input struct {
+	Turns      []Turn
+	ToolDigest string
+	OpenTodos  []string
 }
 
 // Parse extracts up to MaxItems usable suggestions from model output.
@@ -68,18 +70,27 @@ func Parse(raw string) []string {
 
 // Generate asks the provider for suggestions. accountID pins the call to
 // the run's account, like title generation.
-func Generate(ctx context.Context, provider loop.Provider, model string, in Input, accountID string) []string {
+func Generate(ctx context.Context, provider loop.Provider, model, thinkingLevel string, in Input, accountID string) []string {
 	var prompt strings.Builder
-	prompt.WriteString("User said:\n" + in.UserText + "\n\nAssistant replied:\n" + in.AssistantText)
+	for i, turn := range in.Turns {
+		if i > 0 {
+			prompt.WriteString("\n\n---\n\n")
+		}
+		prompt.WriteString("User said:\n" + turn.UserText + "\n\nAssistant replied:\n" + turn.AssistantText)
+	}
 	if in.ToolDigest != "" {
 		prompt.WriteString("\n\nWork done: " + in.ToolDigest)
 	}
+	if len(in.OpenTodos) > 0 {
+		prompt.WriteString("\n\nOpen tasks:\n- " + strings.Join(in.OpenTodos, "\n- "))
+	}
 	events := stream.New[loop.Event]()
 	req := loop.TurnRequest{
-		Model:        model,
-		SystemPrompt: systemText,
-		Messages:     []any{loop.UserMessage{Role: loop.RoleUser, Content: prompt.String()}},
-		AccountID:    accountID,
+		Model:         model,
+		SystemPrompt:  systemText,
+		Messages:      []any{loop.UserMessage{Role: loop.RoleUser, Content: prompt.String()}},
+		AccountID:     accountID,
+		ThinkingLevel: thinkingLevel,
 	}
 	if err := provider.RunTurn(ctx, req, events); err != nil {
 		return nil
