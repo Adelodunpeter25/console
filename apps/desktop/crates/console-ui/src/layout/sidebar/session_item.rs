@@ -1,17 +1,24 @@
-use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
-use gpui::{
-    App, AppContext, ElementId, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, actions, div,
-    prelude::FluentBuilder, px,
-};
+use std::cell::Cell;
 use std::rc::Rc;
 
+use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
+use gpui::{
+    App, AppContext, Bounds, ElementId, Entity, InteractiveElement, IntoElement, ParentElement,
+    Pixels, Point, RenderOnce, StatefulInteractiveElement, Styled, Window, actions, anchored,
+    canvas, deferred, div, prelude::FluentBuilder, px,
+};
+
+use super::item_row::{draft_badge, row_container, scheduled_badge, status_slot, title_label};
+use super::session_card::{
+    CardStatusMark, SidebarHoverManager, dismiss_card, on_card_hover, on_row_hover,
+    render_session_card_content,
+};
 use crate::input::ComposerInput;
 use crate::layout::sidebar_loading::{self as sidebar, SidebarLoadingState};
+use crate::primitives::motion;
 use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon, session_context_menu};
 use crate::theme::Theme;
-use crate::utils::format_time_ago;
 use crate::workspace::{WorkspaceDrag, WorkspaceDragPreview};
 
 actions!(
@@ -40,17 +47,49 @@ pub fn init_session_rename_keybindings(cx: &mut App) {
     ]);
 }
 
+/// The settle shortcut as it reads on this platform.
+pub const SETTLE_SHORTCUT_LABEL: &str = if cfg!(target_os = "macos") {
+    "⇧⌘S"
+} else {
+    "Ctrl+Shift+S"
+};
+
+/// The pin shortcut as it reads on this platform.
+pub const PIN_SHORTCUT_LABEL: &str = if cfg!(target_os = "macos") {
+    "⇧⌘P"
+} else {
+    "Ctrl+Shift+P"
+};
+
+/// The delete shortcut as it reads on this platform.
+pub const DELETE_SHORTCUT_LABEL: &str = if cfg!(target_os = "macos") {
+    "⇧⌘D"
+} else {
+    "Ctrl+Shift+D"
+};
+
+/// Tooltip for the settle toggle: the action it performs, plus the shortcut
+/// that does the same thing from the keyboard.
+pub fn settle_tooltip_label(settled: bool) -> String {
+    let action = if settled {
+        "Move back to active"
+    } else {
+        "Settle chat"
+    };
+    format!("{action} ({SETTLE_SHORTCUT_LABEL})")
+}
+
 #[derive(IntoElement)]
 pub struct SidebarSessionItem {
     session: SessionHeader,
-    /// The project this session belongs to, when the app knows it. Falls back
-    /// to the session's working-directory name in the UI.
-    project_name: Option<String>,
     is_active: bool,
     loading_state: Option<SidebarLoadingState>,
     has_draft: bool,
+    has_automation: bool,
+    has_webhook: bool,
     is_renaming: bool,
     rename_input: Option<Entity<ComposerInput>>,
+    project_name: String,
     on_click: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_open_in_new_window: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -59,6 +98,7 @@ pub struct SidebarSessionItem {
     on_toggle_pin: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_settle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_unsettle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_toggle_read: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_delete: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
@@ -66,12 +106,12 @@ impl SidebarSessionItem {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         session: SessionHeader,
-        project_name: Option<String>,
         is_active: bool,
         loading_state: Option<SidebarLoadingState>,
         has_draft: bool,
         is_renaming: bool,
         rename_input: Option<Entity<ComposerInput>>,
+        project_name: String,
         on_click: impl Fn(&mut Window, &mut App) + 'static,
         on_open_in_new_window: impl Fn(&mut Window, &mut App) + 'static,
         on_rename: impl Fn(&mut Window, &mut App) + 'static,
@@ -80,16 +120,19 @@ impl SidebarSessionItem {
         on_toggle_pin: impl Fn(&mut Window, &mut App) + 'static,
         on_settle: impl Fn(&mut Window, &mut App) + 'static,
         on_unsettle: impl Fn(&mut Window, &mut App) + 'static,
+        on_toggle_read: impl Fn(&mut Window, &mut App) + 'static,
         on_delete: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             session,
-            project_name,
             is_active,
             loading_state,
             has_draft,
+            has_automation: false,
+            has_webhook: false,
             is_renaming,
             rename_input,
+            project_name,
             on_click: Rc::new(on_click),
             on_open_in_new_window: Rc::new(on_open_in_new_window),
             on_rename: Rc::new(on_rename),
@@ -98,13 +141,20 @@ impl SidebarSessionItem {
             on_toggle_pin: Rc::new(on_toggle_pin),
             on_settle: Rc::new(on_settle),
             on_unsettle: Rc::new(on_unsettle),
+            on_toggle_read: Rc::new(on_toggle_read),
             on_delete: Rc::new(on_delete),
         }
+    }
+
+    pub fn scheduled(mut self, has_automation: bool, has_webhook: bool) -> Self {
+        self.has_automation = has_automation;
+        self.has_webhook = has_webhook;
+        self
     }
 }
 
 impl RenderOnce for SidebarSessionItem {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let session = &self.session;
         let is_active = self.is_active;
@@ -115,6 +165,7 @@ impl RenderOnce for SidebarSessionItem {
         let on_cancel_rename = self.on_cancel_rename;
         let on_toggle_pin = self.on_toggle_pin;
         let on_delete = self.on_delete;
+        let on_toggle_read = self.on_toggle_read;
         let pinned = session.pinned_at.is_some();
         let settled = session.settled_at.is_some();
 
@@ -122,15 +173,7 @@ impl RenderOnce for SidebarSessionItem {
         let is_renaming = self.is_renaming;
         let rename_input = self.rename_input;
 
-        let folder_name = if self.session.project_id.is_none() {
-            "General".to_string()
-        } else {
-            self.project_name
-                .clone()
-                .unwrap_or_else(|| crate::utils::format_folder_display_name(&session.cwd))
-        };
-
-        let title_pending = sidebar::title_is_pending(session);
+        let title_pending = sidebar::title_is_pending(session, loading_state);
         let display_title = if title_pending {
             "Generating title…".to_string()
         } else {
@@ -148,18 +191,40 @@ impl RenderOnce for SidebarSessionItem {
         );
 
         let group_name = format!("sidebar-session-{}", session.id);
-        // The hover button settles an active chat and un-settles a settled
-        // one; delete lives in the context menu only.
-        let toggle_settle_action = if settled {
-            self.on_unsettle.clone()
-        } else {
-            self.on_settle.clone()
+        // Status colour is information, not decoration. Unread and needs
+        // attention share the badge red whether or not the row is selected:
+        // both mean "this chat wants you", and the mark's whole job is to be
+        // noticed in a long list, usually on an unfocused row.
+        let status_id = || ElementId::Name(format!("status-{}", session.id).into());
+        let row_status = sidebar::row_status(session, loading_state);
+        let status_indicator = match row_status {
+            sidebar::RowStatus::Running => status_slot()
+                .id(status_id())
+                .tooltip(Tooltip::text("Running"))
+                .child(motion::spin_slow(
+                    IconName::LoaderCircle,
+                    15.0,
+                    theme.accent,
+                ))
+                .into_any_element(),
+            sidebar::RowStatus::NeedsAttention => status_slot()
+                .id(status_id())
+                .tooltip(Tooltip::text("Needs attention"))
+                .child(app_icon(IconName::Alert, 15.0, theme.badge))
+                .into_any_element(),
+            sidebar::RowStatus::Unread => status_slot()
+                .id(status_id())
+                .tooltip(Tooltip::text("Unread"))
+                .child(app_icon(IconName::Unread, 15.0, theme.badge))
+                .into_any_element(),
+            sidebar::RowStatus::Done => status_slot()
+                .id(status_id())
+                .tooltip(Tooltip::text("Done"))
+                .child(app_icon(IconName::Done, 15.0, theme.success))
+                .into_any_element(),
+            sidebar::RowStatus::Quiet => status_slot().into_any_element(),
         };
-        let (settle_icon, settle_tooltip) = if settled {
-            (IconName::ArrowUp, "Move back to active")
-        } else {
-            (IconName::Check, "Settle chat")
-        };
+
         let title = if let Some(rename_input) = rename_input {
             let on_commit = on_commit_rename.clone();
             let on_cancel = on_cancel_rename.clone();
@@ -192,166 +257,175 @@ impl RenderOnce for SidebarSessionItem {
                 .child(rename_input)
                 .into_any_element()
         } else {
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_size(px(13.5))
-                .font_weight(if is_active {
-                    FontWeight::SEMIBOLD
-                } else {
-                    FontWeight::MEDIUM
-                })
+            title_label(is_active, theme)
                 .when(title_pending, |s| {
                     s.italic().text_color(theme.text_tertiary)
-                })
-                .when(!title_pending, |s| {
-                    s.text_color(if is_active {
-                        theme.text
-                    } else {
-                        theme.text_secondary
-                    })
                 })
                 .child(display_title.clone())
                 .into_any_element()
         };
 
-        let row = div()
-            .id(ElementId::Name(session.id.clone().into()))
+        let hover_mgr = window.use_keyed_state(
+            ElementId::Name("sidebar-session-hover-mgr".into()),
+            cx,
+            |_, _| SidebarHoverManager::new(),
+        );
+        let is_card_active = hover_mgr.read(cx).active_id.as_deref() == Some(&session.id);
+
+        let probe_bounds = window
+            .use_keyed_state(
+                ElementId::Name(format!("sidebar-row-probe-{}", session.id).into()),
+                cx,
+                |_, _| Rc::new(Cell::new(None::<Bounds<Pixels>>)),
+            )
+            .read(cx)
+            .clone();
+
+        let mut row = row_container(ElementId::Name(session.id.clone().into()), is_active, theme)
             .relative()
-            .w_full()
-            .min_w_0()
-            .h(px(53.0))
-            .px(px(12.0))
-            .py(px(7.0))
-            .rounded(px(7.0))
-            .cursor_default()
+            .child(
+                canvas(
+                    {
+                        let probe_bounds = probe_bounds.clone();
+                        move |probe: Bounds<Pixels>, _, _| probe_bounds.set(Some(probe))
+                    },
+                    |_, _, _, _| (),
+                )
+                .absolute()
+                .inset_0(),
+            )
             .on_drag(drag, |drag, _, _, cx| {
                 cx.new(|_| WorkspaceDragPreview::new(drag.tab.title()))
             })
-            .flex()
-            .flex_col()
-            .gap_y(px(6.0))
-            .justify_between()
-            .group(group_name.clone())
-            .when(is_active, |s| s.bg(theme.sidebar_item_background))
-            .when(!is_active, |s| {
-                s.hover(|h| h.bg(theme.sidebar_item_background))
-            })
+            .group(group_name)
             // Settled chats read as archived: slightly dimmed everywhere.
             .when(settled, |s| s.opacity(0.7))
             .when(!is_renaming, |element| {
-                element.on_click(move |_, w, cx| {
-                    (on_click)(w, cx);
-                })
+                let session_id = session.id.clone();
+                let hover_mgr = hover_mgr.clone();
+                let dismiss_mgr = hover_mgr.clone();
+                element
+                    .on_hover(move |hovered, _, cx| {
+                        on_row_hover(&hover_mgr, &session_id, *hovered, cx);
+                    })
+                    // Capture phase: the context menu stops propagation on
+                    // right-click, which would swallow a bubble-phase handler.
+                    .capture_any_mouse_down(move |_, _, cx| dismiss_card(&dismiss_mgr, cx))
+                    .on_click(move |_, w, cx| {
+                        (on_click)(w, cx);
+                    })
             })
-            // Top Row: Title + Status Icon + Hover Delete
             .child(
                 div()
-                    .w_full()
+                    .flex_1()
+                    .min_w_0()
                     .flex()
                     .items_center()
-                    .justify_between()
                     .gap_x(px(6.0))
-                    .overflow_hidden()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .items_center()
-                            .gap_x(px(6.0))
-                            .child(title)
-                            .when(self.has_draft, |el| {
-                                el.child(
-                                    div()
-                                        .flex_none()
-                                        .px(px(4.0))
-                                        .py(px(0.5))
-                                        .rounded(px(3.0))
-                                        .bg(theme.accent.opacity(0.15))
-                                        .text_color(theme.accent)
-                                        .text_size(px(10.0))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .child("Draft"),
-                                )
-                            })
-                            .when_some(
-                                loading_state
-                                    .and_then(|state| sidebar::status_indicator(state, theme)),
-                                |el, indicator| el.child(indicator),
-                            ),
-                    )
-                    // Settle/Unsettle Button: hidden until hover, then
-                    // reveals on the right side of the card. Replaces the
-                    // old hover delete; Delete lives in the context menu.
-                    .child(
-                        div()
-                            .id(ElementId::Name(format!("settle-{}", session.id).into()))
-                            .p(px(4.0))
-                            .rounded(px(5.0))
-                            .cursor_default()
-                            .invisible()
-                            .group_hover(group_name.clone(), |el| el.visible())
-                            .hover(|s| s.bg(theme.overlay))
-                            .tooltip(Tooltip::text(settle_tooltip))
-                            .on_click(move |_, w, cx| {
-                                cx.stop_propagation();
-                                (toggle_settle_action)(w, cx);
-                            })
-                            .child(app_icon(settle_icon, 14.0, theme.text)),
-                    ),
-            )
-            // Bottom Row: Folder icon + Working Dir Name + Time
-            .child(
-                div()
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_x(px(5.0))
-                    .text_size(px(11.5))
-                    .line_height(px(15.0))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .items_center()
-                            .gap_x(px(4.0))
-                            .child(app_icon(IconName::Folder, 11.0, theme.text_tertiary))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .truncate()
-                                    .text_color(theme.text_tertiary)
-                                    .child(folder_name),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_color(if loading_state.is_some() {
-                                theme.text_tertiary
-                            } else {
-                                theme.text_ghost
-                            })
-                            .child(
-                                loading_state
-                                    .and_then(|state| {
-                                        sidebar::working_label(
-                                            state,
-                                            chrono::Utc::now().timestamp(),
-                                        )
-                                    })
-                                    .unwrap_or_else(|| {
-                                        SharedString::from(format_time_ago(
-                                            session.sort_timestamp(),
-                                        ))
-                                    }),
-                            ),
-                    ),
+                    .child(status_indicator)
+                    .child(title)
+                    .when(self.has_automation || self.has_webhook, |el| {
+                        el.child(scheduled_badge(
+                            ElementId::Name(format!("scheduled-{}", session.id).into()),
+                            self.has_automation,
+                            self.has_webhook,
+                            theme,
+                        ))
+                    })
+                    .when(self.has_draft, |el| {
+                        el.child(draft_badge(
+                            ElementId::Name(format!("draft-{}", session.id).into()),
+                            theme,
+                        ))
+                    }),
             );
+
+        if is_card_active
+            && !is_renaming
+            && let Some(bounds) = probe_bounds.get()
+        {
+            let hover_mgr_card = hover_mgr;
+            let model_name = if !session.model_id.is_empty() {
+                let base = console_shared::format::format_model_name(&session.model_id);
+                let thinking = session
+                    .thinking_level
+                    .as_deref()
+                    .filter(|t| !t.is_empty())
+                    .or_else(|| match session.provider.to_ascii_lowercase().as_str() {
+                        "claude" => Some("low"),
+                        "antigravity" | "google" => Some("low"),
+                        _ => None,
+                    });
+                if let Some(thinking) = thinking {
+                    Some(format!("{base} ({thinking})"))
+                } else {
+                    Some(base)
+                }
+            } else {
+                None
+            };
+
+            let (branch, is_worktree) = if let Some(ref wt) = session.worktree
+                && !wt.branch.is_empty()
+            {
+                (Some(wt.branch.as_str()), true)
+            } else {
+                (None, false)
+            };
+
+            let (status_label, status_color, status_mark) = match row_status {
+                sidebar::RowStatus::Running => ("Running", theme.accent, CardStatusMark::Spinner),
+                sidebar::RowStatus::NeedsAttention => (
+                    "Needs attention",
+                    theme.badge,
+                    CardStatusMark::Icon(IconName::Alert),
+                ),
+                sidebar::RowStatus::Unread => (
+                    "Unread",
+                    theme.badge,
+                    CardStatusMark::Icon(IconName::Unread),
+                ),
+                sidebar::RowStatus::Done => {
+                    ("Done", theme.success, CardStatusMark::Icon(IconName::Done))
+                }
+                sidebar::RowStatus::Quiet if settled => {
+                    ("Settled", theme.text_tertiary, CardStatusMark::Dot)
+                }
+                sidebar::RowStatus::Quiet => ("Idle", theme.text_ghost, CardStatusMark::Dot),
+            };
+
+            let card = div()
+                .id(ElementId::Name(
+                    format!("session-card-{}", session.id).into(),
+                ))
+                .occlude()
+                .on_hover(move |hovered, _, cx| {
+                    on_card_hover(&hover_mgr_card, *hovered, cx);
+                })
+                .child(render_session_card_content(
+                    &display_title,
+                    session.created_at,
+                    session.updated_at,
+                    model_name.as_deref(),
+                    &self.project_name,
+                    branch,
+                    is_worktree,
+                    status_label,
+                    status_color,
+                    status_mark,
+                    &theme,
+                ));
+
+            row = row.child(
+                deferred(
+                    anchored()
+                        .position(Point::new(bounds.right() + px(6.0), bounds.top()))
+                        .snap_to_window_with_margin(px(8.0))
+                        .child(card),
+                )
+                .with_priority(100),
+            );
+        }
 
         if is_renaming {
             let on_commit = on_commit_rename;
@@ -364,18 +438,27 @@ impl RenderOnce for SidebarSessionItem {
                 .into_any_element()
         } else {
             let on_toggle_pin = on_toggle_pin;
+            let toggle_read = sidebar::read_action(session, row_status).map(|action| {
+                (action, move |window: &mut Window, cx: &mut App| {
+                    (on_toggle_read)(window, cx)
+                })
+            });
+            let menu_id = format!("session-menu-{}", session.id);
             session_context_menu(
                 row,
+                menu_id,
+                window,
+                cx,
                 move |window, cx| (on_open_in_new_window)(window, cx),
                 move |window, cx| (on_rename)(window, cx),
                 move |window, cx| (on_toggle_pin)(window, cx),
                 move |window, cx| (self.on_settle)(window, cx),
                 move |window, cx| (self.on_unsettle)(window, cx),
                 move |window, cx| (on_delete)(window, cx),
+                toggle_read,
                 pinned,
                 settled,
             )
-            .into_any_element()
         }
     }
 }
@@ -388,6 +471,8 @@ pub fn render_sidebar_session_item(
     running_started_at: Option<i64>,
     is_waiting: bool,
     has_draft: bool,
+    has_automation: bool,
+    has_webhook: bool,
     on_select: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_open_in_new_window: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_rename: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -396,6 +481,7 @@ pub fn render_sidebar_session_item(
     on_toggle_pin: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_settle: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_unsettle: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_toggle_read: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_delete: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     renaming_session_id: Option<&str>,
     rename_input: Option<Entity<ComposerInput>>,
@@ -405,17 +491,33 @@ pub fn render_sidebar_session_item(
     let project_name = projects
         .iter()
         .find(|project| project.matches_session(&session))
-        .map(|project| project.name.clone());
+        .map(|project| project.name.clone())
+        .unwrap_or_else(|| {
+            if session.project_id.is_none()
+                || session.cwd.is_empty()
+                || session.cwd.contains("/scratch/")
+                || session.cwd.contains(r"\scratch\")
+            {
+                "No Project".to_string()
+            } else {
+                std::path::Path::new(&session.cwd)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .filter(|s| !s.is_empty() && s.len() < 32)
+                    .unwrap_or("No Project")
+                    .to_string()
+            }
+        });
     let session_id = session.id.clone();
     let is_renaming = renaming_session_id == Some(session_id.as_str());
     SidebarSessionItem::new(
         session,
-        project_name,
         is_active,
         loading_state,
         has_draft,
         is_renaming,
         is_renaming.then_some(rename_input).flatten(),
+        project_name,
         {
             let session_id = session_id.clone();
             let on_select = on_select.clone();
@@ -455,9 +557,15 @@ pub fn render_sidebar_session_item(
             move |window, cx| (on_unsettle)(session_id.clone(), window, cx)
         },
         {
+            let session_id = session_id.clone();
+            let on_toggle_read = on_toggle_read.clone();
+            move |window, cx| (on_toggle_read)(session_id.clone(), window, cx)
+        },
+        {
             let on_delete = on_delete.clone();
             move |window, cx| (on_delete)(session_id.clone(), window, cx)
         },
     )
+    .scheduled(has_automation, has_webhook)
     .into_any_element()
 }

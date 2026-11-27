@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use console_core::types::SessionFileChange;
 use gpui::{
-    App, ElementId, IntoElement, ParentElement, Stateful, StatefulInteractiveElement, Styled,
+    App, ElementId, IntoElement, ParentElement, Stateful, StatefulInteractiveElement, Styled, Task,
     Window, div, prelude::*, px,
 };
 
@@ -53,6 +53,7 @@ impl ChangesSummary {
 /// turn's chips each frame never copies a diff body.
 pub struct TurnChange {
     pub path: String,
+    pub turn_index: u32,
     pub status: String,
     pub additions: u32,
     pub deletions: u32,
@@ -63,6 +64,7 @@ impl TurnChange {
     pub fn from_change(change: &SessionFileChange) -> Self {
         Self {
             path: change.path.clone(),
+            turn_index: change.turn_index,
             status: change.status.clone(),
             additions: change.additions,
             deletions: change.deletions,
@@ -78,8 +80,13 @@ pub struct TurnChanges {
     pub files: Vec<TurnChange>,
 }
 
-/// Opens the diff of one changed file: `(path, diff_text)`.
-pub type OpenChangeHandler = Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>;
+/// Opens the diff of one changed file: `(path, turn_index, diff_text)`. The
+/// diff text is `None` when the chip rows were loaded without diffs.
+pub type OpenChangeHandler =
+    Rc<dyn Fn(String, u32, Option<String>, &mut Window, &mut App) + 'static>;
+
+/// Fetches one changed file's diff text: `(path, turn_index)`.
+pub type LoadDiffHandler = Rc<dyn Fn(&str, u32, &mut App) -> Task<Option<String>> + 'static>;
 
 /// Expands or collapses the chip row.
 pub type ToggleChangesHandler = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
@@ -91,6 +98,7 @@ pub fn turn_change_chips(
     expanded: bool,
     on_open: Option<OpenChangeHandler>,
     on_toggle: Option<ToggleChangesHandler>,
+    load_diff: Option<LoadDiffHandler>,
     theme: &Theme,
     window: &mut Window,
     cx: &mut App,
@@ -109,7 +117,15 @@ pub fn turn_change_chips(
         .map(|index| {
             let chip_key = format!("{key}-{index}");
             let chip = file_change_chip(&chip_key, turn, index, theme, on_open.clone());
-            with_diff_popover(chip, &chip_key, &turn.files[index], theme, window, cx)
+            with_diff_popover(
+                chip,
+                &chip_key,
+                &turn.files[index],
+                load_diff.clone(),
+                theme,
+                window,
+                cx,
+            )
         })
         .collect();
     if foldable {
@@ -192,7 +208,13 @@ fn file_change_chip(
             element.on_click(move |_, window, cx| {
                 cx.stop_propagation();
                 let change = &turn.files[index];
-                (on_open)(change.path.clone(), change.diff_text.clone(), window, cx);
+                (on_open)(
+                    change.path.clone(),
+                    change.turn_index,
+                    change.diff_text.clone(),
+                    window,
+                    cx,
+                );
             })
         })
 }

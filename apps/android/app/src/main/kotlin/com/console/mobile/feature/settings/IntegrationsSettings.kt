@@ -43,9 +43,9 @@ import com.console.mobile.ui.components.common.new.SkeletonLoader
 import console.v1.IntegrationStatus
 
 /**
- * Helper binaries the server shells out to (gh CLI today). Read-only: the
- * page reports live installed/missing status and the command to install what
- * is missing — the install itself happens on the box, outside this UI.
+ * Helper tools the server shells out to (gh CLI, the Linux desktop stack).
+ * The Install button runs the official setup on the server; status is
+ * detected live on every load.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,7 +86,7 @@ fun IntegrationsSettings(onBack: () -> Unit) {
                 modifier = Modifier.fillMaxSize(),
             ) {
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-                    Text("Helper tools the server uses on your behalf. Status is checked live on the server — install anything missing, then refresh.", color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp))
+                    Text("Helper tools the server uses on your behalf. Status is checked live on the server — install anything missing and the row updates when it finishes.", color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp))
                     integrationsState.error?.let { Banner(it, modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp)) }
                     if (integrationsState.integrations.isEmpty() && !isLoading) {
                         Note("No integrations reported.")
@@ -130,7 +130,7 @@ private fun IntegrationCard(row: IntegrationStatus, busy: Boolean) {
             Text(row.install_url, color = NewTheme.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp))
             ActionButton(
                 text = "Install",
-                onClick = { AppContainer.integrationsRepository.installGh() },
+                onClick = { AppContainer.integrationsRepository.installIntegration(row.id) },
                 kind = ActionButtonKind.Primary,
                 loading = busy,
                 compact = true,

@@ -58,7 +58,7 @@ impl DeviceState {
     }
 }
 
-/// Boundary helpers: the wire carries strings, the UI wants enums.
+// Boundary helpers: the wire carries strings, the UI wants enums.
 
 /// The device's platform as a UI-side enum. Anything that isn't "android" is
 /// treated as iOS, matching the old `platform_kind`.

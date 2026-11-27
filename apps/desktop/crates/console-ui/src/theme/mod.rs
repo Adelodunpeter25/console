@@ -2,7 +2,6 @@ pub mod constants;
 pub use constants::*;
 
 use gpui::{App, Global, Hsla, Window, WindowAppearance, hsla, rgb, transparent_black};
-use gpui_component::{Theme as ComponentTheme, ThemeMode};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum ThemePreference {
@@ -47,6 +46,13 @@ pub struct Theme {
     pub raised: Hsla,
     pub composer: Hsla,
     pub inset: Hsla,
+    /// Surface of floating menus and popups (context menus, dropdowns, the
+    /// autocomplete list): a step darker than `inset` so the card reads as its
+    /// own layer over the sidebar and the chat canvas.
+    pub menu: Hsla,
+    /// Dim laid over the window behind a centred overlay (the floating
+    /// composer and the command and search palettes).
+    pub backdrop: Hsla,
     /// Terminal screen surface.
     pub terminal: Hsla,
     pub overlay: Hsla,
@@ -86,6 +92,11 @@ pub struct Theme {
     pub user_bubble_border: Hsla,
     pub danger: Hsla,
     pub danger_soft: Hsla,
+    /// The red of the unread marker and the needs-attention alert in the
+    /// sidebar. It is the same red as `danger` (the `-N` in the changed-files
+    /// pill), kept as its own token so the badge can be retuned without
+    /// touching delete and error states.
+    pub badge: Hsla,
     /// Tinted backgrounds for diff `+` and `-` lines.
     pub diff_added_bg: Hsla,
     pub diff_removed_bg: Hsla,
@@ -116,11 +127,13 @@ impl Theme {
             raised: rgb(0x232323).into(),
             composer: rgb(0x0A0A0A).into(),
             inset: rgb(0x151515).into(),
+            menu: rgb(0x0E0E0E).into(),
+            backdrop: hsla(0.0, 0.0, 0.0, 0.65),
             terminal: rgb(0x000000).into(),
             overlay: hsla(220.0 / 360.0, 0.10, 0.90, 0.05),
             overlay_strong: hsla(220.0 / 360.0, 0.10, 0.90, 0.09),
 
-            border: hsla(220.0 / 360.0, 0.10, 0.90, 0.07),
+            border: rgb(0x2A2A2A).into(),
             border_strong: hsla(220.0 / 360.0, 0.10, 0.90, 0.14),
             sidebar_border: hsla(126.93 / 360.0, 0.000_000_1, 0.16077, 1.0),
 
@@ -157,6 +170,7 @@ impl Theme {
             user_bubble_border: hsla(37.0 / 360.0, 1.0, 0.657, 0.15),
             danger: rgb(0xE2726A).into(),
             danger_soft: hsla(4.0 / 360.0, 0.55, 0.63, 0.10),
+            badge: rgb(0xE2726A).into(),
             diff_added_bg: hsla(145.0 / 360.0, 0.50, 0.66, 0.08),
             diff_removed_bg: hsla(4.0 / 360.0, 0.55, 0.63, 0.08),
         }
@@ -178,6 +192,8 @@ impl Theme {
             raised: rgb(0xECECEC).into(),
             composer: rgb(0xFFFFFF).into(),
             inset: rgb(0xE6E6E6).into(),
+            menu: rgb(0xE6E6E6).into(),
+            backdrop: hsla(0.0, 0.0, 0.0, 0.65),
             terminal: rgb(0xFFFFFF).into(),
             overlay: hsla(220.0 / 360.0, 0.10, 0.12, 0.05),
             overlay_strong: hsla(220.0 / 360.0, 0.10, 0.12, 0.09),
@@ -219,6 +235,7 @@ impl Theme {
             user_bubble_border: hsla(30.0 / 360.0, 0.70, 0.40, 0.20),
             danger: rgb(0xC64A42).into(),
             danger_soft: hsla(4.0 / 360.0, 0.55, 0.52, 0.10),
+            badge: rgb(0xC64A42).into(),
             diff_added_bg: hsla(145.0 / 360.0, 0.50, 0.50, 0.08),
             diff_removed_bg: hsla(4.0 / 360.0, 0.55, 0.50, 0.08),
         }
@@ -246,21 +263,6 @@ pub fn init(cx: &mut App) {
         },
         cx,
     );
-    sync_component_theme(is_dark, cx);
-}
-
-/// gpui-component widgets (command palette, dialogs) read their own global
-/// `Theme`; keep its light/dark mode aligned with ours so overlays match.
-fn sync_component_theme(is_dark: bool, cx: &mut App) {
-    ComponentTheme::change(
-        if is_dark {
-            ThemeMode::Dark
-        } else {
-            ThemeMode::Light
-        },
-        None,
-        cx,
-    );
 }
 
 /// Switch the active palette and update the native window appearance to match.
@@ -274,7 +276,6 @@ pub fn apply_theme_preference(preference: ThemePreference, window: &mut Window, 
         },
         cx,
     );
-    sync_component_theme(is_dark, cx);
     // On macOS: request native dark/light appearance override.
     #[cfg(target_os = "macos")]
     {

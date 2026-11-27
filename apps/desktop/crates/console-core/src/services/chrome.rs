@@ -58,7 +58,9 @@ impl ChromeService {
             .context("Failed to list Chrome profiles")?;
         let status = resp.status();
         if is_unsupported_route(status) {
-            anyhow::bail!("This server does not support Chrome import yet — update it (console upgrade).");
+            anyhow::bail!(
+                "This server does not support Chrome import yet — update it (console upgrade)."
+            );
         }
         let body: ApiResponse<Vec<ChromeProfile>> = self
             .transport
@@ -74,7 +76,8 @@ impl ChromeService {
             Ok(body.data.unwrap_or_default())
         } else {
             Err(anyhow!(
-                body.error.unwrap_or_else(|| "Failed to list Chrome profiles".into())
+                body.error
+                    .unwrap_or_else(|| "Failed to list Chrome profiles".into())
             ))
         }
     }
@@ -111,7 +114,9 @@ impl ChromeService {
         log::info!("chrome import: response status={}", resp.status());
         let status = resp.status();
         if is_unsupported_route(status) {
-            anyhow::bail!("This server does not support Chrome import yet — update it (console upgrade).");
+            anyhow::bail!(
+                "This server does not support Chrome import yet — update it (console upgrade)."
+            );
         }
         let body: ApiResponse<ChromeImportData> = self
             .transport

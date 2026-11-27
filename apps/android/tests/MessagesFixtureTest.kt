@@ -15,8 +15,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Golden-fixture tests for the messages migration
- * (docs/plan/shared-protobuf-schema.md §8). Fixtures live in
+ * Golden-fixture tests for the messages migration. Fixtures live in
  * proto/testdata/message and are shared by Go, Rust, and Kotlin.
  */
 class MessagesFixtureTest {
@@ -38,6 +37,19 @@ class MessagesFixtureTest {
     }
 
     @Test
+    fun userMessageCarriesItsApprovalMode() {
+        val ui = messageAdapter.fromJson(
+            "{\"user\":{\"content\":\"plan it\",\"approvalMode\":\"plan-mode\"}}",
+        )!!.toUi()!!
+        check(ui is com.console.mobile.data.model.UserMessage)
+        assertEquals("plan-mode", ui.approvalMode)
+        // Stored before the server recorded the mode: unknown, not plan.
+        val old = messageAdapter.fromJson(fixture("user.json"))!!.toUi()!!
+        check(old is com.console.mobile.data.model.UserMessage)
+        assertEquals(null, old.approvalMode)
+    }
+
+    @Test
     fun decodesGoldenAssistantFixture() {
         val ui = messageAdapter.fromJson(fixture("assistant.json"))!!.toUi()!!
         check(ui is com.console.mobile.data.model.AssistantMessage)
@@ -56,12 +68,15 @@ class MessagesFixtureTest {
     }
 
     @Test
-    fun ignoresUnknownFields() {
+    fun decodesAnnotationsAndIgnoresUnknownFields() {
         val ui = messageAdapter.fromJson(
-            "{\"user\":{\"content\":\"x\",\"annotations\":[{\"id\":\"a\"}]},\"futureField\":1}",
+            "{\"user\":{\"content\":\"x\",\"annotations\":[{\"id\":\"a\",\"selector\":\"div.button\"}]},\"futureField\":1}",
         )!!.toUi()!!
         check(ui is com.console.mobile.data.model.UserMessage)
         assertEquals("x", ui.content)
+        assertEquals(1, ui.annotations.size)
+        assertEquals("a", ui.annotations[0].id)
+        assertEquals("div.button", ui.annotations[0].selector)
     }
 
     @Test

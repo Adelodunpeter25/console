@@ -1,5 +1,15 @@
 package com.console.mobile.ui.navigation
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -13,6 +23,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -31,7 +42,9 @@ import com.console.mobile.feature.browser.handOffToSystem
 import com.console.mobile.feature.browser.rememberBrowserState
 import com.console.mobile.feature.changes.ChangesScreen
 import com.console.mobile.feature.chat.ChatScreen
+import com.console.mobile.feature.computer.ComputerScreen
 import com.console.mobile.feature.devices.DevicesScreen
+import com.console.mobile.feature.chat.html.HtmlPreviewScreen
 import com.console.mobile.feature.files.FilesScreen
 import com.console.mobile.feature.home.HomeScreen
 import com.console.mobile.feature.onboarding.OnboardingScreen
@@ -40,11 +53,27 @@ import com.console.mobile.feature.onboarding.SetupStep
 import com.console.mobile.feature.ports.PortsScreen
 import com.console.mobile.feature.settings.AddProjectScreen
 import com.console.mobile.feature.settings.SettingsScreen
+import com.console.mobile.feature.settings.UsageSettings
 import com.console.mobile.feature.terminal.TerminalScreen
 import com.console.mobile.ui.components.common.new.ConfirmPromptHost
+import com.console.mobile.ui.components.common.new.FloatingNavBar
+import com.console.mobile.ui.components.common.new.FloatingNavTab
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.X
+
+// Fractions of the screen width: the incoming page travels further than the
+// outgoing one, which gives the push its depth.
+private const val PAGE_ENTER_SHIFT = 0.28f
+private const val PAGE_EXIT_SHIFT = 0.12f
+private val PageSlideSpring = spring<IntOffset>(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMediumLow,
+)
+private val PageFadeSpring = spring<Float>(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMedium,
+)
 
 @Composable
 fun AppNavGraph() {
@@ -101,6 +130,25 @@ fun AppNavGraph() {
         navController.navigate(RouteChat) { launchSingleTop = true }
     }
 
+    // Keep activeTab in sync with the visible destination (including system Back
+    // and notification taps) so foreground notification suppression is accurate.
+    LaunchedEffect(backStackEntry) {
+        val route = backStackEntry?.destination?.route ?: return@LaunchedEffect
+        val tab = when {
+            route.contains("RouteChat", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Chat
+            route.contains("RouteHome", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Home
+            route.contains("RouteFiles", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Files
+            route.contains("RouteChanges", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Changes
+            route.contains("RouteTerminal", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Terminal
+            route.contains("RouteDevices", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Devices
+            route.contains("RouteComputer", ignoreCase = true) -> com.console.mobile.data.store.MobileTab.Computer
+            else -> null
+        }
+        if (tab != null && appState.activeTab != tab) {
+            AppContainer.appStateHolder.setActiveTab(tab)
+        }
+    }
+
     // Keep nav in sync when Home opens a chat / subagent details programmatically.
     LaunchedEffect(appState.activeTab, appState.selectedSessionId) {
         if (appState.activeTab == com.console.mobile.data.store.MobileTab.Chat && !appState.selectedSessionId.isNullOrBlank()) {
@@ -128,13 +176,41 @@ fun AppNavGraph() {
         ) { url -> navController.navigate(RouteBrowser(url)) { launchSingleTop = true } }
     }
     CompositionLocalProvider(LocalUriHandler provides linkHandler) {
+    val currentRoute = backStackEntry?.destination?.route.orEmpty()
+    val activeNavTab = when {
+        currentRoute.contains("RouteUsage", ignoreCase = true) -> FloatingNavTab.Usage
+        currentRoute.contains("RouteSettings", ignoreCase = true) &&
+            !currentRoute.contains("RouteSettingsFromSetup", ignoreCase = true) &&
+            !currentRoute.contains("RouteSettingsProviders", ignoreCase = true) -> FloatingNavTab.Settings
+        currentRoute.contains("RouteHome", ignoreCase = true) -> FloatingNavTab.Chats
+        else -> null
+    }
     Scaffold(
         containerColor = NewTheme.Background,
     ) { padding ->
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            modifier = Modifier.padding(padding),
+            modifier = Modifier.fillMaxSize(),
+            // Forward pushes the new screen in from the right while the old
+            // one drifts left; back is the same motion reversed.
+            enterTransition = {
+                slideInHorizontally(PageSlideSpring) { (it * PAGE_ENTER_SHIFT).toInt() } +
+                    fadeIn(PageFadeSpring)
+            },
+            exitTransition = {
+                slideOutHorizontally(PageSlideSpring) { -(it * PAGE_EXIT_SHIFT).toInt() } +
+                    fadeOut(PageFadeSpring)
+            },
+            popEnterTransition = {
+                slideInHorizontally(PageSlideSpring) { -(it * PAGE_EXIT_SHIFT).toInt() } +
+                    fadeIn(PageFadeSpring)
+            },
+            popExitTransition = {
+                slideOutHorizontally(PageSlideSpring) { (it * PAGE_ENTER_SHIFT).toInt() } +
+                    fadeOut(PageFadeSpring)
+            },
         ) {
             composable<RouteHome> {
                 HomeScreen(
@@ -155,12 +231,17 @@ fun AppNavGraph() {
                                 com.console.mobile.data.store.MobileTab.Changes -> navController.navigate(RouteChanges) { launchSingleTop = true }
                                 com.console.mobile.data.store.MobileTab.Terminal -> navController.navigate(RouteTerminal) { launchSingleTop = true }
                                 com.console.mobile.data.store.MobileTab.Devices -> navController.navigate(RouteDevices) { launchSingleTop = true }
+                                com.console.mobile.data.store.MobileTab.Computer -> navController.navigate(RouteComputer) { launchSingleTop = true }
                                 else -> {}
                             }
                         },
                         onAddProject = { navController.navigate(RouteAddProject) },
+                        onConnectGithub = { navController.navigate(RouteSettingsProviders) },
                         onOpenPorts = { navController.navigate(RoutePorts) { launchSingleTop = true } },
                         onOpenUrl = { url -> navController.navigate(RouteBrowser(url)) { launchSingleTop = true } },
+                        onOpenHtmlPreview = { artifact ->
+                            navController.navigate(RouteHtmlPreview(artifact.path, artifact.title)) { launchSingleTop = true }
+                        },
                     )
                 }
             }
@@ -184,6 +265,19 @@ fun AppNavGraph() {
                     // Schemes the WebView will not render still belong to a
                     // system app.
                     onExternalUrl = { handOffToSystem(systemUriHandler, it) },
+                )
+            }
+            composable<RouteHtmlPreview> { entry ->
+                val route = entry.toRoute<RouteHtmlPreview>()
+                HtmlPreviewScreen(
+                    path = route.path,
+                    title = route.title,
+                    onBack = { navController.popBackStack() },
+                    onOpenEditor = { path ->
+                        AppContainer.appStateHolder.openFile(path, forceEditor = true)
+                        navController.navigate(RouteFiles) { launchSingleTop = true }
+                    },
+                    onOpenExternalUrl = { handOffToSystem(systemUriHandler, it) },
                 )
             }
             composable<RouteFiles> {
@@ -228,6 +322,12 @@ fun AppNavGraph() {
                     navController.navigate(RouteChat) { launchSingleTop = true }
                 })
             }
+            composable<RouteComputer> {
+                ComputerScreen(onBack = {
+                    AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Chat)
+                    navController.navigate(RouteChat) { launchSingleTop = true }
+                })
+            }
             // Ports is reached from chat's overflow menu rather than the tab
             // bar, so back is a plain pop to wherever it was pushed from.
             composable<RoutePorts> {
@@ -248,6 +348,9 @@ fun AppNavGraph() {
                     onAddProject = { navController.navigate(RouteAddProject) },
                 )
             }
+            composable<RouteUsage> {
+                UsageSettings(onBack = null)
+            }
             // Same screen, but it knows the first-run panel sent it here, so
             // back returns to that panel instead of the Settings landing list.
             composable<RouteSettingsFromSetup> {
@@ -256,6 +359,15 @@ fun AppNavGraph() {
                     onAddProject = { navController.navigate(RouteAddProject) },
                     startSection = com.console.mobile.feature.settings.SettingsSection.Providers,
                     openedFromSetup = true,
+                )
+            }
+            // The pickers' "Connect GitHub…" handoff: straight to the GitHub
+            // token row, and back returns to wherever the picker lived.
+            composable<RouteSettingsProviders> {
+                SettingsScreen(
+                    onBackToHome = { navController.popBackStack() },
+                    onAddProject = { navController.navigate(RouteAddProject) },
+                    startSection = com.console.mobile.feature.settings.SettingsSection.Providers,
                 )
             }
             composable<RouteAddProject> {
@@ -296,6 +408,46 @@ fun AppNavGraph() {
                     },
                 )
             }
+        }
+        var lastNavTab by remember { androidx.compose.runtime.mutableStateOf(FloatingNavTab.Chats) }
+        if (activeNavTab != null) lastNavTab = activeNavTab
+        AnimatedVisibility(
+            visible = activeNavTab != null,
+            enter = slideInVertically(PageSlideSpring) { it } + fadeIn(PageFadeSpring),
+            exit = slideOutVertically(PageSlideSpring) { it } + fadeOut(PageFadeSpring),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            FloatingNavBar(
+                activeTab = activeNavTab ?: lastNavTab,
+                onSelectTab = { tab ->
+                    if (tab == activeNavTab) return@FloatingNavBar
+                    when (tab) {
+                        FloatingNavTab.Chats -> {
+                            AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
+                            navController.navigate(RouteHome) {
+                                launchSingleTop = true
+                                popUpTo(RouteHome)
+                            }
+                        }
+                        FloatingNavTab.PullRequests -> {
+                            // No-op for now.
+                        }
+                        FloatingNavTab.Usage -> {
+                            navController.navigate(RouteUsage) { launchSingleTop = true }
+                        }
+                        FloatingNavTab.Settings -> {
+                            navController.navigate(RouteSettings) { launchSingleTop = true }
+                        }
+                    }
+                },
+                onNewChat = {
+                    val proj = AppContainer.projectStateHolder.state.value.projects.firstOrNull()
+                    val id = AppContainer.sessionRepository.startNewChat(proj?.id, proj?.path)
+                    AppContainer.appStateHolder.openChatSession(id)
+                    navController.navigate(RouteChat) { launchSingleTop = true }
+                },
+            )
+        }
         }
         ConfirmPromptHost()
     }

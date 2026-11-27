@@ -22,13 +22,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.UpdateSessionDto
-import com.console.mobile.ui.components.picker.ApprovalModePickerSheet
 import com.console.mobile.ui.components.picker.ThinkingLevelPickerSheet
 import com.console.mobile.ui.components.picker.PickerChip
+import com.console.mobile.ui.components.picker.PlanChip
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Brain
 import io.github.lyxnx.compose.ui.tablericons.outline.Robot
@@ -37,9 +38,8 @@ import kotlinx.coroutines.launch
 import com.console.mobile.ui.theme.NewTheme
 
 /**
- * Approval mode on the left, context ring on the right. Everything else that
- * used to live here moved up (project, branch) or into the composer's action
- * row (model + thinking), which is what keeps approval on screen on a narrow phone.
+ * Plan toggle on the left, context ring on the right. Plan and Full Access are
+ * the only modes: the chip lights up while Plan is on and a tap flips it.
  */
 @Composable
 fun ComposerBottomStrip(sessionId: String) {
@@ -47,45 +47,31 @@ fun ComposerBottomStrip(sessionId: String) {
     val chatSessions by AppContainer.chatStateHolder.sessions.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val view = sessionViews[sessionId]
-    var approvalSheet by remember { mutableStateOf(false) }
     var usageSheet by remember { mutableStateOf(false) }
-    HoldComposerOpen(approvalSheet || usageSheet)
+    HoldComposerOpen(usageSheet)
 
     // A value before the first live update, so the ring isn't blank on entry.
-    LaunchedEffect(sessionId) { AppContainer.chatRepository.loadContext(sessionId) }
+    LaunchedEffect(sessionId) { if (!com.console.mobile.core.chat.isNewChatId(sessionId)) AppContainer.chatRepository.loadContext(sessionId) }
 
-    val modeLabel = when (ApprovalMode.fromValue(view?.approvalMode ?: "")) {
-        ApprovalMode.AlwaysAsk -> "Always Ask"
-        ApprovalMode.AcceptEdits -> "Accept Edits"
-        ApprovalMode.PlanMode -> "Plan Mode"
-        ApprovalMode.FullAccess -> "Full Access"
-    }
+    val planOn = ApprovalMode.fromValue(view?.approvalMode) == ApprovalMode.PlanMode
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 6.dp, end = 6.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        PickerChip(icon = TablerIcons.Outline.Shield, label = modeLabel) { approvalSheet = true }
+        PlanChip(on = planOn) {
+            val next = if (planOn) ApprovalMode.FullAccess else ApprovalMode.PlanMode
+            scope.launch {
+                AppContainer.sessionRepository.updateSession(sessionId, UpdateSessionDto(approvalMode = next.value))
+                AppContainer.sessionRepository.refreshHeader(sessionId)
+            }
+        }
         ContextRing(snapshot = chatSessions[sessionId]?.context, onClick = { usageSheet = true })
     }
 
     if (usageSheet) {
         UsageSheet(sessionId = sessionId, onDismiss = { usageSheet = false })
-    }
-
-    if (approvalSheet) {
-        ApprovalModePickerSheet(
-            current = view?.approvalMode ?: ApprovalMode.AlwaysAsk.value,
-            onDismiss = { approvalSheet = false },
-            onSelect = { mode ->
-                approvalSheet = false
-                scope.launch {
-                    AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(approvalMode = mode))
-                    AppContainer.sessionRepository.refreshHeader(sessionId)
-                }
-            },
-        )
     }
 }
 
@@ -119,7 +105,7 @@ fun ModelChip(sessionId: String, modifier: Modifier = Modifier) {
             onSelect = { newModel, newProvider ->
                 sheet = false
                 scope.launch {
-                    AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(modelId = newModel, provider = newProvider))
+                    AppContainer.sessionRepository.updateSession(sessionId, UpdateSessionDto(modelId = newModel, provider = newProvider))
                     AppContainer.sessionRepository.refreshHeader(sessionId)
                 }
             },
@@ -128,8 +114,8 @@ fun ModelChip(sessionId: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * Brain icon-only button, colored per level like desktop's stepper. Tap opens
- * a level picker sheet instead of cycling. Hidden when the model declares no
+ * Thinking-level chip showing the active level's label. Tap opens
+ * a level picker sheet. Hidden when the model declares no
  * levels. Disabled during a run, where a change would only apply to the next turn.
  */
 @Composable
@@ -155,14 +141,14 @@ fun ThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = Modif
             .clip(RoundedCornerShape(NewTheme.ChipRadius))
             .background(NewTheme.Raised)
             .clickable(enabled = !running, onClick = { sheet = true })
-            .padding(horizontal = 9.dp, vertical = 7.dp),
+            .padding(horizontal = 11.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            TablerIcons.Outline.Brain,
-            contentDescription = "Thinking level: $current",
-            tint = Color(com.console.mobile.core.chat.thinkingLevelColorHex(current)),
-            modifier = Modifier.size(14.dp),
+        androidx.compose.material3.Text(
+            current.replaceFirstChar { it.uppercase() },
+            color = NewTheme.TextSecondary,
+            fontSize = 12.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
         )
     }
 
@@ -174,7 +160,7 @@ fun ThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = Modif
             onSelect = { level ->
                 sheet = false
                 scope.launch {
-                    AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(thinkingLevel = level))
+                    AppContainer.sessionRepository.updateSession(sessionId, UpdateSessionDto(thinkingLevel = level))
                     AppContainer.sessionRepository.refreshHeader(sessionId)
                 }
             },

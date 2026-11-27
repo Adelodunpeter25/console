@@ -58,7 +58,14 @@ build_target() {
     )
 }
 
-for pair in "aarch64-linux-android:arm64-v8a" "x86_64-linux-android:x86_64"; do
+# CI sets ANDROID_ABIS=arm64-v8a: x86_64 is emulator-only and not shipped.
+ALL_PAIRS=("aarch64-linux-android:arm64-v8a" "x86_64-linux-android:x86_64")
+PAIRS=()
+for pair in "${ALL_PAIRS[@]}"; do
+    [[ " ${ANDROID_ABIS:-arm64-v8a x86_64} " == *" ${pair##*:} "* ]] && PAIRS+=("$pair")
+done
+
+for pair in "${PAIRS[@]}"; do
     target="${pair%%:*}"
     abi="${pair##*:}"
     echo "==> building $target"

@@ -12,8 +12,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Golden-fixture tests for the assist migration
- * (docs/plan/shared-protobuf-schema.md §8). Fixtures live in
+ * Golden-fixture tests for the assist migration. Fixtures live in
  * proto/testdata/assist and are shared by Go, Rust, and Kotlin.
  */
 class AssistFixtureTest {
@@ -31,18 +30,14 @@ class AssistFixtureTest {
     @Test
     fun decodesGoldenCommandsFixture() {
         val cmds = listAdapter.fromJson(fixture("commands.json"))!!
-        assertEquals(5, cmds.size)
+        assertEquals(3, cmds.size)
         assertEquals("init", cmds[0].name)
         assertTrue(cmds[0].builtin)
         assertEquals("computer-use", cmds[1].name)
         assertTrue(cmds[1].builtin)
-        assertEquals("visualize", cmds[2].name)
-        assertTrue(cmds[2].builtin)
-        assertEquals("console", cmds[3].name)
-        assertTrue(cmds[3].builtin)
         // A discovered skill omits `builtin` on the wire and reads as false.
-        assertEquals("find-skills", cmds[4].name)
-        assertFalse(cmds[4].builtin)
+        assertEquals("find-skills", cmds[2].name)
+        assertFalse(cmds[2].builtin)
     }
 
     @Test

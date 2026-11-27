@@ -66,13 +66,13 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val deleted = projectState.deletedSessions
 
-    LaunchedEffect(Unit) { AppContainer.projectRepository.loadDeletedSessions() }
+    LaunchedEffect(Unit) { AppContainer.sessionRepository.loadDeletedSessions() }
 
     fun restore(id: String) {
         busyId = id
         scope.launch {
             try {
-                withContext(Dispatchers.IO) { AppContainer.projectRepository.restoreSession(id) }
+                withContext(Dispatchers.IO) { AppContainer.sessionRepository.restoreSession(id) }
             } catch (e: Exception) {
                 confirmAlert("Failed", e.message ?: "Unable to restore chat.")
             } finally { busyId = null }
@@ -114,7 +114,7 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
                                 busyId = item.id
                                 scope.launch {
                                     try {
-                                        withContext(Dispatchers.IO) { AppContainer.projectRepository.permanentlyDeleteSession(item.id) }
+                                        withContext(Dispatchers.IO) { AppContainer.sessionRepository.permanentlyDeleteSession(item.id) }
                                     } catch (e: Exception) {
                                         confirmAlert("Failed", e.message ?: "Unable to delete chat.")
                                     } finally { busyId = null }
@@ -138,7 +138,7 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
                             scope.launch {
                                 try {
                                     withContext(Dispatchers.IO) {
-                                        for (s in AppContainer.projectStateHolder.state.value.deletedSessions) AppContainer.projectRepository.restoreSession(s.id)
+                                        for (s in AppContainer.projectStateHolder.state.value.deletedSessions) AppContainer.sessionRepository.restoreSession(s.id)
                                     }
                                 } catch (e: Exception) {
                                     confirmAlert("Failed", e.message ?: "Unable to restore all chats.")
@@ -154,7 +154,7 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
                             scope.launch {
                                 try {
                                     withContext(Dispatchers.IO) {
-                                        for (s in AppContainer.projectStateHolder.state.value.deletedSessions) AppContainer.projectRepository.permanentlyDeleteSession(s.id)
+                                        for (s in AppContainer.projectStateHolder.state.value.deletedSessions) AppContainer.sessionRepository.permanentlyDeleteSession(s.id)
                                     }
                                 } catch (e: Exception) {
                                     confirmAlert("Failed", e.message ?: "Unable to delete all chats.")

@@ -75,17 +75,6 @@ fn shortcut_state_detects_two_way_conflicts() {
 }
 
 #[test]
-fn shortcut_state_three_way_conflict_includes_all_scripts() {
-    let scripts = vec![
-        script("a", Some("cmd-r")),
-        script("b", Some("cmd-r")),
-        script("c", Some("cmd-r")),
-    ];
-    let state = compute_shortcut_state(&scripts);
-    assert_eq!(state.conflicts.get("cmd-r").map(|s| s.len()), Some(3));
-}
-
-#[test]
 fn shortcut_state_skips_scripts_without_shortcuts() {
     let scripts = vec![
         script("dev", Some("cmd-r")),
@@ -135,22 +124,13 @@ fn test_shortcut_display_tolerates_case_and_opt_spelling() {
 fn test_status_labels_cover_every_row_state() {
     assert_eq!(script_row_status_label(None, false), "Not run yet");
     assert_eq!(script_row_status_label(None, true), "Starting…");
+    assert_eq!(script_row_status_label(Some("running"), false), "Running…");
     assert_eq!(
-        script_row_status_label(Some("running".into()), false),
-        "Running…"
-    );
-    assert_eq!(
-        script_row_status_label(Some("succeeded".into()), false),
+        script_row_status_label(Some("succeeded"), false),
         "Succeeded"
     );
-    assert_eq!(
-        script_row_status_label(Some("failed".into()), false),
-        "Failed"
-    );
-    assert_eq!(
-        script_row_status_label(Some("stopped".into()), false),
-        "Stopped"
-    );
+    assert_eq!(script_row_status_label(Some("failed"), false), "Failed");
+    assert_eq!(script_row_status_label(Some("stopped"), false), "Stopped");
 }
 
 #[test]

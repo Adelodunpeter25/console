@@ -90,6 +90,33 @@ pub enum WorkspaceTabConfig {
         #[serde(rename = "lastActiveAtMs")]
         last_active_at_ms: Option<i64>,
     },
+    #[serde(rename = "fileTree")]
+    FileTree {
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        project_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "lastActiveAtMs")]
+        last_active_at_ms: Option<i64>,
+    },
+    #[serde(rename = "device")]
+    Device {
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        project_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "lastActiveAtMs")]
+        last_active_at_ms: Option<i64>,
+    },
+    #[serde(rename = "computer")]
+    Computer {
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        project_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "lastActiveAtMs")]
+        last_active_at_ms: Option<i64>,
+    },
     #[serde(rename = "settings")]
     Settings {
         #[serde(default = "default_settings_title")]
@@ -118,6 +145,9 @@ impl WorkspaceTabConfig {
             Self::ChangesReview {
                 session_id, scope, ..
             } => format!("changesReview:{session_id}:{scope:?}"),
+            Self::FileTree { .. } => "files".to_string(),
+            Self::Device { .. } => "device".to_string(),
+            Self::Computer { .. } => "computer".to_string(),
             Self::Settings { .. } => "settings".to_string(),
         }
     }
@@ -130,6 +160,9 @@ impl WorkspaceTabConfig {
             | Self::Diff { title, .. }
             | Self::Browser { title, .. }
             | Self::ChangesReview { title, .. }
+            | Self::FileTree { title, .. }
+            | Self::Device { title, .. }
+            | Self::Computer { title, .. }
             | Self::Settings { title, .. } => title,
         }
     }
@@ -143,6 +176,9 @@ impl WorkspaceTabConfig {
             | Self::Diff { title: t, .. }
             | Self::Browser { title: t, .. }
             | Self::ChangesReview { title: t, .. }
+            | Self::FileTree { title: t, .. }
+            | Self::Device { title: t, .. }
+            | Self::Computer { title: t, .. }
             | Self::Settings { title: t, .. } => *t = title,
         }
     }
@@ -154,7 +190,10 @@ impl WorkspaceTabConfig {
             | Self::File { project_id, .. }
             | Self::Diff { project_id, .. }
             | Self::Browser { project_id, .. }
-            | Self::ChangesReview { project_id, .. } => project_id.as_deref(),
+            | Self::ChangesReview { project_id, .. }
+            | Self::FileTree { project_id, .. }
+            | Self::Device { project_id, .. }
+            | Self::Computer { project_id, .. } => project_id.as_deref(),
             Self::Settings { .. } => None,
         }
     }
@@ -166,7 +205,10 @@ impl WorkspaceTabConfig {
             | Self::File { project_id: p, .. }
             | Self::Diff { project_id: p, .. }
             | Self::Browser { project_id: p, .. }
-            | Self::ChangesReview { project_id: p, .. } => *p = project_id,
+            | Self::ChangesReview { project_id: p, .. }
+            | Self::FileTree { project_id: p, .. }
+            | Self::Device { project_id: p, .. }
+            | Self::Computer { project_id: p, .. } => *p = project_id,
             Self::Settings { .. } => {}
         }
     }
@@ -189,6 +231,15 @@ impl WorkspaceTabConfig {
                 last_active_at_ms, ..
             }
             | Self::ChangesReview {
+                last_active_at_ms, ..
+            }
+            | Self::FileTree {
+                last_active_at_ms, ..
+            }
+            | Self::Device {
+                last_active_at_ms, ..
+            }
+            | Self::Computer {
                 last_active_at_ms, ..
             }
             | Self::Settings {
@@ -215,6 +266,15 @@ impl WorkspaceTabConfig {
                 last_active_at_ms, ..
             }
             | Self::ChangesReview {
+                last_active_at_ms, ..
+            }
+            | Self::FileTree {
+                last_active_at_ms, ..
+            }
+            | Self::Device {
+                last_active_at_ms, ..
+            }
+            | Self::Computer {
                 last_active_at_ms, ..
             }
             | Self::Settings {
@@ -314,6 +374,16 @@ impl WorkspaceNode {
         }
     }
 
+    /// Find the leaf with the given id.
+    pub fn find_leaf(&self, id: &str) -> Option<&LeafPaneNode> {
+        match self {
+            Self::Leaf(node) => (node.id == id).then_some(node),
+            Self::Split(node) => node.children[0]
+                .find_leaf(id)
+                .or_else(|| node.children[1].find_leaf(id)),
+        }
+    }
+
     /// Find the leaf with the given id, mutably.
     pub fn leaf_mut(&mut self, id: &str) -> Option<&mut LeafPaneNode> {
         match self {
@@ -351,17 +421,109 @@ pub fn split_node(
 /// always splits the two.
 const WORKTREE_KEY_SEP: &str = "::wt::";
 
-/// The workspace key for a git worktree of `project_id`. A plain project's
-/// workspace keeps using the bare project id, so saved layouts keep working;
-/// only worktrees get this composite key, which gives each checkout its own
-/// tabs, terminals, files and diffs while the chat still belongs to the project.
+/// The workspace key for a git worktree of `project_id`. Only worktrees get
+/// this composite key, which gives each checkout its own tabs, terminals,
+/// files and diffs while the chat still belongs to the project.
 pub fn worktree_workspace_key(project_id: &str, worktree_path: &str) -> String {
     format!("{project_id}{WORKTREE_KEY_SEP}{worktree_path}")
 }
 
+/// Separator between a project id and a chat session id inside a workspace
+/// key. Session ids never contain it, so the first occurrence splits the two.
+const SESSION_KEY_SEP: &str = "::session::";
+
+/// The workspace key of a plain project chat: one chat, one desk. Every chat
+/// owns its own tabs, terminals, files and diffs — even inside the same
+/// project — while the chat still belongs to that project (the id stays the
+/// prefix, so project grouping and lookups keep working).
+pub fn session_workspace_key(project_id: &str, session_id: &str) -> String {
+    format!("{project_id}{SESSION_KEY_SEP}{session_id}")
+}
+
+/// The chat session behind a session-scoped workspace key.
+pub fn session_id_of_workspace_key(key: &str) -> Option<&str> {
+    key.split_once(SESSION_KEY_SEP).map(|(_, id)| id)
+}
+
+/// Marks the start of a desk's namespace inside a pane id.
+const PANE_NAMESPACE_SEP: &str = "::";
+
+/// The prefix a desk's pane ids carry. Pane state — the draft being typed,
+/// the staged comments, the branch a pane loaded — is filed under the pane
+/// id, so two desks must never share one.
+///
+/// `None` (the project-less desk) has no prefix: it keeps the window's
+/// shared `pane-main`.
+pub fn desk_pane_prefix(workspace_key: &Option<String>) -> Option<String> {
+    let key = workspace_key.as_deref()?;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(key, &mut hasher);
+    let digest = format!("{:08x}", std::hash::Hasher::finish(&hasher) as u32);
+    let readable: String = project_id_of_workspace_key(key)
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    Some(format!("pane-{readable}-{digest}{PANE_NAMESPACE_SEP}"))
+}
+
+/// The pane id a fresh desk starts with.
+pub fn desk_leaf_id(workspace_key: &Option<String>) -> String {
+    match desk_pane_prefix(workspace_key) {
+        Some(prefix) => format!("{prefix}main"),
+        None => "pane-main".to_string(),
+    }
+}
+
+/// Rewrite a desk's pane ids so they carry the desk's namespace. Desks
+/// saved by an older build all shared one pane id, so their state bled into
+/// each other. Only the local part of an id is kept, so rewriting is
+/// idempotent: a desk that is saved and restored again keeps its ids.
+pub fn namespace_pane_ids(
+    root: &mut WorkspaceNode,
+    workspace_key: &Option<String>,
+) -> Vec<(String, String)> {
+    let Some(prefix) = desk_pane_prefix(workspace_key) else {
+        return Vec::new();
+    };
+    let mut renamed = Vec::new();
+    namespace_leaf_ids(root, &prefix, &mut renamed);
+    renamed
+}
+
+fn namespace_leaf_ids(node: &mut WorkspaceNode, prefix: &str, renamed: &mut Vec<(String, String)>) {
+    match node {
+        WorkspaceNode::Leaf(leaf) => {
+            let local = leaf
+                .id
+                .rsplit_once(PANE_NAMESPACE_SEP)
+                .map(|(_, local)| local)
+                .unwrap_or(leaf.id.as_str());
+            let next = format!("{prefix}{local}");
+            if next != leaf.id {
+                renamed.push((leaf.id.clone(), next.clone()));
+                leaf.id = next;
+            }
+        }
+        WorkspaceNode::Split(split) => {
+            namespace_leaf_ids(&mut split.children[0], prefix, renamed);
+            namespace_leaf_ids(&mut split.children[1], prefix, renamed);
+        }
+    }
+}
+
+/// Whether `key` belongs to one chat's own workspace rather than a project or
+/// worktree desk.
+pub fn is_session_workspace_key(key: &str) -> bool {
+    key.contains(SESSION_KEY_SEP)
+}
+
 /// Split a workspace key into its real project id and, for a worktree
-/// workspace, the worktree path.
+/// workspace, the worktree path. Session-scoped keys sit in the project
+/// folder, so they split to no path.
 pub fn split_workspace_key(key: &str) -> (&str, Option<&str>) {
+    if let Some((project_id, _)) = key.split_once(SESSION_KEY_SEP) {
+        return (project_id, None);
+    }
     match key.split_once(WORKTREE_KEY_SEP) {
         Some((project_id, path)) if !path.is_empty() => (project_id, Some(path)),
         Some((project_id, _)) => (project_id, None),
@@ -394,10 +556,10 @@ pub fn session_checkout_path<'a>(
     session: &'a crate::types::session::SessionHeader,
     project_path: Option<&str>,
 ) -> Option<&'a str> {
-    if let Some(path) = session.worktree.as_ref().map(|w| w.path.as_str()) {
-        if !path.is_empty() {
-            return Some(trim_path(path));
-        }
+    if let Some(path) = session.worktree.as_ref().map(|w| w.path.as_str())
+        && !path.is_empty()
+    {
+        return Some(trim_path(path));
     }
     let cwd = trim_path(session.cwd.as_str());
     let project_path = trim_path(project_path?);
@@ -416,7 +578,8 @@ pub fn workspace_key_for_session(
     let project_id = session.project_id.as_deref()?;
     match session_checkout_path(session, project_path) {
         Some(path) => Some(worktree_workspace_key(project_id, path)),
-        None => Some(project_id.to_owned()),
+        // One chat, one desk: plain chats each get their own workspace too.
+        None => Some(session_workspace_key(project_id, &session.id)),
     }
 }
 
@@ -431,4 +594,67 @@ pub fn dead_worktree_workspace_keys<'a>(
         .filter(|key| is_worktree_workspace_key(key) && !live.contains(*key))
         .map(str::to_owned)
         .collect()
+}
+
+/// One row of the ⌘T workspace switcher: a desk and the chat it was made for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeskRow {
+    pub key: Option<String>,
+    pub session_id: String,
+    pub title: String,
+    /// The project the chat belongs to, shown where a tab list would show
+    /// "current" or a time.
+    pub project_name: String,
+    /// The worktree branch, for a desk that lives in its own checkout.
+    pub branch: Option<String>,
+    pub provider: String,
+    pub last_active_at_ms: i64,
+}
+
+/// The newest tab activity in a desk, or 0 for one that has none.
+pub fn desk_last_active_ms(root: &WorkspaceNode) -> i64 {
+    root.leaves()
+        .iter()
+        .flat_map(|leaf| leaf.tabs.iter())
+        .filter_map(|tab| tab.last_active_at_ms())
+        .max()
+        .unwrap_or(0)
+}
+
+/// Rows for the workspace switcher, most recently used first.
+///
+/// `desks` is every open desk as `(key, last_active_ms)`. A desk is shown as
+/// the chat it belongs to: the most recently updated session whose workspace
+/// key is the desk's, found through `key_of`. A desk with no matching chat
+/// (its chat was deleted) has nothing to name it by and is left out.
+pub fn desk_rows(
+    desks: &[(Option<String>, i64)],
+    sessions: &[crate::types::session::SessionHeader],
+    key_of: impl Fn(&crate::types::session::SessionHeader) -> Option<String>,
+    project_name_of: impl Fn(&crate::types::session::SessionHeader) -> String,
+) -> Vec<DeskRow> {
+    let mut rows: Vec<DeskRow> = desks
+        .iter()
+        .filter_map(|(key, last_active)| {
+            let session = sessions
+                .iter()
+                .filter(|session| key_of(session) == *key)
+                .max_by_key(|session| session.updated_at)?;
+            Some(DeskRow {
+                key: key.clone(),
+                session_id: session.id.clone(),
+                title: crate::types::session::SessionHeaderExt::display_title(session).to_string(),
+                project_name: project_name_of(session),
+                branch: session
+                    .worktree
+                    .as_ref()
+                    .map(|worktree| worktree.branch.clone())
+                    .filter(|branch| !branch.is_empty()),
+                provider: session.provider.clone(),
+                last_active_at_ms: *last_active,
+            })
+        })
+        .collect();
+    rows.sort_by_key(|row| std::cmp::Reverse(row.last_active_at_ms));
+    rows
 }

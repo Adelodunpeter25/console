@@ -11,6 +11,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/accounts"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/devin"
 )
 
 // accountPins pins one account id per provider for a single run. Pins are
@@ -60,6 +61,8 @@ func envOwned(providerID string) bool {
 		return claude.EnvToken() != ""
 	case "codex":
 		return codex.EnvToken() != ""
+	case "devin":
+		return devin.EnvToken() != ""
 	default:
 		return false
 	}

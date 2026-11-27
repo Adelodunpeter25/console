@@ -14,9 +14,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -36,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,6 +56,8 @@ import com.console.mobile.core.util.formatContextWindow
 import com.console.mobile.core.util.formatModelName
 import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.ApprovalModeOption
+import com.console.mobile.data.api.ApiException
+import com.console.mobile.data.model.GithubRepo
 import console.v1.Model
 import console.v1.ProjectInfo
 import com.console.mobile.data.model.favoriteKey
@@ -62,6 +70,7 @@ import com.console.mobile.ui.components.common.new.OptionRow
 import com.console.mobile.ui.components.common.new.SearchInput
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.TabPill
+import com.console.mobile.ui.components.common.new.TintPill
 import com.console.mobile.ui.components.common.new.LoadingState
 import com.console.mobile.ui.theme.NewTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -69,8 +78,13 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.console.mobile.ui.components.common.new.ActionButton
 import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.ActionRow
 import com.console.mobile.ui.components.common.new.Banner
+import com.console.mobile.ui.components.common.new.Note
+import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionCard
+import io.github.lyxnx.compose.ui.tablericons.outline.BrandGithub
+import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 
 /**
  * Selection sheets shared by the composer strip and settings. These are
@@ -87,6 +101,7 @@ fun ProjectPickerSheet(
     onSelect: (ProjectInfo) -> Unit,
     onSelectNone: () -> Unit,
     onAddProject: () -> Unit,
+    onConnectGithub: () -> Unit,
 ) {
     BaseSheet(onDismiss = onDismiss, title = "Select Folder") {
         if (locked) {
@@ -106,6 +121,95 @@ fun ProjectPickerSheet(
                     kind = ActionButtonKind.Primary,
                     modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
                 )
+            }
+            GithubPickerSection(onSelect = onSelect, onConnectGithub = onConnectGithub)
+        }
+    }
+}
+
+/**
+ * The GitHub part of a project picker: the connected account's repositories,
+ * cloned on tap and then selected like any local project — the clone lands in
+ * the server's projects root (~/console/projects), no folder picking here.
+ * Mirrors the desktop's github_menu_section, so loading, retry and the
+ * "Connect GitHub…" handoff behave the same on both.
+ */
+@Composable
+private fun GithubPickerSection(
+    onSelect: (ProjectInfo) -> Unit,
+    onConnectGithub: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var repos by remember { mutableStateOf<List<GithubRepo>?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    // A real failure (network, server). Not-connected is a state, not an
+    // error: it leaves this null and shows the connect handoff instead.
+    var error by remember { mutableStateOf<String?>(null) }
+    // The repo being cloned, so taps are blocked and the row shows progress.
+    var cloningRepo by remember { mutableStateOf<String?>(null) }
+    var cloneError by remember { mutableStateOf<String?>(null) }
+
+    fun load() {
+        scope.launch {
+            loading = true
+            error = null
+            try {
+                repos = AppContainer.projectRepository.listGithubRepos()
+            } catch (e: ApiException) {
+                if (e.code != "409") error = e.message ?: "Couldn't load repositories"
+            } catch (_: Exception) {
+                error = "Couldn't load repositories"
+            } finally {
+                loading = false
+            }
+        }
+    }
+    LaunchedEffect(Unit) { load() }
+
+    fun clone(repo: GithubRepo) {
+        if (cloningRepo != null) return
+        cloningRepo = repo.fullName.ifBlank { repo.name }
+        cloneError = null
+        scope.launch {
+            try {
+                val proj = AppContainer.projectRepository.cloneProject(repo.cloneUrl)
+                cloningRepo = null
+                onSelect(proj)
+            } catch (e: ApiException) {
+                cloningRepo = null
+                cloneError = e.message ?: "Clone failed"
+            } catch (_: Exception) {
+                cloningRepo = null
+                cloneError = "Clone failed"
+            }
+        }
+    }
+
+    cloneError?.let {
+        Banner(text = it, modifier = Modifier.padding(top = 12.dp))
+    }
+    Section(title = "GitHub") {
+        when {
+            loading -> Note("Loading repositories…")
+            error != null -> {
+                Note("Couldn't load repositories")
+                ActionRow(icon = TablerIcons.Outline.Refresh, title = "Retry") { load() }
+            }
+            repos == null -> ActionRow(icon = TablerIcons.Outline.BrandGithub, title = "Connect GitHub…") { onConnectGithub() }
+            repos?.isEmpty() == true -> Note("No repositories found")
+            else -> {
+                repos?.take(20)?.forEach { repo ->
+                    val label = repo.fullName.ifBlank { repo.name }
+                    val busy = cloningRepo == label
+                    OptionRow(
+                        title = if (busy) "Cloning $label…" else label,
+                        subtitle = repo.description ?: if (repo.private) "Private" else null,
+                    ) {
+                        if (cloningRepo == null) clone(repo)
+                    }
+                    SectionDivider()
+                }
+                ActionRow(icon = TablerIcons.Outline.Refresh, title = "Refresh") { load() }
             }
         }
     }
@@ -130,13 +234,22 @@ fun ModelPickerSheet(
     val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var search by remember { mutableStateOf("") }
-    var showFavorites by remember { mutableStateOf(false) }
-    var activeProvider by remember(providerState.providers) {
-        mutableStateOf(selectedProvider ?: providerState.providers.firstOrNull()?.name)
-    }
+    val providers = providerState.providers
+    val pageCount = 1 + providers.size
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { pageCount })
+    val tabListState = rememberLazyListState()
+    val showFavorites = pagerState.currentPage == 0
+    val activeProvider = if (pagerState.currentPage in 1..providers.size) providers[pagerState.currentPage - 1].name else null
+
     LaunchedEffect(Unit) {
         AppContainer.providerRepository.loadProviders()
         AppContainer.providerRepository.loadFavorites()
+    }
+    // Keep the selected tab pill scrolled into view when swiping between pages.
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage < pageCount) {
+            tabListState.animateScrollToItem(pagerState.currentPage)
+        }
     }
     // Load the models for whichever provider tab is showing. Without this the
     // provider tabs never fetch anything — only the favourites tab does, which
@@ -147,7 +260,7 @@ fun ModelPickerSheet(
     // Favourite rows can live under any provider, so load them all before the
     // favourites tab can render an empty list it does not deserve.
     LaunchedEffect(showFavorites) {
-        if (showFavorites) providerState.providers.forEach { AppContainer.providerRepository.loadModels(it.name) }
+        if (showFavorites) providers.forEach { AppContainer.providerRepository.loadModels(it.name) }
     }
 
     val modelsByProvider = providerState.modelsByProvider
@@ -169,17 +282,24 @@ fun ModelPickerSheet(
 
     // The list scrolls itself (LazyColumn), so the sheet must not also scroll.
     BaseSheet(onDismiss = onDismiss, title = title, scrollable = false) {
-        if (providerState.providers.isNotEmpty()) {
-            LazyRow(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (providers.isNotEmpty()) {
+            LazyRow(
+                state = tabListState,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 // Favourites tab: a star ahead of the provider tabs, matching the desktop's tab bar.
-                item { IconTabPill(TablerIcons.Outline.Star, "Favorites", selected = showFavorites) { showFavorites = true } }
-                items(providerState.providers) { p ->
+                item {
+                    IconTabPill(TablerIcons.Outline.Star, "Favorites", selected = showFavorites) {
+                        scope.launch { pagerState.animateScrollToPage(0) }
+                    }
+                }
+                itemsIndexed(providers, key = { _, p -> p.name }) { index, p ->
                     TabPill(
                         label = p.display_name.ifBlank { p.name },
-                        selected = !showFavorites && p.name == activeProvider,
+                        selected = pagerState.currentPage == index + 1,
                     ) {
-                        showFavorites = false
-                        activeProvider = p.name
+                        scope.launch { pagerState.animateScrollToPage(index + 1) }
                     }
                 }
             }
@@ -214,37 +334,48 @@ fun ModelPickerSheet(
             )
         }
 
-        if (showFavorites) {
-            val visibleFavorites = if (q.isEmpty()) favoriteEntries else favoriteEntries.filter { it.model.id.lowercase().contains(q) }
-            when {
-                (providerState.loadingFavorites || anyModelLoading) && favoriteEntries.isEmpty() -> LoadingState()
-                visibleFavorites.isEmpty() -> ModelPlaceholder(if (search.isNotEmpty()) "No matching favorites" else "No favorites yet — tap a star to pin a model")
-                else -> ModelListCard(visibleFavorites, key = { favoriteKey(it.provider, it.model.id) }) { entry ->
-                    OptionRow(
-                        title = formatModelName(entry.model.id),
-                        // Provider is not shown as a tab here, so it belongs on the row (desktop parity).
-                        subtitle = "${entry.providerLabel} · ${formatContextWindow(entry.model.context_window)} context",
-                        selected = entry.model.id == selectedModel && entry.provider == selectedProvider,
-                        trailing = { starFor(entry.provider, entry.model.id) },
-                    ) { onSelect(entry.model.id, entry.provider) }
+        val pagerHeight = (LocalConfiguration.current.screenHeightDp * 0.52f).dp.coerceIn(320.dp, 520.dp)
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth().height(pagerHeight),
+            verticalAlignment = Alignment.Top,
+        ) { page ->
+            if (page == 0) {
+                val visibleFavorites = if (q.isEmpty()) favoriteEntries else favoriteEntries.filter { it.model.id.lowercase().contains(q) }
+                when {
+                    (providerState.loadingFavorites || anyModelLoading || bootstrapping) && favoriteEntries.isEmpty() -> LoadingState()
+                    visibleFavorites.isEmpty() -> ModelPlaceholder(if (search.isNotEmpty()) "No matching favorites" else "No favorites yet — tap a star to pin a model")
+                    else -> ModelListCard(visibleFavorites, key = { favoriteKey(it.provider, it.model.id) }) { entry ->
+                        val isSelected = entry.model.id == selectedModel && entry.provider == selectedProvider
+                        OptionRow(
+                            title = formatModelName(entry.model.id),
+                            // Provider is not shown as a tab here, so it belongs on the row (desktop parity).
+                            subtitle = "${entry.providerLabel} · ${formatContextWindow(entry.model.context_window)} context",
+                            titleBadge = if (isSelected) { { TintPill("Active", NewTheme.Accent, horizontalPadding = 12.dp, verticalPadding = 3.dp) } } else null,
+                            trailing = { starFor(entry.provider, entry.model.id) },
+                        ) { onSelect(entry.model.id, entry.provider) }
+                    }
                 }
-            }
-        } else {
-            val models: List<Model> = activeProvider?.let { providerState.modelsByProvider[it] } ?: emptyList()
-            val filtered = if (q.isEmpty()) models else models.filter { it.id.lowercase().contains(q) }
-            when {
-                (activeLoading || bootstrapping) && models.isEmpty() -> LoadingState()
-                filtered.isEmpty() -> ModelPlaceholder(if (search.isNotEmpty()) "No matching models found" else "No models available")
-                else -> ModelListCard(filtered.take(100), key = { it.id }) { m ->
-                    val providerId = activeProvider.orEmpty()
-                    OptionRow(
-                        title = formatModelName(m.id),
-                        // The formatted name is already the row title, so the id under it
-                        // repeated itself — the context window is the useful second line.
-                        subtitle = "${formatContextWindow(m.context_window)} context",
-                        selected = m.id == selectedModel,
-                        trailing = { starFor(providerId, m.id) },
-                    ) { onSelect(m.id, activeProvider) }
+            } else {
+                val pageProvider = providers.getOrNull(page - 1)?.name
+                val models: List<Model> = pageProvider?.let { providerState.modelsByProvider[it] } ?: emptyList()
+                val pageLoading = pageProvider?.let { providerState.loadingModels[it] } == true || providerState.loadingProviders
+                val filtered = if (q.isEmpty()) models else models.filter { it.id.lowercase().contains(q) }
+                when {
+                    (pageLoading || bootstrapping) && models.isEmpty() -> LoadingState()
+                    filtered.isEmpty() -> ModelPlaceholder(if (search.isNotEmpty()) "No matching models found" else "No models available")
+                    else -> ModelListCard(filtered.take(100), key = { it.id }) { m ->
+                        val providerId = pageProvider.orEmpty()
+                        val isSelected = m.id == selectedModel
+                        OptionRow(
+                            title = formatModelName(m.id),
+                            // The formatted name is already the row title, so the id under it
+                            // repeated itself — the context window is the useful second line.
+                            subtitle = "${formatContextWindow(m.context_window)} context",
+                            titleBadge = if (isSelected) { { TintPill("Active", NewTheme.Accent, horizontalPadding = 12.dp, verticalPadding = 3.dp) } } else null,
+                            trailing = { starFor(providerId, m.id) },
+                        ) { onSelect(m.id, pageProvider) }
+                    }
                 }
             }
         }
@@ -257,9 +388,9 @@ fun ModelPickerSheet(
  * provider lists (antigravity) with no way to reach the overflow items.
  */
 @Composable
-private fun <T> ColumnScope.ModelListCard(items: List<T>, key: (T) -> Any, row: @Composable (T) -> Unit) {
+private fun <T> ModelListCard(items: List<T>, key: (T) -> Any, row: @Composable (T) -> Unit) {
     LazyColumn(
-        modifier = Modifier.fillMaxWidth().weight(1f, fill = false)
+        modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card),
     ) {
         itemsIndexed(items, key = { _, item -> key(item) }) { index, item ->
@@ -273,31 +404,6 @@ private fun <T> ColumnScope.ModelListCard(items: List<T>, key: (T) -> Any, row: 
 private fun ModelPlaceholder(message: String) {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
         Text(message, color = NewTheme.TextSecondary, fontSize = 14.sp)
-    }
-}
-
-@Composable
-fun ApprovalModePickerSheet(current: String, onDismiss: () -> Unit, onSelect: (String) -> Unit) {
-    val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { AppContainer.providerRepository.loadApprovalModes() }
-    BaseSheet(onDismiss = onDismiss, title = "Approval Mode") {
-        if (providerState.loadingApprovalModes && providerState.approvalModes.isEmpty()) {
-            LoadingState()
-        } else {
-            val modes = providerState.approvalModes.ifEmpty {
-                ApprovalMode.entries.map { ApprovalModeOption(it, it.value, "") }
-            }
-            SectionCard {
-                modes.forEachIndexed { index, m ->
-                    OptionRow(
-                        title = m.label.ifBlank { m.value.value },
-                        subtitle = m.description.takeIf { it.isNotBlank() },
-                        selected = m.value.value == current,
-                    ) { onSelect(m.value.value) }
-                    if (index < modes.lastIndex) SectionDivider()
-                }
-            }
-        }
     }
 }
 
@@ -322,7 +428,7 @@ fun ThinkingLevelPickerSheet(
                         Icon(
                             TablerIcons.Outline.Brain,
                             contentDescription = null,
-                            tint = Color(thinkingLevelColorHex(level)),
+                            tint = NewTheme.TextSecondary,
                             modifier = Modifier.size(18.dp),
                         )
                     },
@@ -341,6 +447,7 @@ fun ThinkingLevelPickerSheet(
  * branch switch mid-stream would only land on the next turn, and a worktree
  * can only be attached to a message-less session.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BranchPickerSheet(
     branches: List<console.v1.GitBranchInfo>?,
@@ -356,9 +463,14 @@ fun BranchPickerSheet(
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit,
     onNewWorktree: () -> Unit,
+    title: String = "Branch",
+    /** Highlights this branch instead of the checked-out one. */
+    selectedName: String? = null,
+    /** Optional first row that clears the choice, e.g. "Use default branch". */
+    onUseDefault: (() -> Unit)? = null,
 ) {
     // The branch list scrolls itself, so the sheet must not also scroll.
-    BaseSheet(onDismiss = onDismiss, title = "Branch", scrollable = false) {
+    BaseSheet(onDismiss = onDismiss, title = title, scrollable = false) {
         if (locked && !lockedReason.isNullOrBlank()) {
             Text(lockedReason, color = NewTheme.TextMuted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
         }
@@ -366,6 +478,15 @@ fun BranchPickerSheet(
             Banner(error, modifier = Modifier.padding(vertical = 8.dp))
         }
         Column(modifier = Modifier.alpha(if (locked) 0.45f else 1f)) {
+            if (onUseDefault != null) {
+                SectionCard(modifier = Modifier.padding(bottom = 12.dp)) {
+                    OptionRow(
+                        title = "Use default branch",
+                        subtitle = "Let the repository's default branch be the starting point",
+                        selected = selectedName == "",
+                    ) { onUseDefault() }
+                }
+            }
             if (worktreeBranch == null && canStartWorktree) {
                 SectionCard(modifier = Modifier.padding(bottom = 12.dp)) {
                     OptionRow(title = "New worktree", subtitle = "Work in an isolated copy on its own branch") {
@@ -383,9 +504,9 @@ fun BranchPickerSheet(
                     itemsIndexed(branches, key = { _, b -> b.name }) { index, b ->
                         OptionRow(
                             title = b.name,
-                            selected = b.current,
+                            selected = if (selectedName != null) b.name == selectedName else b.current,
                             trailing = if (switchingTo == b.name) {
-                                { CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(18.dp)) }
+                                { LoadingIndicator(color = NewTheme.TextMuted, modifier = Modifier.size(20.dp)) }
                             } else null,
                         ) { if (!locked && switchingTo == null) onSelect(b.name) }
                         if (index < branches.lastIndex) SectionDivider()

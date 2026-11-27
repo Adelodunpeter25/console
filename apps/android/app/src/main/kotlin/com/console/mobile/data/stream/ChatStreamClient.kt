@@ -6,8 +6,10 @@ import com.console.mobile.data.model.BackgroundWorkOutputFrame
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -26,14 +28,13 @@ import java.io.IOException
 import java.io.InputStreamReader
 
 /**
- * SSE frame emitted by the server. Mirrors the NativeStreamModule Kotlin
- * implementation in apps/mobile/modules/native-stream: `id:` lines feed
- * `seq` (resume cursor for `?since=`), `data:` lines carry AgentSessionEvent
- * JSON. Heartbeat comments (`:`) and blank lines are skipped.
+ * SSE frame emitted by the server. `id:` lines feed `seq` (the resume cursor
+ * for `?since=`) and `data:` lines carry AgentSessionEvent JSON. Heartbeat
+ * comments (`:`) and blank lines are skipped.
  */
 data class SseStreamFrame(val seq: Long?, val event: AgentSessionEvent)
 
-/** Terminal state for a stream — mirrors onStreamEnd/onStreamError contract. */
+/** Terminal state for a stream. */
 sealed interface StreamEnd {
     data object Completed : StreamEnd
     data object Aborted : StreamEnd
@@ -136,7 +137,7 @@ class ChatStreamClient(
             job.cancel()
             call.cancel()
         }
-    }
+    }.buffer(Channel.UNLIMITED)
 
     private sealed interface Method {
         data class Post(val bodyJson: String) : Method
@@ -176,6 +177,7 @@ class ChatStreamClient(
                         close()
                         return
                     }
+                    trySend(StreamOutcome.Opened)
                     val responseBody = response.body
                     if (responseBody == null) {
                         response.close()
@@ -231,10 +233,12 @@ class ChatStreamClient(
             job.cancel()
             call.cancel()
         }
-    }
+    }.buffer(Channel.UNLIMITED)
 }
 
 sealed interface StreamOutcome {
+    /** The server accepted the run request — safe to render the user bubble. */
+    data object Opened : StreamOutcome
     data class Frame(val frame: SseStreamFrame) : StreamOutcome
     data class End(val end: StreamEnd) : StreamOutcome
 }

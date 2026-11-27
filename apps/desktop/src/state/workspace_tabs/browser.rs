@@ -29,10 +29,10 @@ impl ConsoleDesktopApp {
 
         let view = cx.new(|cx| {
             let mut view = BrowserView::new(window, cx);
-            if let Some(url) = initial_url.clone() {
-                if !url.is_empty() {
-                    view.navigate_to_url(url, cx);
-                }
+            if let Some(url) = initial_url.clone()
+                && !url.is_empty()
+            {
+                view.navigate_to_url(url, cx);
             }
             view
         });
@@ -40,14 +40,32 @@ impl ConsoleDesktopApp {
         let app_entity = cx.entity().downgrade();
         view.update(cx, |v, _cx| {
             v.set_annotation_handler(move |annotation, cx| {
-                let _ = app_entity.update(cx, |this, cx| {
-                    this.stage_browser_annotation(&handler_bid, annotation, cx);
-                });
+                // When the chip lands on a chat composer, the handler moves
+                // keyboard focus there — the page must not take it back, so
+                // the view skips its refocus.
+                app_entity
+                    .update(cx, |this, cx| {
+                        this.stage_browser_annotation(&handler_bid, annotation, cx)
+                    })
+                    .unwrap_or(false)
+            });
+        });
+
+        let focus_bid = browser_id.to_string();
+        let focus_app = cx.entity().downgrade();
+        view.update(cx, |v, _cx| {
+            v.set_user_focus_handler(move |cx| {
+                let _ = focus_app.update(cx, |this, cx| this.focus_pane_of_browser(&focus_bid, cx));
             });
         });
 
         let bid = browser_id.to_string();
         let sub = cx.observe(&view, move |this, view, cx| {
+            // The annotation popover floats above the native webview in GPUI,
+            // so an open popover (or address context menu) must hide the
+            // webview via the occlusion sync, and closing it must restore
+            // the live surface. The view notifies on every such change.
+            this.sync_workspace_webviews(cx);
             let (new_title, new_url) = {
                 let bv = view.read(cx);
                 let title = bv.tab_label().unwrap_or_else(|| "New Tab".to_string());
@@ -63,14 +81,12 @@ impl ConsoleDesktopApp {
                         url,
                         ..
                     } = tab
+                        && id == &bid
+                        && (*title != new_title || *url != new_url)
                     {
-                        if id == &bid {
-                            if *title != new_title || *url != new_url {
-                                *title = new_title.clone();
-                                *url = new_url.clone();
-                                changed = true;
-                            }
-                        }
+                        *title = new_title.clone();
+                        *url = new_url.clone();
+                        changed = true;
                     }
                 }
             }
@@ -83,14 +99,12 @@ impl ConsoleDesktopApp {
                             url,
                             ..
                         } = tab
+                            && id == &bid
+                            && (*title != new_title || *url != new_url)
                         {
-                            if id == &bid {
-                                if *title != new_title || *url != new_url {
-                                    *title = new_title.clone();
-                                    *url = new_url.clone();
-                                    changed = true;
-                                }
-                            }
+                            *title = new_title.clone();
+                            *url = new_url.clone();
+                            changed = true;
                         }
                     }
                 }
@@ -110,7 +124,7 @@ impl ConsoleDesktopApp {
     /// Synchronize the visibility and occlusion state of all workspace browser webviews.
     /// Only browser tabs active in currently visible panes stay visible; inactive ones are hidden.
     pub fn sync_workspace_webviews(&self, cx: &mut Context<Self>) {
-        let active_browser_ids: std::collections::HashSet<String> = self
+        let mut active_browser_ids: std::collections::HashSet<String> = self
             .workspace_root
             .leaves()
             .into_iter()
@@ -124,14 +138,65 @@ impl ConsoleDesktopApp {
             })
             .collect();
 
-        let palettes_open = self.any_palette_open(cx);
+        // Settings take over the window; native webviews paint above GPUI, so
+        // they must be hidden rather than left at their old bounds.
+        if self.settings_open {
+            active_browser_ids.clear();
+        }
 
         for (browser_id, view) in &self.browser_views {
             let is_active = active_browser_ids.contains(browser_id);
-            let occluded = palettes_open || view.read(cx).overlay_open(cx);
             view.update(cx, |v, cx| {
-                v.sync_native_state(is_active, occluded, cx);
+                v.sync_native_state(is_active, cx);
             });
+        }
+
+        // Media file tabs: the surface is visible only while its file tab is
+        // the active tab of a visible pane.
+        let active_media_paths: std::collections::HashSet<String> = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .filter_map(|leaf| {
+                let active_id = leaf.active_tab_id.as_deref()?;
+                leaf.tabs.iter().find(|t| t.id() == active_id)
+            })
+            .filter_map(|tab| match tab {
+                WorkspaceTabConfig::File { path, .. } => Some(path.clone()),
+                _ => None,
+            })
+            .filter(|path| {
+                matches!(
+                    console_core::file_kind_for_path(path),
+                    console_core::FileKind::Video
+                        | console_core::FileKind::Audio
+                        | console_core::FileKind::Pdf
+                )
+            })
+            .collect();
+        for (path, view) in &self.file_media_views {
+            let is_active = active_media_paths.contains(path);
+            view.update(cx, |v, cx| {
+                v.sync_native_state(is_active, cx);
+            });
+        }
+        self.sync_device_webview(cx);
+        self.sync_computer_webview(cx);
+    }
+
+    /// A click into a page focuses the pane that holds its tab.
+    fn focus_pane_of_browser(&mut self, browser_id: &str, cx: &mut Context<Self>) {
+        let tab_id = format!("browser:{browser_id}");
+        let pane_id = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.active_tab_id.as_deref() == Some(tab_id.as_str()))
+            .map(|leaf| leaf.id.clone());
+        if let Some(pane_id) = pane_id
+            && self.active_pane_id.as_deref() != Some(pane_id.as_str())
+        {
+            self.focus_workspace_pane(&pane_id, cx);
         }
     }
 
@@ -154,12 +219,21 @@ impl ConsoleDesktopApp {
             return;
         }
 
-        let pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".into());
-        let (browser_id, tab) =
-            self.new_browser_tab(url.clone(), None, None, &pane_id);
+        let pane_id = self.target_subtab_pane_id();
+        self.open_browser_tab_in_pane(&pane_id, url, focus, window, cx);
+    }
+
+    /// Open a Browser tab in a specific pane.
+    pub fn open_browser_tab_in_pane(
+        &mut self,
+        pane_id: &str,
+        url: Option<String>,
+        focus: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let pane_id = pane_id.to_string();
+        let (browser_id, tab) = self.new_browser_tab(url.clone(), None, None, &pane_id);
         if focus {
             workspace_ops::open_tab(&mut self.workspace_root, &pane_id, tab);
         } else {
@@ -204,11 +278,20 @@ impl ConsoleDesktopApp {
         // Which tree/pane the tab opens in: the chat's own workspace when one
         // can be located, else the active pane as before.
         enum Target {
-            Active { pane_id: String },
-            Stashed { key: Option<String>, pane_id: String },
+            Active {
+                pane_id: String,
+            },
+            Stashed {
+                key: Option<String>,
+                pane_id: String,
+            },
         }
-        let target = if let Some(pane_id) = active_chat_pane {
-            Target::Active { pane_id }
+        let target = if active_chat_pane.is_some() {
+            // The right-hand split, like every other subtab, so the chat stays
+            // where it is and the page appears beside it.
+            Target::Active {
+                pane_id: self.target_subtab_pane_id(),
+            }
         } else {
             let mut stashed = None;
             for (key, root) in self.project_workspace_roots.iter() {
@@ -234,8 +317,10 @@ impl ConsoleDesktopApp {
                 Some((key, pane_id)) => Target::Stashed { key, pane_id },
                 // Chat rendered nowhere: fall back to the active tree/pane.
                 None => {
-                    let pane_id =
-                        self.active_pane_id.clone().unwrap_or_else(|| "pane-main".into());
+                    let pane_id = self
+                        .active_pane_id
+                        .clone()
+                        .unwrap_or_else(|| "pane-main".into());
                     Target::Active { pane_id }
                 }
             }
@@ -256,9 +341,7 @@ impl ConsoleDesktopApp {
                 workspace_ops::open_tab_in_background(&mut self.workspace_root, &pane_id, tab);
             }
             Target::Stashed { key, .. } => {
-                let Some(root) = self.project_workspace_roots.get_mut(key) else {
-                    return None;
-                };
+                let root = self.project_workspace_roots.get_mut(key)?;
                 workspace_ops::open_tab_in_background(root, &pane_id, tab);
             }
         }
@@ -271,7 +354,7 @@ impl ConsoleDesktopApp {
     /// Build the id and tab config for the next browser tab in `pane_id`.
     /// `project_key` wins when given (agent tabs know their workspace); user
     /// tabs fall back to the pane's project selection.
-    fn new_browser_tab(
+    pub(crate) fn new_browser_tab(
         &self,
         url: Option<String>,
         owner_session: Option<String>,
@@ -292,7 +375,7 @@ impl ConsoleDesktopApp {
             url: url.unwrap_or_default(),
             title,
             session_id: owner_session,
-            project_id: project_key.or_else(|| self.pane_project_id(pane_id)),
+            project_id: project_key.or_else(|| self.pane_workspace_key(pane_id)),
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
         (browser_id, tab)

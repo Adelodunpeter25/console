@@ -12,6 +12,7 @@ type subagentInput struct {
 	Prompt string `json:"prompt" jsonschema:"required,description=Clear, actionable task description for the subagent"`
 	Name   string `json:"name" jsonschema:"required,description=Name or identifier for the subagent to help differentiate it from other instances"`
 	Role   string `json:"role,omitempty" jsonschema:"description=Role or job title for the subagent (e.g. 'Codebase Inspector', 'Test Runner')"`
+	Model  string `json:"model,omitempty" jsonschema:"description=Model ID the subagent runs on, from the same provider as the parent run (see the model catalog). Omit to use the parent run's model."`
 }
 
 // Subagent is the headless default-answer instance used by DefaultTools();

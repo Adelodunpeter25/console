@@ -22,6 +22,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/devin"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/usage"
 )
@@ -29,7 +30,7 @@ import (
 // pendingTTL is the 10-minute OAuth state expiry.
 const pendingTTL = 10 * time.Minute
 
-// ErrUnknownProvider rejects a provider id outside codex|claude|antigravity.
+// ErrUnknownProvider rejects a provider id outside the OAuth set.
 var ErrUnknownProvider = errors.New("Invalid OAuth provider.")
 
 // ErrEnvAccount rejects mutations of the synthetic env account. It is
@@ -121,6 +122,8 @@ type AuthService struct {
 	Exchange func(code, verifier, redirectURI string) (codex.OAuthCredential, error)
 	// ExchangeClaude swaps an authorization code for Claude credentials.
 	ExchangeClaude func(code, state, verifier, redirectURI string) (claude.OAuthCredential, error)
+	// ExchangeDevin swaps an authorization code for Devin credentials.
+	ExchangeDevin func(code, verifier string) (devin.OAuthCredential, error)
 	// ValidatePAT verifies a pasted GitHub token (overridable in tests).
 	ValidatePAT func(ctx context.Context, client *http.Client, token string) (string, []string, error)
 	// Usage is the aggregated usage cache; nil skips its invalidation.
@@ -145,6 +148,13 @@ func (s *AuthService) exchangeClaude(code, state, verifier, redirectURI string) 
 	return claude.ExchangeCode(nil, code, state, verifier, redirectURI)
 }
 
+func (s *AuthService) exchangeDevin(code, verifier string) (devin.OAuthCredential, error) {
+	if s.ExchangeDevin != nil {
+		return s.ExchangeDevin(code, verifier)
+	}
+	return devin.ExchangeCode(nil, code, verifier)
+}
+
 // GetStatus reports login state from credential files/env tokens, plus
 // every provider's stored account list.
 func (s *AuthService) GetStatus() AuthStatus {
@@ -152,6 +162,7 @@ func (s *AuthService) GetStatus() AuthStatus {
 		Antigravity: s.providerStatus("antigravity"),
 		Codex:       s.providerStatus("codex"),
 		Claude:      s.providerStatus("claude"),
+		Devin:       s.providerStatus("devin"),
 		GitHub:      GitHubStatus(),
 	}
 	return status
@@ -179,6 +190,12 @@ func (s *AuthService) providerStatus(provider string) ProviderAuthStatus {
 		if cred, err := antigravity.LoadCredential(); err == nil && cred.AccessToken != "" {
 			out = ProviderAuthStatus{LoggedIn: true, Email: cred.Email}
 		} else if antigravity.CredentialExists() {
+			out = ProviderAuthStatus{LoggedIn: true}
+		}
+	case "devin":
+		if cred, err := devin.LoadCredential(); err == nil && cred.Token != "" {
+			out = ProviderAuthStatus{LoggedIn: true, Email: cred.Email}
+		} else if devin.CredentialExists() {
 			out = ProviderAuthStatus{LoggedIn: true}
 		}
 	}
@@ -220,6 +237,8 @@ func envOwned(provider string) bool {
 		return claude.EnvToken() != ""
 	case "codex":
 		return codex.EnvToken() != ""
+	case "devin":
+		return devin.EnvToken() != ""
 	default:
 		return false
 	}
@@ -252,11 +271,12 @@ func (s *AuthService) ValidateGitHubPAT(ctx context.Context, token string) (GitH
 	if err != nil {
 		return GitHubAuthStatus{}, err
 	}
-	if err := github.SaveCredential(github.Credential{
-		Token:    token,
-		Username: login,
-		Scopes:   scopes,
-	}); err != nil {
+	cred := github.Credential{Token: token, Username: login, Scopes: scopes}
+	// Best effort: without the profile there is simply no git identity.
+	if id, name, email, err := github.FetchIdentity(ctx, nil, token); err == nil {
+		cred.ID, cred.Name, cred.Email = id, name, email
+	}
+	if err := github.SaveCredential(cred); err != nil {
 		return GitHubAuthStatus{}, err
 	}
 	return GitHubStatus(), nil
@@ -310,6 +330,21 @@ func (s *AuthService) GetLoginURLFor(provider string) (LoginURL, error) {
 		s.pending[state] = pendingLogin{verifier: verifier, redirectURI: redirectURI, expiresAt: time.Now().Add(pendingTTL)}
 		s.mu.Unlock()
 		return LoginURL{Provider: "claude", AuthURL: authURL, State: state, RedirectURI: redirectURI}, nil
+	case "devin":
+		var verifier, challenge string
+		verifier, challenge, err = devin.GeneratePKCE()
+		if err != nil {
+			return LoginURL{}, err
+		}
+		authURL, redirectURI = devin.AuthorizationURL(state, challenge)
+		s.mu.Lock()
+		if s.pending == nil {
+			s.pending = map[string]pendingLogin{}
+		}
+		s.sweepLocked()
+		s.pending[state] = pendingLogin{verifier: verifier, redirectURI: redirectURI, expiresAt: time.Now().Add(pendingTTL)}
+		s.mu.Unlock()
+		return LoginURL{Provider: "devin", AuthURL: authURL, State: state, RedirectURI: redirectURI}, nil
 	default:
 		var verifier, challenge string
 		verifier, challenge, err = codex.GeneratePKCE()
@@ -383,6 +418,29 @@ func (s *AuthService) HandleCallbackFor(provider, code, state string) (CallbackR
 			return CallbackResult{}, err
 		}
 		return renderLogin(provider, credential.Email, target), nil
+	case "devin":
+		credential, err := s.exchangeDevin(code, pending.verifier)
+		if err != nil {
+			return CallbackResult{}, err
+		}
+		// Identity: JWT claims (email → subject → token prefix). No
+		// identity → a fresh, unmerged account.
+		identity, email := devin.TokenIdentity(credential.Token)
+		if credential.Email != "" {
+			email = credential.Email
+		}
+		if identity == "" {
+			identity = email
+		}
+		credential.Email = email
+		target, err := loginAccount(provider, identity, email)
+		if err != nil {
+			return CallbackResult{}, err
+		}
+		if err := saveLogin(credential, target, devin.SaveCredentialFor, devin.SaveCredential); err != nil {
+			return CallbackResult{}, err
+		}
+		return renderLogin(provider, email, target), nil
 	}
 	credential, err := s.exchange(code, pending.verifier, pending.redirectURI)
 	if err != nil {
@@ -466,7 +524,7 @@ func (s *AuthService) SetProjectID(provider, projectID string) error {
 // validateProvider accepts only the OAuth providers with account support.
 func validateProvider(provider string) error {
 	switch provider {
-	case "codex", "claude", "antigravity":
+	case "codex", "claude", "antigravity", "devin":
 		return nil
 	default:
 		return ErrUnknownProvider
@@ -530,6 +588,8 @@ func (s *AuthService) DeleteAccount(provider, id string) (ProviderAuthStatus, er
 			_ = codex.ClearLegacyCredentialFile()
 		case "antigravity":
 			_ = antigravity.ClearLegacyCredentialFile()
+		case "devin":
+			_ = devin.ClearLegacyCredentialFile()
 		}
 	}
 	s.invalidateProviderCaches(provider)
@@ -547,6 +607,8 @@ func (s *AuthService) invalidateProviderCaches(provider string) {
 		codex.MarkModelCacheStale()
 	case "antigravity":
 		antigravity.MarkModelCacheStale()
+	case "devin":
+		devin.MarkModelCacheStale()
 	}
 	if s.Usage != nil {
 		s.Usage.MarkStale(provider)

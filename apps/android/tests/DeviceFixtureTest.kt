@@ -15,8 +15,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Golden-fixture tests for the device migration
- * (docs/plan/shared-protobuf-schema.md §8). Fixtures live in
+ * Golden-fixture tests for the device migration. Fixtures live in
  * proto/testdata/device and are shared by Go, Rust, and Kotlin.
  */
 class DeviceFixtureTest {

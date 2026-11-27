@@ -4,9 +4,11 @@ package routes
 import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/accounts"
@@ -18,10 +20,14 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/usage"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/computer"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/stt"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
 )
 
 type Config struct {
@@ -52,16 +58,39 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 		// get overwritten by later requests; run goroutines outlive their
 		// handler, so a mutated session id silently dropped persistence.
 		Immutable: true,
+		// Speech-to-text uploads are multipart. Fiber's 4 MB default leaves
+		// no room for framing around a near-limit 4 MB audio file.
+		BodyLimit: 8 << 20,
 	})
 	app.Use(recover.New())
+
+	app.Use(compress.New(compress.Config{
+		Next: func(c *fiber.Ctx) bool {
+			// SSE uses SetBodyStreamWriter; the Next hook runs before handlers
+			// set Content-Type, so exclude streams by path instead. /run is a
+			// POST so plain paths stay compressible.
+			path := c.Path()
+			return strings.HasSuffix(path, "/stream") ||
+				strings.HasSuffix(path, "/watch") ||
+				(c.Method() == fiber.MethodPost && strings.HasSuffix(path, "/run"))
+		},
+	}))
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
 	RegisterVersionRoutes(app)
 
-	// Authentication is protected by default. Pairing is the sole public
-	// application endpoint; health/version are registered above this boundary.
+	// Authentication is protected by default. Pairing and webhook ingress are
+	// registered above this boundary; webhooks authenticate per-subscription
+	// via secret/HMAC rather than a device token.
+	var runSvc *run.Service
+	RegisterWebhookRoutes(app, func(topic, subID string, headers map[string]string, queryToken string, body []byte) (int, error) {
+		if runSvc == nil {
+			return 0, run.ErrWebhooksUnavailable
+		}
+		return runSvc.DeliverWebhook(topic, subID, headers, queryToken, body)
+	})
 	tokenIssuer := cfg.TokenIssuer
 	if tokenIssuer == nil {
 		tokenIssuer = auth.NewTokenIssuer()
@@ -72,7 +101,9 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	app.Use(RequireDeviceToken(authManager))
 
 	RegisterFavoriteRoutes(app, services.NewFavoriteService(cfg.DB))
-	RegisterDraftRoutes(app, services.NewDraftService(cfg.DB))
+	draftService := services.NewDraftService(cfg.DB)
+	RegisterDraftRoutes(app, draftService)
+	RegisterFileCommentRoutes(app, services.NewFileCommentService(cfg.DB))
 	RegisterPortRoutes(app, cfg.Ports)
 	RegisterSettingsRoutes(app, services.NewSettingsService())
 	RegisterFsRoutes(app, fs.NewFsService(), cfg.Watch)
@@ -87,9 +118,11 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 		return project.ID
 	})
 	RegisterTerminalRoutes(app, ptyManager)
+	RegisterComputerRoutes(app, nil)
 	scriptsSvc := projectssvc.NewProjectScriptsService(projectssvc.NewProjectService(cfg.DB), cfg.Ports)
 	RegisterScriptRoutes(app, scriptsSvc)
 	RegisterProjectRoutes(app, projectssvc.NewProjectService(cfg.DB), projectssvc.NewProjectBootstrapService())
+	RegisterRepoTaskRoutes(app, projects, projectssvc.NewProjectBootstrapService(), services.NewSessionService(cfg.DB))
 	// One shared usage instance: auth-driven account mutations invalidate
 	// the same cache the usage routes read from.
 	usageSvc := usage.NewService()
@@ -103,21 +136,34 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	// The old freely-mintable token endpoint is intentionally removed. Device
 	// tokens can only be issued through a consumed pairing grant.
 	RegisterIntegrationRoutes(app)
+	RegisterSttRoutes(app, stt.NewClient(""))
+	RegisterGitHubRoutes(app)
 	registerProviderRoutes(app, services.NewFavoriteService(cfg.DB))
-	runSvc := run.NewService(services.NewSessionService(cfg.DB))
+	runSvc = run.NewService(services.NewSessionService(cfg.DB))
 	runSvc.SetNotifications(cfg.Notifications)
 	runSvc.SetMemories(memory.NewRegistry(""))
 	bashJobs := terminal.NewBashJobManager(cfg.Ports)
 	runSvc.SetBashJobs(bashJobs)
 	runSvc.SetPorts(cfg.Ports)
 	runSvc.SetProjectScripts(scriptsSvc)
+	autoStore := automations.New(cfg.DB.Global())
+	webhookStore := webhooks.New(cfg.DB.Global())
+	runSvc.SetAutomations(autoStore)
+	runSvc.SetWebhooks(webhookStore)
+	runSvc.SetWebhookBaseURL(defaultWebhookBaseURL)
 	runSvc.SetConsoleServices(projects)
 	runSvc.SetPullRequests(prSvc)
+	RegisterAutomationRoutes(app, autoStore)
+	RegisterWebhookManagementRoutes(app, webhookStore, defaultWebhookBaseURL)
+	stopAutomationScanner := runSvc.StartAutomationScanner()
 	mcpManager := mcp.NewManager(mcp.NewConfigStore(""), mcp.NewCredentialStore(""), nil)
 	runSvc.SetMCP(mcpManager)
 	go mcpManager.AutoConnect()
 	registerMCPRoutes(app, mcpManager)
-	RegisterSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
+	sessionService := services.NewSessionService(cfg.DB)
+	RegisterSessionRoutes(app, sessionService, runSvc)
+	RegisterBootstrapRoutes(app, sessionService, runSvc, draftService)
+	RegisterWorktreeLaunchRoutes(app, services.NewSessionService(cfg.DB), runSvc)
 	registerWorktreeRoutes(app, services.NewSessionService(cfg.DB), git.NewWorktreeService())
 	// The provider account store backs multi-account support. Configure
 	// also migrates the legacy single-credential files; a failure here must
@@ -146,14 +192,16 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 
 	slog.Info("api routes registered")
 	// shutdown stops every process the server owns: in-flight agent runs,
-	// detached background bash jobs, terminal PTYs, and managed project
-	// scripts. Called once, after the HTTP listener drains, so "stop the
-	// server" really means stop everything — not just the API.
+	// detached background bash jobs, terminal PTYs, the headless desktop, and
+	// managed project scripts. Called once, after the HTTP listener drains, so
+	// "stop the server" really means stop everything — not just the API.
 	shutdown := func() {
+		stopAutomationScanner()
 		runSvc.AbortAll()
 		bashJobs.KillAll()
 		ptyManager.KillAll()
 		scriptsSvc.StopAll()
+		computer.Default().Close()
 		fffManager.CloseAll()
 		mcpManager.CloseAll()
 		_ = deviceSvc.Close()

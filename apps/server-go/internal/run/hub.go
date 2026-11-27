@@ -122,6 +122,9 @@ func (s *subscriber) pump() {
 		f := s.queue[0]
 		s.queue[0] = Frame{}
 		s.queue = s.queue[1:]
+		if len(s.queue) == 0 {
+			s.queue = s.queue[:0]
+		}
 		s.mu.Unlock()
 		for sent := false; !sent; {
 			select {
@@ -156,7 +159,11 @@ func (h *Hub) Broadcast(event loop.Event) {
 	frame := Frame{Seq: h.seq, Event: event}
 	h.buf = append(h.buf, frame)
 	if len(h.buf) > hubBuffer {
-		h.buf = h.buf[len(h.buf)-hubBuffer:]
+		excess := len(h.buf) - hubBuffer
+		for i := 0; i < excess; i++ {
+			h.buf[i] = Frame{}
+		}
+		h.buf = h.buf[excess:]
 	}
 	for id, sub := range h.subs {
 		if !sub.push(frame) {

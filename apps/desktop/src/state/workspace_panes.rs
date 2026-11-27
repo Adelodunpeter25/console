@@ -31,16 +31,42 @@ impl ConsoleDesktopApp {
             );
         }
 
-        self.save_transcript_scroll_position(cx);
+        // Snapshot the chat this pane is showing, not the one the active pane
+        // happens to show: the tab can be closed in a pane that is not the
+        // active one.
+        self.save_pane_scroll_position(pane_id, cx);
         self.close_workspace_tab(pane_id, tab_id, cx);
         self.active_pane_id = Some(pane_id.to_string());
+        if let Some(leaf) = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|l| l.id == pane_id)
+        {
+            // Closing a chat tab parks its workspace when other tabs remain, so
+            // its emptied pane stays: removing it would collapse the saved
+            // layout and the chat would reopen beside the file, not left of it.
+            let parking = tab_id.starts_with("chat:")
+                && !workspace_ops::is_workspace_empty(&self.workspace_root);
+            if leaf.tabs.is_empty() && self.workspace_root.leaves().len() > 1 && !parking {
+                console_ui::workspace::ops::close_pane(&mut self.workspace_root, pane_id);
+                self.carry_staged_comments(pane_id, cx);
+                if let Some((chat_pane, _)) = self.workspace_chat() {
+                    self.active_pane_id = Some(chat_pane.to_owned());
+                }
+            }
+        }
+        self.clear_project_if_workspace_empty();
+        if tab_id.starts_with("chat:") {
+            self.park_workspace_if_chatless(cx);
+        }
 
         let next_session = self.active_session_for_pane(pane_id);
         let transcript = self.transcript_for_pane(pane_id);
-        let composer = self.composer_for_pane(pane_id);
 
         if next_session == previous_session {
-            self.maybe_refresh_inspector(cx);
+            self.refresh_file_tree(cx);
+            self.sync_workspace_webviews(cx);
             cx.notify();
             return;
         }
@@ -48,41 +74,122 @@ impl ConsoleDesktopApp {
         match next_session {
             Some(session_id) => {
                 self.selected_session_id = Some(session_id.clone());
-                let draft = self.get_draft_with_mentions(Some(&session_id));
-                let draft_context_files = self.get_draft_context_files(Some(&session_id));
-                composer.update(cx, |input, cx| {
-                    input.set_prompt_history(Vec::new(), cx);
-                    if let Some((draft, mentions)) = draft {
-                        input.set_content_with_mentions(draft, mentions, cx);
-                    } else {
-                        input.clear(cx);
-                    }
-                    input.set_context_files(draft_context_files);
-                    cx.notify();
-                });
+                self.sidebar_draft_ids.remove(&session_id);
+                self.restore_draft_for_pane(pane_id, Some(&session_id), cx);
                 // Keep the previous transcript visible until the new load
                 // succeeds. A failed request must not strand the pane empty.
                 self.load_session_messages_for_pane(pane_id.to_string(), session_id, cx);
             }
             None => {
                 self.selected_session_id = None;
-                let draft = self.get_draft_with_mentions(None);
-                let draft_context_files = self.get_draft_context_files(None);
-                composer.update(cx, |input, cx| {
-                    if let Some((draft, mentions)) = draft {
-                        input.set_content_with_mentions(draft, mentions, cx);
-                    } else {
-                        input.clear(cx);
-                    }
-                    input.set_context_files(draft_context_files);
-                    cx.notify();
+                self.restore_draft_for_pane(pane_id, None, cx);
+                transcript.update(cx, |t, cx| {
+                    t.set_turns(Vec::new(), cx);
+                    t.clear_session_changes(cx);
                 });
-                transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
             }
         }
 
-        self.maybe_refresh_inspector(cx);
+        self.refresh_file_tree(cx);
         self.sync_workspace_webviews(cx);
+        cx.notify();
+    }
+
+    /// Closing a chat tab by hand must not leave its file, terminal and browser
+    /// splits on screen. When the workspace still has other tabs but no chat,
+    /// park it whole under its key — terminals keep running, nothing is closed
+    /// — and show a clean desk. Opening the chat again brings it back. Settling
+    /// or deleting the chat is what actually ends the workspace.
+    fn park_workspace_if_chatless(&mut self, cx: &mut Context<Self>) {
+        if self.workspace_chat().is_some()
+            || workspace_ops::is_workspace_empty(&self.workspace_root)
+        {
+            return;
+        }
+        let Some(key) = self.selected_project_id.clone() else {
+            return;
+        };
+        self.remember_active_pane();
+        self.workspace_root = workspace_ops::switch_desk(
+            &mut self.project_workspace_roots,
+            &self.workspace_root,
+            &Some(key.clone()),
+            &None,
+        );
+        self.selected_project_id = None;
+        for state in self.workspace_pane_states.values_mut() {
+            if state.selected_project_id.as_deref() == Some(key.as_str()) {
+                state.selected_project_id = None;
+                state.branches = Rc::from([]);
+                state.branch_loaded = true;
+                state.branch_is_git_repository = false;
+                state.branch_cwd = None;
+            }
+        }
+        self.restore_active_pane(&None);
+        self.persist_layout();
+        self.persist_workspaces();
+        self.sync_workspace_webviews(cx);
+    }
+
+    /// Once the last tab in every pane is closed the workspace is back to its
+    /// empty state, so no project stays selected: otherwise New Terminal, New
+    /// Chat and the pickers keep acting on a project the user has left behind.
+    /// Clears the global selection and every pane's own, which would otherwise
+    /// win over the global one.
+    fn clear_project_if_workspace_empty(&mut self) {
+        if !workspace_ops::is_workspace_empty(&self.workspace_root) {
+            return;
+        }
+        let had_selection = self.selected_project_id.is_some()
+            || self
+                .workspace_pane_states
+                .values()
+                .any(|state| state.selected_project_id.is_some());
+        if !had_selection {
+            return;
+        }
+        self.selected_project_id = None;
+        for state in self.workspace_pane_states.values_mut() {
+            state.selected_project_id = None;
+            state.branches = Rc::from([]);
+            state.branch_loaded = true;
+            state.branch_is_git_repository = false;
+            // Otherwise a reopen against the same cwd looks already-loaded and
+            // the header apply skips re-fetching these cleared branches.
+            state.branch_cwd = None;
+        }
+        self.persist_layout();
+        self.persist_workspaces();
+    }
+
+    /// Close every chat tab for a session (e.g. when it is settled), wherever
+    /// it lives. Active-workspace closes use the normal close path so pane
+    /// selection, drafts, and transcripts stay in sync.
+    pub fn close_session_chat_tabs(&mut self, session_id: &str, cx: &mut Context<Self>) {
+        let tab_id = format!("chat:{session_id}");
+        // Cloned first: closing mutates the tree.
+        let mut active_closes: Vec<String> = Vec::new();
+        for leaf in self.workspace_root.leaves() {
+            for tab in &leaf.tabs {
+                if matches!(
+                    tab,
+                    WorkspaceTabConfig::Chat {
+                        session_id: owner, ..
+                    } if owner == session_id
+                ) {
+                    active_closes.push(leaf.id.clone());
+                }
+            }
+        }
+        for pane_id in active_closes {
+            self.close_tab_and_sync_pane(&pane_id, &tab_id, cx);
+        }
+        // Stashed workspace trees: drop the tab there too.
+        for root in self.project_workspace_roots.values_mut() {
+            console_ui::workspace::ops::close_matching_tabs(root, |tab| tab.id() == tab_id);
+        }
+        self.persist_workspaces();
         cx.notify();
     }
 
@@ -95,6 +202,12 @@ impl ConsoleDesktopApp {
     ) -> Option<String> {
         let closed_tab = workspace_ops::find_tab(&self.workspace_root, tab_id);
         let res = workspace_ops::close_tab(&mut self.workspace_root, pane_id, tab_id);
+        if let Some(new_active_id) = &res
+            && let Some(leaf) = self.workspace_root.leaf_mut(pane_id)
+            && let Some(tab) = leaf.tabs.iter_mut().find(|tab| tab.id() == *new_active_id)
+        {
+            tab.set_last_active_at_ms(Some(chrono::Utc::now().timestamp_millis()));
+        }
         // Evict from stashed workspace caches too, or a closed tab outlives
         // its close in memory while disk already dropped it.
         for root in self.project_workspace_roots.values_mut() {
@@ -103,7 +216,7 @@ impl ConsoleDesktopApp {
         if let Some(tab) = closed_tab {
             self.dispose_closed_tab(&tab, cx);
         }
-        self.trim_file_caches();
+        self.trim_file_caches(cx);
         self.persist_workspaces();
         res
     }
@@ -126,7 +239,7 @@ impl ConsoleDesktopApp {
         for tab in &closed {
             self.dispose_closed_tab(tab, cx);
         }
-        self.trim_file_caches();
+        self.trim_file_caches(cx);
         self.persist_workspaces();
     }
 
@@ -157,20 +270,23 @@ impl ConsoleDesktopApp {
         }
     }
 
-    /// Drop every worktree workspace that no live chat maps to — its worktree
-    /// (or all its chats) was deleted — and with it that workspace's tabs,
-    /// terminals, split layout and remembered state. If the workspace on
-    /// screen is one of them, fall back to the project's own workspace.
+    /// Drop every workspace that no live chat maps to — a worktree whose
+    /// checkout (or all its chats) was deleted, or a chat desk whose chat is
+    /// gone — and with it that workspace's tabs, terminals, split layout and
+    /// remembered state. If the workspace on screen is one of them, fall back
+    /// to the project's own desk.
     /// Skipped until projects have loaded: a chat started inside an existing
     /// worktree is only recognised as a worktree chat once its project's
     /// folder is known, and sweeping earlier would discard live workspaces.
-    pub(crate) fn sweep_dead_worktree_workspaces(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn sweep_dead_workspaces(&mut self, cx: &mut Context<Self>) {
         if self.projects.is_empty() {
             return;
         }
         let live: std::collections::HashSet<String> = self
             .sessions
             .iter()
+            // A settled chat is filed away, and its workspace with it.
+            .filter(|session| session.settled_at.is_none())
             .filter_map(|session| self.workspace_key_for_header(session))
             .collect();
         let mut candidates: Vec<&str> = self
@@ -182,10 +298,44 @@ impl ConsoleDesktopApp {
             candidates.push(current);
         }
         let mut dead = console_core::dead_worktree_workspace_keys(candidates, &live);
+        // Session-scoped desks die with their chat: once no live chat maps to
+        // the key any more, the workspace (and its terminals) go too.
+        dead.extend(
+            self.project_workspace_roots
+                .keys()
+                .filter_map(|key| key.as_deref())
+                .filter(|key| console_core::is_session_workspace_key(key) && !live.contains(*key))
+                .map(str::to_owned),
+        );
         dead.sort();
         dead.dedup();
-        if dead.is_empty() {
+        let migrated = self.has_stale_project_chat_tabs();
+        if dead.is_empty() && !migrated {
             return;
+        }
+
+        // Chat tabs parked on bare project desks are leftovers from before
+        // the per-chat switch: every live session opens into its own desk,
+        // so close them here on later sweeps.
+        if migrated {
+            let is_bare_project = |key: Option<&str>| {
+                key.is_some_and(|k| {
+                    !console_core::is_session_workspace_key(k)
+                        && !console_core::is_worktree_workspace_key(k)
+                })
+            };
+            if is_bare_project(self.selected_project_id.as_deref()) {
+                console_ui::workspace::ops::close_matching_tabs(&mut self.workspace_root, |t| {
+                    matches!(t, WorkspaceTabConfig::Chat { .. })
+                });
+            }
+            for (slot, root) in self.project_workspace_roots.iter_mut() {
+                if is_bare_project(slot.as_deref()) {
+                    console_ui::workspace::ops::close_matching_tabs(root, |t| {
+                        matches!(t, WorkspaceTabConfig::Chat { .. })
+                    });
+                }
+            }
         }
 
         let current_dead = self
@@ -216,29 +366,27 @@ impl ConsoleDesktopApp {
             let key = self.selected_project_id.clone().unwrap_or_default();
             removed_roots.push(self.workspace_root.clone());
             let project_slot = Some(console_core::project_id_of_workspace_key(&key).to_owned());
-            let pane_id = self
-                .active_pane_id
-                .clone()
-                .unwrap_or_else(|| "pane-main".to_string());
             self.workspace_root = self
                 .project_workspace_roots
                 .get(&project_slot)
                 .cloned()
-                .unwrap_or_else(|| console_core::WorkspaceNode::leaf(&pane_id));
+                .unwrap_or_else(|| {
+                    console_core::WorkspaceNode::leaf(console_core::desk_leaf_id(&project_slot))
+                });
             self.selected_project_id = project_slot.clone();
             self.restore_active_pane(&project_slot);
         }
 
         // Any pane still pointing at a dead workspace goes back to its project.
         for state in self.workspace_pane_states.values_mut() {
-            if let Some(key) = state.selected_project_id.clone() {
-                if dead.iter().any(|d| *d == key) {
-                    state.selected_project_id =
-                        Some(console_core::project_id_of_workspace_key(&key).to_owned());
-                    Rc::make_mut(&mut state.branches).clear();
-                    state.branch_loaded = false;
-                    state.branch_cwd = None;
-                }
+            if let Some(key) = state.selected_project_id.clone()
+                && dead.contains(&key)
+            {
+                state.selected_project_id =
+                    Some(console_core::project_id_of_workspace_key(&key).to_owned());
+                state.branches = Rc::from([]);
+                state.branch_loaded = false;
+                state.branch_cwd = None;
             }
         }
 
@@ -260,22 +408,57 @@ impl ConsoleDesktopApp {
         }
         for root in &removed_roots {
             for terminal_id in terminal_ids(root) {
-                if !still_used.contains(&terminal_id) {
-                    if let Some(view) = self.terminals.remove(&terminal_id) {
-                        view.update(cx, |terminal, _| terminal.kill());
-                    }
+                if !still_used.contains(&terminal_id)
+                    && let Some(view) = self.terminals.remove(&terminal_id)
+                {
+                    view.update(cx, |terminal, _| terminal.kill());
                 }
+            }
+            for leaf in root.leaves() {
+                self.workspace_pane_states.remove(&leaf.id);
+                self.todo_items.remove(&leaf.id);
+                self.browser_annotations.remove(&leaf.id);
             }
         }
         self.sweep_unreferenced_browser_views(cx);
-        self.trim_file_caches();
+        self.trim_file_caches(cx);
         self.sync_workspace_webviews(cx);
         self.persist_layout();
         self.persist_workspaces();
         if current_dead {
-            self.maybe_refresh_inspector(cx);
+            self.refresh_file_tree(cx);
         }
         cx.notify();
+    }
+
+    /// Whether any chat tab still sits on a bare project desk. Since the
+    /// per-chat switch, live sessions always open into their own desk, so a
+    /// chat tab on the project desk is a leftover from an older layout.
+    fn has_stale_project_chat_tabs(&self) -> bool {
+        let has_chat = |root: &console_core::WorkspaceNode| {
+            root.leaves().iter().any(|leaf| {
+                leaf.tabs
+                    .iter()
+                    .any(|t| matches!(t, WorkspaceTabConfig::Chat { .. }))
+            })
+        };
+        // The on-screen root, when the selection is a bare project desk.
+        if self.selected_project_id.as_deref().is_some_and(|key| {
+            !console_core::is_session_workspace_key(key)
+                && !console_core::is_worktree_workspace_key(key)
+        }) && has_chat(&self.workspace_root)
+        {
+            return true;
+        }
+        self.project_workspace_roots
+            .iter()
+            .filter(|(slot, _)| {
+                slot.as_deref().is_some_and(|key| {
+                    !console_core::is_session_workspace_key(key)
+                        && !console_core::is_worktree_workspace_key(key)
+                })
+            })
+            .any(|(_, root)| has_chat(root))
     }
 
     /// Release resources owned by a tab leaving the current tree: terminal
@@ -300,14 +483,12 @@ impl ConsoleDesktopApp {
                             } if open_id == terminal_id
                         )
                     });
-                if !still_referenced {
-                    if let Some(view) = self.terminals.remove(terminal_id) {
-                        view.update(cx, |terminal, _| terminal.kill());
-                    }
+                if !still_referenced && let Some(view) = self.terminals.remove(terminal_id) {
+                    view.update(cx, |terminal, _| terminal.kill());
                 }
             }
             WorkspaceTabConfig::File { path, .. } | WorkspaceTabConfig::Diff { path, .. } => {
-                self.evict_file_caches_for_path(path);
+                self.evict_file_caches_for_path(path, cx);
             }
             WorkspaceTabConfig::Browser { browser_id, .. } => {
                 let still_referenced = self
@@ -324,14 +505,62 @@ impl ConsoleDesktopApp {
                             } if open_id == browser_id
                         )
                     });
-                if !still_referenced {
-                    if let Some(view) = self.browser_views.remove(browser_id) {
-                        view.update(cx, |browser, cx| browser.close(cx));
-                    }
+                if !still_referenced && let Some(view) = self.browser_views.remove(browser_id) {
+                    view.update(cx, |browser, cx| browser.close(cx));
                 }
             }
             WorkspaceTabConfig::Chat { .. } => {}
             WorkspaceTabConfig::Settings { .. } => {}
+            WorkspaceTabConfig::Device { .. } => {
+                let still_open = self
+                    .workspace_root
+                    .leaves()
+                    .iter()
+                    .flat_map(|leaf| leaf.tabs.iter())
+                    .any(|open_tab| matches!(open_tab, WorkspaceTabConfig::Device { .. }));
+                if !still_open && let Some(device) = self.device_view.take() {
+                    device.update(cx, |view, cx| view.close(cx));
+                }
+            }
+            WorkspaceTabConfig::Computer { .. } => {
+                let still_open = self
+                    .workspace_root
+                    .leaves()
+                    .iter()
+                    .flat_map(|leaf| leaf.tabs.iter())
+                    .any(|open_tab| matches!(open_tab, WorkspaceTabConfig::Computer { .. }));
+                if !still_open && let Some(view) = self.computer_view.take() {
+                    view.update(cx, |view, cx| view.close(cx));
+                    // GPUI focus stays on the dropped viewer's handle, which
+                    // swallows keystrokes meant for the composer.
+                    let entity = cx.entity().downgrade();
+                    cx.defer(move |cx| {
+                        if let Some(window) = cx.active_window() {
+                            let _ = window.update(cx, |_, window, cx| {
+                                if view.focus_handle(cx).is_focused(window)
+                                    && let Some(app) = entity.upgrade()
+                                {
+                                    app.update(cx, |this, cx| this.focus_composer(window, cx));
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+            WorkspaceTabConfig::FileTree { .. } => {
+                let tab_id = tab.id();
+                let still_referenced = self
+                    .workspace_root
+                    .leaves()
+                    .iter()
+                    .flat_map(|leaf| leaf.tabs.iter())
+                    .any(|open_tab| open_tab.id() == tab_id);
+                if !still_referenced {
+                    self.file_tree_data.remove(&tab_id);
+                    self.file_tree_expanded.remove(&tab_id);
+                    self.file_tree_scrolls.remove(&tab_id);
+                }
+            }
             WorkspaceTabConfig::ChangesReview { .. } => {
                 let tab_id = tab.id();
                 let still_referenced = self
@@ -342,7 +571,9 @@ impl ConsoleDesktopApp {
                     .any(|open_tab| open_tab.id() == tab_id);
                 if !still_referenced {
                     self.changes_review_data.remove(&tab_id);
-                    self.changes_review_collapsed.remove(&tab_id);
+                    self.changes_review_expanded.remove(&tab_id);
+                    self.viewer_list_states
+                        .remove(&format!("changes-review:{}", tab_id));
                 }
             }
         }
@@ -354,10 +585,10 @@ impl ConsoleDesktopApp {
         // Refresh the recency timestamp on the freshly-selected tab so the
         // ⌘⇧P palette can sort open tabs by recent activity. Skipped when the
         // tab is unknown (e.g. id collision or stale persisted state).
-        if let Some(leaf) = self.workspace_root.leaf_mut(pane_id) {
-            if let Some(tab) = leaf.tabs.iter_mut().find(|tab| tab.id() == tab_id) {
-                tab.set_last_active_at_ms(Some(chrono::Utc::now().timestamp_millis()));
-            }
+        if let Some(leaf) = self.workspace_root.leaf_mut(pane_id)
+            && let Some(tab) = leaf.tabs.iter_mut().find(|tab| tab.id() == tab_id)
+        {
+            tab.set_last_active_at_ms(Some(chrono::Utc::now().timestamp_millis()));
         }
         self.active_pane_id = Some(pane_id.to_string());
         self.persist_workspaces();
@@ -371,15 +602,14 @@ impl ConsoleDesktopApp {
         // A chat tab saved in the wrong workspace (e.g. a worktree chat that
         // predates per-worktree workspaces) is moved to its own workspace
         // instead of being shown in this one.
-        if let Some(sid) = tab_id.strip_prefix("chat:") {
-            if let Some(target) = self.target_workspace_for_session(sid) {
-                if self.selected_project_id.as_deref() != Some(target.as_str()) {
-                    self.select_and_open_session(sid.to_string(), cx);
-                    return;
-                }
-            }
+        if let Some(sid) = tab_id.strip_prefix("chat:")
+            && let Some(target) = self.target_workspace_for_session(sid)
+            && self.selected_project_id.as_deref() != Some(target.as_str())
+        {
+            self.select_and_open_session(sid.to_string(), cx);
+            return;
         }
-        let prev_sid = self.active_session_for_pane(pane_id).map(|s| s.to_string());
+        let prev_sid = self.active_session_for_pane(pane_id);
         self.select_workspace_tab(pane_id, tab_id);
         self.sync_workspace_webviews(cx);
         if let Some(sid) = tab_id.strip_prefix("chat:") {
@@ -391,55 +621,43 @@ impl ConsoleDesktopApp {
                 .iter()
                 .find(|s| s.id == sid)
                 .and_then(|session| self.workspace_key_for_header(session));
-            if let Some(key) = key {
-                if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
-                    state.selected_project_id = Some(key);
-                }
+            if let Some(key) = key
+                && let Some(state) = self.workspace_pane_states.get_mut(pane_id)
+            {
+                state.selected_project_id = Some(key);
             }
             let transcript_has_messages =
-                self.transcript_for_pane(pane_id).read(cx).message_count() > 0;
+                self.transcript_for_pane(pane_id).read(cx).turn_count() > 0;
             let already_loaded = self
                 .workspace_pane_states
                 .get(pane_id)
                 .and_then(|state| state.loaded_session_id.as_deref())
                 == Some(sid);
             if transcript_has_messages && (already_loaded || prev_sid.as_deref() == Some(sid)) {
-                self.maybe_refresh_inspector(cx);
+                if prev_sid.as_deref() != Some(sid) {
+                    self.restore_draft_for_pane(pane_id, Some(sid), cx);
+                }
+                self.refresh_file_tree(cx);
                 cx.notify();
                 return;
             }
-            let draft = self.get_draft_with_mentions(Some(sid));
-            let draft_ctx_files = self.get_draft_context_files(Some(sid));
-            let draft_attachments = self
-                .drafts
-                .get(sid)
-                .map(|draft| draft.attachments.clone())
-                .unwrap_or_default();
-            self.set_attachments_for_pane(pane_id, draft_attachments);
-            let draft_annotations = self
-                .drafts
-                .get(sid)
-                .map(|draft| draft.annotations.clone())
-                .unwrap_or_default();
-            self.set_annotations_for_pane(pane_id, draft_annotations);
-            self.composer_for_pane(pane_id).update(cx, |input, cx| {
-                input.set_prompt_history(Vec::new(), cx);
-                if let Some((draft_text, mentions)) = draft {
-                    input.set_content_with_mentions(draft_text, mentions, cx);
-                } else {
-                    input.clear(cx);
-                }
-                input.set_context_files(draft_ctx_files);
-                cx.notify();
-            });
+            self.sidebar_draft_ids.remove(sid);
+            self.restore_draft_for_pane(pane_id, Some(sid), cx);
             // Switching tabs: clear synchronously so the old session's
             // messages never linger while the new session loads. (The
             // close-tab path intentionally keeps the old transcript
             // visible until its load succeeds; here the tab highlight
             // already moved, so stale content reads as lag.)
             if prev_sid.as_deref() != Some(sid) {
+                // The outgoing chat's position is lost with its transcript,
+                // so it is recorded here — while the anchor is still the one
+                // the user left it at.
+                if let Some(prev_sid) = prev_sid.as_deref() {
+                    self.save_transcript_scroll_position_for_pane(pane_id, prev_sid, cx);
+                }
                 self.transcript_for_pane(pane_id).update(cx, |t, cx| {
-                    t.set_messages(Vec::new(), cx);
+                    t.set_turns(Vec::new(), cx);
+                    t.clear_session_changes(cx);
                 });
             }
             self.load_session_messages_for_pane(pane_id.to_string(), sid.to_string(), cx);
@@ -482,7 +700,7 @@ impl ConsoleDesktopApp {
         } else {
             self.selected_session_id = None;
         }
-        self.maybe_refresh_inspector(cx);
+        self.refresh_file_tree(cx);
         cx.notify();
     }
 
@@ -524,17 +742,61 @@ impl ConsoleDesktopApp {
             .as_deref()
             .and_then(|session_id| self.sessions.iter().find(|s| s.id == session_id))
             .and_then(|session| self.workspace_key_for_header(session));
-        if let Some(key) = key {
-            if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
-                state.selected_project_id = Some(key);
-            }
+        if let Some(key) = key
+            && let Some(state) = self.workspace_pane_states.get_mut(pane_id)
+        {
+            state.selected_project_id = Some(key);
         }
-        self.maybe_refresh_inspector(cx);
+        self.refresh_file_tree(cx);
         cx.notify();
     }
 
     /// Close a split pane and collapse its parent into the remaining sibling.
     pub fn close_workspace_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
+        // The pane's chat loses its transcript with the pane, so its position
+        // is recorded before the pane goes away.
+        self.save_pane_scroll_position(pane_id, cx);
+        // A pane close takes its tabs with it, so it needs the same guard as
+        // closing one dirty file tab.
+        let dirty_paths: Vec<String> = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.id == pane_id)
+            .map(|leaf| {
+                leaf.tabs
+                    .iter()
+                    .filter_map(|tab| match tab {
+                        WorkspaceTabConfig::File { path, .. } => Some(path.clone()),
+                        _ => None,
+                    })
+                    .filter(|path| {
+                        self.viewer_editor_views
+                            .get(path)
+                            .is_some_and(|(_, _, state, _)| state.read(cx).is_dirty())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !dirty_paths.is_empty() {
+            if let Some(tab_id) = self
+                .workspace_root
+                .leaves()
+                .into_iter()
+                .find(|leaf| leaf.id == pane_id)
+                .and_then(|leaf| {
+                    leaf.tabs.iter().find_map(|tab| match tab {
+                        WorkspaceTabConfig::File { path, .. } if dirty_paths.contains(path) => {
+                            Some(tab.id())
+                        }
+                        _ => None,
+                    })
+                })
+            {
+                self.request_close_tab(pane_id, &tab_id, cx);
+            }
+            return;
+        }
         let removed_tabs: Vec<WorkspaceTabConfig> = self
             .workspace_root
             .leaves()
@@ -548,7 +810,8 @@ impl ConsoleDesktopApp {
         for tab in &removed_tabs {
             self.dispose_closed_tab(tab, cx);
         }
-        self.trim_file_caches();
+        self.trim_file_caches(cx);
+        self.carry_staged_comments(pane_id, cx);
         self.workspace_pane_states.remove(pane_id);
         self.todo_items.remove(pane_id);
         if self.active_pane_id.as_deref() == Some(pane_id) {
@@ -565,7 +828,7 @@ impl ConsoleDesktopApp {
                     self.load_session_messages_for_pane(next_pane_id, session_id, cx);
                 } else {
                     transcript.update(cx, |transcript, cx| {
-                        transcript.set_messages(Vec::new(), cx);
+                        transcript.set_turns(Vec::new(), cx);
                     });
                 }
             }
@@ -601,9 +864,13 @@ impl ConsoleDesktopApp {
             return false;
         };
 
+        let prev_sid = self.active_session_for_pane(&existing_pane_id);
         workspace_ops::select_tab(&mut self.workspace_root, &existing_pane_id, &tab_id);
-        self.active_pane_id = Some(existing_pane_id);
-        self.selected_session_id = Some(session_id);
+        self.active_pane_id = Some(existing_pane_id.clone());
+        self.selected_session_id = Some(session_id.clone());
+        if prev_sid.as_deref() != Some(session_id.as_str()) {
+            self.restore_draft_for_pane(&existing_pane_id, Some(&session_id), cx);
+        }
         self.persist_workspaces();
         cx.notify();
         true
@@ -646,9 +913,15 @@ impl ConsoleDesktopApp {
         if self.focus_existing_chat_tab_from_drag(&drag, cx) {
             return;
         }
-        self.save_transcript_scroll_position(cx);
         let source_pane_id = drag.source_pane_id.clone();
         let tab = drag.tab.clone();
+        // The chat leaving the source pane and the chat the target pane is
+        // about to show both lose their transcript in this move, so both
+        // positions are recorded first, while their anchors are still live.
+        if let Some(source_pane_id) = source_pane_id.as_deref() {
+            self.save_pane_scroll_position(source_pane_id, cx);
+        }
+        self.save_pane_scroll_position(&target_pane_id, cx);
         let Some(target_pane_id) = workspace_ops::move_tab_to_pane(
             &mut self.workspace_root,
             source_pane_id.clone().as_deref(),
@@ -658,25 +931,25 @@ impl ConsoleDesktopApp {
             return;
         };
 
-        if source_pane_id.as_deref() != Some(target_pane_id.as_str()) {
-            if let Some(source_pane_id) = source_pane_id {
-                if let Some(source_session_id) = self.active_session_for_pane(&source_pane_id) {
-                    let source_transcript = self.transcript_for_pane(&source_pane_id);
-                    source_transcript.update(cx, |transcript, cx| {
-                        transcript.set_messages(Vec::new(), cx);
+        if source_pane_id.as_deref() != Some(target_pane_id.as_str())
+            && let Some(source_pane_id) = source_pane_id
+        {
+            if let Some(source_session_id) = self.active_session_for_pane(&source_pane_id) {
+                let source_transcript = self.transcript_for_pane(&source_pane_id);
+                source_transcript.update(cx, |transcript, cx| {
+                    transcript.set_turns(Vec::new(), cx);
+                });
+                self.load_session_messages_for_pane(source_pane_id, source_session_id, cx);
+            } else if self
+                .workspace_root
+                .leaves()
+                .iter()
+                .any(|leaf| leaf.id == source_pane_id)
+            {
+                self.transcript_for_pane(&source_pane_id)
+                    .update(cx, |transcript, cx| {
+                        transcript.set_turns(Vec::new(), cx);
                     });
-                    self.load_session_messages_for_pane(source_pane_id, source_session_id, cx);
-                } else if self
-                    .workspace_root
-                    .leaves()
-                    .iter()
-                    .any(|leaf| leaf.id == source_pane_id)
-                {
-                    self.transcript_for_pane(&source_pane_id)
-                        .update(cx, |transcript, cx| {
-                            transcript.set_messages(Vec::new(), cx);
-                        });
-                }
             }
         }
 
@@ -684,13 +957,10 @@ impl ConsoleDesktopApp {
         self.ensure_workspace_pane_state(&target_pane_id, window, cx);
         if let WorkspaceTabConfig::Chat { session_id, .. } = tab {
             self.selected_session_id = Some(session_id.clone());
-            self.composer_for_pane(&target_pane_id)
-                .update(cx, |input, cx| {
-                    input.set_prompt_history(Vec::new(), cx);
-                });
+            self.restore_draft_for_pane(&target_pane_id, Some(&session_id), cx);
             self.transcript_for_pane(&target_pane_id)
                 .update(cx, |transcript, cx| {
-                    transcript.set_messages(Vec::new(), cx);
+                    transcript.set_turns(Vec::new(), cx);
                 });
             self.load_session_messages_for_pane(target_pane_id, session_id, cx);
         }
@@ -716,9 +986,13 @@ impl ConsoleDesktopApp {
         if self.focus_existing_chat_tab_from_drag(&drag, cx) {
             return;
         }
-        self.save_transcript_scroll_position(cx);
         let source_pane_id = drag.source_pane_id.clone();
         let tab = drag.tab.clone();
+        // The chat leaving the source pane loses its transcript in this move,
+        // so its position is recorded first, while the anchor is still live.
+        if let Some(source_pane_id) = source_pane_id.as_deref() {
+            self.save_pane_scroll_position(source_pane_id, cx);
+        }
         let Some(new_pane_id) = workspace_ops::move_tab_to_split(
             &mut self.workspace_root,
             source_pane_id.as_deref(),
@@ -734,7 +1008,7 @@ impl ConsoleDesktopApp {
             if let Some(source_session_id) = self.active_session_for_pane(&source_pane_id) {
                 let source_transcript = self.transcript_for_pane(&source_pane_id);
                 source_transcript.update(cx, |transcript, cx| {
-                    transcript.set_messages(Vec::new(), cx);
+                    transcript.set_turns(Vec::new(), cx);
                 });
                 self.load_session_messages_for_pane(source_pane_id, source_session_id, cx);
             } else if self
@@ -745,7 +1019,7 @@ impl ConsoleDesktopApp {
             {
                 self.transcript_for_pane(&source_pane_id)
                     .update(cx, |transcript, cx| {
-                        transcript.set_messages(Vec::new(), cx);
+                        transcript.set_turns(Vec::new(), cx);
                     });
             }
         }
@@ -754,26 +1028,105 @@ impl ConsoleDesktopApp {
         self.active_pane_id = Some(new_pane_id.clone());
         if let WorkspaceTabConfig::Chat { session_id, .. } = tab {
             self.selected_session_id = Some(session_id.clone());
-            let draft = self.get_draft_with_mentions(Some(&session_id));
-            let draft_ctx_files2 = self.get_draft_context_files(Some(&session_id));
-            self.composer_for_pane(&new_pane_id)
-                .update(cx, |input, cx| {
-                    input.set_prompt_history(Vec::new(), cx);
-                    if let Some((draft_text, mentions)) = draft {
-                        input.set_content_with_mentions(draft_text, mentions, cx);
-                    } else {
-                        input.clear(cx);
-                    }
-                    input.set_context_files(draft_ctx_files2);
-                    cx.notify();
-                });
+            self.sidebar_draft_ids.remove(&session_id);
+            self.restore_draft_for_pane(&new_pane_id, Some(&session_id), cx);
             self.transcript_for_pane(&new_pane_id)
                 .update(cx, |transcript, cx| {
-                    transcript.set_messages(Vec::new(), cx);
+                    transcript.set_turns(Vec::new(), cx);
                 });
             self.load_session_messages_for_pane(new_pane_id, session_id, cx);
         }
         self.persist_workspaces();
         cx.notify();
+    }
+
+    /// Locate the pane currently hosting the active chat tab, if one is open.
+    pub fn active_chat_pane_ref(&self) -> Option<&str> {
+        let session_id = self.selected_session_id.as_deref()?;
+        for leaf in self.workspace_root.leaves() {
+            if leaf.tabs.iter().any(|t| match t {
+                WorkspaceTabConfig::Chat { session_id: s, .. } => s == session_id,
+                _ => false,
+            }) {
+                return Some(&leaf.id);
+            }
+        }
+        None
+    }
+
+    /// The chat this workspace's composer state belongs to, as
+    /// `(pane_id, session_id)`: the selected chat, or — while a terminal,
+    /// file, or browser tab is in front — the workspace's only chat. Staged
+    /// file comments, browser annotations, and the sidebar highlight all
+    /// follow it.
+    ///
+    /// Distinct from [`Self::active_chat_pane_id`], which answers "is a chat
+    /// actually selected". Opening a subtab or falling back after a pane
+    /// close must not be redirected to a chat that is not in front.
+    pub(crate) fn focused_chat(&self) -> Option<(&str, &str)> {
+        if let Some(pane_id) = self.active_chat_pane_ref() {
+            return self
+                .selected_session_id
+                .as_deref()
+                .map(|sid| (pane_id, sid));
+        }
+        self.workspace_chat()
+    }
+
+    /// The chat that owns the current workspace, as `(pane_id, session_id)`,
+    /// whichever pane has focus. A workspace is created for one chat, so this
+    /// is that chat's tab; if a desk ever holds several (worktree desks can),
+    /// the most recently used wins. `None` when no pane holds a chat tab.
+    pub(crate) fn workspace_chat(&self) -> Option<(&str, &str)> {
+        let mut best: Option<(i64, &str, &str)> = None;
+        for leaf in self.workspace_root.leaves() {
+            for tab in &leaf.tabs {
+                if let WorkspaceTabConfig::Chat {
+                    session_id,
+                    last_active_at_ms,
+                    ..
+                } = tab
+                {
+                    let ts = last_active_at_ms.unwrap_or(0);
+                    if best.is_none_or(|(b, _, _)| ts > b) {
+                        best = Some((ts, leaf.id.as_str(), session_id.as_str()));
+                    }
+                }
+            }
+        }
+        best.map(|(_, pane, session)| (pane, session))
+    }
+
+    /// Target pane for secondary subtabs (Files, Diffs, Terminals, Browsers).
+    /// If a chat is open, opens or targets the right-hand split so the chat stays pinned left.
+    pub fn target_subtab_pane_id(&mut self) -> String {
+        let chat_pane_id = self.workspace_chat().map(|(pane, _)| pane.to_owned());
+        if let Some(chat_pane_id) = chat_pane_id {
+            let other_pane = self
+                .workspace_root
+                .leaves()
+                .into_iter()
+                .find(|l| l.id != chat_pane_id)
+                .map(|l| l.id.clone());
+
+            if let Some(other_id) = other_pane {
+                other_id
+            } else if let Some(new_id) = console_ui::workspace::ops::split_pane(
+                &mut self.workspace_root,
+                &chat_pane_id,
+                console_core::SplitDirection::Horizontal,
+            ) {
+                // Only a split made by opening a tab animates in; switching
+                // workspaces, returning from settings and dragging do not.
+                self.new_split_pane = Some(new_id.clone());
+                new_id
+            } else {
+                chat_pane_id
+            }
+        } else {
+            self.active_pane_id
+                .clone()
+                .unwrap_or_else(|| "pane-main".to_string())
+        }
     }
 }

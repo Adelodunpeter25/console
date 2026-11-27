@@ -1,0 +1,13 @@
+[
+  {"text": "look at $fix-login-bug and $abc-def, ok", "refs": ["fix-login-bug", "abc-def"]},
+  {"text": "costs $5, mail a$b, $$ and $ alone", "refs": []},
+  {"text": "see $123e4567-89ab", "refs": ["123e4567-89ab"]},
+  {"text": "$5abc is not an id", "refs": []},
+  {"text": "(see $my-chat) and '$quoted'", "refs": ["my-chat", "quoted"]},
+  {"text": "trim $-edge-_ dashes", "refs": ["edge"]},
+  {"text": "mail a@b.com then $under_score", "refs": ["under_score"]},
+  {"text": "mixed $Fix-Me2 case", "refs": ["Fix-Me2"]},
+  {"text": "ascii only $café", "refs": ["caf"]},
+  {"text": "url https://x.io/$path and path/$nope", "refs": []},
+  {"text": "last one $last", "refs": ["last"]}
+]

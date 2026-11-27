@@ -32,7 +32,7 @@ impl ConsoleDesktopApp {
         // The way back: the title bar's arrow, which stands in for the
         // sidebar toggle it replaces.
         let on_back: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
+            let entity = entity;
             Rc::new(move |window, cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| this.close_settings(window, cx));

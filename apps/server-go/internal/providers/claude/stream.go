@@ -7,8 +7,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"runtime"
@@ -41,7 +41,7 @@ func (p *Provider) httpClient() *http.Client {
 	if p.HTTPClient != nil {
 		return p.HTTPClient
 	}
-	return &http.Client{Timeout: 0}
+	return &http.Client{Transport: shared.Transport, Timeout: 0}
 }
 
 func (p *Provider) loadCredential(accountID string) (ParsedCredential, error) {
@@ -158,7 +158,7 @@ func BuildRequestBody(modelID, systemPrompt string, messages []any, toolDefs []t
 	if trimmed != "" {
 		block := map[string]any{"type": "text", "text": trimmed}
 		if retention != loop.CacheNone {
-			block["cache_control"] = map[string]any{"type": "ephemeral"}
+			block["cache_control"] = CacheControl(retention)
 		}
 		system = append(system, block)
 	}
@@ -169,6 +169,30 @@ func BuildRequestBody(modelID, systemPrompt string, messages []any, toolDefs []t
 	}
 	body["stream"] = true
 	return body
+}
+
+// CacheControl is the cache marker for a retention. Long retention asks for
+// the one-hour lifetime so a pause past five minutes does not wipe the cache.
+func CacheControl(retention loop.CacheRetention) map[string]any {
+	marker := map[string]any{"type": "ephemeral"}
+	if retention == loop.CacheLong {
+		marker["ttl"] = "1h"
+	}
+	return marker
+}
+
+// AppendTail adds per-request context to the final user message, after its
+// cache breakpoint, so the cached prefix is unaffected by it.
+func AppendTail(body map[string]any, tail string) {
+	if strings.TrimSpace(tail) == "" {
+		return
+	}
+	msgs, ok := body["messages"].([]ClaudeMessage)
+	if !ok || len(msgs) == 0 {
+		return
+	}
+	last := &msgs[len(msgs)-1]
+	last.Content = append(last.Content, map[string]any{"type": "text", "text": loop.TailText(tail)})
 }
 
 // sseFrame is one named Anthropic SSE frame. Unlike the shared parser, the
@@ -355,7 +379,10 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		events.Fail(err)
 		return err
 	}
+	// A real request refreshes the cache itself; drop any pending warm.
+	cancelWarm(req.ConversationID)
 	body := BuildRequestBody(req.Model, req.SystemPrompt, req.Messages, req.Tools, req.CacheRetention, req.ThinkingLevel)
+	AppendTail(body, req.Tail)
 	if userID := metadataUserID(req.ConversationID); userID != "" {
 		body["metadata"] = map[string]any{"user_id": userID}
 	}
@@ -467,6 +494,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		events.Fail(parseErr)
 		return parseErr
 	}
+	p.scheduleWarm(req, body, usage)
 	events.Complete()
 	return nil
 }

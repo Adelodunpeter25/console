@@ -6,6 +6,7 @@ import console.v1.ProviderCatalogEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 data class ProviderState(
     val providers: List<ProviderCatalogEntry> = emptyList(),
@@ -29,21 +30,21 @@ class ProviderStateHolder(initial: ProviderState = ProviderState()) {
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<ProviderState> = _state.asStateFlow()
 
-    fun setProviders(v: List<ProviderCatalogEntry>) { _state.value = _state.value.copy(providers = v, loadingProviders = false, error = null) }
-    fun setLoadingProviders(v: Boolean) { _state.value = _state.value.copy(loadingProviders = v) }
+    fun setProviders(v: List<ProviderCatalogEntry>) { _state.update { it.copy(providers = v, loadingProviders = false, error = null) } }
+    fun setLoadingProviders(v: Boolean) { _state.update { it.copy(loadingProviders = v) } }
     fun setModels(providerId: String, models: List<Model>) {
-        _state.value = _state.value.copy(modelsByProvider = _state.value.modelsByProvider + (providerId to models), loadingModels = _state.value.loadingModels + (providerId to false))
+        _state.update { it.copy(modelsByProvider = it.modelsByProvider + (providerId to models), loadingModels = it.loadingModels + (providerId to false)) }
     }
-    fun setLoadingModel(providerId: String, v: Boolean) { _state.value = _state.value.copy(loadingModels = _state.value.loadingModels + (providerId to v)) }
-    fun setApprovalModes(v: List<ApprovalModeOption>) { _state.value = _state.value.copy(approvalModes = v, loadingApprovalModes = false) }
-    fun setError(e: String?) { _state.value = _state.value.copy(error = e) }
-    fun setModelRoles(v: Map<String, String>) { _state.value = _state.value.copy(modelRoles = v, loadingRoles = false, rolesError = null) }
-    fun setLoadingRoles(v: Boolean) { _state.value = _state.value.copy(loadingRoles = v) }
-    fun setSavingRoles(v: Boolean) { _state.value = _state.value.copy(savingRoles = v) }
-    fun setRolesError(e: String?) { _state.value = _state.value.copy(rolesError = e, savingRoles = false) }
-    fun setFavorites(v: Set<String>) { _state.value = _state.value.copy(favorites = v, loadingFavorites = false) }
-    fun setLoadingFavorites(v: Boolean) { _state.value = _state.value.copy(loadingFavorites = v) }
-    fun clear() { _state.value = ProviderState() }
+    fun setLoadingModel(providerId: String, v: Boolean) { _state.update { it.copy(loadingModels = it.loadingModels + (providerId to v)) } }
+    fun setApprovalModes(v: List<ApprovalModeOption>) { _state.update { it.copy(approvalModes = v, loadingApprovalModes = false) } }
+    fun setError(e: String?) { _state.update { it.copy(error = e) } }
+    fun setModelRoles(v: Map<String, String>) { _state.update { it.copy(modelRoles = v, loadingRoles = false, rolesError = null) } }
+    fun setLoadingRoles(v: Boolean) { _state.update { it.copy(loadingRoles = v) } }
+    fun setSavingRoles(v: Boolean) { _state.update { it.copy(savingRoles = v) } }
+    fun setRolesError(e: String?) { _state.update { it.copy(rolesError = e, savingRoles = false) } }
+    fun setFavorites(v: Set<String>) { _state.update { it.copy(favorites = v, loadingFavorites = false) } }
+    fun setLoadingFavorites(v: Boolean) { _state.update { it.copy(loadingFavorites = v) } }
+    fun clear() { _state.update { ProviderState() } }
 
     fun resolveProvider(modelId: String, fallback: String?): String? {
         val s = _state.value

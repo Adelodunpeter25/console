@@ -34,6 +34,9 @@ message GitDiffResponse {
 message GitBranchInfo {
   string name = 1;
   bool current = 2;
+  // True for a remote-tracking branch (origin/…); canonical omission keeps
+  // local-branch payloads identical to the pre-remote shape.
+  bool remote = 3;
 }
 
 message GitBranchesResponse {

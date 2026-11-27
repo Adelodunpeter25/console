@@ -154,6 +154,7 @@ async fn browser_http_survives_real_manager_forward() {
             tokio::spawn(async move {
                 let path = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
                 let path_clone = path.clone();
+                #[allow(clippy::result_large_err)]
                 let callback = move |request: &Request, response: Response| {
                     *path_clone.lock().expect("path lock") = request.uri().path().to_string();
                     Ok(response)
@@ -163,10 +164,7 @@ async fn browser_http_survives_real_manager_forward() {
                     Err(_) => return,
                 };
                 let target = tunnel_target(&path.lock().expect("path lock").clone());
-                match target {
-                    Some(port) => bridge(ws, port).await,
-                    None => {}
-                }
+                if let Some(port) = target { bridge(ws, port).await }
             });
         }
     });

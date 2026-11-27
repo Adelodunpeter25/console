@@ -10,10 +10,8 @@ import (
 )
 
 var approvalModes = []fiber.Map{
-	{"value": "always-ask", "label": "Normal", "description": "Ask for every action"},
-	{"value": "accept-edits", "label": "Accept Edits", "description": "Auto-approve file edits"},
-	{"value": "plan-mode", "label": "Plan Mode", "description": "Plan only, no execution"},
-	{"value": "full-access", "label": "Bypass Permissions", "description": "Run everything without asking"},
+	{"value": "plan-mode", "label": "Plan", "description": "Plan only, no execution"},
+	{"value": "full-access", "label": "Full Access", "description": "Run everything without asking"},
 }
 
 func registerMiscRoutes(app *fiber.App, notifications *services.NotificationService) {
@@ -33,9 +31,11 @@ func registerMiscRoutes(app *fiber.App, notifications *services.NotificationServ
 					if event == nil {
 						continue
 					}
-					// Encode straight into the stream buffer: protojson, no
-					// intermediate []byte->string copy.
-					if err := sse.SendJSON("notification", event); err != nil {
+					raw, err := protoMarshal.Marshal(event)
+					if err != nil {
+						return
+					}
+					if err := sse.Send("notification", string(raw)); err != nil {
 						return
 					}
 				case <-ticker.C:

@@ -199,45 +199,58 @@ impl Render for FileBrowser {
             // scrolling.
             .flex()
             .flex_col()
-            .bg(theme.canvas)
+            .bg(theme.menu)
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener({
                 // Cloned: the listener must own it, and it outlives render.
                 let on_cancel = on_cancel.clone();
-                move |_this, event: &KeyDownEvent, window, cx| match event
-                    .keystroke
-                    .key
-                    .as_str()
-                {
-                    "escape" => on_cancel(window, cx),
-                    _ => {}
+                move |_this, event: &KeyDownEvent, window, cx| {
+                    if event.keystroke.key == "escape" {
+                        on_cancel(window, cx);
+                    }
                 }
             }))
             .child(
                 div()
-                    .mx(px(16.0))
-                    .mt(px(48.0))
+                    .flex_none()
+                    .px(px(20.0))
+                    .pt(px(44.0))
+                    .pb(px(14.0))
+                    .border_b_1()
+                    .border_color(theme.border)
                     .flex()
-                    .flex_1()
-                    // Must fill the window, and must be allowed to be shorter
-                    // than its content — otherwise the column grows, the list
-                    // below never overflows, and nothing scrolls.
-                    .min_h_0()
                     .flex_col()
-                    .gap(px(12.0))
+                    .gap(px(2.0))
                     .child(
                         div()
-                            .text_size(px(16.0))
+                            .text_size(px(15.0))
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .text_color(theme.text)
                             .child("Choose a folder"),
                     )
                     .child(
                         div()
+                            .text_size(px(12.0))
+                            .text_color(theme.text_tertiary)
+                            .child("Folders on the server, not on this Mac. Double-click to open."),
+                    ),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    // Must be allowed to be shorter than its content, or the
+                    // list never overflows and nothing scrolls.
+                    .min_h_0()
+                    .p(px(20.0))
+                    .flex()
+                    .flex_col()
+                    .gap(px(12.0))
+                    .child(
+                        div()
                             .px(px(8.0))
                             .py(px(6.0))
                             .rounded(px(5.0))
-                            .bg(theme.surface)
+                            .bg(theme.overlay)
                             .border_1()
                             .border_color(theme.border)
                             .text_size(px(11.5))
@@ -248,23 +261,21 @@ impl Render for FileBrowser {
                             }),
                     )
                     .child(build_list(
-                        parent, selected, entries, loading, entity.clone(), &theme,
-                    ))
-                    .child(
-                        div()
-                            .px(px(2.0))
-                            .text_size(px(11.0))
-                            .text_color(theme.text_ghost)
-                            .child("Double-click a folder to open it. These are folders on the server, not on this Mac."),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap(px(8.0))
-                            .justify_end()
-                            .child(cancel_button)
-                            .child(choose_button),
-                    ),
+                        parent, selected, entries, loading, entity, &theme,
+                    )),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .px(px(20.0))
+                    .py(px(12.0))
+                    .border_t_1()
+                    .border_color(theme.border)
+                    .flex()
+                    .gap(px(8.0))
+                    .justify_end()
+                    .child(cancel_button)
+                    .child(choose_button),
             )
     }
 }

@@ -149,25 +149,26 @@ pub struct CroppedSnapshot {
     pub full_png: Vec<u8>,
 }
 
-pub type CroppedSlot =
-    std::sync::Arc<std::sync::Mutex<Option<Result<CroppedSnapshot, String>>>>;
+pub type CroppedSlot = std::sync::Arc<std::sync::Mutex<Option<Result<CroppedSnapshot, String>>>>;
 
 #[cfg(target_os = "macos")]
 mod macos_host {
     use std::cell::Cell;
 
-    use gpui::{Bounds, Pixels, Window};
+    use gpui::{Bounds, DevicePixels, Pixels, Window, WindowCompositionSurface};
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, ProtocolObject};
     use objc2::{DefinedClass, MainThreadOnly, define_class, msg_send};
     use objc2_app_kit::NSView;
-    use objc2_foundation::{MainThreadMarker, NSError, NSObjectProtocol, NSString};
+    use objc2_foundation::{
+        MainThreadMarker, NSError, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
+    };
     use objc2_web_kit::{WKNavigationDelegate, WKWebView};
     use wry::WebViewExtMacOS;
     use wry::dpi::{LogicalPosition, LogicalSize};
 
     use super::{HostCallbacks, HostContent, NativeNavigationError};
-    use crate::browser::native_utils::{ResponderObserver, lower_below_scene_overlay};
+    use crate::browser::native_utils::ResponderObserver;
 
     pub(super) struct NavigationDelegateIvars {
         on_start: Box<dyn Fn()>,
@@ -247,10 +248,27 @@ mod macos_host {
         }
     }
 
+    struct SurfaceWindowHandle(raw_window_handle::AppKitWindowHandle);
+
+    impl raw_window_handle::HasWindowHandle for SurfaceWindowHandle {
+        fn window_handle(
+            &self,
+        ) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
+            // SAFETY: the composition surface's NSView outlives `build_as_child`.
+            Ok(unsafe {
+                raw_window_handle::WindowHandle::borrow_raw(
+                    raw_window_handle::RawWindowHandle::AppKit(self.0),
+                )
+            })
+        }
+    }
+
     pub struct WebviewHost {
         pub webview: wry::WebView,
         wk: Retained<WKWebView>,
-        last_bounds: Cell<Option<(i32, i32, i32, i32)>>,
+        surface: WindowCompositionSurface,
+        last_bounds: Cell<Option<Bounds<DevicePixels>>>,
+        last_clip: Cell<Option<Bounds<DevicePixels>>>,
         visible: Cell<bool>,
         _responder_observer: Option<Retained<ResponderObserver>>,
         _navigation_delegate: Option<Retained<ConsoleNavigationDelegate>>,
@@ -286,7 +304,7 @@ mod macos_host {
                 builder = builder.with_html(html);
             }
             if let Some(allow_navigation) = content.allow_navigation {
-                builder = builder.with_navigation_handler(move |url| allow_navigation(url));
+                builder = builder.with_navigation_handler(allow_navigation);
             }
             if let Some(on_ipc) = content.on_ipc {
                 builder = builder.with_ipc_handler(move |request: wry::http::Request<String>| {
@@ -294,7 +312,7 @@ mod macos_host {
                 });
             }
             if let Some(on_title) = content.on_title {
-                builder = builder.with_document_title_changed_handler(move |title| on_title(title));
+                builder = builder.with_document_title_changed_handler(on_title);
             }
             if let Some(on_new_window_url) = content.on_new_window_url {
                 builder = builder.with_new_window_req_handler(move |url, _features| {
@@ -302,9 +320,30 @@ mod macos_host {
                     wry::NewWindowResponse::Deny
                 });
             }
-            match builder.build_as_child(window) {
+            let composition = window
+                .enable_window_composition()
+                .map_err(|error| error.to_string())?;
+            let surface = composition
+                .create_native_surface()
+                .map_err(|error| error.to_string())?;
+            let surface_handle = surface
+                .platform_surface()
+                .map_err(|error| error.to_string())?
+                .platform_handle()
+                .map_err(|error| error.to_string())?;
+            let ns_view_ptr = surface_handle
+                .downcast::<usize>()
+                .map(|handle| *handle as *mut std::ffi::c_void)
+                .map_err(|_| "native surface did not provide an AppKit view".to_string())?;
+            let ns_view = std::ptr::NonNull::new(ns_view_ptr)
+                .ok_or_else(|| "native surface AppKit view pointer was null".to_string())?;
+            let parent_handle =
+                SurfaceWindowHandle(raw_window_handle::AppKitWindowHandle::new(ns_view));
+
+            match builder.build_as_child(&parent_handle) {
                 Ok(webview) => Ok(Self::with_navigation_callbacks(
                     webview,
+                    surface,
                     callbacks.on_responder_change,
                     callbacks.on_nav_start,
                     callbacks.on_nav_finish,
@@ -316,13 +355,16 @@ mod macos_host {
 
         fn with_navigation_callbacks(
             webview: wry::WebView,
+            surface: WindowCompositionSurface,
             on_responder_change: Box<dyn Fn(bool)>,
             on_nav_start: Box<dyn Fn()>,
             on_nav_finish: Box<dyn Fn()>,
             on_nav_error: Box<dyn Fn(NativeNavigationError)>,
         ) -> Self {
             let wk: Retained<WKWebView> = Retained::into_super(webview.webview());
-            lower_below_scene_overlay(&wk);
+            let _ = surface
+                .platform_surface()
+                .and_then(|platform| platform.set_visible(false));
             let responder_observer = wk
                 .window()
                 .map(|window| ResponderObserver::new(window, on_responder_change));
@@ -331,7 +373,9 @@ mod macos_host {
             Self {
                 webview,
                 wk,
+                surface,
                 last_bounds: Cell::new(None),
+                last_clip: Cell::new(None),
                 visible: Cell::new(false),
                 _responder_observer: responder_observer,
                 _navigation_delegate: Some(navigation_delegate),
@@ -346,23 +390,66 @@ mod macos_host {
             &self.wk
         }
 
-        pub fn sync_bounds(&self, bounds: Bounds<Pixels>, _scale: f32) {
-            let left = f32::from(bounds.origin.x).round() as i32;
-            let top = f32::from(bounds.origin.y).round() as i32;
-            let right = f32::from(bounds.origin.x + bounds.size.width).round() as i32;
-            let bottom = f32::from(bounds.origin.y + bounds.size.height).round() as i32;
-            if self.last_bounds.get() == Some((left, top, right, bottom)) {
+        pub fn sync_bounds(&self, bounds: Bounds<Pixels>, scale: f32) {
+            let device_bounds = bounds.to_device_pixels(scale);
+            if self.last_bounds.get() == Some(device_bounds) && self.last_clip.get().is_none() {
                 return;
             }
-            self.last_bounds.set(Some((left, top, right, bottom)));
+            self.last_bounds.set(Some(device_bounds));
+            self.last_clip.set(None);
+            let _ = self
+                .surface
+                .platform_surface()
+                .and_then(|platform| platform.set_bounds(device_bounds));
             let _ = self.webview.set_bounds(wry::Rect {
-                position: LogicalPosition::new(f64::from(left), f64::from(top)).into(),
+                position: LogicalPosition::new(0.0, 0.0).into(),
                 size: LogicalSize::new(
-                    f64::from((right - left).max(0)),
-                    f64::from((bottom - top).max(0)),
+                    f64::from(bounds.size.width).max(0.0),
+                    f64::from(bounds.size.height).max(0.0),
                 )
                 .into(),
             });
+        }
+
+        /// Places the page at `bounds` but shows only the `visible` part of it.
+        /// The composition surface's `NSView` masks to bounds, so sizing it to
+        /// `clipped` and offsetting `WKWebView` inside keeps the page at full
+        /// size (no reflow) while clipping to the scroll viewport.
+        pub fn sync_bounds_clipped(
+            &self,
+            bounds: Bounds<Pixels>,
+            visible: Bounds<Pixels>,
+            scale: f32,
+        ) {
+            let clipped = visible.intersect(&bounds);
+            if f32::from(clipped.size.width) < 1.0 || f32::from(clipped.size.height) < 1.0 {
+                self.set_visible(false);
+                return;
+            }
+            let device_bounds = bounds.to_device_pixels(scale);
+            let device_clip = clipped.to_device_pixels(scale);
+            if self.last_bounds.get() != Some(device_bounds)
+                || self.last_clip.get() != Some(device_clip)
+            {
+                self.last_bounds.set(Some(device_bounds));
+                self.last_clip.set(Some(device_clip));
+                let _ = self
+                    .surface
+                    .platform_surface()
+                    .and_then(|platform| platform.set_bounds(device_clip));
+                let bx = f64::from(bounds.origin.x);
+                let by = f64::from(bounds.origin.y);
+                let bw = f64::from(bounds.size.width).max(0.0);
+                let bh = f64::from(bounds.size.height).max(0.0);
+                let cx = f64::from(clipped.origin.x);
+                let cy = f64::from(clipped.origin.y);
+                let ch = f64::from(clipped.size.height).max(0.0);
+                self.wk.setFrame(NSRect::new(
+                    NSPoint::new(bx - cx, ch - (by - cy) - bh),
+                    NSSize::new(bw, bh),
+                ));
+            }
+            self.set_visible(true);
         }
 
         pub fn set_visible(&self, visible: bool) {
@@ -370,6 +457,14 @@ mod macos_host {
                 return;
             }
             self.visible.set(visible);
+            // A hidden view that keeps the first responder swallows every key.
+            if !visible && self.native_focus_within() {
+                self.focus_parent();
+            }
+            let _ = self
+                .surface
+                .platform_surface()
+                .and_then(|platform| platform.set_visible(visible));
             let _ = self.webview.set_visible(visible);
         }
 
@@ -441,10 +536,7 @@ mod macos_host {
 
         /// Capture the visible page as PNG. The completion handler fires on
         /// the main thread and writes into `slot`, which the caller polls.
-        pub fn take_snapshot(
-            &self,
-            slot: super::SnapshotSlot,
-        ) {
+        pub fn take_snapshot(&self, slot: super::SnapshotSlot) {
             use block2::RcBlock;
             use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
             use objc2_foundation::{NSDictionary, NSError};
@@ -492,11 +584,7 @@ mod macos_host {
         /// origin, so no Y-flip applies here. Falls back to the full PNG
         /// on any error or an empty rect. `setRect:` native cropping was
         /// removed earlier (selector crash + point-vs-pixel offset).
-        pub fn take_snapshot_cropped(
-            &self,
-            rect: (f64, f64, f64, f64),
-            slot: super::CroppedSlot,
-        ) {
+        pub fn take_snapshot_cropped(&self, rect: (f64, f64, f64, f64), slot: super::CroppedSlot) {
             use block2::RcBlock;
             use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
             use objc2_foundation::{NSDictionary, NSError};
@@ -542,12 +630,23 @@ mod macos_host {
                                     };
                                     let cx0 = (x * scale).round().clamp(0.0, pw as f64) as u32;
                                     let cy0 = (y * scale).round().clamp(0.0, ph as f64) as u32;
-                                    let cw = (w * scale).round().max(1.0).min((pw.saturating_sub(cx0)) as f64) as u32;
-                                    let ch = (h * scale).round().max(1.0).min((ph.saturating_sub(cy0)) as f64) as u32;
+                                    let cw = (w * scale)
+                                        .round()
+                                        .max(1.0)
+                                        .min((pw.saturating_sub(cx0)) as f64)
+                                        as u32;
+                                    let ch = (h * scale)
+                                        .round()
+                                        .max(1.0)
+                                        .min((ph.saturating_sub(cy0)) as f64)
+                                        as u32;
                                     if cw > 0 && ch > 0 {
                                         let cropped = img.crop_imm(cx0, cy0, cw, ch);
                                         let mut buf = Vec::new();
-                                        match cropped.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png) {
+                                        match cropped.write_to(
+                                            &mut std::io::Cursor::new(&mut buf),
+                                            image::ImageFormat::Png,
+                                        ) {
                                             Ok(()) => buf,
                                             Err(_) => full_png,
                                         }
@@ -569,7 +668,7 @@ mod macos_host {
                             full_png: full_png_clone,
                         }));
                     }
-                    return Ok(());
+                    Ok(())
                 })();
                 // Success is written by the background thread; surface the
                 // synchronous failures from the handler itself.
@@ -639,6 +738,30 @@ mod macos_host {
         }
 
         pub fn focus_parent(&self) {
+            if let Some(window) = self.ns_view().window()
+                && let Some(content_view) = window.contentView()
+            {
+                // GPUI takes keystrokes on its own view, the content view's
+                // child that hosts this webview. Handing the keyboard to the
+                // content view itself leaves every key with nowhere to go.
+                // SAFETY: plain AppKit view-hierarchy reads on the main thread.
+                let gpui_view = unsafe {
+                    let mut target = self.ns_view().superview();
+                    let mut found = None;
+                    while let Some(view) = target {
+                        let parent = view.superview();
+                        if parent.as_deref() == Some(&*content_view) {
+                            found = Some(view);
+                            break;
+                        }
+                        target = parent;
+                    }
+                    found
+                };
+                let responder = gpui_view.as_deref().unwrap_or(&content_view);
+                let _ = window.makeFirstResponder(Some(responder));
+                return;
+            }
             let _ = self.webview.focus_parent();
         }
 
@@ -657,6 +780,9 @@ mod macos_host {
 
     impl Drop for WebviewHost {
         fn drop(&mut self) {
+            if self.native_focus_within() {
+                self.focus_parent();
+            }
             unsafe {
                 self.wk.stopLoading();
                 self.wk.setNavigationDelegate(None);
@@ -693,6 +819,13 @@ impl WebviewHost {
         }
     }
     pub fn sync_bounds(&self, _bounds: Bounds<Pixels>, _scale: f32) {}
+    pub fn sync_bounds_clipped(
+        &self,
+        _bounds: Bounds<Pixels>,
+        _visible: Bounds<Pixels>,
+        _scale: f32,
+    ) {
+    }
     pub fn set_visible(&self, _visible: bool) {}
     pub fn native_focus_within(&self) -> bool {
         false
@@ -788,9 +921,8 @@ pub fn download_destination(
     suggested: std::path::PathBuf,
     base_dir: Option<std::path::PathBuf>,
 ) -> Option<std::path::PathBuf> {
-    let base = base_dir.or_else(|| {
-        console_shared::path::home_dir().map(|h| h.join("Downloads"))
-    })?;
+    let base =
+        base_dir.or_else(|| console_shared::path::home_dir().map(|h| h.join("Downloads")))?;
 
     let name = suggested
         .file_name()

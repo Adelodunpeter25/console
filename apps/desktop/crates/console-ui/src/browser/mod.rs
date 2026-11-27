@@ -15,7 +15,7 @@ pub mod host;
 pub mod inspector;
 #[cfg(target_os = "macos")]
 pub(crate) mod native_utils;
-pub mod view;
+mod view;
 
 pub use actions::{
     BROWSER_ADDRESS_KEY_CONTEXT, BROWSER_KEY_CONTEXT, BrowserAddressCancel, BrowserBack,
@@ -26,4 +26,4 @@ pub use actions::{
 pub use address::*;
 pub use host::*;
 pub use inspector::*;
-pub use view::*;
+pub use view::{BrowserView, ScriptOutcome, should_show_native};

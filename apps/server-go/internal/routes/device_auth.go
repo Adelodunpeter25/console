@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"html"
 	"os"
 	"path/filepath"
@@ -39,7 +39,15 @@ func bearer(c *fiber.Ctx) string {
 // deviceStreamPath reports whether path is `/api/devices/<id>/stream`, the
 // websocket a player page opens on the device's behalf.
 func deviceStreamPath(path string) bool {
-	return strings.HasPrefix(path, "/api/devices/") && strings.HasSuffix(path, "/stream")
+	return (strings.HasPrefix(path, "/api/devices/") && strings.HasSuffix(path, "/stream")) ||
+		path == "/api/computer/ws"
+}
+
+// mediaFilePath reports whether path is the media endpoint, the one ordinary
+// HTTP route where a query-string token is accepted (media players and
+// embedded webviews cannot always send an Authorization header).
+func mediaFilePath(c *fiber.Ctx) bool {
+	return c.Method() == fiber.MethodGet && (c.Path() == "/api/fs/file/media" || c.Path() == "/api/fs/file/html")
 }
 
 // isWebSocketUpgrade mirrors the handshake test the upgrader performs. Browser
@@ -53,15 +61,18 @@ func RequireDeviceToken(manager authManager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// The player page is inert HTML with no data or secrets, and a webview
 		// navigation cannot carry an Authorization header.
-		if c.Method() == fiber.MethodGet && c.Path() == "/api/devices/player" {
+		if c.Method() == fiber.MethodGet && (c.Path() == "/api/devices/player" || c.Path() == "/api/computer/player") {
 			return c.Next()
 		}
 		credential := bearer(c)
 		// A player page opening the stream websocket cannot send the header
 		// either, so the device stream accepts its credential in the query
-		// string.
+		// string. The media endpoint serves video/audio/PDF bytes to players
+		// that likewise cannot set headers on some platforms, so it gets the
+		// same GET-only fallback.
 		// Ordinary HTTP stays header-only, keeping tokens out of access logs.
-		if credential == "" && isWebSocketUpgrade(c) && deviceStreamPath(c.Path()) {
+		if credential == "" &&
+			(isWebSocketUpgrade(c) && deviceStreamPath(c.Path()) || mediaFilePath(c)) {
 			credential = strings.TrimSpace(c.Query("token"))
 		}
 		claims, err := manager.Authenticate(credential)
@@ -142,7 +153,8 @@ func serverIdentityProto(info auth.ServerIdentity) *consolev1.ServerIdentity {
 // The caller reports the address it is talking to, but that is often the
 // LAN address, useless to a phone on another network. The tunnel reaches
 // the server from anywhere, so it is preferred whenever one exists and its
-// certificate is issued — the same preference `console pair` applies. A
+// certificate is issued (or the iroh endpoint is up) — the same preference
+// `console pair` applies. A
 // CONSOLE_PUBLIC_URL override means the operator has already stated the
 // address clients use, so the caller's answer stands.
 func qrBaseURL(requested string) string {
@@ -150,7 +162,14 @@ func qrBaseURL(requested string) string {
 		return requested
 	}
 	if remote, ok := tunnel.ReadInfo(filepath.Join(utils.ConsoleStorageDir(), "tunnel")); ok && remote.Ready {
-		return remote.URL
+		// iroh has a node id, not a URL; an empty address would make the QR
+		// fall back to localhost, which no phone can reach.
+		if remote.NodeID != "" {
+			return auth.IrohBaseURL(remote.NodeID)
+		}
+		if remote.URL != "" {
+			return remote.URL
+		}
 	}
 	return requested
 }

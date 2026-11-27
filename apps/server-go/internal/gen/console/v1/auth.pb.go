@@ -40,8 +40,7 @@ const (
 //   - credentials themselves (access/refresh tokens, PATs) never cross this
 //     boundary.
 //   - OAuth provider ids stay plain strings: codex | claude | antigravity |
-//     devin, with devin reserved and answering 501. A proto enum would force a
-//     client-wide rename for no gain.
+//     devin. A proto enum would force a client-wide rename for no gain.
 type ProviderAuthStatus struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	LoggedIn bool                   `protobuf:"varint,1,opt,name=logged_in,json=loggedIn,proto3" json:"logged_in,omitempty"`

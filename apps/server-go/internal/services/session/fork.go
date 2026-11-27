@@ -47,24 +47,39 @@ func (s *Service) Fork(sourceID, messageID string) (types.SessionHeader, error) 
 	if err != nil {
 		return types.SessionHeader{}, err
 	}
+	s.ensureContentDropped(sourceID, srcProject, srcConn)
 
-	// History cutoff: every message up to messageID in rowid order.
+	// History cutoff: every message up to messageID in rowid order. The
+	// content column exists only while the stage-6 migration is pending or
+	// its audit refused the drop; a literal keeps one query shape for both.
+	contentSel := "''"
+	if hasContentColumn(srcConn) {
+		contentSel = "content"
+	}
 	rows, err := srcConn.Query(
-		`SELECT id, role, content, created_at FROM messages ORDER BY rowid ASC`)
+		`SELECT id, role, ` + contentSel + `, created_at, skeleton, split_state FROM messages ORDER BY rowid ASC`)
 	if err != nil {
 		return types.SessionHeader{}, err
 	}
-	copied := make([]forkMessage, 0)
+	type scannedMessage struct {
+		id        string
+		role      string
+		content   sql.NullString
+		createdAt int64
+		skeleton  sql.NullString
+		state     int
+	}
+	scanned := make([]scannedMessage, 0)
 	userIDs := make(map[string]struct{})
 	userCount := 0
 	found := false
 	for rows.Next() {
-		var m forkMessage
-		if err := rows.Scan(&m.id, &m.role, &m.content, &m.createdAt); err != nil {
+		var m scannedMessage
+		if err := rows.Scan(&m.id, &m.role, &m.content, &m.createdAt, &m.skeleton, &m.state); err != nil {
 			rows.Close()
 			return types.SessionHeader{}, err
 		}
-		copied = append(copied, m)
+		scanned = append(scanned, m)
 		if m.role == "user" {
 			userIDs[m.id] = struct{}{}
 			userCount++
@@ -81,6 +96,21 @@ func (s *Service) Fork(sourceID, messageID string) (types.SessionHeader, error) 
 	rows.Close()
 	if !found {
 		return types.SessionHeader{}, ErrForkMessageNotFound
+	}
+	// Rebuild each copied message from its skeleton and parts (or serve its
+	// content while the column is still there), then re-split on insert below,
+	// so a fork is built by exactly the same code as any other message.
+	srows := make([]storedRow, len(scanned))
+	for i, m := range scanned {
+		srows[i] = storedRow{id: m.id, content: m.content, skeleton: m.skeleton, state: m.state}
+	}
+	bodies := s.materialize(sourceID, srcProject, srcConn, srows)
+	copied := make([]forkMessage, 0, len(scanned))
+	for i, m := range scanned {
+		if bodies[i] == "" {
+			continue
+		}
+		copied = append(copied, forkMessage{id: m.id, role: m.role, content: bodies[i], createdAt: m.createdAt})
 	}
 
 	// Current todos snapshot (no history table, so the whole list carries).
@@ -192,15 +222,16 @@ func (s *Service) Fork(sourceID, messageID string) (types.SessionHeader, error) 
 		return types.SessionHeader{}, err
 	}
 
+	withContent := hasContentColumn(destConn)
 	tx, err := destConn.Begin()
 	if err != nil {
 		cleanupGlobal()
 		return types.SessionHeader{}, err
 	}
 	for _, m := range copied {
-		// Re-split from the source's content rather than copying parts, so a
-		// fork is built by exactly the same code as any other message.
-		if _, err := insertMessage(tx, s.imagesFor(newID, srcProject), false, m.id, m.role, m.content, m.createdAt); err != nil {
+		// Re-split from the source's rebuilt JSON rather than copying parts,
+		// so a fork is built by exactly the same code as any other message.
+		if _, err := insertMessage(tx, s.imagesFor(newID, srcProject), false, withContent, m.id, m.role, m.content, m.createdAt); err != nil {
 			tx.Rollback()
 			cleanupGlobal()
 			return types.SessionHeader{}, err

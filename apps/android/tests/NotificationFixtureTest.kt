@@ -28,7 +28,7 @@ class NotificationFixtureTest {
         assertEquals("s1", n.session_id)
         assertEquals("Needs Attention", n.title)
         assertEquals("Fix the parser", n.subtitle)
-        assertEquals("sh is requesting permission", n.body)
+        assertEquals("Which file should I edit?", n.body)
     }
 
     @Test
@@ -38,6 +38,14 @@ class NotificationFixtureTest {
         assertEquals("Done", n.title)
         assertEquals("Fix the parser", n.subtitle)
         assertEquals("all done here", n.body)
+    }
+
+    @Test
+    fun decodesGoldenSuggestionsFixture() {
+        val n = adapter.fromJson(fixture("suggestions.json"))!!
+        assertEquals("suggestions", n.kind)
+        assertEquals("s1", n.session_id)
+        assertEquals(listOf("Run the tests", "Commit this"), n.items)
     }
 
     @Test

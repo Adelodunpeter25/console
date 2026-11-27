@@ -11,8 +11,8 @@
 package loop
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -104,6 +104,15 @@ func MessageFromProtoBytes(raw []byte) (any, error) {
 
 func userToProto(m UserMessage) *consolev1.AgentUserMessage {
 	out := &consolev1.AgentUserMessage{Content: m.Content, Synthetic: m.Synthetic}
+	if m.ApprovalMode != "" {
+		out.ApprovalMode = &m.ApprovalMode
+	}
+	if m.Source != "" {
+		out.Source = &m.Source
+	}
+	if m.WakeLabel != "" {
+		out.WakeLabel = &m.WakeLabel
+	}
 	out.ContextFiles = append(out.ContextFiles, m.ContextFiles...)
 	for _, a := range m.Attachments {
 		out.Attachments = append(out.Attachments, &consolev1.ImageAttachment{
@@ -172,10 +181,12 @@ func AssistantToProto(m AssistantMessage) *consolev1.AgentAssistantMessage {
 				Part: &consolev1.AssistantContentPart_Text{Text: tp},
 			})
 		case ThinkingPart:
+			tp := &consolev1.ThinkingPart{Text: p.Text}
+			if p.Signature != "" {
+				tp.Signature = &p.Signature
+			}
 			out.Content = append(out.Content, &consolev1.AssistantContentPart{
-				Part: &consolev1.AssistantContentPart_Thinking{
-					Thinking: &consolev1.ThinkingPart{Text: p.Text},
-				},
+				Part: &consolev1.AssistantContentPart_Thinking{Thinking: tp},
 			})
 		case ToolCallPart:
 			call := &consolev1.ToolCall{Id: p.Call.ID, Name: p.Call.Name}
@@ -185,10 +196,11 @@ func AssistantToProto(m AssistantMessage) *consolev1.AgentAssistantMessage {
 			if p.Call.ThoughtSignature != "" {
 				call.ThoughtSignature = &p.Call.ThoughtSignature
 			}
-			label := tools.ToolLabel(p.Call.Name)
+			label := tools.ToolCallLabel(p.Call.Name, p.Call.Arguments)
 			flags := tools.ToolKindFlags(p.Call.Name)
 			icon := tools.ToolIconKey(p.Call.Name)
-			call.Label, call.KindFlags, call.Icon = &label, &flags, &icon
+			summary := tools.ToolCallSummary(p.Call.Name, p.Call.Arguments)
+			call.Label, call.KindFlags, call.Icon, call.Summary = &label, &flags, &icon, &summary
 			out.Content = append(out.Content, &consolev1.AssistantContentPart{
 				Part: &consolev1.AssistantContentPart_ToolCall{ToolCall: call},
 			})
@@ -222,13 +234,21 @@ func toolResultsToProto(results []tools.ToolResult) ([]*consolev1.ToolResult, er
 				Spec:    append([]byte(nil), r.Visual.Spec...),
 			}
 		}
+		if r.Html != nil {
+			item.Html = &consolev1.HtmlPart{
+				Path:     r.Html.Path,
+				Title:    r.Html.Title,
+				Height:   r.Html.Height,
+				Snapshot: append([]byte(nil), r.Html.Snapshot...),
+			}
+		}
 		out = append(out, item)
 	}
 	return out, nil
 }
 
 func protoToUser(m *consolev1.AgentUserMessage) UserMessage {
-	out := UserMessage{Role: RoleUser, Content: m.GetContent(), Synthetic: m.GetSynthetic()}
+	out := UserMessage{Role: RoleUser, Content: m.GetContent(), Synthetic: m.GetSynthetic(), Source: m.GetSource(), ApprovalMode: m.GetApprovalMode(), WakeLabel: m.GetWakeLabel()}
 	out.ContextFiles = append(out.ContextFiles, m.GetContextFiles()...)
 	for _, a := range m.GetAttachments() {
 		out.Attachments = append(out.Attachments, ImageAttachment{
@@ -298,7 +318,7 @@ func protoToAssistant(m *consolev1.AgentAssistantMessage) (AssistantMessage, err
 				Text: p.Text.GetText(), ThoughtSignature: p.Text.GetThoughtSignature(),
 			})
 		case *consolev1.AssistantContentPart_Thinking:
-			out.Content = append(out.Content, ThinkingPart{Text: p.Thinking.GetText()})
+			out.Content = append(out.Content, ThinkingPart{Text: p.Thinking.GetText(), Signature: p.Thinking.GetSignature()})
 		case *consolev1.AssistantContentPart_ToolCall:
 			var args json.RawMessage
 			if len(p.ToolCall.GetArguments()) > 0 {
@@ -342,9 +362,18 @@ func protoToToolResults(items []*consolev1.ToolResult) ([]tools.ToolResult, erro
 				Spec:    append([]byte(nil), v.GetSpec()...),
 			}
 		}
+		var html *tools.HtmlArtifact
+		if h := r.GetHtml(); h != nil && h.GetPath() != "" {
+			html = &tools.HtmlArtifact{
+				Path:     h.GetPath(),
+				Title:    h.GetTitle(),
+				Height:   h.GetHeight(),
+				Snapshot: append([]byte(nil), h.GetSnapshot()...),
+			}
+		}
 		out = append(out, tools.ToolResult{
 			ToolCallID: r.GetToolCallId(), ToolName: r.GetToolName(),
-			Content: content, IsError: r.GetIsError(), Visual: visual,
+			Content: content, IsError: r.GetIsError(), Visual: visual, Html: html,
 		})
 	}
 	return out, nil

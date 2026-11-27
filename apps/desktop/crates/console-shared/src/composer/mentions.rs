@@ -19,7 +19,31 @@ pub const SKILL_PATH_PREFIX: &str = "skill:";
 /// in the path so the chip survives as a confirmed mention.
 pub const CHAT_PATH_PREFIX: &str = "chat:";
 
+/// `path` prefix marking a mention as an image chip. The chip's text is the
+/// `[Image N]` marker the model reads; N is the 1-based position of the
+/// matching attachment, so the marker travels with the prompt text and the
+/// images keep their order.
+pub const IMAGE_PATH_PREFIX: &str = "image:";
+
 impl ComposerMention {
+    /// An image chip over `range`, whose text is `[Image <number>]`.
+    pub fn image(range: Range<usize>, number: usize) -> Self {
+        Self {
+            range,
+            path: format!("{IMAGE_PATH_PREFIX}{number}"),
+            label: format!("[Image {number}]"),
+        }
+    }
+
+    pub fn is_image(&self) -> bool {
+        self.path.starts_with(IMAGE_PATH_PREFIX)
+    }
+
+    /// The 1-based attachment number, when this is an image chip.
+    pub fn image_number(&self) -> Option<usize> {
+        self.path.strip_prefix(IMAGE_PATH_PREFIX)?.parse().ok()
+    }
+
     /// A skill chip over `range`, whose text is `/<name>`.
     pub fn skill(range: Range<usize>, name: &str) -> Self {
         Self {
@@ -57,14 +81,84 @@ impl ComposerMention {
     }
 }
 
-/// Paths of the file mentions only: skills and chat refs are text the
-/// agent reads, not context files to attach.
+/// A `$slug` chat reference found in text; `range` covers the `$` and every
+/// ref character after it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChatRef {
+    pub range: Range<usize>,
+    pub slug: String,
+}
+
+/// Find `$ref` tokens the way the server's `ParseDollarRefs` does (shared
+/// cases live in `proto/testdata/session/chat_refs.json`): a `$` at the start
+/// or after whitespace or opening punctuation, then ASCII letters, digits,
+/// `-` or `_`. Edge dashes/underscores are trimmed from the slug, and a
+/// digit-led token only counts when it looks like an id (contains `-`, at
+/// least 8 long), so prices stay plain text. Repeats are all returned.
+pub fn parse_chat_refs(text: &str) -> Vec<ChatRef> {
+    let mut refs = Vec::new();
+    for (i, _) in text.match_indices('$') {
+        let boundary = text[..i]
+            .chars()
+            .next_back()
+            .is_none_or(|c| c.is_whitespace() || "([{\"'<".contains(c));
+        if !boundary {
+            continue;
+        }
+        let rest = &text[i + 1..];
+        let len = rest
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+            .unwrap_or(rest.len());
+        let slug = rest[..len].trim_matches(['-', '_']);
+        let digit_led = slug.starts_with(|c: char| c.is_ascii_digit());
+        if slug.is_empty() || (digit_led && !(slug.contains('-') && slug.len() >= 8)) {
+            continue;
+        }
+        refs.push(ChatRef {
+            range: i..i + 1 + len,
+            slug: slug.to_string(),
+        });
+    }
+    refs
+}
+
+/// Paths of the file mentions only: skills, chat refs and image markers are
+/// text the agent reads, not context files to attach.
 pub fn context_file_paths(mentions: &[ComposerMention]) -> Vec<String> {
     mentions
         .iter()
-        .filter(|mention| !mention.is_skill() && !mention.is_chat())
+        .filter(|mention| !mention.is_skill() && !mention.is_chat() && !mention.is_image())
         .map(|mention| mention.path.clone())
         .collect()
+}
+
+/// Every mention's path, skills and chat refs included, as sent with a prompt
+/// so the sent message can redraw them as chips. The server keeps the
+/// prefixed entries out of the agent-facing text.
+pub fn submitted_mention_paths(mentions: &[ComposerMention]) -> Vec<String> {
+    mentions
+        .iter()
+        .map(|mention| mention.path.clone())
+        .collect()
+}
+
+/// The text a mention path shows as a chip: `/name` for skills, `$slug` for
+/// chat refs, the basename for files.
+pub fn mention_label(path: &str) -> String {
+    if let Some(name) = path.strip_prefix(SKILL_PATH_PREFIX) {
+        format!("/{name}")
+    } else if let Some(slug) = path.strip_prefix(CHAT_PATH_PREFIX) {
+        format!("${slug}")
+    } else if let Some(number) = path.strip_prefix(IMAGE_PATH_PREFIX) {
+        format!("[Image {number}]")
+    } else {
+        let clean = path.trim_end_matches(['/', '\\']);
+        std::path::Path::new(clean)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(clean)
+            .to_string()
+    }
 }
 
 pub fn adjust_mentions(
@@ -114,11 +208,7 @@ pub fn mentions_from_context_files(
     let mut mentions = Vec::new();
     let mut search_from = 0;
     for path in context_files {
-        let label = std::path::Path::new(path)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or(path)
-            .to_string();
+        let label = mention_label(path);
         let Some(relative_start) = content[search_from..].find(&label) else {
             continue;
         };

@@ -13,6 +13,7 @@ use gpui::{
     IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, px,
 };
 
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -70,10 +71,8 @@ pub fn copy_button_with_action(
 ) -> impl IntoElement {
     let content = content.into();
     let copied_generation = cx
-        .default_global::<CopyFeedback>()
-        .generations
-        .get(&id)
-        .copied();
+        .try_global::<CopyFeedback>()
+        .and_then(|feedback| feedback.generations.get(&id).copied());
     let copied = copied_generation.is_some();
     let animation_key = format!(
         "copy-feedback-{id}-{copied}-{}",
@@ -90,6 +89,7 @@ pub fn copy_button_with_action(
         .justify_center()
         .cursor_default()
         .hover(|element| element.bg(theme.overlay_strong))
+        .tooltip(Tooltip::text(if copied { "Copied!" } else { "Copy" }))
         .on_click(move |_, _, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(content.to_string()));
             if let Some(callback) = &on_copied {

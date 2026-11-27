@@ -3,6 +3,7 @@ use crate::persistence::store::{
     PersistedEnvironment, PersistedEnvironmentsState, save_environment_list_preserving_active,
     save_environments,
 };
+use console_core::ModelFavorite;
 use console_ui::settings::{EnvironmentRow, ProbeState};
 use gpui::Context;
 use serde::{Deserialize, Serialize};
@@ -49,41 +50,40 @@ impl ConsoleDesktopApp {
         // Only write back when something actually changed: this runs on every
         // launch and a save is a full store read + rewrite.
         let mut mutated = false;
-        if let Some(state) = persisted {
-            if !state.environments.is_empty() {
-                let mut fixed_legacy_url = false;
-                self.environments = state
-                    .environments
-                    .into_iter()
-                    .map(|e| {
-                        // Fix legacy mock 4040 port or placeholder from initial test to true default local url
-                        let url = match e.url.as_str() {
-                            "http://127.0.0.1:4040" | "http://localhost:4040" => match &def {
-                                Some(def) => {
-                                    fixed_legacy_url = true;
-                                    def.url.clone()
-                                }
-                                None => e.url,
-                            },
-                            _ => e.url,
-                        };
-                        Environment {
-                            id: e.id,
-                            name: e.name,
-                            url,
-                        }
-                    })
-                    .collect();
-                let persisted_active_id = state.active_id;
-                self.active_env_id = inherited_environment_id
-                    .filter(|id| self.environments.iter().any(|e| &e.id == id))
-                    .or_else(|| {
-                        persisted_active_id
-                            .filter(|id| self.environments.iter().any(|e| &e.id == id))
-                    })
-                    .or_else(|| self.environments.first().map(|e| e.id.clone()));
-                mutated = fixed_legacy_url;
-            }
+        if let Some(state) = persisted
+            && !state.environments.is_empty()
+        {
+            let mut fixed_legacy_url = false;
+            self.environments = state
+                .environments
+                .into_iter()
+                .map(|e| {
+                    // Fix legacy mock 4040 port or placeholder from initial test to true default local url
+                    let url = match e.url.as_str() {
+                        "http://127.0.0.1:4040" | "http://localhost:4040" => match &def {
+                            Some(def) => {
+                                fixed_legacy_url = true;
+                                def.url.clone()
+                            }
+                            None => e.url,
+                        },
+                        _ => e.url,
+                    };
+                    Environment {
+                        id: e.id,
+                        name: e.name,
+                        url,
+                    }
+                })
+                .collect();
+            let persisted_active_id = state.active_id;
+            self.active_env_id = inherited_environment_id
+                .filter(|id| self.environments.iter().any(|e| &e.id == id))
+                .or_else(|| {
+                    persisted_active_id.filter(|id| self.environments.iter().any(|e| &e.id == id))
+                })
+                .or_else(|| self.environments.first().map(|e| e.id.clone()));
+            mutated = fixed_legacy_url;
         }
         if self.environments.is_empty() {
             if let Some(def) = def {
@@ -206,7 +206,7 @@ impl ConsoleDesktopApp {
         cx.notify();
 
         cx.spawn(async move |entity, cx| {
-            let ok = console_core::utils::probe_backend(&url, Duration::from_secs(3)).await;
+            let ok = console_core::utils::probe_backend(&url, Duration::from_secs(6)).await;
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
@@ -265,6 +265,12 @@ impl ConsoleDesktopApp {
                                 this.load_providers(cx);
                                 this.load_projects(cx);
                                 this.refresh_auth_status(cx);
+                                this.stt_status = None;
+                                this.refresh_stt_status(cx);
+                                // The URL changed: the repo list belongs to
+                                // the old server until refetched.
+                                this.github_repos = None;
+                                this.github_repos_loaded = false;
                                 this.fetch_usage(cx);
                                 cx.notify();
                             });
@@ -319,7 +325,7 @@ impl ConsoleDesktopApp {
         cx.notify();
 
         let client = self.client.clone();
-        let url = env.url.clone();
+        let url = env.url;
 
         cx.spawn(async move |entity, cx| {
             client.set_base_url(&url).await;
@@ -330,13 +336,18 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         // Reset in-memory session and workspace caches, closing all open tabs
-                        this.sessions = std::rc::Rc::new(Vec::new());
+                        this.sessions = std::rc::Rc::from([]);
                         this.selected_session_id = None;
-                        this.projects = std::rc::Rc::new(Vec::new());
+                        this.projects = std::rc::Rc::from([]);
                         this.selected_project_id = None;
-                        this.branches = std::rc::Rc::new(Vec::new());
+                        // The GitHub repo list belongs to the old server; the
+                        // next menu open refetches it from the new one.
+                        this.github_repos = None;
+                        this.github_repos_loaded = false;
+                        this.branches = std::rc::Rc::from([]);
                         this.branch_loaded = false;
                         this.transcript_scroll_positions.clear();
+                        this.clear_transcript_pagination();
 
                         // Close all tabs and collapse splits back to clean main pane
                         this.workspace_root = console_core::WorkspaceNode::leaf("pane-main");
@@ -351,24 +362,129 @@ impl ConsoleDesktopApp {
                         this.todo_items.clear();
                         this.queued_prompts.clear();
                         this.running_sessions.clear();
+                        this.wake_records.clear();
+                        this.wake_boundary_pushed_at.clear();
                         this.stream_render_pending.clear();
                         this.transcript_view
-                            .update(cx, |t, cx| t.set_messages(Vec::new(), cx));
+                            .update(cx, |t, cx| t.set_turns(Vec::new(), cx));
                         this.composer_input.update(cx, |input, cx| input.clear(cx));
 
                         this.usage_reports = None;
                         this.usage_loading = false;
                         this.usage_last_fetched = None;
 
+                        // Server-scoped caches the old backend owned. Favourites
+                        // are per server, so they clear here and refetch below;
+                        // the rest are refetched lazily on their next surface
+                        // open, but must not survive the switch.
+                        this.favorites = std::rc::Rc::new(std::collections::HashSet::new());
+                        this.models_by_provider =
+                            std::rc::Rc::new(std::collections::HashMap::new());
+                        this.loading_models.clear();
+                        this.provider_credentials.clear();
+                        this.provider_credential_error = None;
+                        this.github_status = None;
+                        this.github_error = None;
+                        this.integrations = Vec::new();
+                        this.integrations_error = None;
+                        this.forwarded_ports_by_project.clear();
+                        this.project_scripts_by_project.clear();
+                        this.active_project_shortcuts.clear();
+                        // Dropping the map drops the stream tasks, which stop
+                        // their SSE loops when the entities go away.
+                        this.project_script_streams.clear();
+                        this.right_sidebar_terminals_by_cwd.clear();
+
+                        // Session-keyed run state from the old server: the
+                        // sessions are gone, so keeping these only risks a
+                        // stale id colliding with a new one.
+                        this.pending_questions.clear();
+                        this.question_selected.clear();
+                        this.agent_notices.clear();
+                        this.session_errors.clear();
+                        this.session_run_tokens.clear();
+                        this.pagination_in_flight.clear();
+                        this.session_subagents.clear();
+                        this.session_background_work.clear();
+
+                        // Old server's file and review payloads must never be
+                        // shown as the new server's.
+                        this.open_file_contents.clear();
+                        this.open_file_errors.clear();
+                        this.open_image_contents.clear();
+                        this.open_media_contents.clear();
+                        // Media views embed the old server's token in their
+                        // media URL; drop the surfaces so reopened tabs get a
+                        // fresh URL.
+                        let media_views: Vec<_> = this.file_media_views.drain().collect();
+                        for (_, view) in media_views {
+                            view.update(cx, |v, cx| v.close(cx));
+                        }
+                        this.open_diff_contents.clear();
+                        this.changes_review_data.clear();
+                        this.changes_review_expanded.clear();
+                        this.file_tree_scrolls.clear();
+                        this.file_tree_nodes = std::rc::Rc::from([]);
+                        this.working_changes = std::rc::Rc::from([]);
+                        this.git_badges = std::rc::Rc::new(std::collections::HashMap::new());
+                        this.file_tree_selected_path = None;
+
                         // Reload data from new server
                         this.load_sessions(cx);
                         this.load_providers(cx);
                         this.load_projects(cx);
                         this.refresh_auth_status(cx);
+                        // STT status belongs to the old server; reset it so the
+                        // mic button doesn't claim the new server is configured
+                        // before the refresh lands.
+                        this.stt_status = None;
+                        this.refresh_stt_status(cx);
                         this.fetch_usage(cx);
+                        this.automations.clear();
+                        this.webhooks.clear();
                         this.init_port_stream(cx);
+                        this.init_automation_stream(cx);
+                        this.init_webhook_stream(cx);
+                        // Favourites are stored per server; refetch from the
+                        // one just activated (same shape as bootstrap step 3).
+                        let favorites_client = client.clone();
+                        let favorites_entity = entity.clone();
+                        cx.spawn(async move |_, cx| {
+                            match favorites_client.model_favorites.list().await {
+                                Ok(model_favorites) => {
+                                    let _ = cx.update(|cx| {
+                                        if let Some(app) = favorites_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.favorites = std::rc::Rc::new(
+                                                    model_favorites
+                                                        .into_iter()
+                                                        .map(|favorite: ModelFavorite| {
+                                                            format!(
+                                                                "{}:{}",
+                                                                favorite.provider,
+                                                                favorite.model_id
+                                                            )
+                                                        })
+                                                        .collect(),
+                                                );
+                                                cx.notify();
+                                            });
+                                        }
+                                    });
+                                }
+                                Err(error) => {
+                                    log::warn!(
+                                        "model favorites after environment switch: {error:#}"
+                                    );
+                                }
+                            }
+                        })
+                        .detach();
                         // Point the device viewer at the new backend origin so
                         // stream/screenshot URLs follow the active server.
+                        if let Some(ref computer) = this.computer_view {
+                            computer.update(cx, |view, cx| view.connect(cx));
+                        }
                         if let Some(ref device) = this.device_view {
                             let url = url.clone();
                             let token = crate::persistence::server_auth_token(&url);

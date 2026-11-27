@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,6 +54,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.LoadingState
 import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.theme.NewTheme
@@ -174,10 +174,7 @@ fun TerminalScreen(onBack: () -> Unit) {
                     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                         if (terminalId == null && spawnError == null) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                                    Text("Starting shell…", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
-                                }
+                                LoadingState("Starting shell…")
                             }
                         } else {
                             GhosttyTerminalSurface(

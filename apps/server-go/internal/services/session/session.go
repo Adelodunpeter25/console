@@ -3,11 +3,13 @@ package session
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
@@ -19,14 +21,22 @@ import (
 // queued prompt, so it is not finished work. The routes layer maps it to 409.
 var ErrSessionBusy = errors.New("session has an active run or queued prompt")
 
+// ErrSessionSettled refuses marking a settled chat unread: settling files a
+// chat away, so it is never unread. The routes layer maps it to 409.
+var ErrSessionSettled = errors.New("session is settled")
+
+// ErrCwdMissing rejects pointing a project session at a working directory
+// that is no longer on disk (typically: the folder was deleted after the
+// project was registered). Failing here beats a session whose every tool
+// call and terminal spawn dies later. The routes layer maps it to 400.
+var ErrCwdMissing = errors.New("working directory does not exist")
+
 type Service struct {
 	manager *db.DB
-	// backfilled remembers sessions whose old messages are all converted, so the
-	// check is skipped on every later load in this process.
-	backfilled sync.Map
-	// verified remembers which messages were already proven to rebuild from
-	// their parts exactly, so each is checked once per process.
-	verified verifiedSet
+	// migrated remembers sessions whose database no longer has a `content`
+	// column (or whose migration was decided), so the check is skipped on
+	// every later open in this process.
+	migrated sync.Map
 	// isBusy reports whether a run is in flight on a session. Wired by the
 	// caller (the run service's IsActive) rather than imported, since run
 	// already depends on this package.
@@ -37,9 +47,22 @@ func New(manager *db.DB) *Service {
 	return &Service{manager: manager}
 }
 
+// StorageDir returns the root storage directory for this session service.
+func (s *Service) StorageDir() string {
+	if s.manager != nil {
+		return s.manager.StorageDir()
+	}
+	return utils.ConsoleStorageDir()
+}
+
 // SetBusyCheck wires the run-in-flight probe used by Settle. Called once at
 // startup, after the run service exists; nil (tests) means never busy.
-func (s *Service) SetBusyCheck(fn func(id string) bool) { s.isBusy = fn }
+func (s *Service) SetBusyCheck(fn func(id string) bool) {
+	s.isBusy = fn
+	if s.manager != nil {
+		s.manager.SetBusyCheck(fn)
+	}
+}
 
 // Fallback model and provider used when Create is not given one.
 const (
@@ -67,7 +90,7 @@ func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, 
 	}
 	approvalMode := opts.ApprovalMode
 	if approvalMode == "" {
-		approvalMode = "always-ask"
+		approvalMode = "plan-mode"
 	}
 
 	cwd := opts.Cwd
@@ -85,6 +108,11 @@ func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, 
 		if cwd == "" {
 			if wd, err := os.Getwd(); err == nil {
 				cwd = wd
+			}
+		}
+		if cwd != "" {
+			if _, err := os.Stat(cwd); err != nil {
+				return types.SessionHeader{}, fmt.Errorf("%w: %s", ErrCwdMissing, cwd)
 			}
 		}
 		if opts.ProjectID != nil {
@@ -149,40 +177,58 @@ func worktreeCol(w *types.SessionWorktree, pick func(*types.SessionWorktree) str
 type ListFilter struct {
 	Cwd         string
 	ProjectID   string
+	Query       string
 	OnlyDeleted bool
+	// IncludeDeleted drops the deleted filter entirely, listing live and
+	// trashed sessions together. Ignored when OnlyDeleted is set.
+	IncludeDeleted bool
 }
 
 const sessionColumns = `id, title, cwd, project_id, model_id, provider, approval_mode,
 	thinking_level, pinned_at, settled_at, created_at, updated_at, message_count, status, deleted_at,
-	worktree_path, worktree_branch, worktree_repo`
+	worktree_path, worktree_branch, worktree_repo, last_activity_at, last_read_at`
 
 const sessionListOrder = `ORDER BY pinned_at IS NULL, pinned_at DESC, updated_at DESC`
 
 // ListFiltered lists sessions: limit 100, pinned first (most recently
 // pinned), then newest first. Cwd takes precedence over projectId, deleted
-// filter flips the condition.
+// filter flips the condition, and Query filters title with case-insensitive LIKE.
 func (s *Service) ListFiltered(f ListFilter) ([]types.SessionHeader, error) {
 	const limit = 100
-	deletedCondition := "deleted_at IS NULL"
-	if f.OnlyDeleted {
-		deletedCondition = "deleted_at IS NOT NULL"
-	}
-	var rows *sql.Rows
-	var err error
+	whereClauses := []string{"1=1"}
+	var args []any
+
 	switch {
-	case f.Cwd != "":
-		rows, err = s.manager.Global().Query(`
-			SELECT `+sessionColumns+`
-			FROM sessions WHERE cwd = ? AND `+deletedCondition+` `+sessionListOrder+` LIMIT ?`, f.Cwd, limit)
-	case f.ProjectID != "":
-		rows, err = s.manager.Global().Query(`
-			SELECT `+sessionColumns+`
-			FROM sessions WHERE project_id = ? AND `+deletedCondition+` `+sessionListOrder+` LIMIT ?`, f.ProjectID, limit)
+	case f.OnlyDeleted:
+		whereClauses = append(whereClauses, "deleted_at IS NOT NULL")
+	case f.IncludeDeleted:
+		// no deleted_at filter
 	default:
-		rows, err = s.manager.Global().Query(`
-			SELECT `+sessionColumns+`
-			FROM sessions WHERE `+deletedCondition+` `+sessionListOrder+` LIMIT ?`, limit)
+		whereClauses = append(whereClauses, "deleted_at IS NULL")
 	}
+
+	if f.Cwd != "" {
+		whereClauses = append(whereClauses, "cwd = ?")
+		args = append(args, f.Cwd)
+	} else if f.ProjectID != "" {
+		whereClauses = append(whereClauses, "project_id = ?")
+		args = append(args, f.ProjectID)
+	}
+
+	if q := strings.TrimSpace(f.Query); q != "" {
+		whereClauses = append(whereClauses, "LOWER(title) LIKE LOWER(?)")
+		args = append(args, "%"+q+"%")
+	}
+
+	args = append(args, limit)
+	query := fmt.Sprintf(`
+		SELECT %s
+		FROM sessions WHERE %s %s LIMIT ?`,
+		sessionColumns,
+		strings.Join(whereClauses, " AND "),
+		sessionListOrder,
+	)
+	rows, err := s.manager.Global().Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -223,9 +269,10 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 		var settledAt sql.NullInt64
 		var deletedAt sql.NullInt64
 		var wtPath, wtBranch, wtRepo sql.NullString
+		var lastActivityAt, lastReadAt sql.NullInt64
 		if err := rows.Scan(&h.ID, &h.Title, &h.Cwd, &projectID, &h.ModelID, &h.Provider,
 			&h.ApprovalMode, &thinkingLevel, &pinnedAt, &settledAt, &h.CreatedAt, &h.UpdatedAt, &h.MessageCount, &h.Status, &deletedAt,
-			&wtPath, &wtBranch, &wtRepo); err != nil {
+			&wtPath, &wtBranch, &wtRepo, &lastActivityAt, &lastReadAt); err != nil {
 			return nil, err
 		}
 		if projectID.Valid && projectID.String != "" && projectID.String != "scratch" {
@@ -248,6 +295,15 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 			v := settledAt.Int64
 			h.SettledAt = &v
 		}
+		if lastActivityAt.Valid {
+			v := lastActivityAt.Int64
+			h.LastActivityAt = &v
+		}
+		if lastReadAt.Valid {
+			v := lastReadAt.Int64
+			h.LastReadAt = &v
+		}
+		h.Unread = IsUnread(h)
 		if wtPath.Valid && wtPath.String != "" {
 			h.Worktree = &types.SessionWorktree{
 				Path:   wtPath.String,
@@ -265,28 +321,55 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 // newest page first, limit <= 0 means all messages. Messages are the stored
 // content JSON with createdAt injected, exactly as the desktop parses them.
 func (s *Service) Load(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
+	return s.load(sessionID, limit, before, false)
+}
+
+// LoadIncludingDeleted is Load for soft-deleted (trashed) sessions too:
+// sessions.read uses it to open a chat that search found in the trash.
+// Unknown ids still return nil.
+func (s *Service) LoadIncludingDeleted(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
+	return s.load(sessionID, limit, before, true)
+}
+
+// openForRead resolves a session's header and opens its database. A nil
+// header means the session is unknown (or trashed, unless includeDeleted).
+func (s *Service) openForRead(sessionID string, includeDeleted bool) (*types.SessionHeader, *sql.DB, error) {
 	rows, err := s.manager.Global().Query(`
 		SELECT `+sessionColumns+`
 		FROM sessions WHERE id = ?`, sessionID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	headers, err := scanSessionRows(rows)
 	rows.Close()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if len(headers) == 0 || headers[0].DeletedAt != nil {
-		return nil, nil
+	if len(headers) == 0 || (!includeDeleted && headers[0].DeletedAt != nil) {
+		return nil, nil, nil
 	}
-
 	conn, err := s.manager.Session(sessionID, projectIDFrom(headers[0].ProjectID))
 	if err != nil {
+		return nil, nil, err
+	}
+	s.ensureContentDropped(sessionID, projectIDFrom(headers[0].ProjectID), conn)
+	return &headers[0], conn, nil
+}
+
+func (s *Service) load(sessionID string, limit int64, before int64, includeDeleted bool) (*types.LoadedSession, error) {
+	header, conn, err := s.openForRead(sessionID, includeDeleted)
+	if err != nil || header == nil {
 		return nil, err
 	}
-	s.ensureBackfilled(sessionID, projectIDFrom(headers[0].ProjectID), conn)
+	headers := []types.SessionHeader{*header}
 
-	query := `SELECT content, created_at, rowid, id, skeleton, split_state FROM messages`
+	// The content column exists only while the stage-6 migration is pending or
+	// its audit refused the drop; a literal keeps one query shape for both.
+	contentSel := "''"
+	if hasContentColumn(conn) {
+		contentSel = "content"
+	}
+	query := `SELECT ` + contentSel + `, created_at, rowid, id, skeleton, split_state FROM messages`
 	var args []any
 	if before > 0 {
 		query += ` WHERE rowid < ?`
@@ -322,11 +405,14 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 	if hasMore {
 		fetched = fetched[:limit]
 	}
-	// Oldest first for display. Split messages are rebuilt from their parts and
-	// checked against the original; anything unproven is served as stored.
+	// Oldest first for display. Split messages are rebuilt from their parts;
+	// a row that cannot be rebuilt is skipped (it is logged in materialize).
 	bodies := s.materialize(sessionID, projectIDFrom(headers[0].ProjectID), conn, fetched)
 	messages := make([]json.RawMessage, 0, len(fetched))
 	for i := len(fetched) - 1; i >= 0; i-- {
+		if bodies[i] == "" {
+			continue
+		}
 		messages = append(messages, withCreatedAt(bodies[i], fetched[i].createdAt, fetched[i].id))
 	}
 	result := &types.LoadedSession{Header: headers[0], Messages: messages, HasMore: hasMore}
@@ -373,6 +459,10 @@ func (s *Service) SoftDelete(sessionID string) (bool, error) {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
+	if n > 0 {
+		_, _ = s.manager.Global().Exec(`DELETE FROM automations WHERE session_id = ?`, sessionID)
+		_, _ = s.manager.Global().Exec(`DELETE FROM webhook_subscriptions WHERE session_id = ?`, sessionID)
+	}
 	return n > 0, nil
 }
 
@@ -381,7 +471,8 @@ func (s *Service) SoftDelete(sessionID string) (bool, error) {
 // its original settled_at, so its position in the section does not jump — and
 // settling does not touch updated_at, because settling is not activity. A
 // session with a run in flight or a queued prompt is refused with
-// ErrSessionBusy: settling is for finished work.
+// ErrSessionBusy: settling is for finished work. Settling unpins: pinned and
+// settled are mutually exclusive.
 func (s *Service) Settle(sessionID string) (bool, error) {
 	if s.isBusy != nil && s.isBusy(sessionID) {
 		return false, ErrSessionBusy
@@ -390,7 +481,7 @@ func (s *Service) Settle(sessionID string) (bool, error) {
 		return false, ErrSessionBusy
 	}
 	res, err := s.manager.Global().Exec(
-		`UPDATE sessions SET settled_at = COALESCE(settled_at, ?) WHERE id = ?`,
+		`UPDATE sessions SET settled_at = COALESCE(settled_at, ?), pinned_at = NULL WHERE id = ?`,
 		utils.NowMillis(), sessionID)
 	if err != nil {
 		return false, err

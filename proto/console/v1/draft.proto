@@ -31,12 +31,29 @@ message DraftFileComment {
   string snippet = 6;
 }
 
+message FloatingDraftChoices {
+  string project_id = 1;
+  // "project", "new_worktree", or "from_branch"
+  string branch_mode = 2;
+  string branch_name = 3;
+  string worktree_base = 4;
+  string provider = 5;
+  string model_id = 6;
+  string thinking_level = 7;
+  string approval_mode = 8;
+}
+
 message ChatDraft {
   string session_id = 1;
   string text = 2;
   repeated DraftMention mentions = 3;
   repeated DraftFileComment comments = 4;
   int64 updated_at = 5;
+  FloatingDraftChoices floating = 6;
+}
+
+message ListDraftsResponse {
+  repeated string session_ids = 1;
 }
 
 // applied=false means the stored draft was newer; draft is what to adopt.

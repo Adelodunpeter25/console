@@ -14,7 +14,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const maxCachedSessionDBs = 20
+const maxCachedSessionDBs = 64
 
 type DB struct {
 	storageDir string
@@ -22,6 +22,8 @@ type DB struct {
 
 	mu         sync.Mutex
 	sessionDBs map[string]*sql.DB
+	order      []string
+	isBusy     func(sessionID string) bool
 }
 
 type OpenOptions struct {
@@ -93,6 +95,55 @@ func (d *DB) StorageDir() string {
 	return d.storageDir
 }
 
+// SetBusyCheck configures a probe that reports whether a session is actively
+// executing a turn or background work. Active sessions are spared from cache eviction.
+func (d *DB) SetBusyCheck(fn func(sessionID string) bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.isBusy = fn
+}
+
+func (d *DB) touchLocked(sessionID string) {
+	for i, id := range d.order {
+		if id == sessionID {
+			d.order = append(append(d.order[:i], d.order[i+1:]...), sessionID)
+			return
+		}
+	}
+	d.order = append(d.order, sessionID)
+}
+
+func (d *DB) removeOrderLocked(sessionID string) {
+	for i, id := range d.order {
+		if id == sessionID {
+			d.order = append(d.order[:i], d.order[i+1:]...)
+			return
+		}
+	}
+}
+
+func (d *DB) evictLocked() {
+	if len(d.sessionDBs) < maxCachedSessionDBs {
+		return
+	}
+	victimIdx := -1
+	for i, id := range d.order {
+		if d.isBusy == nil || !d.isBusy(id) {
+			victimIdx = i
+			break
+		}
+	}
+	if victimIdx < 0 {
+		return
+	}
+	victimID := d.order[victimIdx]
+	d.order = append(d.order[:victimIdx], d.order[victimIdx+1:]...)
+	if cached, ok := d.sessionDBs[victimID]; ok {
+		cached.Close()
+		delete(d.sessionDBs, victimID)
+	}
+}
+
 // Session returns the cached connection for a session, opening and
 // initializing it on first use. projectID == "" means a scratch session.
 func (d *DB) Session(sessionID, projectID string) (*sql.DB, error) {
@@ -100,6 +151,7 @@ func (d *DB) Session(sessionID, projectID string) (*sql.DB, error) {
 	defer d.mu.Unlock()
 
 	if conn, ok := d.sessionDBs[sessionID]; ok {
+		d.touchLocked(sessionID)
 		return conn, nil
 	}
 
@@ -125,14 +177,9 @@ func (d *DB) Session(sessionID, projectID string) (*sql.DB, error) {
 		return nil, fmt.Errorf("init session db %s: %w", sessionID, err)
 	}
 
-	if len(d.sessionDBs) >= maxCachedSessionDBs {
-		for id, cached := range d.sessionDBs {
-			cached.Close()
-			delete(d.sessionDBs, id)
-			break
-		}
-	}
+	d.evictLocked()
 	d.sessionDBs[sessionID] = conn
+	d.order = append(d.order, sessionID)
 	return conn, nil
 }
 
@@ -141,6 +188,7 @@ func (d *DB) Session(sessionID, projectID string) (*sql.DB, error) {
 func (d *DB) CloseSession(sessionID string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	d.removeOrderLocked(sessionID)
 	if conn, ok := d.sessionDBs[sessionID]; ok {
 		conn.Close()
 		delete(d.sessionDBs, sessionID)
@@ -155,5 +203,6 @@ func (d *DB) Close() {
 		conn.Close()
 		delete(d.sessionDBs, id)
 	}
+	d.order = nil
 	d.global.Close()
 }

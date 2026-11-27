@@ -6,13 +6,15 @@ use std::rc::Rc;
 
 use console_core::{LeafPaneNode, WorkspaceNode};
 use gpui::{
-    App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
-    Styled, Window, div, prelude::FluentBuilder, px,
+    AnimationExt, App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    RenderOnce, SpringAnimation, SpringConfig, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
 use crate::theme::Theme;
 
+use super::tab_bar::NewTabMenuProvider;
 use super::{TabStripFollow, WorkspaceDrag, WorkspaceDropAction, WorkspaceTabBar};
+use crate::primitives::{ContextMenuHandle, MenuItem};
 
 /// Renders the content area for a leaf's active tab. The app shell supplies
 /// this (chat transcript + composer today); file/terminal/diff views can be
@@ -41,8 +43,12 @@ pub struct WorkspacePane {
         Rc<dyn Fn(String, WorkspaceDrag, WorkspaceDropAction, &mut Window, &mut App) + 'static>,
     on_close_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_new_tab: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    new_tab_menu: Option<NewTabMenuProvider>,
     tab_follow: Option<TabFollowProvider>,
+    dirty_paths: std::collections::HashSet<String>,
+    /// The pane just created by opening a tab in a new split; only the split
+    /// that holds it plays the grow-in animation.
+    new_pane: Option<String>,
     on_resize_split: Option<
         Rc<
             dyn Fn(
@@ -78,17 +84,26 @@ impl WorkspacePane {
             on_drop_tab,
             on_close_pane,
             on_focus_pane,
-            on_new_tab: None,
+            new_tab_menu: None,
             tab_follow: None,
+            dirty_paths: std::collections::HashSet::new(),
+            new_pane: None,
             on_resize_split: None,
         }
     }
 
-    pub fn with_new_tab(
+    /// Animate the split that holds `pane_id`, which was created this frame.
+    pub fn with_new_pane(mut self, pane_id: Option<String>) -> Self {
+        self.new_pane = pane_id;
+        self
+    }
+
+    pub fn with_new_tab_menu(
         mut self,
-        on_new_tab: impl Fn(String, &mut Window, &mut App) + 'static,
+        provider: impl Fn(&str) -> Option<(ContextMenuHandle, Rc<dyn Fn(&mut App) -> Vec<MenuItem>>)>
+        + 'static,
     ) -> Self {
-        self.on_new_tab = Some(Rc::new(on_new_tab));
+        self.new_tab_menu = Some(Rc::new(provider));
         self
     }
 
@@ -97,6 +112,12 @@ impl WorkspacePane {
         tab_follow: impl Fn(&str) -> Option<TabStripFollow> + 'static,
     ) -> Self {
         self.tab_follow = Some(Rc::new(tab_follow));
+        self
+    }
+
+    /// Supply the dirty file paths for the tab strip's modified dot.
+    pub fn with_dirty_paths(mut self, dirty_paths: std::collections::HashSet<String>) -> Self {
+        self.dirty_paths = dirty_paths;
         self
     }
 
@@ -191,8 +212,9 @@ fn render_leaf(
     >,
     on_close_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_new_tab: &Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    new_tab_menu: &Option<NewTabMenuProvider>,
     tab_follow: &Option<TabFollowProvider>,
+    dirty_paths: &std::collections::HashSet<String>,
     can_close_pane: bool,
     window: &mut Window,
     cx: &mut App,
@@ -217,9 +239,8 @@ fn render_leaf(
         move |pane_id, window, cx| (on_close_pane)(pane_id, window, cx),
     )
     .with_scroll_follow(follow);
-    if let Some(on_new) = on_new_tab.clone() {
-        bar = bar.with_new_tab(move |pane_id, window, cx| (on_new)(pane_id, window, cx));
-    }
+    bar = bar.with_dirty_paths(dirty_paths.clone());
+    bar = bar.with_new_tab_menu(new_tab_menu.clone());
 
     div()
         .id(ElementId::Name(
@@ -314,8 +335,9 @@ fn render_node(
     >,
     on_close_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_new_tab: &Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    new_tab_menu: &Option<NewTabMenuProvider>,
     tab_follow: &Option<TabFollowProvider>,
+    dirty_paths: &std::collections::HashSet<String>,
     on_resize_split: &Option<
         Rc<
             dyn Fn(
@@ -328,6 +350,7 @@ fn render_node(
         >,
     >,
     can_close_pane: bool,
+    new_pane: Option<&str>,
     window: &mut Window,
     cx: &mut App,
 ) -> gpui::AnyElement {
@@ -341,8 +364,9 @@ fn render_node(
             on_drop_tab,
             on_close_pane,
             on_focus_pane,
-            on_new_tab,
+            new_tab_menu,
             tab_follow,
+            dirty_paths,
             can_close_pane,
             window,
             cx,
@@ -355,6 +379,8 @@ fn render_node(
             let on_resize = on_resize_split.clone();
             let split_id = split.id.clone();
             let direction = split.direction;
+            let animate = new_pane
+                .is_some_and(|id| split.children[1].leaves().iter().any(|leaf| leaf.id == id));
 
             div()
                 .id(ElementId::Name(
@@ -384,10 +410,12 @@ fn render_node(
                             on_drop_tab,
                             on_close_pane,
                             on_focus_pane,
-                            on_new_tab,
+                            new_tab_menu,
                             tab_follow,
+                            dirty_paths,
                             on_resize_split,
                             can_close_pane,
+                            new_pane,
                             window,
                             cx,
                         )),
@@ -435,11 +463,26 @@ fn render_node(
                     div()
                         .min_w_0()
                         .min_h_0()
-                        .flex_grow(size_1)
-                        .flex_shrink(1.0)
-                        .flex_basis(gpui::relative(size_1 / 100.0))
+                        .overflow_hidden()
                         .flex()
                         .flex_col()
+                        .with_spring(
+                            ElementId::Name(format!("workspace-split-size1-{}", split.id).into()),
+                            {
+                                let spring =
+                                    SpringAnimation::new(SpringConfig::new(1800.0, 85.0, 1.0))
+                                        .to(size_1)
+                                        .with_epsilon(0.5);
+                                if animate { spring.from(0.0) } else { spring }
+                            },
+                            move |el, s| {
+                                let progress = (s / size_1.max(1.0)).clamp(0.0, 1.0);
+                                el.flex_grow(s)
+                                    .flex_shrink(1.0)
+                                    .flex_basis(gpui::relative(s / 100.0))
+                                    .opacity(progress)
+                            },
+                        )
                         .child(render_node(
                             &split.children[1],
                             active_pane_id,
@@ -449,10 +492,12 @@ fn render_node(
                             on_drop_tab,
                             on_close_pane,
                             on_focus_pane,
-                            on_new_tab,
+                            new_tab_menu,
                             tab_follow,
+                            dirty_paths,
                             on_resize_split,
                             can_close_pane,
+                            new_pane,
                             window,
                             cx,
                         )),
@@ -474,10 +519,12 @@ impl RenderOnce for WorkspacePane {
             &self.on_drop_tab,
             &self.on_close_pane,
             &self.on_focus_pane,
-            &self.on_new_tab,
+            &self.new_tab_menu,
             &self.tab_follow,
+            &self.dirty_paths,
             &self.on_resize_split,
             can_close_pane,
+            self.new_pane.as_deref(),
             window,
             cx,
         )

@@ -12,17 +12,17 @@
 
 use std::rc::Rc;
 
-use console_core::{ConsoleClient, GrepMatch, GrepOptions};
-use gpui::{
-    App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
-    KeyBinding, ParentElement, Render, SharedString, Styled, Window, div, prelude::FluentBuilder,
-    px, uniform_list,
-};
-use gpui_component::input::{Input, InputEvent, InputState};
-
 use crate::IconName;
 use crate::Theme;
+use crate::input::{ComposerEvent, ComposerInput};
 use crate::primitives::{app_icon, base_name, file_type_icon};
+use crate::tooltip::Tooltip;
+use console_core::{ConsoleClient, GrepCaseMode, GrepMatch, GrepMode, GrepOptions};
+use gpui::{
+    App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
+    KeyBinding, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window,
+    div, prelude::FluentBuilder, px, uniform_list,
+};
 
 /// Debounce for typed queries.
 const SEARCH_DEBOUNCE_MS: u64 = 150;
@@ -32,6 +32,7 @@ const SEARCH_DEBOUNCE_MS: u64 = 150;
 const ROW_HEIGHT_PX: f32 = 26.0;
 
 const CONTEXT: &str = "GlobalSearchPanel";
+const FIELD_CONTEXT: &str = "GlobalSearchPanel > ComposerInput";
 
 gpui::actions!(
     global_search_panel,
@@ -39,7 +40,7 @@ gpui::actions!(
 );
 
 pub(crate) fn init(cx: &mut App) {
-    let context: Option<&str> = Some(CONTEXT);
+    let context: Option<&str> = Some(FIELD_CONTEXT);
     cx.bind_keys([
         KeyBinding::new("escape", Cancel, context),
         KeyBinding::new("enter", ConfirmMatch, context),
@@ -58,11 +59,11 @@ struct FileGroup {
 fn group_matches(matches: Vec<GrepMatch>) -> Vec<FileGroup> {
     let mut groups: Vec<FileGroup> = Vec::new();
     for m in matches {
-        if let Some(last) = groups.last_mut() {
-            if last.rel_path == m.rel_path {
-                last.matches.push(m);
-                continue;
-            }
+        if let Some(last) = groups.last_mut()
+            && last.rel_path == m.rel_path
+        {
+            last.matches.push(m);
+            continue;
         }
         groups.push(FileGroup {
             rel_path: m.rel_path.clone(),
@@ -71,6 +72,13 @@ fn group_matches(matches: Vec<GrepMatch>) -> Vec<FileGroup> {
         });
     }
     groups
+}
+
+#[derive(Clone, Copy)]
+enum SearchToggle {
+    Case,
+    Word,
+    Regex,
 }
 
 /// A single flattened row: either a file heading or a match line, so the
@@ -82,17 +90,20 @@ enum SearchRow {
 
 pub struct GlobalSearchPanel {
     client: ConsoleClient,
-    query_input: Entity<InputState>,
+    query_input: Entity<ComposerInput>,
     focus_handle: FocusHandle,
     open: bool,
     root: Option<String>,
-    groups: Rc<Vec<FileGroup>>,
-    rows: Rc<Vec<SearchRow>>,
+    groups: Rc<[FileGroup]>,
+    rows: Rc<[SearchRow]>,
     selected_row: Option<usize>,
     total_matched: usize,
     matched_files: usize,
     has_searched: bool,
     loading: bool,
+    case_sensitive: bool,
+    whole_word: bool,
+    regex: bool,
     search_generation: u64,
     on_open_match: Option<Rc<dyn Fn(&str, u32, &mut Window, &mut App)>>,
     _subscriptions: Vec<gpui::Subscription>,
@@ -101,7 +112,11 @@ pub struct GlobalSearchPanel {
 impl GlobalSearchPanel {
     pub fn new(client: ConsoleClient, window: &mut Window, cx: &mut Context<Self>) -> Self {
         init(cx);
-        let query_input = cx.new(|cx| InputState::new(window, cx));
+        let query_input = cx.new(|cx| {
+            ComposerInput::new(window, cx)
+                .search_field()
+                .placeholder("Search in files…")
+        });
         let subscription = cx.subscribe_in(&query_input, window, Self::on_query_input_event);
         Self {
             client,
@@ -109,13 +124,16 @@ impl GlobalSearchPanel {
             focus_handle: cx.focus_handle(),
             open: false,
             root: None,
-            groups: Rc::new(Vec::new()),
-            rows: Rc::new(Vec::new()),
+            groups: Rc::from([]),
+            rows: Rc::from([]),
             selected_row: None,
             total_matched: 0,
             matched_files: 0,
             has_searched: false,
             loading: false,
+            case_sensitive: false,
+            whole_word: false,
+            regex: false,
             search_generation: 0,
             on_open_match: None,
             _subscriptions: vec![subscription],
@@ -135,16 +153,15 @@ impl GlobalSearchPanel {
     pub fn open(&mut self, root: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
         self.root = root;
         self.open = true;
-        self.groups = Rc::new(Vec::new());
-        self.rows = Rc::new(Vec::new());
+        self.groups = Rc::from([]);
+        self.rows = Rc::from([]);
         self.selected_row = None;
         self.total_matched = 0;
         self.matched_files = 0;
         self.has_searched = false;
         self.loading = false;
         self.search_generation += 1;
-        self.query_input
-            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.query_input.update(cx, |input, cx| input.clear(cx));
         window.focus(&self.query_input.focus_handle(cx), cx);
         cx.notify();
     }
@@ -160,15 +177,15 @@ impl GlobalSearchPanel {
 
     fn on_query_input_event(
         &mut self,
-        _input: &Entity<InputState>,
-        event: &InputEvent,
+        _input: &Entity<ComposerInput>,
+        event: &ComposerEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !matches!(event, InputEvent::Change) {
+        if !matches!(event, ComposerEvent::Edited) {
             return;
         }
-        let query = self.query_input.read(cx).value().to_string();
+        let query = self.query_input.read(cx).content().to_string();
         self.schedule_search(query, window, cx);
     }
 
@@ -177,8 +194,8 @@ impl GlobalSearchPanel {
         let generation = self.search_generation;
 
         if query.trim().is_empty() {
-            self.groups = Rc::new(Vec::new());
-            self.rows = Rc::new(Vec::new());
+            self.groups = Rc::from([]);
+            self.rows = Rc::from([]);
             self.selected_row = None;
             self.total_matched = 0;
             self.matched_files = 0;
@@ -195,6 +212,8 @@ impl GlobalSearchPanel {
         cx.notify();
 
         let client = self.client.clone();
+        let (case_sensitive, whole_word, regex) =
+            (self.case_sensitive, self.whole_word, self.regex);
         cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(SEARCH_DEBOUNCE_MS))
@@ -207,7 +226,20 @@ impl GlobalSearchPanel {
                 return;
             }
 
-            let options = GrepOptions::default();
+            let options = GrepOptions {
+                mode: if regex {
+                    GrepMode::Regex
+                } else {
+                    GrepMode::Plain
+                },
+                case_mode: if case_sensitive {
+                    GrepCaseMode::Sensitive
+                } else {
+                    GrepCaseMode::Smart
+                },
+                whole_word,
+                ..GrepOptions::default()
+            };
             let result = client.fs.grep(&root, &query, &options).await;
 
             let _ = this.update(cx, |this, cx| {
@@ -235,14 +267,14 @@ impl GlobalSearchPanel {
                         this.selected_row = rows
                             .iter()
                             .position(|row| matches!(row, SearchRow::Match { .. }));
-                        this.groups = Rc::new(groups);
-                        this.rows = Rc::new(rows);
+                        this.groups = Rc::from(groups);
+                        this.rows = Rc::from(rows);
                     }
                     Err(_) => {
                         this.total_matched = 0;
                         this.matched_files = 0;
-                        this.groups = Rc::new(Vec::new());
-                        this.rows = Rc::new(Vec::new());
+                        this.groups = Rc::from([]);
+                        this.rows = Rc::from([]);
                         this.selected_row = None;
                     }
                 }
@@ -280,6 +312,17 @@ impl GlobalSearchPanel {
                 });
             });
         }
+    }
+
+    fn toggle_option(&mut self, option: SearchToggle, window: &mut Window, cx: &mut Context<Self>) {
+        match option {
+            SearchToggle::Case => self.case_sensitive = !self.case_sensitive,
+            SearchToggle::Word => self.whole_word = !self.whole_word,
+            SearchToggle::Regex => self.regex = !self.regex,
+        }
+        let query = self.query_input.read(cx).content().to_string();
+        self.schedule_search(query, window, cx);
+        cx.notify();
     }
 
     fn move_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
@@ -352,16 +395,16 @@ fn render_highlighted_line(m: &GrepMatch, theme: &Theme) -> gpui::AnyElement {
         if start < cursor || start > end {
             continue;
         }
-        if start > cursor {
-            if let Some(text) = clean_content.get(cursor..start) {
-                segments.push(
-                    div()
-                        .text_color(theme.text_secondary)
-                        .whitespace_nowrap()
-                        .child(text.to_string())
-                        .into_any_element(),
-                );
-            }
+        if start > cursor
+            && let Some(text) = clean_content.get(cursor..start)
+        {
+            segments.push(
+                div()
+                    .text_color(theme.text_secondary)
+                    .whitespace_nowrap()
+                    .child(text.to_string())
+                    .into_any_element(),
+            );
         }
         if let Some(text) = clean_content.get(start..end) {
             segments.push(
@@ -376,16 +419,16 @@ fn render_highlighted_line(m: &GrepMatch, theme: &Theme) -> gpui::AnyElement {
         }
         cursor = end;
     }
-    if cursor < clean_content.len() {
-        if let Some(text) = clean_content.get(cursor..) {
-            segments.push(
-                div()
-                    .text_color(theme.text_secondary)
-                    .whitespace_nowrap()
-                    .child(text.to_string())
-                    .into_any_element(),
-            );
-        }
+    if cursor < clean_content.len()
+        && let Some(text) = clean_content.get(cursor..)
+    {
+        segments.push(
+            div()
+                .text_color(theme.text_secondary)
+                .whitespace_nowrap()
+                .child(text.to_string())
+                .into_any_element(),
+        );
     }
 
     div()
@@ -419,24 +462,37 @@ impl Render for GlobalSearchPanel {
         let empty_state: Option<gpui::AnyElement> = if !has_searched && !loading {
             Some(
                 div()
+                    .flex_1()
                     .flex()
                     .flex_col()
                     .items_center()
                     .justify_center()
-                    .py(px(48.0))
+                    .gap(px(8.0))
                     .text_size(px(12.0))
                     .text_color(theme.text_tertiary)
-                    .child("Search across every file in the project")
+                    .child(app_icon(IconName::Search, 22.0, theme.text_ghost))
+                    .child("Type to search in files")
+                    .into_any_element(),
+            )
+        } else if loading && rows.is_empty() {
+            Some(
+                div()
+                    .flex_1()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_tertiary)
+                    .child("Searching…")
                     .into_any_element(),
             )
         } else if has_searched && !loading && rows.is_empty() {
             Some(
                 div()
+                    .flex_1()
                     .flex()
-                    .flex_col()
                     .items_center()
                     .justify_center()
-                    .py(px(48.0))
                     .text_size(px(12.0))
                     .text_color(theme.text_tertiary)
                     .child("No matches")
@@ -446,10 +502,10 @@ impl Render for GlobalSearchPanel {
             None
         };
 
-        let header_text: Option<SharedString> = if has_searched && !loading && !rows.is_empty() {
+        let count_text: Option<SharedString> = if has_searched && !rows.is_empty() {
             Some(
                 format!(
-                    "{} match{} in {} file{}",
+                    "{} match{} · {} file{}",
                     total_matched,
                     if total_matched == 1 { "" } else { "es" },
                     matched_files,
@@ -462,6 +518,7 @@ impl Render for GlobalSearchPanel {
         };
 
         let entity = cx.entity().downgrade();
+        let toggle_entity = entity.clone();
         // Virtualized results: only the visible ~20 rows are ever built into
         // elements, so a 200-match response stays as cheap to scroll as a
         // 5-match one. Row content is looked up by index from `groups`/`rows`
@@ -484,7 +541,7 @@ impl Render for GlobalSearchPanel {
         div()
             .absolute()
             .inset_0()
-            .bg(gpui::black().opacity(0.35))
+            .bg(theme.backdrop)
             .flex()
             .justify_center()
             .items_start()
@@ -514,7 +571,7 @@ impl Render for GlobalSearchPanel {
                     .flex()
                     .flex_col()
                     .rounded(theme_radius(&theme))
-                    .bg(theme.surface)
+                    .bg(theme.menu)
                     .border_1()
                     .border_color(theme.border)
                     .overflow_hidden()
@@ -522,32 +579,82 @@ impl Render for GlobalSearchPanel {
                         div()
                             .flex_none()
                             .px(px(12.0))
+                            .py(px(8.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
                             .border_b_1()
                             .border_color(theme.border)
+                            .text_size(px(14.0))
+                            .child(div().flex_none().child(app_icon(
+                                IconName::Search,
+                                14.0,
+                                theme.text_tertiary,
+                            )))
+                            .child(div().flex_1().min_w_0().child(self.query_input.clone()))
+                            .when_some(count_text, |el, text| {
+                                el.child(
+                                    div()
+                                        .flex_none()
+                                        .text_size(px(11.0))
+                                        .text_color(theme.text_tertiary)
+                                        .child(text),
+                                )
+                            })
                             .child(
-                                Input::new(&self.query_input)
-                                    .prefix(app_icon(IconName::Search, 14.0, theme.text_tertiary))
-                                    .appearance(false)
-                                    .p_0(),
+                                div()
+                                    .flex_none()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(2.0))
+                                    .child(toggle_button(
+                                        "gsp-case",
+                                        "Aa",
+                                        self.case_sensitive,
+                                        SearchToggle::Case,
+                                        "Match case",
+                                        &theme,
+                                        &toggle_entity,
+                                    ))
+                                    .child(toggle_button(
+                                        "gsp-word",
+                                        "ab",
+                                        self.whole_word,
+                                        SearchToggle::Word,
+                                        "Match whole word",
+                                        &theme,
+                                        &toggle_entity,
+                                    ))
+                                    .child(toggle_button(
+                                        "gsp-regex",
+                                        ".*",
+                                        self.regex,
+                                        SearchToggle::Regex,
+                                        "Use regular expression",
+                                        &theme,
+                                        &toggle_entity,
+                                    )),
                             ),
                     )
-                    .when_some(header_text, |el, text| {
-                        el.child(
-                            div()
-                                .flex_none()
-                                .px(px(12.0))
-                                .py(px(6.0))
-                                .border_b_1()
-                                .border_color(theme.border)
-                                .text_size(px(11.0))
-                                .text_color(theme.text_tertiary)
-                                .child(text),
-                        )
-                    })
                     .when_some(empty_state, |el, empty| el.child(empty))
-                    .when(has_searched && !loading && row_count > 0, |el| {
-                        el.child(results_list)
-                    }),
+                    .when(has_searched && row_count > 0, |el| el.child(results_list))
+                    .child(
+                        div()
+                            .flex_none()
+                            .mt_auto()
+                            .px(px(12.0))
+                            .py(px(6.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(14.0))
+                            .border_t_1()
+                            .border_color(theme.border)
+                            .text_size(px(11.0))
+                            .text_color(theme.text_tertiary)
+                            .child("↑↓ navigate")
+                            .child("↵ open")
+                            .child("esc close"),
+                    ),
             )
             .into_any_element()
     }
@@ -571,6 +678,12 @@ fn render_search_row(
             let Some(group) = groups.get(*group_ix) else {
                 return div().w_full().h(px(ROW_HEIGHT_PX)).into_any_element();
             };
+            let dir = group
+                .rel_path
+                .strip_suffix(group.file_name.as_str())
+                .unwrap_or("")
+                .trim_end_matches('/')
+                .to_string();
             div()
                 .w_full()
                 .h(px(ROW_HEIGHT_PX))
@@ -579,20 +692,34 @@ fn render_search_row(
                 .items_center()
                 .gap(px(6.0))
                 .px(px(10.0))
+                .bg(theme.raised.opacity(0.5))
                 .child(file_type_icon(&group.rel_path, 13.0))
                 .child(
                     div()
+                        .flex_none()
                         .text_size(px(12.0))
-                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
                         .text_color(theme.text)
                         .child(group.file_name.clone()),
                 )
                 .child(
                     div()
+                        .flex_1()
+                        .min_w_0()
                         .text_size(px(11.0))
                         .text_color(theme.text_tertiary)
                         .truncate()
-                        .child(group.rel_path.clone()),
+                        .child(dir),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .px(px(6.0))
+                        .rounded(px(8.0))
+                        .bg(theme.border)
+                        .text_size(px(10.0))
+                        .text_color(theme.text_secondary)
+                        .child(group.matches.len().to_string()),
                 )
                 .into_any_element()
         }
@@ -613,9 +740,16 @@ fn render_search_row(
                 .flex_row()
                 .items_center()
                 .gap(px(8.0))
-                .px(px(14.0))
+                .pl(px(11.0))
+                .pr(px(14.0))
+                .border_l_2()
+                .border_color(if selected {
+                    theme.accent
+                } else {
+                    gpui::transparent_black()
+                })
                 .cursor_pointer()
-                .when(selected, |el| el.bg(theme.raised))
+                .when(selected, |el| el.bg(theme.accent.opacity(0.08)))
                 .hover(|el| el.bg(theme.raised))
                 .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
                     if let Some(panel) = entity.upgrade() {
@@ -643,6 +777,43 @@ fn render_search_row(
                 .into_any_element()
         }
     }
+}
+
+fn toggle_button(
+    id: &'static str,
+    label: &'static str,
+    active: bool,
+    option: SearchToggle,
+    tooltip: &'static str,
+    theme: &Theme,
+    entity: &gpui::WeakEntity<GlobalSearchPanel>,
+) -> impl IntoElement {
+    let entity = entity.clone();
+    div()
+        .id(id)
+        .px(px(5.0))
+        .h(px(20.0))
+        .flex()
+        .items_center()
+        .rounded(px(4.0))
+        .cursor_pointer()
+        .text_size(px(11.0))
+        .font_weight(gpui::FontWeight::SEMIBOLD)
+        .text_color(if active {
+            theme.accent
+        } else {
+            theme.text_tertiary
+        })
+        .when(active, |el| el.bg(theme.accent.opacity(0.15)))
+        .hover(|el| el.bg(theme.raised))
+        .tooltip(Tooltip::text(tooltip))
+        .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
+            cx.stop_propagation();
+            if let Some(panel) = entity.upgrade() {
+                panel.update(cx, |panel, cx| panel.toggle_option(option, window, cx));
+            }
+        })
+        .child(label)
 }
 
 fn theme_radius(_theme: &Theme) -> gpui::Pixels {

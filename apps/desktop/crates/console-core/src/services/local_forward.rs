@@ -67,9 +67,31 @@ impl LocalForwardManager {
 
     /// True when the backend runs on this machine: the remote port is already
     /// local, so no listener is needed.
+    ///
+    /// The loopback literals are a fast path; a hostname or LAN address that
+    /// still resolves to this machine must also count as local, or the
+    /// forwarder binds this machine's dev ports and shadows the servers it
+    /// is meant to expose.
     pub async fn is_local_backend(&self) -> bool {
         let base = self.transport.base_url().await.to_lowercase();
-        base.contains("://localhost") || base.contains("://127.0.0.1") || base.contains("://[::1]")
+        if base.contains("://localhost")
+            || base.contains("://127.0.0.1")
+            || base.contains("://[::1]")
+        {
+            return true;
+        }
+        let Some(host) = url_host(&base) else {
+            return false;
+        };
+        // IP literals need no resolution; hostnames resolve and any loopback
+        // answer means the backend is this machine.
+        if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+            return ip.is_loopback();
+        }
+        match tokio::net::lookup_host((host.as_str(), 0u16)).await {
+            Ok(mut addrs) => addrs.any(|addr| addr.ip().is_loopback()),
+            Err(_) => false,
+        }
     }
 
     /// Reconcile listeners with the latest remote port list.
@@ -145,12 +167,27 @@ impl LocalForwardManager {
         }
     }
 
-    /// Bind 127.0.0.1:preferred (usually the remote number), falling back to
-    /// an OS-picked ephemeral port. Never binds 0.0.0.0.
+    /// Bind 127.0.0.1:preferred (usually the remote number) when it is free,
+    /// falling back to an OS-picked ephemeral port. Never binds 0.0.0.0 and
+    /// never shadows an existing local listener: on macOS a specific bind
+    /// succeeds even while a wildcard listener holds the port, so the probe —
+    /// not the bind result — decides between preferred and ephemeral.
     async fn bind_local(&self, preferred: u16) -> Option<(u16, JoinHandle<()>)> {
-        let listener = match TcpListener::bind(format!("127.0.0.1:{preferred}")).await {
-            Ok(listener) => listener,
-            Err(_) => TcpListener::bind("127.0.0.1:0").await.ok()?,
+        let mut listener = None;
+        if preferred != 0 {
+            if !is_port_taken(preferred).await {
+                listener = TcpListener::bind(format!("127.0.0.1:{preferred}"))
+                    .await
+                    .ok();
+            } else {
+                log::warn!(
+                    "Port {preferred} already has a local listener; forwarding localhost:<ephemeral> instead of shadowing it"
+                );
+            }
+        }
+        let listener = match listener {
+            Some(listener) => listener,
+            None => TcpListener::bind("127.0.0.1:0").await.ok()?,
         };
         let local_port = listener.local_addr().ok()?.port();
         let transport = self.transport.clone();
@@ -159,6 +196,33 @@ impl LocalForwardManager {
         });
         Some((local_port, task))
     }
+}
+
+/// True when something already listens on 127.0.0.1:port.
+async fn is_port_taken(port: u16) -> bool {
+    tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .is_ok()
+}
+
+/// Hostname part of a base URL: scheme, userinfo, port, and path stripped.
+fn url_host(base: &str) -> Option<String> {
+    let rest = base.split_once("://")?.1;
+    let rest = rest.split(['/', '?', '#']).next()?;
+    let host = match rest.rsplit_once('@') {
+        Some((_, host)) => host,
+        None => rest,
+    };
+    if let Some(stripped) = host.strip_prefix('[') {
+        let (inside, _) = stripped.split_once(']')?;
+        return Some(inside.to_string());
+    }
+    // Bracketed IPv6 handled above; otherwise one colon separates the port.
+    let host = match host.split_once(':') {
+        Some((host, port)) if !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) => host,
+        _ => host,
+    };
+    Some(host.to_string())
 }
 
 /// Accept local browser connections and tunnel each one to the VPS.

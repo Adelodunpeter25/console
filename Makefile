@@ -4,6 +4,10 @@
 # resolveUpgradeTarget's CONSOLE_INSTALL_DIR fallback in upgrade.go).
 INSTALL_DIR ?= $(HOME)/.local/bin
 
+# Dev binaries run from the go-build cache or the repo root, not the install
+# dir, so point libvoxl's runtime loader at the copy fetch-voxl-lib.sh stages.
+VOXL_LIB ?= $(CURDIR)/apps/server-go/third_party/voxl/libvoxl.$(if $(filter Darwin,$(shell uname -s)),dylib,so)
+
 # Default target
 .DEFAULT_GOAL := help
 
@@ -25,7 +29,7 @@ REMOTE_PAIR = case "$$(echo $$CONSOLE_REMOTE | tr A-Z a-z)" in 0|off|false|no|di
 dev-server:
 	@CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) go -C apps/server-go run ./cmd/console pair --dev
 	@$(REMOTE_PAIR)
-	CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) \
+	CONSOLE_ENV=dev VOXL_LIB_PATH=$(VOXL_LIB) $(if $(PORT),PORT=$(PORT),) \
 	go -C apps/server-go run ./cmd/server
 
 ## dev-console: Start the console agent as a background daemon (survives closing terminal)
@@ -35,7 +39,7 @@ dev-server:
 ## ~/.console-dev, matching the desktop's separate dev bundle identifier.
 ## Builds the Go binary first.
 dev-console: build-server
-	CONSOLE_ENV=$(if $(PORT),,dev) ./console start -p $(if $(PORT),$(PORT),3000)
+	CONSOLE_ENV=$(if $(PORT),,dev) VOXL_LIB_PATH=$(VOXL_LIB) ./console start -p $(if $(PORT),$(PORT),3000)
 
 ## dev-mobile: Build and run the native Android app in dev mode
 ##   Installs debug APK and launches the app on Android emulator/device
@@ -73,10 +77,20 @@ build-server:
 
 ## install: Build the Go server from source and swap it into $(INSTALL_DIR)
 ##   (default ~/.local/bin), stopping and restarting the daemon around the
-##   swap. Same effect as `console upgrade` but from your local checkout
-##   instead of downloading a release — for testing unreleased fixes.
+##   swap, and stage the fff + cua native sidecars next to the binary (the
+##   fetch scripts download this host's builds from the pinned releases).
+##   Same effect as `console upgrade` but from your local checkout instead
+##   of downloading a release — for testing unreleased fixes.
 install: build-server
 	@mkdir -p "$(INSTALL_DIR)"
+	@bash apps/server-go/scripts/fetch-fff-lib.sh && \
+		bash apps/server-go/scripts/fetch-cua-lib.sh && \
+		cp apps/server-go/third_party/fff/libfff_c.* "$(INSTALL_DIR)/" && \
+		cp apps/server-go/third_party/cua/*driver_sdk.* "$(INSTALL_DIR)/" || \
+		echo "NOTE: sidecar fetch failed; file search and computer-use may be unavailable (rerun scripts/fetch-fff-lib.sh and fetch-cua-lib.sh)." >&2
+	@bash apps/server-go/scripts/fetch-voxl-lib.sh && \
+		cp apps/server-go/third_party/voxl/libvoxl.* "$(INSTALL_DIR)/" || \
+		echo "NOTE: voxl fetch failed; Computer streaming tab may be unavailable (rerun scripts/fetch-voxl-lib.sh)." >&2
 	@was_running=0; \
 	if [ -x "$(INSTALL_DIR)/console" ] && "$(INSTALL_DIR)/console" status | grep -q "is running"; then \
 		was_running=1; \
@@ -124,6 +138,6 @@ help:
 	@echo "  make build-desktop     - Build the GPUI desktop app for production"
 	@echo "  make desktop-check     - Fast typecheck of the GPUI desktop app"
 	@echo "  make build-server      - Compile the multi-call console binary (CLI + server)"
-	@echo "  make install           - Build from source and install/restart the local console daemon (INSTALL_DIR=path)"
+	@echo "  make install           - Build from source, install/restart the daemon, and stage fff/cua sidecars (INSTALL_DIR=path)"
 	@echo "  make build-android     - Build the native Android app for release"
 	@echo "  make check             - Vet the Go server"

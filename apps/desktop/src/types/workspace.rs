@@ -9,13 +9,17 @@ use console_ui::workspace::TabStripFollow;
 use console_ui::{ComposerInput, ContextMenuHandle, PickerTab, TranscriptView};
 use gpui::Entity;
 
-/// One staged line comment in a pane. A draft is the card opened by a gutter
-/// drag; committing it keeps the same card in the `Added` state and stages it
-/// in the pane's composer.
+/// A line comment on a file or a diff. A draft is the card opened by a gutter
+/// drag; committing it saves it to the server and keeps the same card in the
+/// `Added` state. `staged` comments additionally ride the pane's next message.
 pub(crate) struct FileComment {
     pub(crate) id: u64,
-    /// Stable across devices: the key the synced draft identifies it by.
-    pub(crate) sync_id: String,
+    /// The server row; `None` until the first save lands.
+    pub(crate) server_id: Option<String>,
+    /// The lines are numbered in the pre-change file (a removed diff row).
+    pub(crate) old_side: bool,
+    /// Session key (`session_id` or `"new_chat"`) this comment is staged for.
+    pub(crate) staged_session_id: Option<String>,
     /// Absolute path; prompts render it project-relative.
     pub(crate) path: String,
     pub(crate) start_line: u32,
@@ -39,6 +43,10 @@ pub(crate) enum FileCommentState {
 }
 
 impl FileComment {
+    pub(crate) fn is_staged_for(&self, session_key: &str) -> bool {
+        self.staged_session_id.as_deref() == Some(session_key)
+    }
+
     /// `address.rs +23-35` (or `+23` for one line), the chip/card label.
     pub(crate) fn label(&self) -> String {
         let name = std::path::Path::new(&self.path)
@@ -46,9 +54,9 @@ impl FileComment {
             .and_then(|name| name.to_str())
             .unwrap_or(&self.path);
         if self.start_line == self.end_line {
-            format!("{name} +{}", self.start_line)
+            format!("{name} {}", self.start_line)
         } else {
-            format!("{name} +{}-{}", self.start_line, self.end_line)
+            format!("{name} {}-{}", self.start_line, self.end_line)
         }
     }
 }
@@ -67,25 +75,22 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) active_picker_tab: PickerTab,
     pub(crate) approval_mode: ApprovalMode,
     pub(crate) thinking_level: Option<ThinkingLevel>,
-    /// Most-recently-used approval modes for this pane, newest last. Updated
-    /// by every mode change (picker or Shift+Tab) and read by the Shift+Tab
-    /// toggle to jump back to where the user was. Session-local on purpose:
-    /// it is a navigation aid, not persisted state.
-    pub(crate) approval_mode_history: Vec<ApprovalMode>,
     pub(crate) model_menu: ContextMenuHandle,
-    pub(crate) approval_menu: ContextMenuHandle,
+    pub(crate) thinking_menu: ContextMenuHandle,
     pub(crate) usage_menu: ContextMenuHandle,
     pub(crate) tasks_menu: ContextMenuHandle,
     pub(crate) subagents_menu: ContextMenuHandle,
     pub(crate) shells_menu: ContextMenuHandle,
+    pub(crate) automations_menu: ContextMenuHandle,
     pub(crate) selected_project_id: Option<String>,
-    pub(crate) branches: Rc<Vec<GitBranchInfo>>,
+    pub(crate) branches: Rc<[GitBranchInfo]>,
     pub(crate) branch_loaded: bool,
     pub(crate) branch_is_git_repository: bool,
     /// Folder `branches` was loaded for (the session's own cwd, which for a
     /// worktree session differs from its project path). A response for any
     /// other folder is stale and dropped.
     pub(crate) branch_cwd: Option<String>,
+    pub(crate) branch_request_seq: u64,
     pub(crate) branch_pending: bool,
     pub(crate) project_menu: ContextMenuHandle,
     pub(crate) branch_menu: ContextMenuHandle,
@@ -96,10 +101,13 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) model_search: Entity<ComposerInput>,
     /// The session id whose messages are currently loaded in this pane's transcript.
     pub(crate) loaded_session_id: Option<String>,
-    /// Line comments staged for this pane's next message. They stay here
-    /// (with their inline cards) until removed, and every send includes the
-    /// committed ones.
+    /// The project whose saved comments `file_comments` holds.
+    pub(crate) comments_project: Option<String>,
+    /// The project's saved comments plus any card still being typed.
     pub(crate) file_comments: Vec<FileComment>,
+    /// `(server_id, session_key)` of comments staged in a pane that has since
+    /// closed. The next load of this pane's comments restores their staged session.
+    pub(crate) pending_staged_comments: Vec<(String, String)>,
     pub(crate) next_file_comment_id: u64,
     /// Retained tab strip scroll-follow state for this pane.
     pub(crate) tab_strip_follow: TabStripFollow,

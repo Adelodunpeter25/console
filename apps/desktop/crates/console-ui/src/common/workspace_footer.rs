@@ -10,25 +10,36 @@
 
 use std::rc::Rc;
 
-use console_core::{ContextSnapshot, GitBranchInfo, ProjectInfo, UsageReport};
+use console_core::{ContextSnapshot, GitBranchInfo, GithubRepo, ProjectInfo, UsageReport};
 use gpui::{
     App, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px,
 };
 
-use crate::primitives::{
-    ContextMenuHandle, IconName, MenuAlign, MenuChip, MenuItem, dropdown_menu,
-};
+use crate::primitives::{ContextMenuHandle, IconName, MenuAlign, MenuChip, dropdown_menu};
 use crate::theme::Theme;
+
+use super::github_menu::github_menu_section;
+use super::picker_menus::{ProjectMenuExtras, branch_menu_section, project_menu_section};
 
 #[derive(IntoElement)]
 pub struct WorkspaceFooter {
-    projects: Rc<Vec<ProjectInfo>>,
+    projects: Rc<[ProjectInfo]>,
     selected_project_id: Option<String>,
-    branches: Rc<Vec<GitBranchInfo>>,
+    branches: Rc<[GitBranchInfo]>,
     branch_loaded: bool,
     is_git_repository: bool,
     branch_pending: bool,
     project_locked: bool,
+    /// Repositories from the connected GitHub account for the menu's GitHub
+    /// section. None until the first fetch; `github_repos_error` then says
+    /// why (None error + None repos means not connected).
+    github_repos: Option<Rc<[GithubRepo]>>,
+    github_repos_loading: bool,
+    github_repos_error: Option<String>,
+    /// The repo a GitHub tap is cloning right now, if any. Shown on the
+    /// project chip ("Cloning <name>…") because the menu itself closes on
+    /// tap — without this, a long clone looks like nothing happened.
+    repo_cloning: Option<String>,
     project_menu: ContextMenuHandle,
     branch_menu: ContextMenuHandle,
     usage_menu: ContextMenuHandle,
@@ -38,6 +49,9 @@ pub struct WorkspaceFooter {
     on_select_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_no_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_open_github_repo: Rc<dyn Fn(GithubRepo, &mut Window, &mut App) + 'static>,
+    on_refresh_github_repos: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_connect_github: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_select_branch: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_worktree: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
@@ -45,9 +59,9 @@ pub struct WorkspaceFooter {
 impl WorkspaceFooter {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        projects: Rc<Vec<ProjectInfo>>,
+        projects: Rc<[ProjectInfo]>,
         selected_project_id: Option<String>,
-        branches: Rc<Vec<GitBranchInfo>>,
+        branches: Rc<[GitBranchInfo]>,
         branch_loaded: bool,
         is_git_repository: bool,
         branch_pending: bool,
@@ -60,6 +74,9 @@ impl WorkspaceFooter {
         on_select_project: impl Fn(String, &mut Window, &mut App) + 'static,
         on_new_project: impl Fn(&mut Window, &mut App) + 'static,
         on_no_project: impl Fn(&mut Window, &mut App) + 'static,
+        on_open_github_repo: impl Fn(GithubRepo, &mut Window, &mut App) + 'static,
+        on_refresh_github_repos: impl Fn(&mut Window, &mut App) + 'static,
+        on_connect_github: impl Fn(&mut Window, &mut App) + 'static,
         on_select_branch: impl Fn(String, &mut Window, &mut App) + 'static,
         on_new_worktree: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
@@ -71,6 +88,10 @@ impl WorkspaceFooter {
             is_git_repository,
             branch_pending,
             project_locked: false,
+            github_repos: None,
+            github_repos_loading: false,
+            github_repos_error: None,
+            repo_cloning: None,
             project_menu,
             branch_menu,
             usage_menu,
@@ -80,6 +101,9 @@ impl WorkspaceFooter {
             on_select_project: Rc::new(on_select_project),
             on_new_project: Rc::new(on_new_project),
             on_no_project: Rc::new(on_no_project),
+            on_open_github_repo: Rc::new(on_open_github_repo),
+            on_refresh_github_repos: Rc::new(on_refresh_github_repos),
+            on_connect_github: Rc::new(on_connect_github),
             on_select_branch: Rc::new(on_select_branch),
             on_new_worktree: Rc::new(on_new_worktree),
         }
@@ -92,6 +116,27 @@ impl WorkspaceFooter {
         self.project_locked = locked;
         self
     }
+
+    /// Supply the GitHub section's data: the connected account's repos, plus
+    /// loading and error flags. Without this the menu simply has no GitHub
+    /// section.
+    pub fn github_section(
+        mut self,
+        repos: Option<Rc<[GithubRepo]>>,
+        loading: bool,
+        error: Option<String>,
+    ) -> Self {
+        self.github_repos = repos;
+        self.github_repos_loading = loading;
+        self.github_repos_error = error;
+        self
+    }
+
+    /// The repo a GitHub tap is cloning right now, if any.
+    pub fn repo_cloning(mut self, name: Option<String>) -> Self {
+        self.repo_cloning = name;
+        self
+    }
 }
 
 impl RenderOnce for WorkspaceFooter {
@@ -101,9 +146,15 @@ impl RenderOnce for WorkspaceFooter {
             .selected_project_id
             .as_deref()
             .and_then(|id| self.projects.iter().find(|project| project.id == id));
-        let project_label = selected_project
-            .map(|project| project.name.clone())
-            .unwrap_or_else(|| "No project".to_owned());
+        let project_label = if let Some(name) = &self.repo_cloning {
+            // The menu closes on tap, so this chip is the only place the
+            // running clone is visible.
+            format!("Cloning {name}…")
+        } else {
+            selected_project
+                .map(|project| project.name.clone())
+                .unwrap_or_else(|| "No project".to_owned())
+        };
         let current_branch = self
             .branches
             .iter()
@@ -144,36 +195,31 @@ impl RenderOnce for WorkspaceFooter {
                     &self.project_menu,
                     MenuAlign::AboveLeft,
                     move |_| {
-                        let mut items = projects
-                            .iter()
-                            .map(|project| {
-                                let project_id = project.id.clone();
-                                let on_select_project = on_select_project.clone();
-                                let selected = Some(project.id.as_str()) == selected_id.as_deref();
-                                MenuItem::new(project.name.clone(), move |window, cx| {
-                                    (on_select_project)(project_id.clone(), window, cx);
-                                })
-                                .selected(selected)
-                            })
-                            .collect::<Vec<_>>();
-                        if !items.is_empty() {
-                            items.push(MenuItem::Separator);
-                        }
-                        let on_new_project = on_new_project.clone();
-                        let on_no_project = on_no_project.clone();
-                        items.push(
-                            MenuItem::new("New project…", move |window, cx| {
-                                (on_new_project)(window, cx);
-                            })
-                            .icon(IconName::FolderNew.path()),
+                        let mut items = project_menu_section(
+                            projects.clone(),
+                            selected_id.clone(),
+                            false,
+                            &on_select_project,
+                            Some(&ProjectMenuExtras {
+                                on_new_project: on_new_project.clone(),
+                                on_no_project: on_no_project.clone(),
+                                none_selected: selected_id.is_none(),
+                            }),
                         );
-                        items.push(
-                            MenuItem::new("No project", move |window, cx| {
-                                (on_no_project)(window, cx);
-                            })
-                            .icon(IconName::X.path())
-                            .selected(selected_id.is_none()),
-                        );
+                        let github_repos = self.github_repos.clone();
+                        let github_repos_loading = self.github_repos_loading;
+                        let github_repos_error = self.github_repos_error.clone();
+                        let on_open_github_repo = self.on_open_github_repo.clone();
+                        let on_refresh_github_repos = self.on_refresh_github_repos.clone();
+                        let on_connect_github = self.on_connect_github.clone();
+                        items.extend(github_menu_section(
+                            github_repos,
+                            github_repos_loading,
+                            github_repos_error.is_some(),
+                            &on_open_github_repo,
+                            &on_refresh_github_repos,
+                            &on_connect_github,
+                        ));
                         items
                     },
                 )
@@ -217,33 +263,19 @@ impl RenderOnce for WorkspaceFooter {
                 &self.branch_menu,
                 MenuAlign::AboveLeft,
                 move |_| {
-                    let mut items = branches
-                        .iter()
-                        .map(|branch| {
-                            let branch_name = branch.name.clone();
-                            let on_select_branch = on_select_branch.clone();
-                            MenuItem::new(branch.name.clone(), move |window, cx| {
-                                (on_select_branch)(branch_name.clone(), window, cx);
-                            })
-                            .selected(branch.current)
-                        })
-                        .collect::<Vec<_>>();
-                    if items.is_empty() {
-                        items.push(MenuItem::new("No branches", |_, _| {}).disabled(true));
-                    } else {
-                        // New worktree spawns a session rooted in a fresh
-                        // worktree (server auto-names the branch) and opens
-                        // it — it never re-roots the current session.
-                        items.push(MenuItem::Separator);
-                        let on_new_worktree = on_new_worktree.clone();
-                        items.push(
-                            MenuItem::new("New worktree…", move |window, cx| {
-                                (on_new_worktree)(window, cx);
-                            })
-                            .icon(IconName::GitBranch.path()),
-                        );
-                    }
-                    items
+                    let is_current: Rc<dyn Fn(&GitBranchInfo) -> bool> =
+                        Rc::new(|branch: &GitBranchInfo| branch.current);
+                    // New worktree spawns a session rooted in a fresh worktree
+                    // (server auto-names the branch) and opens it — it never
+                    // re-roots the current session.
+                    branch_menu_section(
+                        branches.clone(),
+                        &is_current,
+                        &on_select_branch,
+                        false,
+                        &[],
+                        Some((&on_new_worktree, "New worktree…")),
+                    )
                 },
             )
         } else {

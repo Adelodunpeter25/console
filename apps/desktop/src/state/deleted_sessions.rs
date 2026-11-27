@@ -45,6 +45,9 @@ impl ConsoleDesktopApp {
                 let _ = cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            // The chat is gone for good, so its remembered
+                            // position is dropped with it.
+                            this.forget_transcript_scroll_position(&session_id, cx);
                             this.refresh_deleted_sessions(cx);
                             crate::window::broadcast_settings_refresh(cx);
                             cx.notify();

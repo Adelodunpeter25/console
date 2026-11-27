@@ -5,13 +5,16 @@ package tools
 import (
 	"context"
 	"fmt"
+	"github.com/MoeForge/moego/regexp"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 const (
@@ -22,8 +25,8 @@ const (
 
 type bashInput struct {
 	Command      string            `json:"command" jsonschema:"required,description=Shell command to execute"`
-	Cwd          string            `json:"cwd,omitempty" jsonschema:"description=Working directory for the command. Defaults to the current directory."`
-	TimeoutMs    int               `json:"timeoutMs,omitempty" jsonschema:"description=Timeout in milliseconds. Sync mode: time the tool call waits (default 30s). Background mode: max job lifetime (default 10min). Max: 20min."`
+	Cwd          string            `json:"cwd,omitempty" jsonschema:"description=Working directory for the command. Defaults to the project directory."`
+	TimeoutMs    int               `json:"timeoutMs,omitempty" jsonschema:"description=Foreground: how long to wait for the command (default 30s, max 20min); if it is still running then, it keeps running as a background job and you are notified when it finishes. Background: optional cap on the job lifetime; omit it for dev servers and other open-ended jobs."`
 	Env          map[string]string `json:"env,omitempty" jsonschema:"description=Additional environment variables for this command"`
 	Background   bool              `json:"background,omitempty" jsonschema:"description=Start as a background job and return immediately with a jobId. You are notified automatically with the exit code and output when it finishes, so do not poll or wait: keep working on other things, or end your turn and tell the user what you are waiting on. The start response is NOT an exit result."`
 	ParentRunID  string            `json:"-"`
@@ -35,6 +38,51 @@ func truncateOutput(output string, maxBytes int, label string) string {
 		return output
 	}
 	return output[:maxBytes] + fmt.Sprintf("\n\n[... %s truncated: %d bytes total, showing first %d bytes ...]", label, len(output), maxBytes)
+}
+
+// bashSection renders one stdout/stderr section. Output over the cap is
+// spilled raw to a per-session file and the tail is shown (errors print at
+// the end), with secrets scrubbed before anything is written or returned.
+func bashSection(sessionID, label, output string) string {
+	redacted := github.RedactSecrets(output)
+	if len(redacted) <= bashMaxOutputBytes {
+		return cleanCommandOutput(redacted)
+	}
+	path, err := utils.SpillFile(utils.SpillDir(sessionID), "bash", "."+label+".log", redacted)
+	if err != nil {
+		return truncateOutput(cleanCommandOutput(redacted), bashMaxOutputBytes, label)
+	}
+	return fmt.Sprintf("%s: %s, %d lines, full output saved to %s\n--- last %s ---\n%s",
+		label, utils.HumanBytes(len(redacted)), countLines(redacted), path,
+		utils.HumanBytes(bashMaxOutputBytes), cleanCommandOutput(utils.TailOutput(redacted, bashMaxOutputBytes)))
+}
+
+var (
+	ansiCSIRe    = regexp.MustCompile("\x1b\\[[0-9;?]*[ -/]*[@-~]")
+	ansiOSCRe    = regexp.MustCompile("\x1b\\][^\x07\x1b]*(?:\x07|\x1b\\\\)")
+	ansiSimpleRe = regexp.MustCompile("\x1b[@-Z\\-_]")
+)
+
+// cleanCommandOutput strips ANSI escapes and collapses carriage-return
+// progress redraws (keep the last frame of each line) before the text
+// reaches the model. The spill file keeps the raw bytes.
+func cleanCommandOutput(output string) string {
+	if !strings.ContainsAny(output, "\x1b\r") {
+		return output
+	}
+	out := ansiOSCRe.ReplaceAllString(output, "")
+	out = ansiCSIRe.ReplaceAllString(out, "")
+	out = ansiSimpleRe.ReplaceAllString(out, "")
+	if strings.Contains(out, "\r") {
+		lines := strings.Split(out, "\n")
+		for i, line := range lines {
+			if idx := strings.LastIndex(line, "\r"); idx >= 0 {
+				lines[i] = line[idx+1:]
+			}
+		}
+		out = strings.Join(lines, "\n")
+	}
+	return out
 }
 
 func mergedEnv(overrides map[string]string) []string {
@@ -64,11 +112,21 @@ func NewBashTool(jobs *terminal.BashJobManager, ownerSessionID string, parentIDs
 	return NewSandboxedBashTool(SandboxOff, jobs, ownerSessionID, parentIDs...)
 }
 
+// NewBashToolWithCwd builds the "bash" tool with a session default working directory.
+func NewBashToolWithCwd(jobs *terminal.BashJobManager, defaultCwd, ownerSessionID string, parentIDs ...string) Tool {
+	return NewSandboxedBashToolWithCwd(SandboxOff, jobs, defaultCwd, ownerSessionID, parentIDs...)
+}
+
 // NewSandboxedBashTool is NewBashTool for a given sandbox mode. Plan mode passes
 // SandboxReadOnly. Background jobs are refused in that mode: a job outlives the
 // call, which is hard to justify in a read-only plan, and the job manager is
 // not sandbox-aware.
 func NewSandboxedBashTool(mode SandboxMode, jobs *terminal.BashJobManager, ownerSessionID string, parentIDs ...string) Tool {
+	return NewSandboxedBashToolWithCwd(mode, jobs, "", ownerSessionID, parentIDs...)
+}
+
+// NewSandboxedBashToolWithCwd is NewSandboxedBashTool with a default working directory fallback.
+func NewSandboxedBashToolWithCwd(mode SandboxMode, jobs *terminal.BashJobManager, defaultCwd, ownerSessionID string, parentIDs ...string) Tool {
 	parentRunID, parentCallID := "", ""
 	if len(parentIDs) > 0 {
 		parentRunID = parentIDs[0]
@@ -76,16 +134,20 @@ func NewSandboxedBashTool(mode SandboxMode, jobs *terminal.BashJobManager, owner
 	if len(parentIDs) > 1 {
 		parentCallID = parentIDs[1]
 	}
-	return NewTool("bash", "Run a shell command and return output. Use for builds, tests, or git — not for reading or editing files. Long-running commands (builds, test suites, dev servers): background=true starts a managed job and returns immediately; you are notified automatically with the result when it finishes, even if you end your turn.", TierExec,
+	return NewTool("bash", "Run a shell command and return output. Never use this for searching or reading files: use grep(), glob(), list(), readFile and editFile instead of shell grep, rg, find, ls or cat. Long-running commands (builds, test suites, dev servers): background=true returns immediately and the result is delivered when it finishes. A foreground command still running at its timeout keeps running as a background job — you're notified when it finishes.", TierExec,
 		func(ctx context.Context, in bashInput) (any, error) {
 			if in.Command == "" {
 				return nil, NewToolError("command is required")
 			}
 			cwd := in.Cwd
 			if cwd != "" {
-				if abs, err := filepath.Abs(cwd); err == nil {
+				if !filepath.IsAbs(cwd) && defaultCwd != "" {
+					cwd = filepath.Join(defaultCwd, cwd)
+				} else if abs, err := filepath.Abs(cwd); err == nil {
 					cwd = abs
 				}
+			} else if defaultCwd != "" {
+				cwd = defaultCwd
 			} else if wd, err := os.Getwd(); err == nil {
 				cwd = wd
 			}
@@ -97,13 +159,9 @@ func NewSandboxedBashTool(mode SandboxMode, jobs *terminal.BashJobManager, owner
 				if jobs == nil {
 					return nil, NewToolError("Background jobs are not available in this context.")
 				}
-				timeoutMs := in.TimeoutMs
-				if timeoutMs <= 0 {
-					timeoutMs = terminal.BashJobDefaultTimeoutMs
-				}
 				snap, err := jobs.Start(terminal.StartBashJobOptions{
 					Command: in.Command, Cwd: cwd, Env: mergedEnv(in.Env),
-					TimeoutMs: timeoutMs, OwnerSessionID: ownerSessionID,
+					TimeoutMs: in.TimeoutMs, OwnerSessionID: ownerSessionID,
 					ParentRunID: parentRunID, ParentCallID: parentCallID,
 				})
 				if err != nil {
@@ -113,36 +171,58 @@ func NewSandboxedBashTool(mode SandboxMode, jobs *terminal.BashJobManager, owner
 				if snap.WorkID != "" {
 					workLine = fmt.Sprintf("\nBackground work: %s", snap.WorkID)
 				}
-				return textResult(fmt.Sprintf(
-					"Started: %s%s\nMax lifetime: %dms\n\nThe job runs in the background. You will be notified automatically with its exit code and output when it finishes — do not poll or wait for it. Continue with other work, or end your turn and tell the user what you are waiting on.\nThis response is not an exit result. Use bashJob (jobId=%q) only to peek at partial output or to kill it.",
-					snap.JobID, workLine, timeoutMs, snap.JobID,
-				)), nil
+				return textResult(backgroundStartedText(snap.JobID, workLine, in.TimeoutMs, "")), nil
 			}
 
 			timeoutMs := in.TimeoutMs
 			if timeoutMs <= 0 {
 				timeoutMs = bashDefaultTimeout
 			}
-			res := terminal.SpawnCapture(ctx, sandboxedShellArgv(in.Command, mode), terminal.SpawnCaptureOptions{
-				Cwd: cwd, Env: mergedEnv(in.Env), TimeoutMs: timeoutMs,
-			})
+			if timeoutMs > bashMaxTimeoutMs {
+				timeoutMs = bashMaxTimeoutMs
+			}
+			var res terminal.SpawnCaptureResult
+			if jobs != nil && mode != SandboxReadOnly {
+				snap, promoted, runRes, err := runForeground(ctx, jobs, in, cwd, ownerSessionID, parentRunID, parentCallID, timeoutMs)
+				if err != nil {
+					return nil, NewToolError("%v", err)
+				}
+				if promoted {
+					workLine := ""
+					if snap.WorkID != "" {
+						workLine = fmt.Sprintf("\nBackground work: %s", snap.WorkID)
+					}
+					return textResult(backgroundStartedText(snap.JobID, workLine, 0,
+						fmt.Sprintf("The command was still running after %dms, so it was moved to the background instead of being killed.\n", timeoutMs))), nil
+				}
+				res = runRes
+			} else {
+				res = terminal.SpawnCapture(ctx, sandboxedShellArgv(in.Command, mode), terminal.SpawnCaptureOptions{
+					Cwd: cwd, Env: mergedEnv(in.Env), TimeoutMs: timeoutMs,
+				})
+			}
 
 			if res.Aborted {
 				return nil, NewToolError(
 					"Command cancelled by user abort.\nCommand: %s\nWorking directory: %s\n\nPartial stdout:\n%s\n\nPartial stderr:\n%s",
-					in.Command, cwd, github.RedactSecrets(truncateOutput(res.Stdout, bashMaxOutputBytes, "stdout")), github.RedactSecrets(truncateOutput(res.Stderr, bashMaxOutputBytes, "stderr")))
+					in.Command, cwd, bashSection(ownerSessionID, "stdout", res.Stdout), bashSection(ownerSessionID, "stderr", res.Stderr))
 			}
 			if res.Killed {
+				hint := ""
+				if mode == SandboxReadOnly {
+					hint = "\n\n" + planModeTimeoutHint
+				}
 				return nil, NewToolError(
-					"Command timed out after %dms.\nCommand: %s\nWorking directory: %s\n\nPartial stdout:\n%s\n\nPartial stderr:\n%s",
-					timeoutMs, in.Command, cwd, github.RedactSecrets(truncateOutput(res.Stdout, bashMaxOutputBytes, "stdout")), github.RedactSecrets(truncateOutput(res.Stderr, bashMaxOutputBytes, "stderr")))
+					"Command timed out after %dms.\nCommand: %s\nWorking directory: %s\n\nPartial stdout:\n%s\n\nPartial stderr:\n%s%s",
+					timeoutMs, in.Command, cwd, bashSection(ownerSessionID, "stdout", res.Stdout), bashSection(ownerSessionID, "stderr", res.Stderr), hint)
 			}
 
-			// The child inherits GH_TOKEN, so its output may echo the secret
-			// (`env`, `printenv GH_TOKEN`) — scrub the exact token before it
-			// can reach the transcript.
-			stdout := github.RedactSecrets(truncateOutput(res.Stdout, bashMaxOutputBytes, "stdout"))
-			stderr := github.RedactSecrets(truncateOutput(res.Stderr, bashMaxOutputBytes, "stderr"))
+			// bashSection redacts before spilling: the child inherits
+			// GH_TOKEN, so its output may echo the secret (`env`,
+			// `printenv GH_TOKEN`) — scrub the exact token before it can
+			// reach the transcript or the spill file.
+			stdout := bashSection(ownerSessionID, "stdout", res.Stdout)
+			stderr := bashSection(ownerSessionID, "stderr", res.Stderr)
 			sections := []string{fmt.Sprintf("Exit code: %d", res.ExitCode), fmt.Sprintf("Working directory: %s", cwd)}
 			if strings.TrimSpace(stdout) != "" {
 				sections = append(sections, "", "stdout:", stdout)
@@ -158,6 +238,58 @@ func NewSandboxedBashTool(mode SandboxMode, jobs *terminal.BashJobManager, owner
 			}
 			return Envelope{Content: textResult(result), IsError: res.ExitCode != 0}, nil
 		})
+}
+
+const planModeTimeoutHint = "This command is too slow for plan mode, which can't run background jobs. Narrow it (for example, limit the paths or output), or describe it in your plan and run it after the plan is approved."
+
+func backgroundStartedText(jobID, workLine string, timeoutMs int, prefix string) string {
+	limit := "none (runs until it exits or is killed)"
+	if timeoutMs > 0 {
+		limit = fmt.Sprintf("%dms", timeoutMs)
+	}
+	return fmt.Sprintf(
+		"%sStarted: %s%s\nTime limit: %s\n\nThe job runs in the background. You will be notified automatically with its exit code and output when it finishes — do not poll or wait for it. Continue with other work, or end your turn and tell the user what you are waiting on.\nThis response is not an exit result. Use bashJob (jobId=%q) only to peek at partial output or to kill it.",
+		prefix, jobID, workLine, limit, jobID)
+}
+
+// runForeground runs the command as a silent job and waits up to timeoutMs.
+// A command still running then is promoted to a background job (promoted=true)
+// rather than killed; one that settles is collected and removed.
+func runForeground(ctx context.Context, jobs *terminal.BashJobManager, in bashInput, cwd, owner, runID, callID string, timeoutMs int) (terminal.BashJobSnapshot, bool, terminal.SpawnCaptureResult, error) {
+	var none terminal.SpawnCaptureResult
+	snap, err := jobs.Start(terminal.StartBashJobOptions{
+		Command: in.Command, Cwd: cwd, Env: mergedEnv(in.Env), OwnerSessionID: owner, Foreground: true,
+	})
+	if err != nil {
+		return snap, false, none, err
+	}
+	snap, err = jobs.WaitSettled(ctx, snap.JobID, owner, time.Duration(timeoutMs)*time.Millisecond)
+	aborted := err != nil
+	if aborted {
+		_, _ = jobs.Kill(snap.JobID, owner)
+		snap, _ = jobs.WaitSettled(context.Background(), snap.JobID, owner, 2*time.Second)
+	} else if snap.Status == terminal.BashJobRunning {
+		promotedSnap, ok, perr := jobs.Promote(snap.JobID, owner, runID, callID)
+		if perr != nil {
+			_, _ = jobs.Kill(snap.JobID, owner)
+			return snap, false, none, perr
+		}
+		if ok {
+			return promotedSnap, true, none, nil
+		}
+		snap = promotedSnap
+	}
+	out, cerr := jobs.Collect(snap.JobID, owner)
+	if cerr != nil {
+		return snap, false, none, cerr
+	}
+	code := 0
+	if out.Snapshot.ExitCode != nil {
+		code = *out.Snapshot.ExitCode
+	}
+	return out.Snapshot, false, terminal.SpawnCaptureResult{
+		Stdout: out.Stdout, Stderr: out.Stderr, ExitCode: code, Killed: aborted, Aborted: aborted,
+	}, nil
 }
 
 // Bash is the unbound default instance used by DefaultTools() (background

@@ -24,6 +24,8 @@ pub struct ProjectScriptRunView {
 }
 
 /// Everything the Run tab needs for one project.
+// Kept without a UI while the Run panel has no new home; see the inspector removal.
+#[allow(dead_code)]
 #[derive(Clone, Default)]
 pub struct ProjectScriptsPanelState {
     pub scripts: Vec<ProjectScript>,
@@ -73,9 +75,7 @@ impl ConsoleDesktopApp {
         // panel shows its empty state — mirroring the inspector's
         // files/changes tabs. The pane-project fallback below is only for
         // a live tab that resolves to no project itself.
-        let Some(active_tab) = active_tab else {
-            return None;
-        };
+        let active_tab = active_tab?;
         let from_tab = match active_tab {
             console_core::WorkspaceTabConfig::Chat {
                 session_id,
@@ -93,11 +93,12 @@ impl ConsoleDesktopApp {
             | console_core::WorkspaceTabConfig::Diff { project_id, .. }
             | console_core::WorkspaceTabConfig::Terminal { project_id, .. }
             | console_core::WorkspaceTabConfig::Browser { project_id, .. }
-            | console_core::WorkspaceTabConfig::ChangesReview { project_id, .. } => {
-                project_id.clone()
-            }
+            | console_core::WorkspaceTabConfig::ChangesReview { project_id, .. }
+            | console_core::WorkspaceTabConfig::FileTree { project_id, .. }
+            | console_core::WorkspaceTabConfig::Device { project_id, .. }
+            | console_core::WorkspaceTabConfig::Computer { project_id, .. } => project_id.clone(),
         };
-        from_tab.or_else(|| self.pane_project_id(pane_id))
+        from_tab.or_else(|| self.pane_workspace_key(pane_id))
     }
 
     /// The server-side project id and checkout folder behind a scripts key
@@ -111,6 +112,7 @@ impl ConsoleDesktopApp {
     /// Fetch script definitions (once per project) and reconnect to any runs
     /// the server still holds. Cheap guards make this safe to call on every
     /// render while the bottom panel is visible.
+    #[allow(dead_code)]
     pub fn ensure_project_scripts(&mut self, cx: &mut Context<Self>) {
         let Some(project_id) = self.active_scripts_project_id() else {
             return;
@@ -128,6 +130,7 @@ impl ConsoleDesktopApp {
     /// Re-read `console.toml` even when already loaded, so edits never need
     /// an app restart. Runs and expanded rows merge by script id, so a
     /// refresh never collapses open output or drops a live tail.
+    #[allow(dead_code)]
     pub fn refresh_project_scripts(&mut self, cx: &mut Context<Self>) {
         let Some(project_id) = self.active_scripts_project_id() else {
             return;
@@ -142,6 +145,7 @@ impl ConsoleDesktopApp {
         self.fetch_project_scripts(project_id, cx);
     }
 
+    #[allow(dead_code)]
     fn fetch_project_scripts(&mut self, project_id: String, cx: &mut Context<Self>) {
         let state = self
             .project_scripts_by_project
@@ -266,6 +270,7 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    #[allow(dead_code)]
     pub(crate) fn prune_project_script_tabs(&mut self, project_id: &str) {
         let Some(state) = self.project_scripts_by_project.get(project_id) else {
             return;
@@ -286,11 +291,11 @@ impl ConsoleDesktopApp {
                 if term_state.script_logs.len() != prev_len {
                     changed = true;
                 }
-                if let Some(active_id) = &term_state.active_script_log {
-                    if !valid_ids.contains(active_id.as_str()) {
-                        term_state.active_script_log = term_state.script_logs.first().cloned();
-                        changed = true;
-                    }
+                if let Some(active_id) = &term_state.active_script_log
+                    && !valid_ids.contains(active_id.as_str())
+                {
+                    term_state.active_script_log = term_state.script_logs.first().cloned();
+                    changed = true;
                 }
             }
 
@@ -302,11 +307,11 @@ impl ConsoleDesktopApp {
                 if persisted.open_script_ids.len() != prev_len {
                     changed = true;
                 }
-                if let Some(active_id) = &persisted.active_script_id {
-                    if !valid_ids.contains(active_id.as_str()) {
-                        persisted.active_script_id = persisted.open_script_ids.first().cloned();
-                        changed = true;
-                    }
+                if let Some(active_id) = &persisted.active_script_id
+                    && !valid_ids.contains(active_id.as_str())
+                {
+                    persisted.active_script_id = persisted.open_script_ids.first().cloned();
+                    changed = true;
                 }
             }
         }
@@ -506,18 +511,6 @@ impl ConsoleDesktopApp {
             || self.global_search_panel.read(cx).is_open()
     }
 
-    pub fn select_bottom_run_tab(&mut self, cx: &mut Context<Self>) {
-        if self.right_sidebar_bottom_collapsed {
-            self.right_sidebar_bottom_collapsed = false;
-            self.persist_layout();
-        }
-        self.right_sidebar_bottom_run_selected = true;
-        // Selecting the tab re-reads console.toml, so edits show up without
-        // an app restart. Merge-by-id keeps open output and live tails.
-        self.refresh_project_scripts(cx);
-        cx.notify();
-    }
-
     /// Follow one run: backfill its record, stream live events, then
     /// reconcile once the stream ends. Replacing the stored task cancels a
     /// previous watch, so reconnects never accumulate duplicate streams.
@@ -533,7 +526,7 @@ impl ConsoleDesktopApp {
         self.project_script_stream_seq += 1;
         let seq = self.project_script_stream_seq;
         let client = self.client.clone();
-        let transport = self.transport.clone();
+        let transport = self.transport;
         let project_id_owned = project_id.to_string();
         let (server_project_id, _) = Self::scripts_server_target(project_id);
         let script_id_owned = script_id.to_string();

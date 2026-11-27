@@ -9,7 +9,7 @@ use std::rc::Rc;
 
 #[derive(IntoElement)]
 pub struct ProjectsPage {
-    pub projects: Rc<Vec<ProjectInfo>>,
+    pub projects: Rc<[ProjectInfo]>,
     pub on_add_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     pub on_remove_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 }

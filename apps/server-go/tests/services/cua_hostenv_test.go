@@ -5,7 +5,6 @@ package tests
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
@@ -49,15 +48,5 @@ func TestBundlePlistScanFindsIdentifier(t *testing.T) {
 	}
 	if got := cua.PlistStringForTest(plist, "Missing"); got != "" {
 		t.Errorf("missing key should be empty, got %q", got)
-	}
-}
-
-func TestBundlePlistScanRejectsNonBundleLayout(t *testing.T) {
-	// ownBundleID returns "" outside a bundle; the observable half is that a
-	// library path next to a bare binary is still found. This just pins the
-	// candidate layout the loader documents.
-	dir := t.TempDir()
-	if _, err := os.Stat(filepath.Join(dir, "libcua_driver_sdk.so")); err == nil {
-		t.Fatal("temp dir should be empty")
 	}
 }

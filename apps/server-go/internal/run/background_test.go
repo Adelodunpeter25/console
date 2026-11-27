@@ -84,3 +84,46 @@ func TestBackgroundContextIncludesCompletedShellOutput(t *testing.T) {
 		}
 	}
 }
+
+func TestBackgroundWakeMessageNamesTheKind(t *testing.T) {
+	work := func(kinds ...backgroundsvc.Kind) []backgroundsvc.Work {
+		out := make([]backgroundsvc.Work, 0, len(kinds))
+		for _, kind := range kinds {
+			out = append(out, backgroundsvc.Work{Kind: kind})
+		}
+		return out
+	}
+	cases := map[string][]backgroundsvc.Work{
+		"Bash tool completed, continuing agent":       work(backgroundsvc.KindShell),
+		"Subagent completed, continuing agent":        work(backgroundsvc.KindSubagent, backgroundsvc.KindSubagent),
+		"Session finished, continuing agent":          work(backgroundsvc.KindSession),
+		"Background work completed, continuing agent": work(backgroundsvc.KindSession, backgroundsvc.KindShell),
+	}
+	for want, items := range cases {
+		if got := wakeMessage(items); got != want {
+			t.Errorf("wakeMessage(%v) = %q, want %q", items, got, want)
+		}
+	}
+}
+
+func TestBackgroundContextNamesWaitedSessions(t *testing.T) {
+	service := NewService(nil)
+	manager := backgroundsvc.NewManager()
+	service.SetBackgroundWorkManager(manager)
+	wait, err := manager.Register(backgroundsvc.Options{
+		SessionID: "session-1", Kind: backgroundsvc.KindSession,
+		Metadata: map[string]string{"session_ids": "a,b", "mode": "all"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Complete(wait.ID, "session-1", backgroundsvc.StatusCompleted, "a: done", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	context := service.backgroundContext("session-1")
+	for _, want := range []string{"(session)", "Sessions: a,b", "Summary: a: done"} {
+		if !strings.Contains(context, want) {
+			t.Fatalf("background context missing %q: %s", want, context)
+		}
+	}
+}

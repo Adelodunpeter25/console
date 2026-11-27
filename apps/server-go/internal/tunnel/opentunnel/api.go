@@ -3,9 +3,9 @@ package opentunnel
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"math/rand"
 	"net"

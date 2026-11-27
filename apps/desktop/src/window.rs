@@ -2,8 +2,7 @@ use gpui::{
     AnyWindowHandle, App, AppContext, Bounds, Pixels, PromptLevel, SharedString, TitlebarOptions,
     WeakEntity, Window, WindowBounds, WindowOptions, point, px,
 };
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
+use std::cell::RefCell;
 
 use crate::persistence;
 use crate::state::ConsoleDesktopApp;
@@ -57,9 +56,9 @@ pub enum WindowLaunchTarget {
 }
 
 thread_local! {
-    static LAST_WINDOW_BOUNDS: RefCell<Option<Bounds<Pixels>>> = RefCell::new(None);
+    static LAST_WINDOW_BOUNDS: RefCell<Option<Bounds<Pixels>>> = const { RefCell::new(None) };
     static WORKSPACE_WINDOWS: RefCell<Vec<(AnyWindowHandle, WeakEntity<ConsoleDesktopApp>)>> =
-        RefCell::new(Vec::new());
+        const { RefCell::new(Vec::new()) };
 }
 
 pub fn update_active_window_bounds(bounds: Bounds<Pixels>) {
@@ -115,12 +114,11 @@ pub fn get_active_window(
         list.retain(|(handle, app)| app.upgrade().is_some() && live_handles.contains(handle));
 
         // 1. Ask GPUI's platform layer which window is currently focused.
-        if let Some(active_handle) = cx.active_window() {
-            if let Some((_, app)) = list.iter().find(|(h, _)| *h == active_handle) {
-                if let Some(upgraded) = app.upgrade() {
-                    return Some((active_handle, upgraded));
-                }
-            }
+        if let Some(active_handle) = cx.active_window()
+            && let Some((_, app)) = list.iter().find(|(h, _)| *h == active_handle)
+            && let Some(upgraded) = app.upgrade()
+        {
+            return Some((active_handle, upgraded));
         }
 
         // 2. Fallback to the most recent known window in our list.
@@ -134,9 +132,12 @@ pub fn get_active_window(
     })
 }
 
-pub fn compute_new_window_bounds(cx: &mut App) -> WindowBounds {
+pub fn compute_new_window_bounds(
+    cx: &mut App,
+    state: Option<persistence::window::PersistedWindowState>,
+) -> WindowBounds {
     let current_bounds = LAST_WINDOW_BOUNDS.with(|b| *b.borrow()).unwrap_or_else(|| {
-        match persistence::window::load_window_bounds(cx) {
+        match persistence::window::window_bounds_from(state, cx) {
             WindowBounds::Windowed(b) | WindowBounds::Maximized(b) => b,
             WindowBounds::Fullscreen(b) => b,
         }
@@ -156,9 +157,12 @@ pub fn compute_new_window_bounds(cx: &mut App) -> WindowBounds {
 }
 
 pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
+    // One read of the state file for the whole window: the frame, the sidebar
+    // layout, the workspace tree and the drafts all come from it.
+    let startup = persistence::load_startup();
     let window_bounds = match &target {
         WindowLaunchTarget::RestorePersisted => {
-            let b = persistence::window::load_window_bounds(cx);
+            let b = persistence::window::window_bounds_from(startup.window, cx);
             let bounds = match b {
                 WindowBounds::Windowed(bounds) | WindowBounds::Maximized(bounds) => bounds,
                 WindowBounds::Fullscreen(bounds) => bounds,
@@ -167,7 +171,7 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
             b
         }
         WindowLaunchTarget::Fresh { .. } | WindowLaunchTarget::Session(_) => {
-            compute_new_window_bounds(cx)
+            compute_new_window_bounds(cx, startup.window)
         }
     };
 
@@ -181,23 +185,10 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
     let open = move |cx: &mut App| {
         let target_clone = target.clone();
         let result = cx.open_window(options, move |window, cx| {
-            let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, target_clone, cx));
+            let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, target_clone, startup, cx));
             let handle = window.window_handle();
             register_window(handle, app_view.downgrade());
-            let weak_app = app_view.downgrade();
-            let confirmed = Rc::new(Cell::new(false));
-            window.on_window_should_close(cx, move |window, cx| {
-                if confirmed.get() || !app_has_running_agent(&weak_app, cx) {
-                    return true;
-                }
-                let confirmed = confirmed.clone();
-                confirm_then(window, cx, "Close this window?", move |window, _| {
-                    confirmed.set(true);
-                    window.remove_window();
-                });
-                false
-            });
-            cx.new(|cx| gpui_component::Root::new(app_view, window, cx))
+            app_view
         });
 
         match result {
@@ -221,22 +212,9 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
     }
 }
 
-fn app_has_running_agent(app: &WeakEntity<ConsoleDesktopApp>, cx: &App) -> bool {
-    app.upgrade()
-        .is_some_and(|a| !a.read(cx).running_sessions_snapshot().is_empty())
-}
-
-/// True when any open workspace has an agent run in progress.
-pub fn any_agent_running(cx: &App) -> bool {
-    WORKSPACE_WINDOWS.with(|w| {
-        w.borrow()
-            .iter()
-            .any(|(_, app)| app_has_running_agent(app, cx))
-    })
-}
-
 /// Show a native confirmation dialog warning that an agent is running; runs
-/// `on_confirm` if the user picks the destructive option.
+/// `on_confirm` if the user confirms. The agent server is a separate process,
+/// so closing only disconnects this client; the run keeps going.
 pub fn confirm_then(
     window: &mut Window,
     cx: &mut App,
@@ -256,8 +234,8 @@ pub fn confirm_then(
                 window.prompt(
                     PromptLevel::Warning,
                     &message,
-                    Some("An agent is still running. Closing will stop its work."),
-                    &["Close Anyway", "Cancel"],
+                    Some("An agent is still running. It will keep working in the background."),
+                    &["Close", "Cancel"],
                     cx,
                 )
             });

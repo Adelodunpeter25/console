@@ -4,11 +4,13 @@ use gpui::{
     Svg, Window, canvas, div, img, point, prelude::*, px, rgb, svg,
 };
 
+pub mod animations;
 pub mod context_menu;
 pub mod file_icons;
 pub mod icons;
 pub mod menu;
 pub mod motion;
+pub mod ring;
 pub mod scrollbar;
 pub mod text_field;
 pub mod tooltip;
@@ -16,15 +18,23 @@ pub mod transparency;
 
 use crate::theme::Theme;
 
-pub use context_menu::{draft_context_menu, session_context_menu};
+pub use animations::{
+    ANIMATION_FRAME_INTERVAL, DEFAULT_SCROLL_DURATION, ease_in_out_cubic, ease_out_cubic,
+    ease_out_quad, interpolate_list_offset, lerp, lerp_px,
+};
+pub use context_menu::{ReadAction, html_file_context_menu, session_context_menu};
 pub use file_icons::{
     base_name, file_icon_for_language, file_icon_for_name, file_icon_for_path, file_type_icon,
     lang_tag_for_path,
 };
-pub use icons::{FileTypeIcon, IconName, ProviderIcon, app_icon, provider_app_icon};
-pub use menu::{
-    ContextMenuHandle, MENU_CONTEXT, MenuAlign, MenuItem, dropdown_menu, popover, toggle_popover,
+pub use icons::{
+    FileTypeIcon, IconName, ProviderIcon, app_icon, provider_app_icon, provider_color_icon,
 };
+pub use menu::{
+    ContextMenuHandle, MENU_CONTEXT, MenuAlign, MenuItem, dropdown_menu, popover, toggle_dropdown,
+    toggle_popover,
+};
+pub use ring::{RingArc, ring_chart, split_arcs};
 pub use scrollbar::ScrollbarState;
 pub use text_field::TextField;
 pub use transparency::transparency_grid;
@@ -93,7 +103,7 @@ pub fn provider_icon(provider: &str) -> &'static str {
     let provider = provider.to_ascii_lowercase();
     match provider.as_str() {
         "antigravity" | "google" | "opencode" | "codex" | "openai" | "chatgpt" | "claude"
-        | "anthropic" | "deepseek" | "grok" | "cursor" | "amp" | "pi" => {
+        | "anthropic" | "deepseek" | "grok" | "cursor" | "amp" | "pi" | "devin" => {
             IconName::provider(&provider).path()
         }
         _ => IconName::Bot.path(),
@@ -127,6 +137,7 @@ fn icon_from_key(key: &str) -> &'static str {
     let icon = match key {
         "sparkle" => IconName::Sparkle,
         "terminal" => IconName::Terminal,
+        "code" => IconName::FileType(FileTypeIcon::Javascript),
         "pencil" => IconName::Pencil,
         "file" => IconName::File,
         "folder" => IconName::Folder,

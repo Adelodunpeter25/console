@@ -2,16 +2,17 @@ package console
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"os"
-	"regexp"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -37,12 +38,10 @@ func TestClampApprovalNeverRaises(t *testing.T) {
 		ceiling, req, want string
 		clamped            bool
 	}{
-		{"always-ask", "full-access", "always-ask", true},
-		{"always-ask", "accept-edits", "always-ask", true},
-		{"accept-edits", "full-access", "accept-edits", true},
+		{"plan-mode", "full-access", "plan-mode", true},
 		{"full-access", "full-access", "full-access", false},
 		{"full-access", "plan-mode", "plan-mode", false},
-		{"always-ask", "plan-mode", "plan-mode", false},
+		{"plan-mode", "plan-mode", "plan-mode", false},
 		// No run behind the kernel fails closed, never open.
 		{"", "full-access", "plan-mode", true},
 	}
@@ -62,25 +61,25 @@ func TestClampApprovalNeverRaises(t *testing.T) {
 
 func TestCreateClampsToCeilingAndReportsIt(t *testing.T) {
 	var aborted []string
-	runtime, _ := newControlRuntime(t, "always-ask", &aborted)
+	runtime, _ := newControlRuntime(t, "plan-mode", &aborted)
 	out := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp", approval_mode:"full-access"})`).(map[string]any)
-	if out["approval_mode"] != "always-ask" {
-		t.Fatalf("approval_mode = %v, want always-ask", out["approval_mode"])
+	if out["approval_mode"] != "plan-mode" {
+		t.Fatalf("approval_mode = %v, want plan-mode", out["approval_mode"])
 	}
-	if note, _ := out["clamped"].(string); !strings.Contains(note, "clamped to always-ask") {
+	if note, _ := out["clamped"].(string); !strings.Contains(note, "clamped to plan-mode") {
 		t.Fatalf("clamp not reported: %#v", out)
 	}
 	header := out["session"].(map[string]any)
-	if header["approvalMode"] != "always-ask" {
+	if header["approvalMode"] != "plan-mode" {
 		t.Fatalf("stored mode = %v", header["approvalMode"])
 	}
 }
 
 func TestCreateOmittedModeInheritsCeiling(t *testing.T) {
 	var aborted []string
-	runtime, _ := newControlRuntime(t, "accept-edits", &aborted)
+	runtime, _ := newControlRuntime(t, "plan-mode", &aborted)
 	out := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp"})`).(map[string]any)
-	if out["approval_mode"] != "accept-edits" {
+	if out["approval_mode"] != "plan-mode" {
 		t.Fatalf("approval_mode = %v", out["approval_mode"])
 	}
 	if _, has := out["clamped"]; has {
@@ -128,6 +127,38 @@ func TestCreateThinkingLevel(t *testing.T) {
 	}
 }
 
+func TestCreateInheritsCallingSessionModelAndThinking(t *testing.T) {
+	withCatalog(t)
+	var aborted []string
+	runtime, sessions := newControlRuntime(t, "full-access", &aborted)
+
+	high := "high"
+	_, err := sessions.Create(types.CreateSessionOptions{
+		ID:            "caller",
+		Title:         "Caller",
+		Cwd:           "/tmp",
+		ModelID:       "thinker",
+		Provider:      "claude",
+		ThinkingLevel: &high,
+	})
+	if err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+
+	out := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp"})`).(map[string]any)
+	id := out["session"].(map[string]any)["id"].(string)
+	h, err := sessions.Header(id)
+	if err != nil || h == nil {
+		t.Fatalf("created header = %v, err = %v", h, err)
+	}
+	if h.ModelID != "thinker" || h.Provider != "claude" {
+		t.Fatalf("model/provider = %s/%s, want thinker/claude", h.ModelID, h.Provider)
+	}
+	if h.ThinkingLevel == nil || *h.ThinkingLevel != "high" {
+		t.Fatalf("thinking_level = %v, want high", h.ThinkingLevel)
+	}
+}
+
 func TestSetModelAcceptsCatalogModel(t *testing.T) {
 	withCatalog(t)
 	var aborted []string
@@ -142,15 +173,15 @@ func TestSetModelAcceptsCatalogModel(t *testing.T) {
 
 func TestSetApprovalClampedToCallingRun(t *testing.T) {
 	var aborted []string
-	runtime, sessions := newControlRuntime(t, "accept-edits", &aborted)
+	runtime, sessions := newControlRuntime(t, "plan-mode", &aborted)
 	created := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp", approval_mode:"plan-mode"})`).(map[string]any)
 	id := created["session"].(map[string]any)["id"].(string)
 
 	out := evalJSON(t, runtime, `console.sessions.set_approval({session_id:"`+id+`", mode:"full-access"})`).(map[string]any)
-	if out["approval_mode"] != "accept-edits" || out["clamped"] == nil {
+	if out["approval_mode"] != "plan-mode" || out["clamped"] == nil {
 		t.Fatalf("set_approval = %#v", out)
 	}
-	if h, _ := sessions.Header(id); h.ApprovalMode != "accept-edits" {
+	if h, _ := sessions.Header(id); h.ApprovalMode != "plan-mode" {
 		t.Fatalf("stored mode = %q", h.ApprovalMode)
 	}
 	// Moving down is always allowed.
@@ -191,7 +222,7 @@ func TestSetModelRejectsUnknownModel(t *testing.T) {
 
 func TestForkClampsInheritedApproval(t *testing.T) {
 	var aborted []string
-	runtime, sessions := newControlRuntime(t, "always-ask", &aborted)
+	runtime, sessions := newControlRuntime(t, "plan-mode", &aborted)
 	// The source was created by someone with more authority than this run.
 	src, err := sessions.Create(newSource("full-access"))
 	if err != nil {
@@ -204,13 +235,13 @@ func TestForkClampsInheritedApproval(t *testing.T) {
 	}
 	out := evalJSON(t, runtime, `console.sessions.fork({session_id:"`+src.ID+`", message_id:"m1"})`).(map[string]any)
 	forked := out["session"].(map[string]any)
-	if forked["approvalMode"] != "always-ask" {
-		t.Fatalf("forked approvalMode = %v, want always-ask", forked["approvalMode"])
+	if forked["approvalMode"] != "plan-mode" {
+		t.Fatalf("forked approvalMode = %v, want plan-mode", forked["approvalMode"])
 	}
 	if out["clamped"] == nil {
 		t.Fatalf("clamp not reported: %#v", out)
 	}
-	if h, _ := sessions.Header(forked["id"].(string)); h == nil || h.ApprovalMode != "always-ask" {
+	if h, _ := sessions.Header(forked["id"].(string)); h == nil || h.ApprovalMode != "plan-mode" {
 		t.Fatalf("stored fork mode = %+v", h)
 	}
 	// The source is untouched.
@@ -229,13 +260,13 @@ func TestForkClampsInheritedApproval(t *testing.T) {
 func TestForkWithinCeilingIsNotClamped(t *testing.T) {
 	var aborted []string
 	runtime, sessions := newControlRuntime(t, "full-access", &aborted)
-	src, _ := sessions.Create(newSource("accept-edits"))
+	src, _ := sessions.Create(newSource("plan-mode"))
 	_ = sessions.AppendMessage(src.ID, types.AgentMessage{ID: "m1", Role: "user", Data: []byte(`{"user":{"content":"hi"}}`)})
 	out := evalJSON(t, runtime, `console.sessions.fork({session_id:"`+src.ID+`", message_id:"m1"})`).(map[string]any)
 	if out["clamped"] != nil {
 		t.Fatalf("unexpected clamp: %#v", out)
 	}
-	if out["session"].(map[string]any)["approvalMode"] != "accept-edits" {
+	if out["session"].(map[string]any)["approvalMode"] != "plan-mode" {
 		t.Fatalf("fork mode = %v", out["session"])
 	}
 }
@@ -262,7 +293,7 @@ func newPromptRuntime(t *testing.T, ceiling string, queued bool, calls *[]prompt
 func TestPromptStartsIdleSession(t *testing.T) {
 	var calls []promptCall
 	runtime, sessions := newPromptRuntime(t, "full-access", false, &calls)
-	target, _ := sessions.Create(newSource("accept-edits"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	out := evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"also add tests"})`).(map[string]any)
 	if out["queued"] != false || out["note"] != nil {
 		t.Fatalf("idle prompt = %#v", out)
@@ -271,15 +302,15 @@ func TestPromptStartsIdleSession(t *testing.T) {
 		t.Fatalf("calls = %+v", calls)
 	}
 	// Omitted mode means the session's own.
-	if calls[0].approval != "accept-edits" {
-		t.Fatalf("approval = %q, want the session's accept-edits", calls[0].approval)
+	if calls[0].approval != "plan-mode" {
+		t.Fatalf("approval = %q, want the session's plan-mode", calls[0].approval)
 	}
 }
 
 func TestPromptReportsQueueingWhenBusy(t *testing.T) {
 	var calls []promptCall
 	runtime, sessions := newPromptRuntime(t, "full-access", true, &calls)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	out := evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"next"})`).(map[string]any)
 	if out["queued"] != true {
 		t.Fatalf("busy prompt must report queued: %#v", out)
@@ -293,15 +324,15 @@ func TestPromptReportsQueueingWhenBusy(t *testing.T) {
 // must not let a restricted run act with that higher mode.
 func TestPromptCannotBorrowTheTargetsHigherMode(t *testing.T) {
 	var calls []promptCall
-	runtime, sessions := newPromptRuntime(t, "always-ask", false, &calls)
+	runtime, sessions := newPromptRuntime(t, "plan-mode", false, &calls)
 	target, _ := sessions.Create(newSource("full-access"))
 	out := evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"go"})`).(map[string]any)
-	if calls[0].approval != "always-ask" || out["clamped"] == nil {
+	if calls[0].approval != "plan-mode" || out["clamped"] == nil {
 		t.Fatalf("approval = %q out = %#v", calls[0].approval, out)
 	}
 	// Explicitly asking for more is clamped too.
 	evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"go", approval_mode:"full-access"})`)
-	if calls[1].approval != "always-ask" {
+	if calls[1].approval != "plan-mode" {
 		t.Fatalf("explicit request approval = %q", calls[1].approval)
 	}
 	// The turn cap never rewrites the session's stored mode.
@@ -313,7 +344,7 @@ func TestPromptCannotBorrowTheTargetsHigherMode(t *testing.T) {
 func TestPromptRefusals(t *testing.T) {
 	var calls []promptCall
 	runtime, sessions := newPromptRuntime(t, "full-access", false, &calls)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	for name, code := range map[string]string{
 		"missing session":  `console.sessions.prompt({session_id:"ghost", prompt:"x"})`,
 		"missing prompt":   `console.sessions.prompt({session_id:"` + target.ID + `"})`,
@@ -334,7 +365,7 @@ func TestPromptValidatesThinkingAgainstTheSessionsModel(t *testing.T) {
 	withCatalog(t)
 	var calls []promptCall
 	runtime, sessions := newPromptRuntime(t, "full-access", false, &calls)
-	opts := newSource("always-ask")
+	opts := newSource("plan-mode")
 	opts.ModelID, opts.Provider = "thinker", "claude"
 	target, _ := sessions.Create(opts)
 	evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"x", thinking_level:"high"})`)
@@ -362,7 +393,7 @@ func TestUnknownAndWrongTypedArgumentsAreRefused(t *testing.T) {
 		}
 	}
 	err := evalErr(runtime, `console.sessions.list({projectId: "p"})`)
-	if err == nil || !strings.Contains(err.Error(), "project_id, cwd") {
+	if err == nil || !strings.Contains(err.Error(), "project_id") || !strings.Contains(err.Error(), "cwd") {
 		t.Fatalf("err = %v, want the accepted argument names listed", err)
 	}
 	// Valid calls are unaffected (an empty list renders as "(no output)", so
@@ -374,50 +405,73 @@ func TestUnknownAndWrongTypedArgumentsAreRefused(t *testing.T) {
 	}
 }
 
-// Every installed method has an argument allow-list, and every allow-list entry
-// is an installed method. A method added without one would accept any argument,
-// silently ignoring typos, which is the bug the allow-list exists to prevent.
-func TestEveryInstalledMethodIsInTheArgumentTable(t *testing.T) {
-	runtime, _ := newConsoleSessionRuntime(t, nil)
-	_ = runtime
-	src, err := os.ReadFile("runtime.go")
-	if err != nil {
-		t.Fatal(err)
+// The catalog is the single source of truth: every entry becomes an
+// installed kernel method, and MethodSignatures is generated from the same
+// list, so the capability listing cannot drift from what is served.
+func TestCatalogMatchesInstalledMethods(t *testing.T) {
+	catalog := consoleCatalog()
+	if len(catalog) < 20 {
+		t.Fatalf("catalog has only %d methods; the pattern is out of date", len(catalog))
 	}
-	re := regexp.MustCompile(`\{Name: "([a-z_.A-Z]+)", Call:`)
-	installed := map[string]bool{}
-	for _, m := range re.FindAllStringSubmatch(string(src), -1) {
-		installed[m[1]] = true
-	}
-	if len(installed) < 20 {
-		t.Fatalf("found only %d installed methods; the pattern is out of date", len(installed))
-	}
-	for name := range installed {
-		if _, ok := methodArgs[name]; !ok {
-			t.Errorf("%s is installed but has no entry in methodArgs", name)
+	seen := map[string]bool{}
+	for _, def := range catalog {
+		if def.name == "" || def.handler == nil {
+			t.Errorf("catalog entry %q is missing a name or handler", def.name)
 		}
+		if seen[def.name] {
+			t.Errorf("duplicate catalog entry %s", def.name)
+		}
+		seen[def.name] = true
 	}
-	for name := range methodArgs {
-		if !installed[name] {
-			t.Errorf("methodArgs lists %s, which is not an installed method", name)
+	signatures := MethodSignatures()
+	if len(signatures) != len(catalog) {
+		t.Fatalf("MethodSignatures returned %d entries for %d catalog methods", len(signatures), len(catalog))
+	}
+	for i, def := range catalog {
+		want := "console." + def.name + def.signatureArgs()
+		if signatures[i] != want {
+			t.Errorf("signature[%d] = %q, want %q", i, signatures[i], want)
 		}
 	}
 }
 
-func TestMethodArgsCoverEveryInstalledMethod(t *testing.T) {
-	runtime, _ := newConsoleSessionRuntime(t, nil)
-	_ = runtime
-	// Every method must be listed so none escapes argument checking by omission.
-	for _, name := range []string{
-		"ports.list", "ports.forward", "ports.unforward", "scripts.list", "scripts.run",
-		"scripts.status", "scripts.output", "scripts.stop", "models", "approvalModes",
-		"projects.list", "projects.add", "sessions.list", "sessions.read", "sessions.create",
-		"sessions.delete", "sessions.abort", "sessions.set_model", "sessions.set_approval",
-		"sessions.prompt", "sessions.queue", "sessions.clear_queue", "sessions.fork",
-		"sessions.wait", "sessions.search",
+func TestPlanModeAllowsSafeMethodsAndBlocksFullAccessMethods(t *testing.T) {
+	var aborted []string
+	runtime, _ := newControlRuntime(t, "plan-mode", &aborted)
+
+	// Allowed in plan mode: discovery, session creation, automations/webhooks.
+	evalJSON(t, runtime, `console.help({namespace:"automation"})`)
+	created := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp"})`).(map[string]any)
+	if created["approval_mode"] != "plan-mode" {
+		t.Fatalf("created approval_mode = %v, want plan-mode", created["approval_mode"])
+	}
+
+	// Blocked in plan mode: delete, ports.forward, scripts.run, projects.add, mcp.disconnect.
+	for _, call := range []string{
+		`console.sessions.delete({session_id:"s1"})`,
+		`console.ports.forward({port:3000})`,
+		`console.ports.unforward({port:3000})`,
+		`console.scripts.run({id:"dev"})`,
+		`console.scripts.stop({run_id:"r1"})`,
+		`console.projects.add({directory:"/tmp"})`,
+		`console.mcp.disconnect({id:"m1"})`,
+		`console.mcp.reset_auth({id:"m1"})`,
 	} {
-		if _, ok := methodArgs[name]; !ok {
-			t.Errorf("%s is not in methodArgs", name)
+		err := evalErr(runtime, call)
+		if err == nil || !strings.Contains(err.Error(), "requires full-access") {
+			t.Fatalf("%s in plan-mode = %v, want requires full-access", call, err)
+		}
+	}
+}
+
+// Every catalog method rejects arguments it does not take, so a typo fails
+// with the accepted names instead of being silently ignored.
+func TestCatalogMethodsRejectUnknownArgs(t *testing.T) {
+	runtime, _ := newConsoleSessionRuntime(t, nil)
+	for _, def := range consoleCatalog() {
+		code := "console." + def.name + "({bogus_arg: 1})"
+		if err := evalErr(runtime, code); err == nil {
+			t.Errorf("%s accepted an unknown argument", def.name)
 		}
 	}
 }
@@ -433,6 +487,10 @@ func TestCreateWithPromptReportsRunning(t *testing.T) {
 	if out["session"].(map[string]any)["status"] != "working" {
 		t.Fatalf("status = %v, want working for a session whose run just started", out["session"].(map[string]any)["status"])
 	}
+	if title := out["session"].(map[string]any)["title"]; title != "New Session" {
+		t.Fatalf("title = %v, want New Session to allow autotitling", title)
+	}
+
 	// No prompt: nothing started, still idle.
 	idle := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp"})`).(map[string]any)
 	if idle["started"] != false || idle["session"].(map[string]any)["status"] != "idle" {
@@ -537,7 +595,7 @@ func newWaitRuntime(t *testing.T, ceiling string, active *activeSet) (*Runtime, 
 func TestWaitReturnsImmediatelyWhenAlreadyFinished(t *testing.T) {
 	active := newActiveSet()
 	runtime, sessions := newWaitRuntime(t, "full-access", active)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"`+target.ID+`"})`).(map[string]any)
 	if out["done"] != true || out["timed_out"] != false {
 		t.Fatalf("a finished session must return done: %#v", out)
@@ -622,7 +680,7 @@ func TestWaitAnyVersusAll(t *testing.T) {
 func TestWaitRefusals(t *testing.T) {
 	active := newActiveSet()
 	runtime, sessions := newWaitRuntime(t, "full-access", active)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	many := make([]string, 25)
 	for i := range many {
 		many[i] = fmt.Sprintf("%q", fmt.Sprintf("s%d", i))
@@ -668,7 +726,7 @@ func TestWaitTimeoutIsCapped(t *testing.T) {
 func TestWaitDeduplicatesIDs(t *testing.T) {
 	active := newActiveSet()
 	runtime, sessions := newWaitRuntime(t, "full-access", active)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"`+target.ID+`", session_ids:["`+target.ID+`","`+target.ID+`"]})`).(map[string]any)
 	if n := len(out["sessions"].([]any)); n != 1 {
 		t.Fatalf("a repeated id must be reported once, got %d entries", n)
@@ -678,7 +736,7 @@ func TestWaitDeduplicatesIDs(t *testing.T) {
 func TestWaitReturnsTheLastReply(t *testing.T) {
 	active := newActiveSet()
 	runtime, sessions := newWaitRuntime(t, "full-access", active)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	for _, m := range []types.AgentMessage{
 		{ID: "u1", Role: "user", Data: []byte(`{"user":{"content":"run the tests"}}`)},
 		{ID: "a1", Role: "assistant", Data: []byte(`{"assistant":{"id":"a1","content":[{"text":{"text":"All 42 tests passed."}}],"stopReason":"stop"}}`)},
@@ -699,7 +757,7 @@ func TestWaitReturnsTheLastReply(t *testing.T) {
 func TestWaitCutsAVeryLongReply(t *testing.T) {
 	active := newActiveSet()
 	runtime, sessions := newWaitRuntime(t, "full-access", active)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	long := strings.Repeat("word ", replyMaxText) // far over the cap
 	data, _ := json.Marshal(map[string]any{"assistant": map[string]any{
 		"id": "a1", "stopReason": "stop",
@@ -729,6 +787,173 @@ func TestWaitStopsWhenTheCallIsCancelled(t *testing.T) {
 	}
 }
 
+// ---- sessions.wait, background
+
+func newBackgroundWaitRuntime(t *testing.T, active *activeSet) (*Runtime, *services.SessionService, *background.Manager) {
+	t.Helper()
+	runtime, sessions := newWaitRuntime(t, "full-access", active)
+	manager := background.NewManager()
+	runtime.work = func() *background.Manager { return manager }
+	return runtime, sessions, manager
+}
+
+// waitForWork polls until the caller's only background work leaves running.
+func waitForWork(t *testing.T, manager *background.Manager) background.Work {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		works := manager.List("caller")
+		if len(works) == 1 && works[0].Status != background.StatusRunning {
+			return works[0]
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("background wait never finished: %#v", manager.List("caller"))
+	return background.Work{}
+}
+
+func appendReply(t *testing.T, sessions *services.SessionService, id, text string) {
+	t.Helper()
+	data, _ := json.Marshal(map[string]any{"assistant": map[string]any{
+		"id": "a1", "stopReason": "stop",
+		"content": []any{map[string]any{"text": map[string]any{"text": text}}},
+	}})
+	if err := sessions.AppendMessage(id, types.AgentMessage{ID: "a1", Role: "assistant", Data: data}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWaitBackgroundReturnsATicketThenDeliversTheReply(t *testing.T) {
+	active := newActiveSet("busy")
+	runtime, sessions, manager := newBackgroundWaitRuntime(t, active)
+	_, _ = sessions.Create(types.CreateSessionOptions{ID: "busy", Title: "b", Cwd: "/tmp"})
+
+	start := time.Now()
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"busy", background: true})`).(map[string]any)
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("a background wait must return at once, took %v", elapsed)
+	}
+	workID, _ := out["work_id"].(string)
+	if out["background"] != true || workID == "" || out["max_wait_ms"] != float64(waitBackgroundMax.Milliseconds()) {
+		t.Fatalf("expected a ticket with the default lifetime: %#v", out)
+	}
+	works := manager.List("caller")
+	if len(works) != 1 || works[0].ID != workID || works[0].Kind != background.KindSession || works[0].Status != background.StatusRunning {
+		t.Fatalf("expected one running session work owned by the caller: %#v", works)
+	}
+	if works[0].Metadata["session_ids"] != "busy" || works[0].Metadata["mode"] != "all" {
+		t.Fatalf("metadata = %#v", works[0].Metadata)
+	}
+
+	appendReply(t, sessions, "busy", "All 42 tests passed.")
+	active.finish("busy")
+	done := waitForWork(t, manager)
+	if done.Status != background.StatusCompleted || !strings.Contains(done.Summary, "All 42 tests passed.") || !strings.Contains(done.Summary, "busy: ") {
+		t.Fatalf("completed work must carry the reply: %#v", done)
+	}
+	if !manager.HasUndelivered("caller") {
+		t.Fatal("a completed wait must be waiting to wake the caller")
+	}
+}
+
+func TestWaitBackgroundTimesOutAndNamesWhatIsStillRunning(t *testing.T) {
+	active := newActiveSet("forever")
+	runtime, sessions, manager := newBackgroundWaitRuntime(t, active)
+	_, _ = sessions.Create(types.CreateSessionOptions{ID: "forever", Title: "f", Cwd: "/tmp"})
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"forever", background: true, timeout_ms: 300})`).(map[string]any)
+	if out["max_wait_ms"] != float64(300) {
+		t.Fatalf("max_wait_ms = %#v", out["max_wait_ms"])
+	}
+	done := waitForWork(t, manager)
+	if done.Status != background.StatusTimedOut || !strings.Contains(done.Summary, "forever: working") || !strings.Contains(done.Error, "still running") {
+		t.Fatalf("expected a timeout naming the running session: %#v", done)
+	}
+	if !manager.HasUndelivered("caller") {
+		t.Fatal("a timed-out wait must still wake the caller")
+	}
+}
+
+func TestWaitBackgroundCancelStopsTheWatcher(t *testing.T) {
+	active := newActiveSet("busy")
+	runtime, sessions, manager := newBackgroundWaitRuntime(t, active)
+	_, _ = sessions.Create(types.CreateSessionOptions{ID: "busy", Title: "b", Cwd: "/tmp"})
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"busy", background: true})`).(map[string]any)
+	if _, err := manager.Cancel(out["work_id"].(string), "caller"); err != nil {
+		t.Fatal(err)
+	}
+	active.finish("busy")
+	time.Sleep(2 * waitPoll)
+	done := waitForWork(t, manager)
+	if done.Status != background.StatusCancelled || done.Summary != "" {
+		t.Fatalf("a cancelled wait must stay cancelled: %#v", done)
+	}
+	if !manager.HasUndelivered("caller") {
+		t.Fatal("a user-cancelled wait must notify the caller")
+	}
+}
+
+func TestWaitBackgroundAlreadyFinishedAnswersDirectly(t *testing.T) {
+	active := newActiveSet()
+	runtime, sessions, manager := newBackgroundWaitRuntime(t, active)
+	target, _ := sessions.Create(newSource("plan-mode"))
+	appendReply(t, sessions, target.ID, "Nothing to do.")
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"`+target.ID+`", background: true})`).(map[string]any)
+	if out["done"] != true || out["background"] != nil {
+		t.Fatalf("a finished session needs no background work: %#v", out)
+	}
+	if first := out["sessions"].([]any)[0].(map[string]any); first["last_reply"] != "Nothing to do." {
+		t.Fatalf("last_reply = %#v", first["last_reply"])
+	}
+	if works := manager.List("caller"); len(works) != 0 {
+		t.Fatalf("no work should be registered: %#v", works)
+	}
+}
+
+func TestWaitBackgroundAnyCompletesOnTheFirstSession(t *testing.T) {
+	active := newActiveSet("a", "b")
+	runtime, sessions, manager := newBackgroundWaitRuntime(t, active)
+	for _, id := range []string{"a", "b"} {
+		_, _ = sessions.Create(types.CreateSessionOptions{ID: id, Title: id, Cwd: "/tmp"})
+	}
+	evalJSON(t, runtime, `console.sessions.wait({session_ids:["a","b"], mode:"any", background: true})`)
+	active.finish("a")
+	done := waitForWork(t, manager)
+	if done.Status != background.StatusCompleted || !strings.Contains(done.Summary, "b: working") {
+		t.Fatalf("mode any must complete with b still working: %#v", done)
+	}
+}
+
+func TestWaitBackgroundSummaryFitsTheManagerLimit(t *testing.T) {
+	active := newActiveSet("a", "b")
+	runtime, sessions, manager := newBackgroundWaitRuntime(t, active)
+	for _, id := range []string{"a", "b"} {
+		_, _ = sessions.Create(types.CreateSessionOptions{ID: id, Title: id, Cwd: "/tmp"})
+		appendReply(t, sessions, id, id+"-reply "+strings.Repeat("word ", 2000))
+	}
+	evalJSON(t, runtime, `console.sessions.wait({session_ids:["a","b"], background: true})`)
+	active.finish("a")
+	active.finish("b")
+	done := waitForWork(t, manager)
+	for _, want := range []string{"a-reply", "b-reply", "[cut]", "console.sessions.read."} {
+		if !strings.Contains(done.Summary, want) {
+			t.Fatalf("summary missing %q (len %d): %s", want, len(done.Summary), done.Summary)
+		}
+	}
+}
+
+func TestWaitBackgroundRejectsBadInput(t *testing.T) {
+	active := newActiveSet("busy")
+	runtime, sessions, _ := newBackgroundWaitRuntime(t, active)
+	_, _ = sessions.Create(types.CreateSessionOptions{ID: "busy", Title: "b", Cwd: "/tmp"})
+	if err := evalErr(runtime, `console.sessions.wait({session_id:"busy", background:"yes"})`); err == nil || !strings.Contains(err.Error(), "true or false") {
+		t.Fatalf("a non-boolean background must be rejected: %v", err)
+	}
+	runtime.work = nil
+	if err := evalErr(runtime, `console.sessions.wait({session_id:"busy", background:true})`); err == nil || !strings.Contains(err.Error(), "not available") {
+		t.Fatalf("background without a manager must be rejected: %v", err)
+	}
+}
+
 // ---- sessions.search
 
 func newSearchRuntime(t *testing.T, projectID, cwd string) (*Runtime, *services.SessionService) {
@@ -742,6 +967,10 @@ func newSearchRuntime(t *testing.T, projectID, cwd string) (*Runtime, *services.
 
 func searchSession(t *testing.T, sessions *services.SessionService, id, title, cwd, text string) {
 	t.Helper()
+	// Create must not point a session at a directory that is not on disk.
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	h, err := sessions.Create(types.CreateSessionOptions{ID: id, Title: title, Cwd: cwd, ModelID: "m", Provider: "p"})
 	if err != nil {
 		t.Fatal(err)
@@ -769,10 +998,12 @@ func searchHits(t *testing.T, out any) []map[string]any {
 }
 
 func TestSearchDefaultsToTheCurrentDirectoryAndLeavesOutTheAgentsOwnSession(t *testing.T) {
-	runtime, sessions := newSearchRuntime(t, "", "/work/app")
-	searchSession(t, sessions, "caller", "Me", "/work/app", "the quarterly report is here")
-	searchSession(t, sessions, "other1", "Other", "/work/app", "the quarterly report draft")
-	searchSession(t, sessions, "elsewhere", "Far", "/somewhere/else", "the quarterly report too")
+	base := t.TempDir()
+	app, elsewhere := filepath.Join(base, "app"), filepath.Join(base, "else")
+	runtime, sessions := newSearchRuntime(t, "", app)
+	searchSession(t, sessions, "caller", "Me", app, "the quarterly report is here")
+	searchSession(t, sessions, "other1", "Other", app, "the quarterly report draft")
+	searchSession(t, sessions, "elsewhere", "Far", elsewhere, "the quarterly report too")
 
 	hits := searchHits(t, evalJSON(t, runtime, `console.sessions.search({query:"quarterly report"})`))
 	if len(hits) != 1 || hits[0]["session_id"] != "other1" {
@@ -781,12 +1012,14 @@ func TestSearchDefaultsToTheCurrentDirectoryAndLeavesOutTheAgentsOwnSession(t *t
 }
 
 func TestSearchScopeOptions(t *testing.T) {
-	runtime, sessions := newSearchRuntime(t, "", "/work/app")
-	searchSession(t, sessions, "a", "A", "/work/app", "needle in app")
-	searchSession(t, sessions, "b", "B", "/work/lib", "needle in lib")
+	base := t.TempDir()
+	app, lib := filepath.Join(base, "app"), filepath.Join(base, "lib")
+	runtime, sessions := newSearchRuntime(t, "", app)
+	searchSession(t, sessions, "a", "A", app, "needle in app")
+	searchSession(t, sessions, "b", "B", lib, "needle in lib")
 
 	count := func(code string) int { return len(searchHits(t, evalJSON(t, runtime, code))) }
-	if n := count(`console.sessions.search({query:"needle", cwd:"/work/lib"})`); n != 1 {
+	if n := count(`console.sessions.search({query:"needle", cwd:` + mustJSONString(lib) + `})`); n != 1 {
 		t.Fatalf("cwd scope = %d hits", n)
 	}
 	if n := count(`console.sessions.search({query:"needle", all_projects:true})`); n != 2 {
@@ -798,8 +1031,8 @@ func TestSearchScopeOptions(t *testing.T) {
 }
 
 func TestSearchRefusals(t *testing.T) {
-	runtime, sessions := newSearchRuntime(t, "", "/work/app")
-	searchSession(t, sessions, "a", "A", "/work/app", "x")
+	runtime, sessions := newSearchRuntime(t, "", filepath.Join(t.TempDir(), "app"))
+	searchSession(t, sessions, "a", "A", runtime.cwd, "x")
 	for name, code := range map[string]string{
 		"no query":         `console.sessions.search({})`,
 		"empty query":      `console.sessions.search({query:""})`,
@@ -829,8 +1062,8 @@ func TestSearchWithNoProjectOrDirectoryExplainsWhatToPass(t *testing.T) {
 }
 
 func TestSearchResultCarriesWhatAFindBarNeeds(t *testing.T) {
-	runtime, sessions := newSearchRuntime(t, "", "/work/app")
-	searchSession(t, sessions, "other", "Other", "/work/app", "alpha needle beta needle gamma")
+	runtime, sessions := newSearchRuntime(t, "", filepath.Join(t.TempDir(), "app"))
+	searchSession(t, sessions, "other", "Other", runtime.cwd, "alpha needle beta needle gamma")
 	out := evalJSON(t, runtime, `console.sessions.search({query:"needle"})`).(map[string]any)
 	hits := searchHits(t, out)
 	if len(hits) != 1 {

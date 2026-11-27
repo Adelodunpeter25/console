@@ -10,7 +10,7 @@ data class SessionViewState(
     val sessionModelId: String? = null,
     val sessionProvider: String? = null,
     val sessionCwd: String? = null,
-    val approvalMode: String = "always-ask",
+    val approvalMode: String = "plan-mode",
     val thinkingLevel: String? = null,
     // Set when the chat lives in a worktree; null for a plain checkout.
     val worktreeBranch: String? = null,
@@ -18,6 +18,10 @@ data class SessionViewState(
     // worktree folder, outside the project's path, so path matching alone
     // loses the project; this id survives the move.
     val projectId: String? = null,
+    // A new chat that will start in a fresh worktree once its first message creates the session.
+    val worktreePending: Boolean = false,
+    // Branch the pending worktree is cut from; null lets the server use the repo default.
+    val worktreeBase: String? = null,
 )
 
 val EMPTY_SESSION_VIEW = SessionViewState()
@@ -56,8 +60,13 @@ class SessionStateHolder {
 
     fun getView(id: String): SessionViewState = _views.value[id] ?: EMPTY_SESSION_VIEW
     fun setView(id: String, view: SessionViewState) { _views.value = _views.value + (id to view) }
+    fun updateApprovalMode(id: String, mode: String) {
+        val cur = _views.value[id] ?: EMPTY_SESSION_VIEW
+        _views.value = _views.value + (id to cur.copy(approvalMode = mode))
+    }
+    fun removeView(id: String) { _views.value = _views.value - id }
     fun applyHeader(id: String, modelId: String?, provider: String?, cwd: String?, approvalMode: String?, status: SessionStatus?) {
-        setView(id, SessionViewState(modelId, provider, cwd, approvalMode ?: "always-ask"))
+        setView(id, SessionViewState(modelId, provider, cwd, approvalMode ?: "plan-mode"))
         if (status != null) setStatus(id, status)
     }
 }

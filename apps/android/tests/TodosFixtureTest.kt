@@ -10,8 +10,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Golden-fixture tests for the todos migration
- * (docs/plan/shared-protobuf-schema.md §8). Fixtures live in
+ * Golden-fixture tests for the todos migration. Fixtures live in
  * proto/testdata/session and are shared by Go, Rust, and Kotlin.
  */
 class TodosFixtureTest {

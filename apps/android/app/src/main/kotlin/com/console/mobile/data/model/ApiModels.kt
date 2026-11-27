@@ -18,6 +18,33 @@ data class CreateSessionDto(
     val provider: String? = null,
     val title: String? = null,
     val approvalMode: String? = null,
+    val thinkingLevel: String? = null,
+    val worktree: CreateWorktreeDto? = null,
+)
+
+@Serializable
+data class CreateWorktreeDto(
+    val branch: String? = null,
+    val baseBranch: String? = null,
+)
+
+/**
+ * POST /api/sessions/with-worktree — the instant launch: the server creates
+ * the session immediately, then provisions the worktree and runs [prompt] in
+ * the background. The response header carries `launchState`
+ * ("provisioning"/"failed") until the prompt is running.
+ */
+@Serializable
+data class LaunchWorktreeDto(
+    val cwd: String? = null,
+    val projectId: String? = null,
+    val title: String? = null,
+    val modelId: String? = null,
+    val provider: String? = null,
+    val approvalMode: String? = null,
+    val thinkingLevel: String? = null,
+    val worktree: CreateWorktreeDto,
+    val prompt: RunPromptDto,
 )
 
 @Serializable
@@ -113,6 +140,22 @@ data class OAuthLoginUrlDto(val provider: String)
 data class GitHubTokenDto(val token: String)
 
 /**
+ * One repository from GET /api/github/repos — the connected account's repos,
+ * shown in the project pickers' GitHub section. `cloneUrl` is what
+ * POST /api/projects/clone takes as its url.
+ */
+@Serializable
+data class GithubRepo(
+    val fullName: String,
+    val name: String,
+    val private: Boolean,
+    val description: String? = null,
+    val htmlUrl: String,
+    val cloneUrl: String,
+    val pushedAt: String? = null,
+)
+
+/**
  * Body for PUT /api/providers/:id/credential.
  *
  * camelCase `apiKey` to match the server's protojson field name — this is the
@@ -128,14 +171,19 @@ data class OAuthCallbackDto(val provider: String, val code: String, val state: S
 @Serializable
 data class AnswerQuestionDto(val requestId: String, val answer: JsonElement)
 
-@Serializable
-data class ApproveToolPermissionDto(val requestId: String, val allow: Boolean)
-
 // SlashCommandInfo and FileSearchResponse moved to the shared protobuf schema
 // (console.v1 from proto/console/v1/assist.proto): SlashCommandInfo is now
 // console.v1.SlashCommandInfo and the search envelope console.v1.AssistFileSearchResponse.
 // Wire types are decoded through WireJsonAdapterFactory in OkHttpConsoleApi, not
 // kotlinx, so these deliberately stay non-@Serializable.
+
+/** One user prompt from `GET /api/sessions/:id/prompts`; `id` matches the loaded message's id. */
+@Serializable
+data class SessionPrompt(
+    val id: String,
+    val createdAt: Long = 0,
+    val preview: String = "",
+)
 
 // ProjectInfo moved to the shared protobuf schema (console.v1 from
 // proto/console/v1): timestamps now arrive as protojson strings, so the
@@ -148,9 +196,22 @@ data class ApproveToolPermissionDto(val requestId: String, val allow: Boolean)
 // in OkHttpConsoleApi.getSession (envelope + Moshi header + kotlinx messages).
 data class SessionDetailResponse(
     val header: console.v1.SessionHeader,
-    val messages: List<AgentMessage> = emptyList(),
+    val turns: List<com.console.mobile.core.chat.TranscriptTurn> = emptyList(),
     val hasMore: Boolean = false,
     val nextCursor: Long? = null,
+)
+
+// One-call chat open: `GET /api/sessions/:id/bootstrap`. Decoded manually in
+// OkHttpConsoleApi.getSessionBootstrap, like SessionDetailResponse.
+data class SessionBootstrapResponse(
+    val detail: SessionDetailResponse,
+    val changes: List<console.v1.SessionFileChange> = emptyList(),
+    val todos: List<console.v1.TodoItem> = emptyList(),
+    val suggestions: List<String> = emptyList(),
+    val queuedPrompts: List<console.v1.QueuedPrompt> = emptyList(),
+    val backgroundWork: List<BackgroundWork> = emptyList(),
+    val draft: console.v1.ChatDraft? = null,
+    val pendingQuestions: List<console.v1.AskQuestionRequest> = emptyList(),
 )
 
 // FsTreeEntry moved to the shared protobuf schema (console.v1 from

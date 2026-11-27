@@ -54,14 +54,22 @@ message FsFileContent {
   string content = 2;
 }
 
-message WriteFileRequest {
+// Atomic, conflict-checked save for the desktop editor (POST /api/fs/save).
+// `content` is the exact text to persist: the editor has already applied the
+// file's own line endings, so the server never rewrites CRLF/LF. `base_etag`
+// is the ETag the buffer was loaded at; when it is set and no longer matches,
+// the save is refused with 409 FILE_CHANGED.
+message SaveFileRequest {
   string path = 1;
   string content = 2;
+  optional string base_etag = 3;
 }
 
-message FileWriteResponse {
+message SaveFileResponse {
   string path = 1;
-  string message = 2;
+  string etag = 2;
+  uint64 size_bytes = 3;
+  int64 mtime_ms = 4;
 }
 
 message FileDeleteResponse {

@@ -4,9 +4,8 @@
 // The shape is the console kernel's: plain results (a call returns its data
 // directly), one object argument per method, unknown members named in the
 // error, and the API documented once in the /browser-use skill instead of as
-// schema on every turn. Methods are synchronous — goja has no microtask pump,
-// so a Promise would never settle — and every one blocks on the desktop
-// client answering the underlying low-level action.
+// schema on every turn. Methods block on the desktop client answering the
+// underlying low-level action.
 //
 // The desktop stays the source of truth for tabs, URLs and titles; this
 // runtime tracks only what the desktop cannot know: which tabs the kernel
@@ -16,10 +15,10 @@ package browseruse
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
+	"github.com/MoeForge/moego/json"
+	"github.com/MoeForge/moego/regexp"
 	"strings"
 	"sync"
 	"time"
@@ -114,7 +113,6 @@ func NewJSRuntime(manager *Manager, sessionID string, handler tools.BrowserHandl
 		Root:             "browser",
 		PlainResults:     true,
 		InterruptMessage: "execution stopped; a browser action in flight may already have taken effect. Inspect fresh state before retrying.",
-		AsyncMessage:     "async code is not supported: call browser methods directly, they already wait for the result",
 	}, r.methods())
 	if err != nil {
 		return nil, err
@@ -406,7 +404,16 @@ func (r *JSRuntime) open(ctx context.Context, args map[string]any) (any, error) 
 		return nil, err
 	}
 	r.setActive(tabID)
-	return map[string]any{"tabId": tabID, "url": liveURL, "title": title}, nil
+	if liveURL == "" {
+		liveURL = url
+	}
+	return map[string]any{
+		"tabId":        tabID,
+		"url":          liveURL,
+		"title":        title,
+		"requestedUrl": url,
+		"redirected":   liveURL != url,
+	}, nil
 }
 
 func (r *JSRuntime) page(ctx context.Context, args map[string]any) (any, error) {
@@ -453,7 +460,16 @@ func (r *JSRuntime) gotoTab(ctx context.Context, args map[string]any) (any, erro
 	}
 	r.setActive(row.ID)
 	_, title, liveURL := parseHeader(res.Result)
-	return map[string]any{"tabId": row.ID, "url": liveURL, "title": title}, nil
+	if liveURL == "" {
+		liveURL = url
+	}
+	return map[string]any{
+		"tabId":        row.ID,
+		"url":          liveURL,
+		"title":        title,
+		"requestedUrl": url,
+		"redirected":   liveURL != url,
+	}, nil
 }
 
 func (r *JSRuntime) snapshot(ctx context.Context, args map[string]any) (any, error) {
@@ -1092,7 +1108,10 @@ func describeLocator(args map[string]any, selector string) string {
 func (r *JSRuntime) close(ctx context.Context, args map[string]any) (any, error) {
 	tabID := argStringOr(args, "tabId", "")
 	if tabID == "" {
-		return nil, jskernel.Errorf("browser.close needs {tabId}; open tabs are listed by browser.tabs()")
+		tabID = r.activeTabID()
+	}
+	if tabID == "" {
+		return nil, jskernel.Errorf("browser.close needs {tabId} when no tab is active; open tabs are listed by browser.tabs()")
 	}
 	if !r.manager.isOwned(r.session, tabID) {
 		return nil, jskernel.Errorf("tab %s was not opened by this kernel; only tabs from browser.open() can be closed here", tabID)

@@ -4,6 +4,11 @@
     all(target_os = "windows", not(debug_assertions)),
     windows_subsystem = "windows"
 )]
+#![allow(
+    clippy::type_complexity,
+    clippy::let_unit_value,
+    clippy::too_many_arguments
+)]
 
 mod app_menu;
 mod assets;
@@ -11,8 +16,8 @@ mod keybindings;
 mod log_filter;
 mod menubar;
 mod new_project_dialog;
-mod persistence;
 mod picker;
+mod recording;
 mod settings;
 mod settings_window;
 mod single_instance;
@@ -22,6 +27,10 @@ mod view;
 mod window;
 
 use assets::{Assets, register_core_fonts};
+
+// The persisted state format lives in the library so it can be tested
+// without a window; `crate::persistence::…` keeps resolving to it.
+use console_app::persistence;
 
 use console_ui::init_input_keybindings;
 use gpui::App;
@@ -43,14 +52,14 @@ fn log_panics_to_file() {
             "==== panic in thread '{thread_name}' ====\n{info}\nbacktrace:\n{backtrace}\n\n"
         );
         eprint!("{text}");
-        if let Some(dir) = panic_log_dir() {
-            if std::fs::create_dir_all(&dir).is_ok() {
-                let _ = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(dir.join("panic.log"))
-                    .and_then(|mut f| std::io::Write::write_all(&mut f, text.as_bytes()));
-            }
+        if let Some(dir) = panic_log_dir()
+            && std::fs::create_dir_all(&dir).is_ok()
+        {
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(dir.join("panic.log"))
+                .and_then(|mut f| std::io::Write::write_all(&mut f, text.as_bytes()));
         }
     }));
 }
@@ -127,25 +136,27 @@ fn main() {
         if let Err(error) = register_core_fonts(cx) {
             log::warn!("Failed to register bundled fonts: {error}");
         }
-        // gpui-component: theme/global state/popover plumbing. Required before
-        // any of its components (CommandPalette) are used, and its `Root` must
-        // wrap the window's top-level view for overlays to render.
-        gpui_component::init(cx);
+        // Global shortcuts first, so context-scoped bindings registered later
+        // win ties inside their own contexts (GPUI breaks equal-depth ties by
+        // preferring later-registered bindings).
+        keybindings::init(cx);
         editor_ui::init(cx);
         console_ui::theme::init(cx);
         init_input_keybindings(cx);
-        // Global shortcuts last, so context-scoped bindings keep winning ties
-        // inside their own contexts.
-        keybindings::init(cx);
         keybindings::init_handlers(cx);
         app_menu::init(cx);
         console_ui::init_autocomplete_keybindings(cx);
         console_ui::init_floating_composer_keybindings(cx);
         console_ui::init_session_rename_keybindings(cx);
+        console_ui::init_sidebar_search_keybindings(cx);
+        console_ui::init_palette_keybindings(cx);
         console_ui::init_code_viewer_keybindings(cx);
         console_ui::terminal::init_terminal_keybindings(cx);
         console_ui::init_browser_keybindings(cx);
         console_ui::primitives::menu::init(cx);
+        // After menu::init so the picker's deeper bindings win the
+        // ConsoleMenu > ComposerInput ties inside its own popover.
+        console_ui::init_model_picker_keybindings(cx);
 
         // Only the main window is persisted and restored. Extra windows
         // opened in-session (New Window) are session-only by design.

@@ -20,6 +20,7 @@ use gpui::{App, AppContext, Context, Entity, IntoElement, Render, Window};
 use crate::CommandPaletteModal;
 use crate::IconName;
 use crate::PaletteEntry;
+use crate::common::palette::PaletteBreadcrumb;
 
 pub struct ProjectBrowsePalette {
     modal: Entity<CommandPaletteModal>,
@@ -61,6 +62,7 @@ impl ProjectBrowsePalette {
             modal.set_placeholder("Filter folders…", cx);
             // Local filter against the listing; query does not re-fetch.
             modal.set_filterable(true, cx);
+            modal.set_show_tabs(false, cx);
             modal.set_query_handler(|_query, _window, _cx| {}, cx);
             modal.set_browse_callback(
                 {
@@ -112,13 +114,26 @@ impl ProjectBrowsePalette {
                     let _ = this.update(cx, |this, cx| {
                         this.current_path = Some(resp.current_path.clone());
                         this.parent_path = resp.parent_path.clone();
+                        let crumbs = build_breadcrumbs(&resp.current_path);
+                        let folder_for_select = resp.current_path.clone();
+                        let on_select = on_select_project.clone();
+                        let modal_ref = modal.clone();
                         this.modal.update(cx, |m, cx| {
-                            // Show the current path in the placeholder so the
-                            // user always knows where they are.
-                            m.set_placeholder(
-                                format!("Filter in {}…", short_path(&resp.current_path)),
+                            m.set_navigation_crumbs(crumbs, resp.parent_path.clone(), cx);
+                            m.set_select_action_callback(
+                                {
+                                    let folder = folder_for_select.clone();
+                                    let modal = modal_ref.clone();
+                                    move |window, cx| {
+                                        if let Some(on_select) = &on_select {
+                                            on_select(folder.clone(), window, cx);
+                                        }
+                                        modal.update(cx, |m, cx| m.hide(cx));
+                                    }
+                                },
                                 cx,
                             );
+                            m.set_placeholder("Search folders…", cx);
                             m.set_entries(
                                 entries_from_browse(
                                     resp.current_path,
@@ -150,17 +165,47 @@ impl Render for ProjectBrowsePalette {
     }
 }
 
+/// Build clickable breadcrumb trail for `current_path` with root segments (e.g. Users).
+fn build_breadcrumbs(current_path: &str) -> Vec<PaletteBreadcrumb> {
+    let mut crumbs = Vec::new();
+    let home_path =
+        console_shared::path::home_dir().and_then(|h| h.into_os_string().into_string().ok());
+
+    let mut accum = String::new();
+    let segments: Vec<&str> = current_path
+        .split(['/', '\\'])
+        .filter(|s| !s.is_empty())
+        .collect();
+    for seg in segments {
+        if (accum.is_empty() && current_path.starts_with('/'))
+            || (!accum.is_empty() && !accum.ends_with('/'))
+        {
+            accum.push('/');
+        }
+        accum.push_str(seg);
+
+        let is_home = home_path.as_deref() == Some(&accum);
+        let icon = if is_home {
+            IconName::Home
+        } else {
+            IconName::Folder
+        };
+        crumbs.push(PaletteBreadcrumb::new(seg.to_string(), Some(accum.clone())).icon(icon));
+    }
+
+    crumbs
+}
+
 /// Shorten a path for the placeholder (home → ~, otherwise basename tail).
 fn short_path(path: &str) -> String {
     if let Some(home) =
         console_shared::path::home_dir().and_then(|h| h.into_os_string().into_string().ok())
+        && let Some(rest) = path.strip_prefix(&home)
     {
-        if let Some(rest) = path.strip_prefix(&home) {
-            if rest.is_empty() {
-                return "~".into();
-            }
-            return format!("~{rest}");
+        if rest.is_empty() {
+            return "~".into();
         }
+        return format!("~{rest}");
     }
     path.to_string()
 }
@@ -182,6 +227,7 @@ fn select_folder_entry(
         modal.update(cx, |modal, cx| modal.hide(cx));
     })
     .icon(icon)
+    .section("Actions")
 }
 
 /// Rows for a directory listing:
@@ -193,7 +239,7 @@ fn select_folder_entry(
 /// Files are omitted: this picker is for choosing a project root, not opening files.
 fn entries_from_browse(
     current_path: String,
-    parent_path: Option<String>,
+    _parent_path: Option<String>,
     entries: Vec<FsTreeEntry>,
     modal: &Entity<CommandPaletteModal>,
     on_select_project: &Option<Rc<dyn Fn(String, &mut Window, &mut App)>>,
@@ -205,19 +251,10 @@ fn entries_from_browse(
     out.push(select_folder_entry(
         current_path,
         folder_label,
-        IconName::FolderOpen,
+        IconName::CircleCheck,
         modal,
         on_select_project,
     ));
-
-    // Parent directory — pure navigation.
-    if let Some(parent) = parent_path {
-        out.push(
-            PaletteEntry::new(parent, "..", |_window, _cx| {})
-                .icon(IconName::Folder)
-                .keep_open(true),
-        );
-    }
 
     // Subfolders: clicking or Enter navigates into the folder.
     // "Use this folder" (row 1) is the only way to add the project.
@@ -235,6 +272,7 @@ fn entries_from_browse(
         out.push(
             PaletteEntry::new(entry.path, entry.name, |_window, _cx| {})
                 .icon(IconName::Folder)
+                .section("Folders")
                 .keep_open(true),
         );
     }

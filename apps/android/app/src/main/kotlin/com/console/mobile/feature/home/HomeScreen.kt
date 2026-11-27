@@ -1,8 +1,19 @@
 package com.console.mobile.feature.home
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.exclude
@@ -15,6 +26,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -23,12 +35,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.GroupedProjectSection
@@ -42,20 +59,21 @@ import com.console.mobile.core.util.folderName
 import com.console.mobile.feature.home.EnvironmentSwitcher
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.ui.components.confirmAlert
-import com.console.mobile.ui.components.common.new.BlurredBottomBar
+import com.console.mobile.ui.components.common.new.BlurredHeaderScrim
 import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.common.new.PageHeaderHeight
-import com.console.mobile.ui.components.common.new.SearchBar
-import com.console.mobile.ui.components.common.new.SectionCard
-import com.console.mobile.ui.components.common.new.SectionDivider
+import androidx.compose.foundation.lazy.items
 import com.console.mobile.ui.components.common.new.hideKeyboardOnScroll
 import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionHeader
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
+import io.github.lyxnx.compose.ui.tablericons.outline.ArrowLeft
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
 import io.github.lyxnx.compose.ui.tablericons.outline.Search
+import io.github.lyxnx.compose.ui.tablericons.outline.X
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
@@ -63,7 +81,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Port of screens/home/home-screen.tsx + components/home/session-list.tsx + hooks/useHomeSessions.
- * Grouped project sections (pinned, drafts, projects), search, pull-refresh, compose.
+ * Grouped project sections (pinned, projects), search, pull-refresh, compose.
  *
  * The row, section header, and long-press sheet live in [SessionRow],
  * [SessionSectionHeader], and [SessionActionsSheet].
@@ -78,22 +96,40 @@ fun HomeScreen(
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
     val chatSessions by AppContainer.chatStateHolder.sessions.collectAsStateWithLifecycle()
     val sessionStatuses by AppContainer.sessionStateHolder.statuses.collectAsStateWithLifecycle()
+    val allAutomations by AppContainer.automationsRepository.automations.collectAsStateWithLifecycle()
+    val allWebhooks by AppContainer.automationsRepository.webhooks.collectAsStateWithLifecycle()
+    val automationSessionIds = remember(allAutomations) {
+        allAutomations.filter { it.status == "active" || it.status == "paused" }.map { it.sessionId }.toSet()
+    }
+    val webhookSessionIds = remember(allWebhooks) {
+        allWebhooks.filter { it.status == "active" }.map { it.sessionId }.toSet()
+    }
+    var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    BackHandler(enabled = searchOpen) {
+        searchOpen = false
+        searchQuery = ""
+    }
     var refreshing by remember { mutableStateOf(false) }
-    var creatingSession by remember { mutableStateOf(false) }
     var activeSession by remember { mutableStateOf<SessionHeader?>(null) }
     var branches by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    // Section keys whose sessions are hidden (Pinned/Drafts/project ids).
-    // Survives navigating into a chat and back; resets on process death,
-    // like the rest of Home's transient UI state.
-    var collapsedSections by rememberSaveable { mutableStateOf(emptySet<String>()) }
+    // Section keys whose sessions are hidden (Pinned/Settled/project ids),
+    // persisted across app restarts.
+    var collapsedSections by remember { mutableStateOf(AppContainer.preferencesStore.loadCollapsedSections()) }
     val toggleSection: (String) -> Unit = { key ->
         collapsedSections = if (key in collapsedSections) collapsedSections - key else collapsedSections + key
+        AppContainer.preferencesStore.saveCollapsedSections(collapsedSections)
     }
 
     LaunchedEffect(Unit) {
         AppContainer.projectRepository.loadProjects()
-        AppContainer.projectRepository.loadSessions()
+        AppContainer.sessionRepository.loadSessions()
+    }
+    LaunchedEffect(searchQuery) {
+        val trimmed = searchQuery.trim()
+        if (trimmed.isEmpty()) return@LaunchedEffect
+        kotlinx.coroutines.delay(150)
+        AppContainer.sessionRepository.searchSessions(trimmed)
     }
     LaunchedEffect(projectState.projects) {
         val projs = projectState.projects
@@ -128,7 +164,7 @@ fun HomeScreen(
             try {
                 withContext(Dispatchers.IO) {
                     AppContainer.projectRepository.loadProjects()
-                    AppContainer.projectRepository.loadSessions()
+                    AppContainer.sessionRepository.loadSessions()
                 }
             } finally {
                 refreshing = false
@@ -137,27 +173,11 @@ fun HomeScreen(
     }
 
     fun startChat(projectId: String?) {
-        if (creatingSession) return
-        creatingSession = true
-        scope.launch {
-            try {
-                val proj = projectId?.let { id -> projectState.projects.firstOrNull { it.id == id } }
-                    ?: projectState.projects.firstOrNull()
-                val created = withContext(Dispatchers.IO) {
-                    AppContainer.projectRepository.createSession(cwd = proj?.path ?: "", projectId = proj?.id, title = "New Chat")
-                }
-                AppContainer.appStateHolder.openChatSession(created.id)
-                onOpenChat(created.id)
-                // Navigate first, then load: loadDetail suspends until the fetch
-                // lands, and holding the transition for that round trip showed a
-                // visible stall on every new chat.
-                launch { AppContainer.sessionRepository.loadDetail(created.id) }
-            } catch (_: Exception) {
-                confirmAlert("Unable to start chat", "Check the backend connection and try again.")
-            } finally {
-                creatingSession = false
-            }
-        }
+        val proj = projectId?.let { id -> projectState.projects.firstOrNull { it.id == id } }
+            ?: projectState.projects.firstOrNull()
+        val id = AppContainer.sessionRepository.startNewChat(proj?.id, proj?.path)
+        AppContainer.appStateHolder.openChatSession(id)
+        onOpenChat(id)
     }
 
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
@@ -227,47 +247,61 @@ fun HomeScreen(
                         contentPadding = PaddingValues(top = PageHeaderHeight, bottom = 96.dp),
                         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).hideKeyboardOnScroll(),
                     ) {
-                        sections.forEachIndexed { sIdx, section ->
-                            val sectionKey = sectionCollapseKey(section)
-                            val collapsed = sectionKey in collapsedSections
-                            item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
-                                SessionSectionHeader(
-                                    section = section,
-                                    isFirst = sIdx == 0,
-                                    collapsed = collapsed,
-                                    onToggle = { toggleSection(sectionKey) },
-                                    onNewChat = if (section.projectId != null && section.projectId != "pinned" && section.projectId != "settled" && section.projectName != "Drafts") {
-                                        { startChat(section.projectId) }
-                                    } else {
-                                        null
-                                    },
+                        val isSearching = searchQuery.trim().isNotEmpty()
+                        val workspacesCollapsed = !isSearching && "workspaces" in collapsedSections
+                        if (!isSearching && sections.isNotEmpty()) {
+                            item(key = "workspaces-label") {
+                                WorkspacesLabel(
+                                    collapsed = workspacesCollapsed,
+                                    onToggle = { toggleSection("workspaces") },
                                 )
                             }
-                            if (!collapsed) {
-                                item(key = "card-${section.projectId ?: section.projectName}-$sIdx") {
-                                    SectionCard(modifier = Modifier.padding(bottom = 10.dp)) {
-                                        section.data.forEachIndexed { index, session ->
-                                            val draft = chatSessions[session.id]
-                                            val isDraft = draft != null && isDraftSession(draft)
-                                            val preview = if (isDraft) draftPreview(draft) else null
-                                            val status: SessionStatus? = sessionStatuses[session.id]
-                                                ?: SessionStatus.fromValue(session.status)
-                                            SessionRow(
-                                                session = session,
-                                                projectName = projectNameFor(session),
-                                                branch = branchFor(session),
-                                                status = status,
-                                                isDraft = isDraft,
-                                                draftPreview = preview,
-                                                onClick = {
-                                                    scope.launch { AppContainer.sessionRepository.loadDetail(session.id) }
-                                                    AppContainer.appStateHolder.openChatSession(session.id)
-                                                    onOpenChat(session.id)
-                                                },
-                                                onLongPress = { activeSession = session },
-                                            )
-                                            if (index < section.data.lastIndex) SectionDivider()
-                                        }
+                        }
+                        if (!workspacesCollapsed) {
+                            sections.forEachIndexed { sIdx, section ->
+                                val isSearchSection = section.projectId == "search"
+                                val sectionKey = sectionCollapseKey(section)
+                                val collapsed = !isSearchSection && sectionKey in collapsedSections
+                                item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
+                                    SessionSectionHeader(
+                                        section = section,
+                                        isFirst = sIdx == 0,
+                                        collapsed = collapsed,
+                                        onToggle = { if (!isSearchSection) toggleSection(sectionKey) },
+                                        onNewChat = if (!isSearchSection && section.projectId != null && section.projectId != "pinned" && section.projectId != "settled") {
+                                            { startChat(section.projectId) }
+                                        } else {
+                                            null
+                                        },
+                                    )
+                                }
+                                if (!collapsed) {
+                                    items(
+                                        items = section.data,
+                                        key = { session -> "row-${section.projectId ?: section.projectName}-${session.id}" },
+                                    ) { session ->
+                                        val draft = chatSessions[session.id]
+                                        val isDraft = draft != null && isDraftSession(draft)
+                                        val preview = if (isDraft) draftPreview(draft) else null
+                                        val status: SessionStatus? = sessionStatuses[session.id]
+                                            ?: SessionStatus.fromValue(session.status)
+                                        SessionRow(
+                                            session = session,
+                                            projectName = projectNameFor(session),
+                                            branch = branchFor(session),
+                                            status = status,
+                                            isDraft = isDraft,
+                                            draftPreview = preview,
+                                            hasAutomation = session.id in automationSessionIds,
+                                            hasWebhook = session.id in webhookSessionIds,
+                                            indented = !isSearchSection,
+                                            onClick = {
+                                                scope.launch { AppContainer.sessionRepository.loadDetail(session.id) }
+                                                AppContainer.appStateHolder.openChatSession(session.id)
+                                                onOpenChat(session.id)
+                                            },
+                                            onLongPress = { activeSession = session },
+                                        )
                                     }
                                 }
                             }
@@ -275,28 +309,37 @@ fun HomeScreen(
                     }
                 }
             }
-            PageHeader(
-                title = "Console",
-                blurred = true,
-                showSettings = true,
-                onSettingsPress = onOpenSettings,
-                actions = { EnvironmentSwitcher() },
+            AnimatedContent(
+                targetState = searchOpen,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
                 modifier = Modifier.align(Alignment.TopCenter),
-            )
-            // The search bar rides over the list rather than sitting below it:
-            // the rows scroll underneath it and the frosted bar fades them out
-            // instead of being cut off at a hard edge.
-            BlurredBottomBar(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
-            ) {
-                SearchBar(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    onComposePress = { startChat(projectState.projects.firstOrNull()?.id) },
-                    composeEnabled = !creatingSession,
-                )
+                label = "homeHeaderSearch",
+            ) { searching ->
+                if (searching) {
+                    HomeSearchHeader(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        onClose = {
+                            searchOpen = false
+                            searchQuery = ""
+                        },
+                    )
+                } else {
+                    PageHeader(
+                        title = "Console",
+                        blurred = true,
+                        showSettings = false,
+                        actions = {
+                            HeaderIconButton(
+                                icon = TablerIcons.Outline.Search,
+                                contentDescription = "Search threads",
+                                onClick = { searchOpen = true },
+                                modifier = Modifier.padding(end = 4.dp),
+                            )
+                            EnvironmentSwitcher()
+                        },
+                    )
+                }
             }
         }
     }
@@ -304,6 +347,56 @@ fun HomeScreen(
     val sheetSession = activeSession
     if (sheetSession != null) {
         SessionActionsSheet(session = sheetSession, onDismiss = { activeSession = null })
+    }
+}
+
+@Composable
+private fun HomeSearchHeader(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onClose: () -> Unit,
+) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        try { focusRequester.requestFocus() } catch (_: Exception) {}
+    }
+    Box(modifier = Modifier.fillMaxWidth().height(PageHeaderHeight)) {
+        BlurredHeaderScrim(backgroundColor = NewTheme.Background, blurRadius = 20.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth().height(PageHeaderHeight).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            HeaderIconButton(
+                icon = TablerIcons.Outline.ArrowLeft,
+                contentDescription = "Close search",
+                onClick = onClose,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = TextStyle(color = NewTheme.TextPrimary, fontSize = 16.sp),
+                cursorBrush = SolidColor(NewTheme.Accent),
+                modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                decorationBox = { innerTextField ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (query.isEmpty()) {
+                            Text("Search threads…", color = NewTheme.TextMuted, fontSize = 16.sp, maxLines = 1)
+                        }
+                        innerTextField()
+                    }
+                },
+            )
+            if (query.isNotEmpty()) {
+                Box(
+                    modifier = Modifier.size(28.dp).clip(CircleShape).clickable(onClickLabel = "Clear") { onQueryChange("") },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(TablerIcons.Outline.X, contentDescription = "Clear", tint = NewTheme.TextSecondary, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
     }
 }
 

@@ -2,8 +2,8 @@
 package tests
 
 import (
-	"encoding/json"
 	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,7 +45,7 @@ func TestFilePreviewGates(t *testing.T) {
 	root := t.TempDir()
 	fs := fssvc.NewFsService()
 
-	if err := os.WriteFile(filepath.Join(root, "big.txt"), make([]byte, 600*1024), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "big.txt"), make([]byte, 11*1024*1024), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := fs.ReadFileContentWithMeta(filepath.Join(root, "big.txt"), 0, 0); err == nil {
@@ -74,7 +74,10 @@ func TestWriteReadTree(t *testing.T) {
 	root := t.TempDir()
 	fs := fssvc.NewFsService()
 
-	if _, err := fs.WriteFileContent(filepath.Join(root, "nested", "f.txt"), "hello"); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "nested", "f.txt"), []byte("hello"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	tree, err := fs.GetDirectoryTree(root, 3, true)
@@ -235,5 +238,84 @@ func TestFsGrepResponseContainsOnlySearchPanelFields(t *testing.T) {
 		if _, exists := match[removed]; exists {
 			t.Fatalf("match unexpectedly contains %q: %s", removed, encoded)
 		}
+	}
+}
+
+func TestFilePreviewGatesMatchSharedFixture(t *testing.T) {
+	raw, err := os.ReadFile("../../../../proto/testdata/fs/file_kinds.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds struct {
+		LockBasenames []string `json:"lock_basenames"`
+		LockSuffixes  []string `json:"lock_suffixes"`
+		Raster        []string `json:"raster_image_extensions"`
+		Video         []string `json:"video_extensions"`
+		Audio         []string `json:"audio_extensions"`
+		PDF           []string `json:"pdf_extensions"`
+		Opaque        []string `json:"opaque_extensions"`
+	}
+	if err := json.Unmarshal(raw, &kinds); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	fs := fssvc.NewFsService()
+	check := func(name, wantCode string) {
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := fs.ReadFileContentWithMeta(path, 0, 0)
+		if blocked, ok := err.(*fssvc.PreviewBlocked); !ok || blocked.Code != wantCode {
+			t.Errorf("%s: want %s, got %v", name, wantCode, err)
+		}
+	}
+	for _, n := range kinds.LockBasenames {
+		check(n, "LOCKFILE_BLOCKED")
+	}
+	for _, s := range kinds.LockSuffixes {
+		check("x"+s, "LOCKFILE_BLOCKED")
+	}
+	// Only opaque binaries are gated now; video/audio/pdf preview inline.
+	for _, e := range kinds.Opaque {
+		check("x"+e, "BINARY_FILE")
+	}
+	for _, e := range append(append(append([]string{}, kinds.Video...), kinds.Audio...), kinds.PDF...) {
+		path := filepath.Join(root, "x"+e)
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fs.ReadFileContentWithMeta(path, 0, 0); err != nil {
+			t.Errorf("%s: media file should not be preview-gated, got %v", e, err)
+		}
+	}
+	for _, e := range kinds.Raster {
+		path := filepath.Join(root, "x"+e)
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fs.ReadFileContentWithMeta(path, 0, 0); err != nil {
+			t.Errorf("%s: raster image should not be preview-gated, got %v", e, err)
+		}
+	}
+}
+
+func TestResolvePath(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		t.Skip("no home dir")
+	}
+	if got := fssvc.ResolvePath("~"); got != home {
+		t.Errorf("ResolvePath(~) = %q, want %q", got, home)
+	}
+	want := filepath.Join(home, "Downloads", "test.txt")
+	if got := fssvc.ResolvePath("~/Downloads/test.txt"); got != want {
+		t.Errorf("ResolvePath(~/Downloads/test.txt) = %q, want %q", got, want)
+	}
+	if got := fssvc.ResolvePath("/absolute/path"); got != "/absolute/path" {
+		t.Errorf("ResolvePath(/absolute/path) = %q, want /absolute/path", got)
+	}
+	if got := fssvc.ResolvePath("relative/path"); got != "relative/path" {
+		t.Errorf("ResolvePath(relative/path) = %q, want relative/path", got)
 	}
 }

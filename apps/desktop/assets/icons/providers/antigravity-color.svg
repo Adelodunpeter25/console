@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-label="Google Antigravity">
+  <defs>
+    <clipPath id="ag-shape">
+      <path d="M21.751 22.607c1.34 1.005 3.35.335 1.508-1.508C17.73 15.74 18.904 1 12.037 1 5.17 1 6.342 15.74.815 21.1c-2.01 2.009.167 2.511 1.507 1.506 5.192-3.517 4.857-9.714 9.715-9.714 4.857 0 4.522 6.197 9.714 9.715z"/>
+    </clipPath>
+    <radialGradient id="ag-green" cx="3.5" cy="8" r="10" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7BC043"/><stop offset="0.45" stop-color="#7BC043" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#7BC043" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ag-orange" cx="10.5" cy="0.5" r="8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FBA21B"/><stop offset="0.5" stop-color="#FBA21B" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#FBA21B" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ag-red" cx="16" cy="2.5" r="9" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FC413D"/><stop offset="0.5" stop-color="#FC413D" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#FC413D" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ag-light" cx="20" cy="15" r="6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#749BFF"/>
+      <stop offset="1" stop-color="#749BFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g clip-path="url(#ag-shape)">
+    <rect width="24" height="24" fill="#3186FF"/>
+    <rect width="24" height="24" fill="url(#ag-light)"/>
+    <rect width="24" height="24" fill="url(#ag-green)"/>
+    <rect width="24" height="24" fill="url(#ag-red)"/>
+    <rect width="24" height="24" fill="url(#ag-orange)"/>
+  </g>
+</svg>

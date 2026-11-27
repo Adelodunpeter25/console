@@ -1,11 +1,11 @@
 // Agent run routes: run,
-// attach-to-stream, abort, queue, steer, approve, answer.
+// attach-to-stream, abort, queue, steer, answer.
 package routes
 
 import (
-	"encoding/json"
 	"errors"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
+	"github.com/MoeForge/moego/json"
 	"strings"
 	"time"
 
@@ -208,15 +208,12 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
-	// POST /api/sessions/:id/abort — cancel the active run and discard any
-	// staged prompt: Stop means stop everything.
+	// POST /api/sessions/:id/abort — cancel the active run. Queued prompts
+	// survive: each starts as its own run once this one settles.
 	app.Post("/api/sessions/:id/abort", func(c *fiber.Ctx) error {
 		sessionID := c.Params("id")
 		if !runs.Abort(sessionID) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No active run found for session '" + sessionID + "'."})
-		}
-		if _, err := runs.ClearQueuedPrompt(sessionID); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
 		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"sessionId": sessionID, "aborted": true}})
 	})
@@ -259,24 +256,8 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"resolved": true}})
 	})
 
-	// POST /api/sessions/:id/approve — approve or deny a pending tool request.
-	app.Post("/api/sessions/:id/approve", func(c *fiber.Ctx) error {
-		sessionID := c.Params("id")
-		var body struct {
-			RequestID string `json:"requestId"`
-			Allow     bool   `json:"allow"`
-		}
-		if err := c.BodyParser(&body); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
-		}
-		if !runs.ApprovePermission(sessionID, body.RequestID, body.Allow) {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No pending permission for requestId '" + body.RequestID + "'."})
-		}
-		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"approved": body.Allow}})
-	})
-
-	// POST /api/sessions/:id/queue — stage (or replace) the prompt that
-	// runs once the active turn settles.
+	// POST /api/sessions/:id/queue — add a prompt to the queue; queued
+	// prompts run oldest first as each turn settles.
 	app.Post("/api/sessions/:id/queue", func(c *fiber.Ctx) error {
 		sessionID := c.Params("id")
 		var body runPromptBody
@@ -297,7 +278,7 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
-	// PUT /api/sessions/:id/queue — edit the staged prompt in place.
+	// PUT /api/sessions/:id/queue — edit the prompt that runs next, in place.
 	app.Put("/api/sessions/:id/queue", func(c *fiber.Ctx) error {
 		sessionID := c.Params("id")
 		var body runPromptBody
@@ -321,7 +302,7 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
-	// GET /api/sessions/:id/queue — fetch the staged prompt, if any.
+	// GET /api/sessions/:id/queue — fetch the prompt that runs next, if any.
 	app.Get("/api/sessions/:id/queue", func(c *fiber.Ctx) error {
 		queued, err := runs.QueuedPrompt(c.Params("id"))
 		if err != nil {
@@ -334,7 +315,33 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
-	// DELETE /api/sessions/:id/queue — discard the staged prompt.
+	// GET /api/sessions/:id/queue/all — every queued prompt, next to run first.
+	app.Get("/api/sessions/:id/queue/all", func(c *fiber.Ctx) error {
+		queue, err := runs.QueuedPrompts(c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		items := make([]any, 0, len(queue))
+		for i := range queue {
+			item, err := run.QueuedPromptData(&queue[i])
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+			}
+			items = append(items, item)
+		}
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"queuedPrompts": items}})
+	})
+
+	// DELETE /api/sessions/:id/queue/:queueId — discard one queued prompt.
+	app.Delete("/api/sessions/:id/queue/:queueId", func(c *fiber.Ctx) error {
+		deleted, err := runs.RemoveQueuedPrompt(c.Params("id"), c.Params("queueId"))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"deleted": deleted}})
+	})
+
+	// DELETE /api/sessions/:id/queue — discard every queued prompt.
 	app.Delete("/api/sessions/:id/queue", func(c *fiber.Ctx) error {
 		deleted, err := runs.ClearQueuedPrompt(c.Params("id"))
 		if err != nil {

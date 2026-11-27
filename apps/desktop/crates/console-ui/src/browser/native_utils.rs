@@ -2,7 +2,7 @@
 //!
 //! Both hosts embed a native child `NSView` in the GPUI window, so both
 //! need native focus tracking (`ResponderObserver`, via `firstResponder`
-//! KVO) and overlay z-order repair (`lower_below_scene_overlay`).
+//! KVO).
 
 use std::ffi::c_void;
 use std::ptr::null_mut;
@@ -10,7 +10,7 @@ use std::ptr::null_mut;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{AnyThread, DefinedClass, define_class, msg_send};
-use objc2_app_kit::{NSApplication, NSEventType, NSView, NSWindow};
+use objc2_app_kit::{NSApplication, NSEventType, NSWindow};
 use objc2_foundation::{
     MainThreadMarker, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions,
     NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSProcessInfo, NSString, ns_string,
@@ -86,26 +86,6 @@ impl Drop for ResponderObserver {
             self.ivars()
                 .window
                 .removeObserver_forKeyPath(self, ns_string!("firstResponder"));
-        }
-    }
-}
-
-/// Park a child view below any `GPUIOverlayView` sibling so menus, palettes,
-/// and popovers paint above the native surface.
-pub(crate) fn lower_below_scene_overlay(view: &NSView) {
-    use objc2_app_kit::NSWindowOrderingMode;
-
-    let Some(superview) = (unsafe { view.superview() }) else {
-        return;
-    };
-    for sibling in superview.subviews().iter() {
-        if sibling.class().name() == c"GPUIOverlayView" {
-            superview.addSubview_positioned_relativeTo(
-                view,
-                NSWindowOrderingMode::Below,
-                Some(&sibling),
-            );
-            return;
         }
     }
 }

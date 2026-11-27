@@ -23,6 +23,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 var (
@@ -79,7 +80,10 @@ func (s *ProjectBootstrapService) InitBlank(parentDir, name string) (string, err
 }
 
 // Clone clones url into <parentDir>/<name>, defaulting <name> to the last
-// path segment of the URL. Returns the created directory.
+// path segment of the URL. An empty parentDir means the caller has no folder
+// to offer (the mobile/desktop repo picker): the clone lands in
+// utils.ProjectsDir(), which is created on demand. Returns the created
+// directory.
 //
 // SSH-style GitHub URLs need no handling: gitconfig.Configure() injects
 // url.https://github.com/.insteadOf rewrites into os.Environ(), which the
@@ -100,9 +104,19 @@ func (s *ProjectBootstrapService) Clone(url, parentDir, name string) (string, er
 	if err := validateChildName(name); err != nil {
 		return "", err
 	}
-	parent, err := resolveParentDir(parentDir)
-	if err != nil {
-		return "", err
+	var parent string
+	if strings.TrimSpace(parentDir) == "" {
+		// The default root is created, not merely resolved: a first clone
+		// into a fresh install must not fail on a missing ~/console.
+		parent = utils.ProjectsDir()
+		if err := os.MkdirAll(parent, 0o755); err != nil {
+			return "", err
+		}
+	} else {
+		parent, err = resolveParentDir(parentDir)
+		if err != nil {
+			return "", err
+		}
 	}
 	dir := filepath.Join(parent, name)
 	if err := ensureTargetAvailable(dir); err != nil {
@@ -123,6 +137,13 @@ func (s *ProjectBootstrapService) Clone(url, parentDir, name string) (string, er
 		return "", fmt.Errorf("clone failed: %w", err)
 	}
 	return dir, nil
+}
+
+// RepoName exposes the URL-to-folder-name rule so routes can predict where a
+// clone would land (and reuse an already-registered project there) without
+// duplicating the parsing.
+func (s *ProjectBootstrapService) RepoName(url string) (string, error) {
+	return repoNameFromURL(url)
 }
 
 // needsGitHubToken reports whether a clone of this URL might need a stored
@@ -168,8 +189,11 @@ func normalizeHost(host string) string {
 // A trailing ".git" is dropped, since nobody wants a folder called "repo.git".
 func repoNameFromURL(url string) (string, error) {
 	trimmed := strings.TrimSuffix(strings.TrimSpace(url), "/")
-	if h, _, found := strings.Cut(trimmed, "://"); found {
-		trimmed = h
+	// Cut returns (before, after, found): the name comes from the part
+	// AFTER the scheme, not the scheme itself — keeping `before` named
+	// every https:// clone "https".
+	if _, after, found := strings.Cut(trimmed, "://"); found {
+		trimmed = after
 	}
 	if rest, found := strings.CutPrefix(trimmed, "git@"); found {
 		// scp-style: everything after the colon is the path.

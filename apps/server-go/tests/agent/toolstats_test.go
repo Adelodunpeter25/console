@@ -4,7 +4,7 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
@@ -51,7 +51,7 @@ func TestToolStatsRecordedByLoop(t *testing.T) {
 		func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "done"}} },
 	}}
 	registry := tools.NewRegistry(tools.DefaultTools()...)
-	agent := loop.New(provider, loop.NewExecutor(registry, permissions.FullAccess, nil), nil)
+	agent := loop.New(provider, loop.NewExecutor(registry, permissions.FullAccess), nil)
 	events, err := agent.Run(context.Background(), "s1", "go", registry.Definitions())
 	if err != nil {
 		t.Fatal(err)

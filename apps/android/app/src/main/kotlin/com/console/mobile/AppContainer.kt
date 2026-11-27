@@ -3,14 +3,15 @@ package com.console.mobile
 import android.content.Context
 import com.console.mobile.core.forward.LocalForwardManager
 import com.console.mobile.core.notification.LocalNotificationPresenter
+import com.console.mobile.core.notification.NotificationCoordinator
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
 import com.console.mobile.data.api.HttpTransport
 import com.console.mobile.data.api.OkHttpConsoleApi
-import com.console.mobile.data.local.ChatPersistence
 import com.console.mobile.data.local.PreferencesStore
 import com.console.mobile.data.local.TokenStore
 import com.console.mobile.data.repo.AuthRepository
+import com.console.mobile.data.repo.AutomationsRepository
 import com.console.mobile.data.repo.SetupRepository
 import com.console.mobile.data.repo.ChatRepository
 import com.console.mobile.data.repo.EnvironmentsRepository
@@ -53,6 +54,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 
 object AppContainer {
@@ -130,9 +132,6 @@ object AppContainer {
     lateinit var environmentsStateHolder: EnvironmentsStateHolder
         private set
 
-    lateinit var chatPersistence: ChatPersistence
-        private set
-
     lateinit var chatRepository: ChatRepository
         private set
 
@@ -167,6 +166,9 @@ object AppContainer {
     lateinit var notificationRepository: NotificationRepository
         private set
 
+    lateinit var notificationCoordinator: NotificationCoordinator
+        private set
+
     lateinit var setupRepository: SetupRepository
         private set
 
@@ -188,6 +190,9 @@ object AppContainer {
     lateinit var scriptsRepository: ScriptsRepository
         private set
 
+    lateinit var automationsRepository: AutomationsRepository
+        private set
+
     /**
      * Teardown that outlives any screen — dropping the port tunnels when the
      * server changes. Screens keep their own scopes for their own work.
@@ -206,6 +211,9 @@ object AppContainer {
         appContext = app
 
         httpCallClient = OkHttpClient.Builder()
+            // REST, SSE, terminal WS and port tunnels share this pool; the
+            // default 5 idle connections churn when a run fans out requests.
+            .connectionPool(ConnectionPool(16, 5, TimeUnit.MINUTES))
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
@@ -251,16 +259,12 @@ object AppContainer {
         terminalStateHolder = TerminalStateHolder()
         environmentsStateHolder = EnvironmentsStateHolder()
 
-        chatPersistence = ChatPersistence.create(app)
         val streamClient = ChatStreamClient(httpClient)
 
         projectRepository = ProjectRepository(
             api = consoleApi,
             projectState = projectStateHolder,
-            sessionState = sessionStateHolder,
             appState = appStateHolder,
-            // chatRepository is built later; the lambda only runs on delete.
-            onSessionGone = { chatRepository.discard(it) },
         )
         providerRepository = ProviderRepository(
             api = consoleApi,
@@ -305,14 +309,16 @@ object AppContainer {
             chats = chatStateHolder,
             sessions = sessionStateHolder,
             projectState = projectStateHolder,
-            persistence = chatPersistence,
             providerRepo = providerRepository,
         )
         sessionRepository = SessionRepository(
             api = consoleApi,
+            projectState = projectStateHolder,
             sessions = sessionStateHolder,
+            appState = appStateHolder,
             chats = chatStateHolder,
             chatRepo = chatRepository,
+            onSessionGone = { chatRepository.discard(it) },
         )
         authRepository = AuthRepository(
             api = consoleApi,
@@ -352,12 +358,16 @@ object AppContainer {
             apiClient = consoleApiClient,
             httpClient = httpClient,
         )
+        automationsRepository = AutomationsRepository(
+            api = consoleApi,
+            apiClient = consoleApiClient,
+            httpClient = httpClient,
+        )
         environmentsRepository = EnvironmentsRepository(
             preferencesStore = preferencesStore,
             environmentsState = environmentsStateHolder,
             appState = appStateHolder,
             chatState = chatStateHolder,
-            chatPersistence = chatPersistence,
             sessionState = sessionStateHolder,
             projectState = projectStateHolder,
             providerState = providerStateHolder,
@@ -371,13 +381,16 @@ object AppContainer {
                 // for whichever server is active now.
                 backgroundScope.launch { portsRepository.stop() }
                 scriptsRepository.clear()
+                automationsRepository.restart()
                 projectRepository.loadProjects()
-                projectRepository.loadSessions()
+                sessionRepository.loadSessions()
                 providerRepository.loadProviders()
                 providerRepository.loadApprovalModes()
                 usageRepository.loadAllUsage()
-                sessionRepository.refresh()
                 authRepository.loadStatus()
+                // STT status is per-server state the composer's mic reads, so
+                // it loads with everything else — not only from Providers.
+                backgroundScope.launch { authRepository.loadSttStatus() }
             },
         )
 
@@ -394,44 +407,17 @@ object AppContainer {
             )
         }
 
-        val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-        // notifications() is a one-shot callbackFlow: the server closing the SSE
-        // connection (idle timeout, restart, brief network drop) completes the flow
-        // and collect() simply returns. Without this loop the app would go silent
-        // for the rest of the process lifetime, so reconnect with backoff.
-        appScope.launch {
-            var backoffMs = 1_000L
-            while (isActive) {
-                try {
-                    notificationRepository.notifications().collect { event ->
-                        if (event.kind == "resumed") {
-                            // Silent: an idle session woke itself for finished background
-                            // work. The old run stream ended, so re-attach to the new run
-                            // (after a beat, so the old run's sessionEnd lands first).
-                            launch {
-                                delay(400)
-                                chatRepository.attachServerRun(event.session_id)
-                            }
-                            return@collect
-                        }
-                        val viewingSame = appStateHolder.state.value.activeTab == MobileTab.Chat &&
-                            appStateHolder.state.value.selectedSessionId == event.session_id
-                        if (!viewingSame) {
-                            LocalNotificationPresenter.showNotification(
-                                app,
-                                event.title,
-                                event.body,
-                                event.session_id,
-                                event.subtitle,
-                            )
-                        }
-                    }
-                    backoffMs = 1_000L // a clean end-of-stream shouldn't escalate
-                } catch (_: Exception) {
-                }
-                delay(backoffMs)
-                backoffMs = (backoffMs * 2).coerceAtMost(30_000L)
-            }
+        automationsRepository.start()
+        if (!appStateHolder.state.value.backendUrl.isNullOrBlank()) {
+            backgroundScope.launch { authRepository.loadSttStatus() }
         }
+
+        notificationCoordinator = NotificationCoordinator(
+            context = app,
+            notificationRepository = notificationRepository,
+            chatRepository = chatRepository,
+            sessionRepository = sessionRepository,
+            appStateHolder = appStateHolder,
+        ).apply { start() }
     }
 }

@@ -28,7 +28,12 @@ func (s *Service) backgroundContext(sessionID string) string {
 func (s *Service) renderBackgroundWork(sessionID string, completed []background.Work) string {
 	lines := make([]string, 0, len(completed)*6)
 	for _, item := range completed {
-		lines = append(lines, fmt.Sprintf("Background work completed: %s (%s)", item.ID, item.Kind))
+		if item.Status == background.StatusCancelled {
+			lines = append(lines, fmt.Sprintf("Background work cancelled by user: %s (%s)", item.ID, item.Kind))
+			lines = append(lines, "Note: This background work was killed by the user and will not complete.")
+		} else {
+			lines = append(lines, fmt.Sprintf("Background work completed: %s (%s)", item.ID, item.Kind))
+		}
 		lines = append(lines, "Status: "+string(item.Status))
 		if command := item.Metadata["command"]; command != "" {
 			lines = append(lines, "Command: "+command)
@@ -44,6 +49,9 @@ func (s *Service) renderBackgroundWork(sessionID string, completed []background.
 		}
 		if name := item.Metadata["name"]; name != "" {
 			lines = append(lines, "Name: "+name)
+		}
+		if ids := item.Metadata["session_ids"]; ids != "" {
+			lines = append(lines, "Sessions: "+ids)
 		}
 		if jobID := item.Metadata["job_id"]; jobID != "" {
 			if jobs := s.bashJobManager(); jobs != nil {
@@ -90,27 +98,49 @@ func (s *Service) wakeContext(sessionID string) (string, []background.Work, bool
 	if len(items) == 0 {
 		return "", nil, false
 	}
+	if allCancelled(items) {
+		return "Background work was cancelled by the user while you were idle. Do not wait for it to complete.\n\n" + s.renderBackgroundWork(sessionID, items), items, true
+	}
 	return "Background work finished while you were idle. Review the results and continue the task.\n\n" + s.renderBackgroundWork(sessionID, items), items, true
+}
+
+func allCancelled(items []background.Work) bool {
+	for _, item := range items {
+		if item.Status != background.StatusCancelled {
+			return false
+		}
+	}
+	return len(items) > 0
 }
 
 // wakeMessage is the short human label carried on the wake event so clients
 // can say what resumed the agent.
 func wakeMessage(items []background.Work) string {
-	shell, sub := false, false
+	kinds := map[background.Kind]bool{}
 	for _, item := range items {
-		switch item.Kind {
-		case background.KindShell:
-			shell = true
-		case background.KindSubagent:
-			sub = true
-		}
+		kinds[item.Kind] = true
 	}
+	cancelled := allCancelled(items)
 	switch {
-	case shell && sub:
+	case len(kinds) > 1:
+		if cancelled {
+			return "Background work cancelled, continuing agent"
+		}
 		return "Background work completed, continuing agent"
-	case sub:
+	case kinds[background.KindSubagent]:
+		if cancelled {
+			return "Subagent cancelled, continuing agent"
+		}
 		return "Subagent completed, continuing agent"
+	case kinds[background.KindSession]:
+		if cancelled {
+			return "Session wait cancelled, continuing agent"
+		}
+		return "Session finished, continuing agent"
 	default:
+		if cancelled {
+			return "Bash tool cancelled, continuing agent"
+		}
 		return "Bash tool completed, continuing agent"
 	}
 }

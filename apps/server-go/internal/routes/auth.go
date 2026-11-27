@@ -3,8 +3,8 @@
 package routes
 
 import (
-	"encoding/json"
 	"errors"
+	"github.com/MoeForge/moego/json"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -40,7 +40,7 @@ func RegisterAuthRoutes(app *fiber.App, authSvc *auth.AuthService) {
 			req.Provider = "codex"
 		}
 		switch req.Provider {
-		case "codex", "claude", "antigravity":
+		case "codex", "claude", "antigravity", "devin":
 			result, err := authSvc.GetLoginURLFor(req.Provider)
 			if err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
@@ -50,8 +50,6 @@ func RegisterAuthRoutes(app *fiber.App, authSvc *auth.AuthService) {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
 			}
 			return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
-		case "devin":
-			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{"success": false, "error": "OAuth login for '" + req.Provider + "' is not supported by the Go server yet."})
 		default:
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid OAuth provider."})
 		}
@@ -70,7 +68,7 @@ func RegisterAuthRoutes(app *fiber.App, authSvc *auth.AuthService) {
 			req.Provider = "codex"
 		}
 		switch req.Provider {
-		case "codex", "claude", "antigravity":
+		case "codex", "claude", "antigravity", "devin":
 			if req.Code == "" {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Authorization 'code' is required."})
 			}
@@ -83,8 +81,6 @@ func RegisterAuthRoutes(app *fiber.App, authSvc *auth.AuthService) {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
 			}
 			return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
-		case "devin":
-			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{"success": false, "error": "OAuth login for '" + req.Provider + "' is not supported by the Go server yet."})
 		default:
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid OAuth provider."})
 		}
@@ -170,7 +166,7 @@ func RegisterAuthRoutes(app *fiber.App, authSvc *auth.AuthService) {
 // account management.
 func accountProviderSupported(provider string) bool {
 	switch provider {
-	case "codex", "claude", "antigravity":
+	case "codex", "claude", "antigravity", "devin":
 		return true
 	default:
 		return false
@@ -178,12 +174,8 @@ func accountProviderSupported(provider string) bool {
 }
 
 // accountProviderUnsupported answers for providers without accounts:
-// devin is reserved (501, same wording as the login routes), anything else
-// is a bad request.
+// anything outside the supported set is a bad request.
 func accountProviderUnsupported(c *fiber.Ctx, provider string) error {
-	if provider == "devin" {
-		return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{"success": false, "error": "Account management for '" + provider + "' is not supported by the Go server yet."})
-	}
 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid OAuth provider."})
 }
 

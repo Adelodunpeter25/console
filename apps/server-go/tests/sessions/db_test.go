@@ -2,7 +2,8 @@
 package tests
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
+	"os"
 	"testing"
 	"time"
 
@@ -32,16 +33,19 @@ func newTestManager(t *testing.T) (*db.DB, *services.SessionService, *projectssv
 func TestProjectsCRUD(t *testing.T) {
 	_, _, projects, _ := newTestManager(t)
 
-	created, err := projects.Create(projectssvc.CreateProjectOptions{Name: "Console", Dir: "/tmp/console"})
+	// The dir must exist on disk: List prunes projects whose folder is gone.
+	dir := t.TempDir()
+
+	created, err := projects.Create(projectssvc.CreateProjectOptions{Name: "Console", Dir: dir})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if created.ID == "" || created.Path != "/tmp/console" {
+	if created.ID == "" || created.Path != dir {
 		t.Fatalf("unexpected project: %+v", created)
 	}
 
 	// Upsert on same dir replaces the name.
-	updated, err := projects.Create(projectssvc.CreateProjectOptions{Name: "Console v2", Dir: "/tmp/console"})
+	updated, err := projects.Create(projectssvc.CreateProjectOptions{Name: "Console v2", Dir: dir})
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -49,7 +53,7 @@ func TestProjectsCRUD(t *testing.T) {
 		t.Fatalf("upsert mismatch: %+v vs %+v", updated, created)
 	}
 
-	byDir, err := projects.GetByDir("/tmp/console")
+	byDir, err := projects.GetByDir(dir)
 	if err != nil || byDir.ID != created.ID {
 		t.Fatalf("byDir: %v %+v", err, byDir)
 	}
@@ -60,11 +64,20 @@ func TestProjectsCRUD(t *testing.T) {
 	}
 }
 
+// makeConsoleDir creates the shared /tmp/console cwd several fork tests
+// use: Create must not point a session at a directory that is not on disk.
+func makeConsoleDir(t *testing.T) {
+	t.Helper()
+	if err := os.MkdirAll("/tmp/console", 0o755); err != nil {
+		t.Fatalf("mkdir /tmp/console: %v", err)
+	}
+}
+
 func TestSessionLifecycle(t *testing.T) {
 	_, sessions, _, _ := newTestManager(t)
 
 	header, err := sessions.Create(types.CreateSessionOptions{
-		Cwd: "/tmp/console", ModelID: "claude-sonnet-4", Provider: "anthropic",
+		Cwd: t.TempDir(), ModelID: "claude-sonnet-4", Provider: "anthropic",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -140,6 +153,10 @@ func TestSessionPinOrdering(t *testing.T) {
 	_, sessions, _, _ := newTestManager(t)
 
 	mk := func(cwd string) string {
+		// Create must not point a session at a directory that is not on disk.
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", cwd, err)
+		}
 		h, err := sessions.Create(types.CreateSessionOptions{
 			Cwd: cwd, ModelID: "m", Provider: "p",
 		})
@@ -207,6 +224,10 @@ func TestModelFavorites(t *testing.T) {
 func TestDeleteProjectRemovesSessions(t *testing.T) {
 	_, sessions, projects, _ := newTestManager(t)
 
+	// Create must not point a session at a directory that is not on disk.
+	if err := os.MkdirAll("/tmp/p", 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
 	proj, err := projects.Create(projectssvc.CreateProjectOptions{Name: "P", Dir: "/tmp/p"})
 	if err != nil {
 		t.Fatalf("create project: %v", err)
@@ -316,6 +337,7 @@ func TestPurgeExpiredDeletedSessions(t *testing.T) {
 func TestSessionFileChangeReviewed(t *testing.T) {
 	_, sessions, _, _ := newTestManager(t)
 
+	makeConsoleDir(t)
 	header, err := sessions.Create(types.CreateSessionOptions{
 		Cwd: "/tmp/console", ModelID: "claude-sonnet-4", Provider: "anthropic",
 	})
@@ -403,5 +425,34 @@ func TestOpsOnMissingSessionNoOp(t *testing.T) {
 	}
 	if subs, err := sessions.GetSubagents(missing); err != nil || len(subs) != 0 {
 		t.Fatalf("GetSubagents on missing session: %+v %v", subs, err)
+	}
+}
+
+func TestDBCacheLRUAndBusyCheck(t *testing.T) {
+	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer manager.Close()
+
+	busySession := "sess_busy"
+	manager.SetBusyCheck(func(sessionID string) bool {
+		return sessionID == busySession
+	})
+
+	conn0, err := manager.Session(busySession, "")
+	if err != nil {
+		t.Fatalf("open busy session: %v", err)
+	}
+
+	for i := 1; i <= 70; i++ {
+		id := "sess_" + string(rune('a'+i))
+		if _, err := manager.Session(id, ""); err != nil {
+			t.Fatalf("open session %s: %v", id, err)
+		}
+	}
+
+	if err := conn0.Ping(); err != nil {
+		t.Fatalf("expected busy session connection to remain open, got: %v", err)
 	}
 }

@@ -4,8 +4,8 @@ package antigravity
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -71,7 +71,7 @@ func (p *Provider) httpClient() *http.Client {
 	if p.HTTPClient != nil {
 		return p.HTTPClient
 	}
-	return &http.Client{Timeout: 0}
+	return &http.Client{Transport: shared.Transport, Timeout: 0}
 }
 
 func (p *Provider) loadCredential(accountID string) (ParsedCredential, error) {
@@ -250,7 +250,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 	}
 
 	requireUserTerminator := IsClaudeModel(req.Model)
-	contents := ConvertMessages(req.Messages, ConvertMessagesOptions{RequireUserTerminator: requireUserTerminator})
+	contents := ConvertMessages(loop.WithTail(req.Tail, req.Messages), ConvertMessagesOptions{RequireUserTerminator: requireUserTerminator})
 	toolDefs := ConvertTools(req.Tools)
 	body := buildRequestBody(cred.ProjectID, req.Model, req.SystemPrompt, contents, toolDefs, p.session(req.ConversationID), req.ThinkingLevel)
 
@@ -351,7 +351,11 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		return nil
 	})
 
-	UpdateLastExecutionID(p.session(req.ConversationID), lastResponseID)
+	state := p.session(req.ConversationID)
+	UpdateLastExecutionID(state, lastResponseID)
+	if req.ConversationID != "" {
+		savePersistedState(req.ConversationID, state)
+	}
 
 	usage := NormalizeUsage(lastUsage, req.CacheRetention)
 	if usage == nil {

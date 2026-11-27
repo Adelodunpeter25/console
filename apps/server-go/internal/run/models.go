@@ -36,8 +36,8 @@ func (s *Service) generateTitle(sessionID, prompt, providerID, modelID string, h
 	if title == "" {
 		title = titles.FallbackTitle(prompt)
 	}
-	loaded, err := s.sessions.Load(sessionID, 0, 0)
-	if err != nil || loaded == nil || !titles.IsGenericTitle(loaded.Header.Title) {
+	header, err := s.sessions.Header(sessionID)
+	if err != nil || header == nil || !titles.IsGenericTitle(header.Title) {
 		return
 	}
 	if err := s.sessions.UpdateTitle(sessionID, title); err != nil {
@@ -64,13 +64,13 @@ func (s *Service) resolveModel(ctx context.Context, providerID, modelID string) 
 }
 
 // DeliversToolResultImages reports whether a provider renders inline images
-// carried by a tool result. Claude sends them natively; Codex and Antigravity
-// forward them in their own wire shapes. Other adapters (e.g. OpenCode) redact
-// them to a placeholder before the request is built, regardless of the model's
-// declared capability.
+// carried by a tool result. Claude sends them natively; Codex, Antigravity,
+// and Devin forward them in their own wire shapes. Other adapters (e.g.
+// OpenCode) redact them to a placeholder before the request is built,
+// regardless of the model's declared capability.
 func DeliversToolResultImages(providerID string) bool {
 	switch providerID {
-	case "claude", "codex", "antigravity":
+	case "claude", "codex", "antigravity", "devin":
 		return true
 	}
 	return false
@@ -115,12 +115,13 @@ func (s *Service) visionLabel(model types.Model) string {
 // when the model and provider can carry them, otherwise a vision-role
 // describer, otherwise the placeholder. pins pins the describer's calls to
 // the run's account (decision 7); nil keeps the ordinary loader.
-func (s *Service) ReadFileToolOptions(model types.Model, providerID, modelID string, pins *accountPins) tools.ReadFileOptions {
+func (s *Service) ReadFileToolOptions(model types.Model, providerID, modelID, cwd string, pins *accountPins) tools.ReadFileOptions {
 	return tools.ReadFileOptions{
 		CanSeeImages: model.SupportsImages && DeliversToolResultImages(providerID),
 		Describer:    s.imageDescriber(model, providerID, pins),
 		RunModel:     modelID,
 		VisionModel:  s.visionLabel(model),
+		Cwd:          cwd,
 	}
 }
 
@@ -180,15 +181,32 @@ func (s *Service) compactionHooks(sessionID string, model types.Model, systemPro
 	emergencyChars := compaction.EmergencyChars
 	return &loop.CompactionHooks{
 		PreTurn: func(ctx context.Context, history []any) []any {
-			if !compaction.ShouldCompact(history, model.ContextWindow, options, systemPrompt, defs) {
-				return history
+			checkpoint := s.compactions.checkpoint(sessionID)
+			working, reused := checkpoint.Apply(history)
+			if !reused {
+				working = history
 			}
-			// Compaction rewrites the prefix anyway; rebuild setup next run.
+			if !reused && checkpoint.WasDropped() {
+				slog.Info("compaction checkpoint dropped: history no longer matches", "session", sessionID)
+			}
+			if !compaction.ShouldCompact(working, model.ContextWindow, options, systemPrompt, defs) {
+				return working
+			}
+			result := compaction.CompactHistory(working, options)
+			if summary, ok := s.summarizeCompaction(ctx, model, working, pins); ok {
+				result = compaction.CompactHistoryWithSummary(working, options, summary)
+			}
+			if result.TokensAfter >= result.TokensBefore {
+				return working
+			}
+			// Compaction rewrites the prefix once; rebuild setup next run and
+			// keep this result so later turns append to it instead of
+			// recompacting from scratch (which would move the cut every turn).
 			s.prompts.forget(sessionID)
-			result := compaction.CompactHistory(history, options)
-			if summary, ok := s.summarizeCompaction(ctx, model, history, pins); ok {
-				result = compaction.CompactHistoryWithSummary(history, options, summary)
-			}
+			checkpoint.Set(history, result.CompactedMessages)
+			slog.Info("compaction applied", "session", sessionID, "reused", reused,
+				"tokensBefore", result.TokensBefore, "tokensAfter", result.TokensAfter,
+				"messagesBefore", len(working), "messagesAfter", len(result.CompactedMessages))
 			return result.CompactedMessages
 		},
 		IsOverflow: compaction.IsContextOverflowError,

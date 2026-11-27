@@ -1,5 +1,5 @@
-// Run service: MCP groups loaded in one user message are restored on the
-// next, and the setup message mentions loadTools when servers are enabled.
+// Run service: MCP servers are announced through the codemode setup hint,
+// and groups loaded through loadTools keep their per-session restore order.
 package tests
 
 import (
@@ -46,14 +46,6 @@ func (p *groupLoader) RunTurn(ctx context.Context, req loop.TurnRequest, s *stre
 	return nil
 }
 
-func toolNames(req loop.TurnRequest) map[string]bool {
-	out := map[string]bool{}
-	for _, d := range req.Tools {
-		out[d.Name] = true
-	}
-	return out
-}
-
 func TestRunRestoresLoadedGroupsAcrossMessages(t *testing.T) {
 	ts := startHTTPMCP(t, nil)
 	m := newManager(t)
@@ -85,29 +77,16 @@ func TestRunRestoresLoadedGroupsAcrossMessages(t *testing.T) {
 	if len(provider.reqs) != 3 {
 		t.Fatalf("agent turns: %d", len(provider.reqs))
 	}
-	first, afterLoad, nextMessage := provider.reqs[0], provider.reqs[1], provider.reqs[2]
-	if toolNames(first)["mcp__echo__get_echo"] {
-		t.Fatal("MCP tools must not be present before loading")
-	}
-	if !toolNames(afterLoad)["mcp__echo__get_echo"] {
-		t.Fatal("loaded tools must appear on the next turn")
-	}
-	if !toolNames(nextMessage)["mcp__echo__get_echo"] {
-		t.Fatal("loaded group must be restored on the next user message")
-	}
-	if !strings.Contains(first.Setup, "loadTools") {
-		t.Fatalf("setup should mention loadTools when MCP is enabled:\n%s", first.Setup)
-	}
-	// Restored tools come after the base set, matching the in-run order.
-	tail := func(req loop.TurnRequest) string {
-		names := []string{}
-		for _, d := range req.Tools {
-			names = append(names, d.Name)
+	first := provider.reqs[0]
+	// Under codemode the provider sees only the REPL tools; MCP tools are
+	// callable from inside the REPL via the native mcp.* namespace.
+	for _, d := range first.Tools {
+		if d.Name != "code" && d.Name != "codeReset" {
+			t.Fatalf("unexpected provider tool %s", d.Name)
 		}
-		return strings.Join(names[len(names)-2:], ",")
 	}
-	if tail(afterLoad) != tail(nextMessage) {
-		t.Fatalf("tool order changed between messages: %s vs %s", tail(afterLoad), tail(nextMessage))
+	if !strings.Contains(first.Setup, "mcp.call") {
+		t.Fatalf("setup should mention mcp.call when MCP is enabled:\n%s", first.Setup)
 	}
 }
 
@@ -129,7 +108,9 @@ func TestRunSetupOmitsMCPHintWithoutServers(t *testing.T) {
 	}
 	provider.mu.Lock()
 	defer provider.mu.Unlock()
-	if len(provider.reqs) == 0 || strings.Contains(provider.reqs[0].Setup, "loadTools") {
-		t.Fatal("no MCP servers -> no loadTools hint")
+	// The codemode hint mentions mcp.call as a capability; without servers
+	// configured there is no group catalog or loadTools instruction.
+	if len(provider.reqs) == 0 || strings.Contains(provider.reqs[0].Setup, "loadTools({group") {
+		t.Fatal("no MCP servers -> no group-loading hint")
 	}
 }

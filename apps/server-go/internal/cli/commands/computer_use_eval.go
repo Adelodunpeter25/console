@@ -70,7 +70,9 @@ var evalOutputPath string
 // printable lines: text parts verbatim, images as size notes (the bytes
 // belong in transcripts, not terminals).
 func runEval(code string, timeout time.Duration) ([]string, error) {
-	out, err := cua.NewManager().EvalOnce(context.Background(), code, timeout)
+	manager := cua.NewManager()
+	defer manager.Close()
+	out, err := manager.EvalOnce(context.Background(), code, timeout)
 	if err != nil {
 		return nil, err
 	}

@@ -1,13 +1,15 @@
 package routes
 
 import (
-	"encoding/json"
 	"errors"
+	"github.com/MoeForge/moego/json"
 	"path/filepath"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
@@ -23,8 +25,8 @@ func subagentToProto(s types.SubagentInfo) *consolev1.SubagentInfo {
 	out := &consolev1.SubagentInfo{
 		SubagentId: s.SubagentID, ParentToolCallId: s.ParentToolCallID,
 		Name: s.Name, Role: s.Role, Prompt: s.Prompt,
-		MaxTurns: int32(s.MaxTurns), CurrentTurn: int32(s.CurrentTurn),
-		Status: s.Status, CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
+		CurrentTurn: int32(s.CurrentTurn),
+		Status:      s.Status, CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}
 	if s.Summary != nil {
 		out.Summary = s.Summary
@@ -99,12 +101,62 @@ func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {
 	if h.SettledAt != nil {
 		out.SettledAt = h.SettledAt
 	}
+	out.Unread = h.Unread
+	// Worktree launch state lives in the in-memory registry, not the session
+	// row, so it rides along on every header serialization. A session that
+	// already owns a worktree is past provisioning regardless of what the
+	// registry says: a crash between attach and clear (or a restart) must
+	// never leave a "Creating worktree…" banner on a ready chat.
+	if launch := services.WorktreeLaunches.Get(h.ID); launch != nil &&
+		(h.Worktree == nil || launch.State != services.LaunchProvisioning) {
+		state := launch.State
+		out.LaunchState = &state
+		if launch.Error != "" {
+			out.LaunchError = &launch.Error
+		}
+	}
 	if h.Worktree != nil {
 		out.Worktree = &consolev1.SessionWorktree{
 			Path: h.Worktree.Path, Branch: h.Worktree.Branch, Repo: h.Worktree.Repo,
 		}
 	}
 	return out
+}
+
+// staleRunStatus reports a chat whose indexed status says a run is going but
+// whose run is gone, so a read should settle it to done: an abort that skipped
+// the terminal status write, or a crash mid-run, would otherwise leave the
+// list showing "working" forever.
+//
+// An unread needs_attention is deliberately left alone. A run that ended in
+// an error writes needs_attention on purpose, and settling it here would wipe
+// the alert within one list poll, before the user ever saw it. It clears when
+// the chat is read (session.MarkRead) or a new run starts.
+func staleRunStatus(h types.SessionHeader, active bool) bool {
+	if active {
+		return false
+	}
+	switch h.Status {
+	case "working":
+		return true
+	case "needs_attention":
+		return !session.IsUnread(h)
+	default:
+		return false
+	}
+}
+
+// sendReadHeader answers a read or unread call with the chat's fresh header,
+// so the caller does not need a second request to see the new state.
+func sendReadHeader(c *fiber.Ctx, sessions *services.SessionService, id string, send func(*fiber.Ctx, types.SessionHeader) error) error {
+	header, err := sessions.Header(id)
+	if err != nil {
+		return sessionError(c, fiber.StatusInternalServerError, err.Error())
+	}
+	if header == nil {
+		return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
+	}
+	return send(c, *header)
 }
 
 // RegisterSessionRoutes registers the /api/sessions routes, with the
@@ -125,12 +177,17 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	}
 
-	// GET /api/sessions — list, optionally filtered by cwd/projectId, with
+	// GET /api/sessions — list, optionally filtered by cwd/projectId/query, with
 	// onlyDeleted=true selecting the trash view.
 	h.Get("/", func(c *fiber.Ctx) error {
+		query := c.Query("query")
+		if query == "" {
+			query = c.Query("q")
+		}
 		list, err := sessions.ListFiltered(session.ListFilter{
 			Cwd:         c.Query("cwd"),
 			ProjectID:   c.Query("projectId"),
+			Query:       query,
 			OnlyDeleted: c.Query("onlyDeleted") == "true",
 		})
 		if err != nil {
@@ -141,9 +198,10 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		// without it an abort that skipped the terminal status write (or a
 		// crash mid-run) left the home list showing "working" forever.
 		for i, header := range list {
-			if (header.Status == "working" || header.Status == "needs_attention") && !runs.IsActive(header.ID) {
+			if staleRunStatus(header, runs.IsActive(header.ID)) {
 				if err := sessions.UpdateStatusOnly(header.ID, "done"); err == nil {
 					list[i].Status = "done"
+					list[i].Unread = session.IsUnread(list[i])
 				}
 			}
 			headers = append(headers, sessionHeaderToProto(list[i]))
@@ -169,6 +227,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 			// Worktree request errors are client errors, not 500s.
 			if errors.Is(err, services.ErrWorktreeScratchpad) ||
 				errors.Is(err, services.ErrWorktreeNeedsCwd) ||
+				errors.Is(err, session.ErrCwdMissing) ||
 				errors.Is(err, gitsvc.ErrNotGitRepo) ||
 				errors.Is(err, gitsvc.ErrUnknownBaseBranch) ||
 				errors.Is(err, gitsvc.ErrUnbornHEAD) {
@@ -179,14 +238,14 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		return sendSessionHeader(c, header)
 	})
 
-	// GET /api/sessions/:id — header plus a page of message history.
+	// GET /api/sessions/:id — header plus a page of whole transcript turns.
 	h.Get("/:id", func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		limit, before, ok := parsePageParams(c)
 		if !ok {
-			return sessionError(c, fiber.StatusBadRequest, "'limit' and 'before' must be positive integers.")
+			return sessionError(c, fiber.StatusBadRequest, "'limit' and 'before' must be non-negative integers.")
 		}
-		result, err := sessions.Load(id, limit, before)
+		result, err := sessions.LoadTurns(id, limit, before, runs.IsActive(id))
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
@@ -196,22 +255,65 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		// Settle stale working state on read, mirroring getSession: a chat
 		// whose run is gone is done, not stuck working. Status-only — a read
 		// must not bump updated_at, which orders the sidebar.
-		if !runs.IsActive(id) && (result.Header.Status == "working" || result.Header.Status == "needs_attention") {
+		if staleRunStatus(result.Header, runs.IsActive(id)) {
 			if err := sessions.UpdateStatusOnly(id, "done"); err == nil {
 				result.Header.Status = "done"
+				result.Header.Unread = session.IsUnread(result.Header)
 			}
 		}
-		// Mixed envelope until messages migrate: proto header plus the raw
-		// message page, hasMore flag, and numeric-or-null cursor, assembled
-		// by hand in the old key order. Messages pass through byte-identical.
-		headerRaw, err := protoMarshal.Marshal(sessionHeaderToProto(result.Header))
+		page := &consolev1.SessionMessagesPage{
+			Header:     sessionHeaderToProto(result.Header),
+			Turns:      result.Turns,
+			HasMore:    result.HasMore,
+			NextCursor: result.NextCursor,
+		}
+		if wantsBinary(c) {
+			raw, err := proto.Marshal(page)
+			if err != nil {
+				return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+			}
+			c.Set("Content-Type", protoContentType)
+			return c.Send(raw)
+		}
+
+		// JSON: proto header and turns, hasMore flag, numeric-or-null cursor.
+		headerRaw, err := protoMarshal.Marshal(page.Header)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		turnsData, err := marshalProtoList(page.Turns)
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
 		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
 			"hasMore": result.HasMore, "header": json.RawMessage(headerRaw),
-			"messages": visibleMessages(result.Messages), "nextCursor": result.NextCursor,
+			"turns": turnsData, "nextCursor": result.NextCursor,
 		}})
+	})
+
+	// GET /api/sessions/:id/messages/:messageId/results/:callId — the full
+	// body of a tool result that history pages leave out.
+	h.Get("/:id/messages/:messageId/results/:callId", func(c *fiber.Ctx) error {
+		res, err := sessions.ToolResult(c.Params("id"), c.Params("messageId"), c.Params("callId"))
+		if errors.Is(err, session.ErrToolResultNotFound) {
+			return sessionError(c, fiber.StatusNotFound, "Tool result not found.")
+		}
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		if wantsBinary(c) {
+			raw, err := proto.Marshal(res)
+			if err != nil {
+				return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+			}
+			c.Set("Content-Type", protoContentType)
+			return c.Send(raw)
+		}
+		raw, err := protoMarshal.Marshal(res)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
 	// PATCH /api/sessions/:id — update title, model/provider, approval mode,
@@ -277,6 +379,11 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 					projectID = header.ProjectID
 				}
 				if err := sessions.UpdateCwd(id, cwd, projectID, projectGiven); err != nil {
+					// A ghost folder is a client fixable state, not a
+					// server fault: the project's directory was deleted.
+					if errors.Is(err, session.ErrCwdMissing) {
+						return sessionError(c, fiber.StatusBadRequest, err.Error())
+					}
 					return sessionError(c, fiber.StatusInternalServerError, err.Error())
 				}
 			}
@@ -299,6 +406,12 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if req.ApprovalMode != nil && *req.ApprovalMode != "" {
 			if err := sessions.UpdateApprovalMode(id, *req.ApprovalMode); err != nil {
 				return sessionError(c, fiber.StatusInternalServerError, err.Error())
+			}
+			if runs != nil {
+				runs.Broadcast(id, loop.Event{
+					Kind:         loop.EventSessionApprovalModeUpdated,
+					ApprovalMode: *req.ApprovalMode,
+				})
 			}
 		}
 		if req.ThinkingLevel != nil && *req.ThinkingLevel != "" {
@@ -461,9 +574,45 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
+	// POST /api/sessions/:id/read — a client showed this chat. Idempotent.
+	// Also clears a lingering needs_attention with no run behind it.
+	h.Post("/:id/read", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		known, err := sessions.MarkRead(id)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		if !known {
+			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
+		}
+		runs.NotifyReadState(id)
+		return sendReadHeader(c, sessions, id, sendSessionHeader)
+	})
+
+	// POST /api/sessions/:id/unread — make a read chat unread again. Refused
+	// with 409 while a run is in flight or for a settled chat.
+	h.Post("/:id/unread", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		known, err := sessions.MarkUnread(id)
+		if errors.Is(err, session.ErrSessionBusy) {
+			return sessionError(c, fiber.StatusConflict, "This chat is running; it will be unread when it finishes.")
+		}
+		if errors.Is(err, session.ErrSessionSettled) {
+			return sessionError(c, fiber.StatusConflict, "Move this chat back to active before marking it unread.")
+		}
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		if !known {
+			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
+		}
+		runs.NotifyReadState(id)
+		return sendReadHeader(c, sessions, id, sendSessionHeader)
+	})
+
 	// DELETE /api/sessions/:id/permanent — irreversibly delete a
-// soft-deleted session. Any owned worktree is force-removed (dirty
-// worktrees and unmerged branches included).
+	// soft-deleted session. Any owned worktree is force-removed (dirty
+	// worktrees and unmerged branches included).
 	h.Delete("/:id/permanent", func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		deleted, err := sessions.PermanentDelete(id)
@@ -517,7 +666,33 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
+	// GET /api/sessions/:id/suggestions — the latest follow-up prompts, kept
+	// until the next run starts. Empty when there are none.
+	h.Get("/:id/suggestions", func(c *fiber.Ctx) error {
+		items, err := sessions.GetSessionSuggestions(c.Params("id"))
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(fiber.Map{"success": true, "data": items})
+	})
+
+	// GET /api/sessions/:id/prompts — every user prompt (id, time, one-line
+	// preview), oldest first, for "jump to prompt" lists. Ids match the loaded
+	// messages', so a client can find the row or page older history to it.
+	h.Get("/:id/prompts", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		prompts, err := sessions.ListPrompts(id)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		if prompts == nil {
+			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": prompts})
+	})
+
 	// GET /api/sessions/:id/changes — session file changes with optional turn filter.
+	// includeDiff=false omits each row's diff text; fetch it from /changes/diff.
 	h.Get("/:id/changes", func(c *fiber.Ctx) error {
 		sessionID := c.Params("id")
 		turnIndex := -1 // -1 means all turns
@@ -528,7 +703,13 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
-		data, err := marshalProtoList(sessionFileChangesToProto(changes))
+		rows := sessionFileChangesToProto(changes)
+		if c.Query("includeDiff") == "false" {
+			for _, row := range rows {
+				row.DiffText = nil
+			}
+		}
+		data, err := marshalProtoList(rows)
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
 		}
@@ -588,13 +769,13 @@ func sessionError(c *fiber.Ctx, code int, message string) error {
 	return c.Status(code).JSON(fiber.Map{"success": false, "error": message})
 }
 
-// parsePageParams reads get-session pagination: default limit 50,
-// both values positive integers when present.
+// parsePageParams reads get-session pagination in turns: default limit 20,
+// limit non-negative (0 returns every turn), before positive when present.
 func parsePageParams(c *fiber.Ctx) (limit, before int64, ok bool) {
-	limit = 50
+	limit = 20
 	if raw := c.Query("limit"); raw != "" {
 		v, err := strconv.Atoi(raw)
-		if err != nil || v < 1 {
+		if err != nil || v < 0 {
 			return 0, 0, false
 		}
 		limit = int64(v)

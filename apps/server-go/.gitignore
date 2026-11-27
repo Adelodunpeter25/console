@@ -4,3 +4,4 @@ third_party/fff/libfff_c.dylib
 # Provided at install time under third_party/cua/ (host library directly,
 # release staging per platform subdir) or via CUA_DRIVER_LIB_PATH.
 third_party/cua/
+third_party/voxl/

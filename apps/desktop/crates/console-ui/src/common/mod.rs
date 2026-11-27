@@ -1,5 +1,5 @@
-pub mod approval_selector;
 pub mod attachment;
+pub(crate) mod image_hover;
 pub mod autocomplete;
 pub mod composer_pills;
 pub mod composer_view;
@@ -8,34 +8,39 @@ pub mod error_banner;
 pub mod file_browser;
 pub mod file_mention_chip;
 pub mod floating_composer;
+pub mod github_menu;
 pub mod global_search_panel;
 pub mod image_viewer;
 pub mod input;
+pub mod mic_button;
 pub mod model_picker;
 pub mod notice_banner;
 pub mod palette;
+pub mod picker_menus;
 pub(crate) mod pill_popovers;
 pub mod project_browse_palette;
 pub mod queued_prompt_card;
 pub mod quick_open_palette;
 pub mod stripe;
-pub mod thinking_stepper;
 pub mod usage_meter;
 pub mod usage_panel;
 pub mod workspace_footer;
 
-pub use approval_selector::{ApprovalModeDropdown, ApprovalModeIconExt, ApprovalModeSelector};
 pub use attachment::attachment_image;
 pub use autocomplete::{
     AUTOCOMPLETE_CONTEXT, AutocompleteConfirm, AutocompleteContentKey, AutocompleteDismiss,
-    AutocompleteItem, AutocompleteKind, AutocompleteNext, AutocompletePrevious,
-    AutocompleteTrigger, AutocompleteView, detect_trigger, filter_items,
+    AutocompleteItem, AutocompleteKind, AutocompleteNext, AutocompletePlacement,
+    AutocompletePrevious, AutocompleteTrigger, AutocompleteView, detect_trigger, filter_items,
     init as init_autocomplete_keybindings, slugify_chat_title,
 };
-pub use composer_pills::{ShellEntry, ShellsPill, SubagentsPill, TasksPill, composer_pills};
+pub use composer_pills::{
+    AutomationsPill, ShellEntry, ShellsPill, SubagentsPill, SuggestionsPill, TasksPill,
+    composer_pills,
+};
+pub(crate) use composer_view::plan_mode_stripes;
 pub use composer_view::{ComposerAnnotation, ComposerComment, ComposerView};
 pub use copy_button::{copy_button, copy_button_with_action};
-pub use error_banner::error_banner;
+pub use error_banner::{BannerAction, error_banner};
 pub use file_browser::FileBrowser;
 pub use file_mention_chip::{
     FILE_MENTION_ICON_SIZE, FILE_MENTION_RADIUS, file_mention_chip, file_mention_colors,
@@ -46,21 +51,25 @@ pub(crate) use file_mention_chip::{InlineFileMention, InlineFileMentionText};
 pub use floating_composer::init as init_floating_composer_keybindings;
 pub use floating_composer::{
     BranchChoice, FloatingComposerData, FloatingComposerState, FloatingComposerView,
-    FloatingSnapshot, FloatingSubmit,
+    FloatingSnapshot, FloatingSubmit, PendingPaste, resolve_pending_pastes,
 };
+pub use github_menu::github_menu_section;
 pub use global_search_panel::GlobalSearchPanel;
 pub use image_viewer::ImageViewerModal;
 pub use input::*;
 pub use model_picker::{
-    ModelDropdownMenu, ModelRolePicker, PickerTab, format_model_name, provider_svg_path,
+    ModelDropdownMenu, ModelRolePicker, PickerTab, format_model_name,
+    init_model_picker_keybindings, provider_svg_path,
 };
 pub use notice_banner::notice_banner;
-pub use palette::{CommandPalette, CommandPaletteModal, PaletteEntry};
+pub use palette::{CommandPalette, CommandPaletteModal, PaletteEntry, init_palette_keybindings};
+pub use picker_menus::{
+    BranchModeRow, ProjectMenuExtras, branch_menu_section, project_menu_section,
+};
 pub use project_browse_palette::ProjectBrowsePalette;
 pub use queued_prompt_card::{queued_prompt_card, queued_prompt_row, queued_prompts_stack};
 pub use quick_open_palette::QuickOpenPalette;
 pub use stripe::centered_stripe;
-pub use thinking_stepper::ThinkingStepper;
 pub use usage_meter::UsageMeter;
 pub use usage_panel::UsagePanel;
 pub use workspace_footer::WorkspaceFooter;

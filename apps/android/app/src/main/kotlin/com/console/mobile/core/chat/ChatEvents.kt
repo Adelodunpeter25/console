@@ -1,15 +1,14 @@
 package com.console.mobile.core.chat
 
-import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.AgentSessionEvent
 import com.console.mobile.data.model.AssistantMessage
 import com.console.mobile.data.model.BackgroundWork
-import com.console.mobile.data.model.ThinkingPart
 import com.console.mobile.data.model.TextPart
+import com.console.mobile.data.model.ThinkingPart
 import com.console.mobile.data.model.ToolCallPart
 import com.console.mobile.data.model.ToolResult
 import com.console.mobile.data.model.UserMessage
-import com.console.mobile.data.model.ToolResultMessage
+import com.console.mobile.data.model.toUi
 import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.AgentAssistantMessage as WireAssistantMessage
@@ -20,7 +19,6 @@ import console.v1.SubagentInfo
 import console.v1.TodoItem
 import console.v1.ToolCall as WireToolCall
 import console.v1.ToolResult as WireToolResult
-import com.console.mobile.data.model.toUi
 import okio.ByteString.Companion.encodeUtf8
 import java.util.UUID
 
@@ -39,36 +37,48 @@ private fun decodeToolCall(raw: kotlinx.serialization.json.JsonElement): com.con
 private fun decodeToolResult(raw: kotlinx.serialization.json.JsonElement): com.console.mobile.data.model.ToolResult? =
     runCatching { toolResultJson.fromJson(raw.toString()) }.getOrNull()?.toUi()
 
-
 fun newMessageId(): String = try {
     UUID.randomUUID().toString()
 } catch (_: Exception) {
     "msg-${System.currentTimeMillis()}-${(Math.random() * 1e6).toInt()}"
 }
 
-fun ensureMessageIds(messages: List<AgentMessage>): List<AgentMessage> {
-    var changed = false
-    val out = messages.map { m ->
-        if (m.id != null) m else {
-            changed = true
-            when (m) {
-                is UserMessage -> m.copy(id = newMessageId())
-                is AssistantMessage -> m.copy(id = newMessageId())
-                is ToolResultMessage -> m.copy(id = newMessageId())
-            }
-        }
+private fun updateTailTurn(
+    session: ChatSessionState,
+    update: (TranscriptTurn) -> TranscriptTurn,
+): ChatSessionState {
+    val turns = session.turns.toMutableList()
+    if (turns.isEmpty()) {
+        turns.add(update(TranscriptTurn(id = newMessageId(), createdAt = System.currentTimeMillis())))
+    } else {
+        turns[turns.lastIndex] = update(turns.last())
     }
-    return if (changed) out else messages
+    return session.copy(turns = turns)
 }
 
 private fun updateLatestRun(
     session: ChatSessionState,
     update: (RunActivityState) -> RunActivityState,
 ): ChatSessionState {
-    if (session.runs.isEmpty()) return session
-    val runs = session.runs.toMutableList()
-    runs[runs.lastIndex] = update(runs.last())
-    return session.copy(runs = runs)
+    val last = session.turns.lastOrNull() ?: return session
+    val run = last.run ?: return session
+    val turns = session.turns.toMutableList()
+    turns[turns.lastIndex] = last.copy(run = update(run))
+    return session.copy(turns = turns)
+}
+
+private fun ensureTailRun(session: ChatSessionState, now: Long = System.currentTimeMillis()): ChatSessionState {
+    return updateTailTurn(session) { turn ->
+        if (turn.run != null) turn
+        else turn.copy(
+            run = RunActivityState(
+                runId = turn.id.ifEmpty { newMessageId() },
+                startedAt = turn.createdAt ?: now,
+                status = RunStatus.Working,
+                dividerLabel = turn.wakeLabel,
+            )
+        )
+    }
 }
 
 private fun setToolCallResult(events: List<ActivityEvent>, result: ToolResult): List<ActivityEvent> =
@@ -88,15 +98,6 @@ private fun upsertBackgroundWork(current: List<BackgroundWork>, work: Background
     return if (index >= 0) current.toMutableList().also { it[index] = work } else current + work
 }
 
-/**
- * Clears the streaming buffers, first flushing whatever partial assistant text is
- * already on screen into `messages` as a completed message.
- *
- * Without this, tapping Stop — or a run erroring — silently deletes the whole
- * in-progress reply, because the streamed text only ever lived in
- * `streamingText`/`streamingThinking` until a `modelStreamEnd` carried the real
- * turn message.
- */
 fun commitStreamingBuffer(session: ChatSessionState): ChatSessionState {
     if (session.streamingText.isEmpty() && session.streamingThinking.isEmpty()) {
         return session.copy(streamingText = "", streamingThinking = "")
@@ -105,15 +106,14 @@ fun commitStreamingBuffer(session: ChatSessionState): ChatSessionState {
         if (session.streamingThinking.isNotEmpty()) add(ThinkingPart(session.streamingThinking))
         if (session.streamingText.isNotEmpty()) add(TextPart(session.streamingText))
     }
-    return session.copy(
-        messages = session.messages + AssistantMessage(
-            id = newMessageId(),
-            createdAt = System.currentTimeMillis(),
-            content = parts,
-        ),
-        streamingText = "",
-        streamingThinking = "",
+    val msg = AssistantMessage(
+        id = newMessageId(),
+        createdAt = System.currentTimeMillis(),
+        content = parts,
     )
+    return updateTailTurn(session) { turn ->
+        turn.copy(responses = turn.responses + msg)
+    }.copy(streamingText = "", streamingThinking = "")
 }
 
 fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSessionState {
@@ -129,35 +129,49 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             )
         }
         "modelStreamEnd" -> {
-            val turn = event.turn?.let { runCatching { turnJson.fromJson(it.toString()) }.getOrNull()?.toUi() } ?: run {
+            val turnMsg = event.turn?.let { runCatching { turnJson.fromJson(it.toString()) }.getOrNull()?.toUi() } ?: run {
                 if (session.streamingText.isEmpty() && session.streamingThinking.isEmpty()) return session
                 return commitStreamingBuffer(session)
             }
-            val normalized = turn.copy(id = turn.id ?: newMessageId(), createdAt = turn.createdAt ?: System.currentTimeMillis())
-            // Attaching to a run this device did not start replays the hub
-            // buffer from ?since=0, which re-delivers turns already present in
-            // the loaded history. Appending them again duplicated the whole
-            // reply, and re-adding their tool calls duplicated the run activity.
-            // The turn id is the join key: the server assigns one per turn and
-            // it survives persistence. The stream buffers still need clearing —
-            // they hold a replayed copy of the same text.
-            if (session.messages.any { it.id != null && it.id == normalized.id }) {
+            val normalized = turnMsg.copy(
+                id = turnMsg.id ?: newMessageId(),
+                createdAt = turnMsg.createdAt ?: System.currentTimeMillis(),
+            )
+            if (session.turns.any { t -> t.responses.any { it.id != null && it.id == normalized.id } }) {
                 return session.copy(streamingText = "", streamingThinking = "")
             }
-            var base = session.copy(messages = session.messages + normalized, streamingText = "", streamingThinking = "")
-            val toolCalls = turn.content.filterIsInstance<ToolCallPart>()
-            if (toolCalls.isEmpty()) return base
+            val toolCalls = turnMsg.content.filterIsInstance<ToolCallPart>()
+            if (toolCalls.isEmpty()) {
+                return updateTailTurn(session) { t ->
+                    t.copy(responses = t.responses + normalized)
+                }.copy(streamingText = "", streamingThinking = "")
+            }
+            val withRun = ensureTailRun(session.copy(streamingText = "", streamingThinking = ""))
+            val existingCallIds = withRun.turns.lastOrNull()?.run?.events
+                ?.filterIsInstance<ActivityEvent.ToolCallEvent>()
+                ?.mapTo(HashSet()) { it.call.id }
+                .orEmpty()
+            if (toolCalls.all { it.call.id in existingCallIds }) {
+                return withRun
+            }
             val newEvents = mutableListOf<ActivityEvent>()
-            for (part in turn.content) {
+            for (part in turnMsg.content) {
                 when (part) {
-                    is ThinkingPart -> if (part.text.isNotBlank()) newEvents.add(ActivityEvent.Thinking("thinking-${part.text.take(16)}-${System.currentTimeMillis()}", part.text))
-                    is TextPart -> if (part.text.isNotBlank()) newEvents.add(ActivityEvent.Text("text-${part.text.take(16)}-${System.currentTimeMillis()}", part.text))
-                    is ToolCallPart -> newEvents.add(ActivityEvent.ToolCallEvent(part.call.id, part.call))
+                    is ThinkingPart -> if (part.text.isNotBlank()) {
+                        newEvents.add(ActivityEvent.Thinking("thinking-${part.text.take(16)}-${System.currentTimeMillis()}", part.text))
+                    }
+                    is TextPart -> if (part.text.isNotBlank()) {
+                        newEvents.add(ActivityEvent.Text("text-${part.text.take(16)}-${System.currentTimeMillis()}", part.text))
+                    }
+                    is ToolCallPart -> if (part.call.id !in existingCallIds) {
+                        newEvents.add(ActivityEvent.ToolCallEvent(part.call.id, part.call))
+                    }
                     else -> {}
                 }
             }
-            base = base.copy(activeToolCalls = toolCalls.map { it.call })
-            updateLatestRun(base) { run -> run.copy(events = run.events + newEvents) }
+            updateLatestRun(withRun.copy(activeToolCalls = toolCalls.map { it.call })) { run ->
+                run.copy(events = run.events + newEvents)
+            }
         }
         "toolExecutionStart" -> session.copy(activeToolCalls = event.calls?.mapNotNull(::decodeToolCall) ?: emptyList())
         "toolExecutionResult" -> {
@@ -172,39 +186,56 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             }
             s.copy(activeToolCalls = emptyList())
         }
+        "sessionStart" -> {
+            val now = System.currentTimeMillis()
+            val serverStartedAt = event.elapsedMs?.let { now - it.coerceAtLeast(0) }
+                ?: event.startedAt?.let { value -> runCatching { java.time.Instant.parse(value).toEpochMilli() }.getOrNull() }
+                ?: return session
+            val withRun = if (session.turns.lastOrNull()?.run != null) session else ensureTailRun(session)
+            updateLatestRun(withRun) { run ->
+                if (run.status == RunStatus.Working) run.copy(startedAt = serverStartedAt) else run
+            }.copy(running = true)
+        }
         "turnStart" -> {
-            // The caller (ChatRepository.sendMessage / attachServerRun) already opened
-            // a Working run for this prompt. Opening a second one here would leave an
-            // empty run in the list, which shifts every later run's activity onto the
-            // wrong user message. Mirrors the hasWorking guard in attachServerRun.
-            val hasWorking = session.runs.lastOrNull()?.status == RunStatus.Working
-            session.copy(
-                running = true,
-                runs = if (hasWorking) session.runs else session.runs + RunActivityState(
-                    runId = newMessageId(),
-                    startedAt = System.currentTimeMillis(),
-                    status = RunStatus.Working,
-                ),
-            )
+            val prompt = event.prompt
+            val lastUser = session.turns.lastOrNull { it.userMessage != null }?.userMessage
+            if (!prompt.isNullOrBlank() && (lastUser?.content != prompt || lastUser.source != event.source)) {
+                val now = System.currentTimeMillis()
+                val settled = commitStreamingBuffer(session)
+                val closed = updateLatestRun(settled) { run ->
+                    if (run.status != RunStatus.Working) run
+                    else run.copy(
+                        status = RunStatus.Completed,
+                        events = finalizePendingToolCalls(run.events),
+                        elapsedMs = if (run.startedAt != null) now - run.startedAt else run.elapsedMs,
+                    )
+                }
+                val newTurn = TranscriptTurn(
+                    id = newMessageId(),
+                    createdAt = now,
+                    userMessage = UserMessage(id = newMessageId(), createdAt = now, content = prompt, source = event.source),
+                    run = RunActivityState(runId = newMessageId(), startedAt = now, status = RunStatus.Working),
+                )
+                return closed.copy(
+                    turns = closed.turns + newTurn,
+                    running = true,
+                    activeToolCalls = emptyList(),
+                )
+            }
+            ensureTailRun(session.copy(running = true))
         }
-        "turnEnd" -> {
-            // The server emits turnEnd once per provider round-trip — there can be
-            // several of these within a single run whenever the agent makes tool
-            // calls (turnEnd, then tool execution, then another turnStart/turnEnd).
-            // Only sessionEnd marks the run as actually finished; treating turnEnd
-            // as terminal here flipped the stop button back to idle after the very
-            // first tool call even though the agent kept working.
-            commitStreamingBuffer(session)
-        }
+        "turnEnd" -> commitStreamingBuffer(session)
         "sessionEnd" -> {
             val finalized = updateLatestRun(session) { run ->
                 if (run.status != RunStatus.Working) run
-                else run.copy(status = RunStatus.Completed, events = finalizePendingToolCalls(run.events),
-                    elapsedMs = if (run.startedAt != null) System.currentTimeMillis() - run.startedAt else run.elapsedMs)
+                else run.copy(
+                    status = RunStatus.Completed,
+                    events = finalizePendingToolCalls(run.events),
+                    elapsedMs = if (run.startedAt != null) System.currentTimeMillis() - run.startedAt else run.elapsedMs,
+                )
             }
             commitStreamingBuffer(finalized.copy(running = false, activeToolCalls = emptyList()))
         }
-        "permissionRequest" -> session // structured payload handled at store layer; keep reducer total
         "askQuestion" -> session
         "todoUpdate" -> session.copy(todoItems = event.items?.mapNotNull { runCatching { todoJson.fromJson(it.toString()) }.getOrNull() } ?: emptyList())
         "contextUpdate" -> {
@@ -212,7 +243,7 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             if (snap == null) session else session.copy(context = snap)
         }
         "queueUpdated" -> {
-            val queued = event.queuedPrompt?.let { runCatching { queuedPromptJson.fromJson(it.toString()) }.getOrNull() }
+            val queued = (event.queuedPrompts?.firstOrNull() ?: event.queuedPrompt)?.let { runCatching { queuedPromptJson.fromJson(it.toString()) }.getOrNull() }
             session.copy(queuedPrompt = queued)
         }
         "subagentStart" -> {
@@ -225,7 +256,6 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
                             name = event.name ?: s.name,
                             role = event.role ?: s.role,
                             prompt = event.prompt ?: s.prompt,
-                            max_turns = event.maxTurns ?: s.max_turns,
                             status = "running",
                         )
                     } else s
@@ -237,7 +267,6 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
                     name = event.name ?: "",
                     role = event.role ?: "",
                     prompt = event.prompt ?: "",
-                    max_turns = event.maxTurns ?: 0,
                     current_turn = 1,
                     status = "running",
                     activities = emptyList(),
@@ -304,9 +333,46 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             }
             session.copy(subagents = updatedList)
         }
+        "backgroundWorkContinue" -> {
+            val items = event.works
+            var updated = session.backgroundWork
+            for (w in items) {
+                updated = upsertBackgroundWork(updated, w)
+            }
+            val now = System.currentTimeMillis()
+            val settled = updateLatestRun(commitStreamingBuffer(session)) { run ->
+                if (run.status != RunStatus.Working) run
+                else run.copy(
+                    status = RunStatus.Completed,
+                    events = finalizePendingToolCalls(run.events),
+                    elapsedMs = if (run.startedAt != null) now - run.startedAt else run.elapsedMs,
+                )
+            }
+            val label = event.message ?: "Background work completed, continuing agent"
+            val wakeTurn = TranscriptTurn(
+                id = newMessageId(),
+                createdAt = now,
+                wakeLabel = label,
+                run = RunActivityState(
+                    runId = newMessageId(),
+                    startedAt = now,
+                    status = RunStatus.Working,
+                    dividerLabel = label,
+                ),
+            )
+            settled.copy(
+                backgroundWork = updated,
+                turns = settled.turns + wakeTurn,
+            )
+        }
         "backgroundWorkStarted", "backgroundWorkProgress", "backgroundWorkCompleted", "backgroundWorkFailed", "backgroundWorkCancelled" -> {
-            val work = event.work ?: return session
-            session.copy(backgroundWork = upsertBackgroundWork(session.backgroundWork, work))
+            val items = event.works
+            if (items.isEmpty()) return session
+            var updated = session.backgroundWork
+            for (w in items) {
+                updated = upsertBackgroundWork(updated, w)
+            }
+            session.copy(backgroundWork = updated)
         }
         "streamReset" -> session.copy(streamingText = "", streamingThinking = "", activeToolCalls = emptyList())
         "error" -> {
@@ -315,19 +381,15 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
                 val aborted = updateLatestRun(session) { run ->
                     run.copy(status = if (run.status == RunStatus.Working) RunStatus.Aborted else run.status, events = finalizePendingToolCalls(run.events))
                 }
-                // Server-side abort (a run killed elsewhere) must not strand the
-                // partially streamed answer in the buffer.
                 commitStreamingBuffer(aborted.copy(running = false, activeToolCalls = emptyList()))
             } else {
                 val withRun = updateLatestRun(session) { run ->
                     run.copy(status = if (run.status == RunStatus.Working) RunStatus.Failed else run.status, events = finalizePendingToolCalls(run.events))
                 }
-                // Commit any partial answer first, then append the error, so the
-                // text the user already read isn't lost when the run dies.
                 val committed = commitStreamingBuffer(withRun)
-                committed.copy(
-                    messages = committed.messages + AssistantMessage(id = newMessageId(), content = listOf(TextPart("Error: $msg"))),
-                )
+                updateTailTurn(committed) { turn ->
+                    turn.copy(responses = turn.responses + AssistantMessage(id = newMessageId(), content = listOf(TextPart("Error: $msg"))))
+                }
             }
         }
         else -> session
@@ -335,23 +397,20 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
 }
 
 fun toChatSnapshot(session: ChatSessionState): ChatSnapshot {
-    val lastRun = session.runs.lastOrNull()
+    val lastRun = session.turns.lastOrNull()?.run
     val live = lastRun?.events?.filterIsInstance<ActivityEvent.ToolCallEvent>()?.mapNotNull { it.result } ?: emptyList()
     return ChatSnapshot(
-        messages = session.messages,
+        turns = session.turns,
         streamingText = session.streamingText,
         streamingThinking = session.streamingThinking,
         activeToolCalls = session.activeToolCalls,
         liveToolResults = live,
-        pendingPermission = session.pendingPermissions.lastOrNull(),
         pendingQuestion = session.pendingQuestions.lastOrNull(),
-        pendingPermissions = session.pendingPermissions,
         pendingQuestions = session.pendingQuestions,
         todoItems = session.todoItems,
         subagents = session.subagents,
         backgroundWork = session.backgroundWork,
         running = session.running,
-        runs = session.runs,
         queuedPrompt = session.queuedPrompt,
     )
 }

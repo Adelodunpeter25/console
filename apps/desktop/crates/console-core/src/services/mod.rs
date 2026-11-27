@@ -1,13 +1,15 @@
 pub mod assist;
 pub mod auth;
+pub mod automation;
 pub mod chrome;
 pub mod device;
+pub mod drafts;
+pub mod file_comments;
 pub mod fs;
 pub mod git;
 pub mod integrations;
 pub mod local_forward;
 pub mod mcp;
-pub mod drafts;
 pub mod model_favorites;
 pub mod notification;
 pub mod port;
@@ -18,26 +20,32 @@ pub mod run;
 pub mod server_auth;
 pub mod session;
 pub mod settings;
+pub mod stt;
 pub mod terminal;
 pub mod transport;
+pub mod update;
 pub mod usage;
 
 pub use assist::AssistService;
 pub use auth::AuthService;
+pub use automation::{
+    AutomationService, AutomationStreamEvent, WebhookService, WebhookStreamEvent,
+};
 pub use chrome::{ChromeImportData, ChromeService};
 pub use device::DeviceService;
+pub use drafts::DraftService;
+pub use file_comments::FileCommentService;
 pub use fs::{FsService, RawFileError};
 pub use git::GitService;
 pub use integrations::IntegrationService;
 pub use local_forward::{LocalForward, LocalForwardManager};
 pub use mcp::McpService;
-pub use drafts::DraftService;
 pub use model_favorites::ModelFavoriteService;
 pub use notification::NotificationService;
 pub use port::PortService;
 pub use project::{
     GithubNotConnected, ProjectService, clone_project_body, init_project_body,
-    is_github_not_connected,
+    is_github_not_connected, repo_task_body,
 };
 pub use project_scripts::ProjectScriptsService;
 pub use provider::ProviderService;
@@ -48,6 +56,7 @@ pub use server_auth::{
 };
 pub use session::SessionService;
 pub use settings::{PatchRoleMapping, PatchSettingsBody, SettingsService};
+pub use stt::SttService;
 pub use terminal::TerminalService;
 pub use transport::{ChatEventStream, Transport};
 pub use usage::UsageService;

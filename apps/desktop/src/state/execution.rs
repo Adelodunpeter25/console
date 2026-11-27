@@ -1,6 +1,6 @@
 use console_core::ImageAttachment;
-use console_core::types::agent::{AskQuestionRequest, PermissionRequest};
-use gpui::Context;
+use console_core::types::agent::AskQuestionRequest;
+use gpui::{Context, Focusable, Window};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
@@ -20,23 +20,21 @@ impl ConsoleDesktopApp {
         match started_at {
             Some(t) => {
                 self.running_sessions.insert(session_id.to_string(), t);
-                if let Some(session) = Rc::make_mut(&mut self.sessions)
-                    .iter_mut()
-                    .find(|s| s.id == session_id)
-                {
-                    session.status = "working".to_string();
-                }
+                super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                    if let Some(session) = sessions.iter_mut().find(|s| s.id == session_id) {
+                        session.status = "working".to_string();
+                    }
+                });
             }
             None => {
                 self.running_sessions.remove(session_id);
-                if let Some(session) = Rc::make_mut(&mut self.sessions)
-                    .iter_mut()
-                    .find(|s| s.id == session_id)
-                {
-                    if session.status == "working" {
+                super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                    if let Some(session) = sessions.iter_mut().find(|s| s.id == session_id)
+                        && session.status == "working"
+                    {
                         session.status = "idle".to_string();
                     }
-                }
+                });
             }
         }
     }
@@ -88,23 +86,6 @@ impl ConsoleDesktopApp {
         }
     }
 
-    pub(crate) fn pending_permission_for_pane(&self, pane_id: &str) -> Option<PermissionRequest> {
-        self.active_session_for_pane(pane_id)
-            .and_then(|sid| self.pending_permissions.get(&sid).cloned())
-    }
-
-    pub(crate) fn set_pending_permission_for_session(
-        &mut self,
-        session_id: &str,
-        perm: Option<PermissionRequest>,
-    ) {
-        if let Some(p) = perm {
-            self.pending_permissions.insert(session_id.to_string(), p);
-        } else {
-            self.pending_permissions.remove(session_id);
-        }
-    }
-
     pub(crate) fn pending_question_for_pane(&self, pane_id: &str) -> Option<AskQuestionRequest> {
         self.active_session_for_pane(pane_id)
             .and_then(|sid| self.pending_questions.get(&sid).cloned())
@@ -152,18 +133,19 @@ impl ConsoleDesktopApp {
         self.question_selected.remove(session_id);
     }
 
-    pub(crate) fn attachments_for_pane(&self, pane_id: &str) -> Rc<Vec<ImageAttachment>> {
+    pub(crate) fn attachments_for_pane(&self, pane_id: &str) -> Rc<[ImageAttachment]> {
         self.attachments
             .get(pane_id)
             .cloned()
-            .unwrap_or_else(|| Rc::new(Vec::new()))
+            .unwrap_or_else(|| Rc::from([]))
     }
 
     pub(crate) fn set_attachments_for_pane(&mut self, pane_id: &str, items: Vec<ImageAttachment>) {
         if items.is_empty() {
             self.attachments.remove(pane_id);
         } else {
-            self.attachments.insert(pane_id.to_string(), Rc::new(items));
+            self.attachments
+                .insert(pane_id.to_string(), Rc::from(items));
         }
     }
 
@@ -189,8 +171,8 @@ impl ConsoleDesktopApp {
             let parked = self
                 .history_draft_attachments
                 .remove(pane_id)
-                .unwrap_or_else(|| Rc::new(Vec::new()));
-            self.set_attachments_for_pane(pane_id, (*parked).clone());
+                .unwrap_or_else(|| Rc::from([]));
+            self.set_attachments_for_pane(pane_id, parked.to_vec());
             self.restore_recalled_annotations(pane_id, message_id, true, cx);
             cx.notify();
             return;
@@ -228,9 +210,10 @@ impl ConsoleDesktopApp {
             return;
         }
         match self.attachments.get_mut(pane_id) {
-            Some(existing) => Rc::make_mut(existing).append(&mut items),
+            Some(existing) => super::types::rc_slice_edit(existing, |v| v.append(&mut items)),
             None => {
-                self.attachments.insert(pane_id.to_string(), Rc::new(items));
+                self.attachments
+                    .insert(pane_id.to_string(), Rc::from(items));
             }
         }
     }
@@ -252,12 +235,10 @@ impl ConsoleDesktopApp {
         }
     }
 
-    /// Sessions waiting for a permission or question response, for the sidebar
-    /// to highlight each waiting chat independently.
+    /// Sessions waiting for a question response, for the sidebar to highlight
+    /// each waiting chat independently.
     pub(crate) fn waiting_sessions_snapshot(&self) -> HashSet<String> {
-        let mut out: HashSet<String> = self.pending_permissions.keys().cloned().collect();
-        out.extend(self.pending_questions.keys().cloned());
-        out
+        self.pending_questions.keys().cloned().collect()
     }
 
     pub(crate) fn queued_prompts_for_session(
@@ -270,33 +251,27 @@ impl ConsoleDesktopApp {
             .unwrap_or_default()
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn queued_prompt_for_session(
-        &self,
-        session_id: &str,
-    ) -> Option<console_core::QueuedPrompt> {
-        self.queued_prompts
-            .get(session_id)
-            .and_then(|v| v.first().cloned())
-    }
-
-    pub(crate) fn set_queued_prompt_for_session(
+    /// Make the local cards match the server's queue. Cards this device just
+    /// queued and the server has not confirmed yet (local ids, no matching
+    /// prompt in `remote`) stay at the end so they do not blink out.
+    pub(crate) fn set_queue_from_server(
         &mut self,
         session_id: &str,
-        queued: Option<console_core::QueuedPrompt>,
+        remote: Vec<console_core::QueuedPrompt>,
     ) {
-        if let Some(q) = queued {
-            let list = self
-                .queued_prompts
-                .entry(session_id.to_string())
-                .or_default();
-            if let Some(existing) = list.iter_mut().find(|p| p.id == q.id) {
-                *existing = q;
-            } else if list.is_empty() {
-                list.push(q);
-            }
-        } else {
+        let unconfirmed: Vec<_> = self
+            .queued_prompts_for_session(session_id)
+            .into_iter()
+            .filter(|local| {
+                local.id.starts_with("queued-") && !remote.iter().any(|r| r.prompt == local.prompt)
+            })
+            .collect();
+        let mut list = remote;
+        list.extend(unconfirmed);
+        if list.is_empty() {
             self.queued_prompts.remove(session_id);
+        } else {
+            self.queued_prompts.insert(session_id.to_string(), list);
         }
     }
 
@@ -358,5 +333,113 @@ impl ConsoleDesktopApp {
     pub(crate) fn has_queued_prompt_for_pane(&self, pane_id: &str) -> bool {
         self.active_session_for_pane(pane_id)
             .is_some_and(|sid| self.queued_prompts.get(&sid).is_some_and(|v| !v.is_empty()))
+    }
+}
+
+impl ConsoleDesktopApp {
+    /// Show chips for a chat, unless it is already working again.
+    pub(crate) fn set_suggestions(
+        &mut self,
+        session_id: &str,
+        items: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        if session_id.is_empty() || items.is_empty() || self.is_session_running(session_id) {
+            return;
+        }
+        self.suggestions.insert(session_id.to_string(), items);
+        cx.notify();
+    }
+
+    /// Fetch the chat's stored suggestions, for a chat just opened or a
+    /// notification stream that reconnected and may have missed the push.
+    pub(crate) fn load_suggestions(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            if let Ok(items) = client.sessions.get_suggestions(&session_id).await {
+                let _ = cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.set_suggestions(&session_id, items, cx);
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Re-fetch suggestions for every chat a pane is showing.
+    pub(crate) fn reload_open_suggestions(&mut self, cx: &mut Context<Self>) {
+        let open: Vec<String> = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .filter_map(|leaf| self.active_session_for_pane(&leaf.id))
+            .collect();
+        for session_id in open {
+            self.load_suggestions(session_id, cx);
+        }
+    }
+
+    pub(crate) fn clear_suggestions(&mut self, session_id: &str, cx: &mut Context<Self>) {
+        if self.suggestions.remove(session_id).is_some() {
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn pills_scroll_for_pane(&mut self, pane_id: &str) -> gpui::ScrollHandle {
+        self.pills_scrolls
+            .entry(pane_id.to_string())
+            .or_default()
+            .clone()
+    }
+
+    pub(crate) fn suggestions_for_pane(&self, pane_id: &str) -> Vec<String> {
+        self.active_session_for_pane(pane_id)
+            .and_then(|sid| self.suggestions.get(&sid).cloned())
+            .unwrap_or_default()
+    }
+
+    /// Put a suggestion in the composer for editing, replacing any draft.
+    pub(crate) fn edit_suggestion_for_pane(
+        &mut self,
+        pane_id: &str,
+        prompt: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let composer = self.composer_for_pane(pane_id);
+        composer.update(cx, |input, cx| {
+            input.set_content(prompt, cx);
+        });
+        cx.notify();
+        // Menu item callbacks refresh the window after returning; focusing in
+        // that same frame gets lost. Defer with the window handle so the focus
+        // request runs after the refresh and can still reach the composer.
+        window.defer(cx, move |window, cx| {
+            composer.update(cx, |input, cx| {
+                window.focus(&input.focus_handle(cx), cx);
+            });
+        });
+    }
+
+    /// A chip click sends the suggestion as a normal prompt in that pane.
+    pub(crate) fn send_suggestion_for_pane(
+        &mut self,
+        pane_id: &str,
+        prompt: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(sid) = self.active_session_for_pane(pane_id) {
+            self.clear_suggestions(&sid, cx);
+        }
+        if self.is_active_session_running_for_pane(pane_id) {
+            self.queue_suggestion_for_pane(pane_id.to_string(), prompt, cx);
+            return;
+        }
+        self.active_pane_id = Some(pane_id.to_string());
+        self.selected_session_id = self.active_session_for_pane(pane_id);
+        self.submit_suggestion(prompt, cx);
     }
 }

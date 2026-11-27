@@ -5,7 +5,7 @@ package shared
 import (
 	"bufio"
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"strings"
 )

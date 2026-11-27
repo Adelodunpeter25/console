@@ -62,7 +62,7 @@ impl ConsoleDesktopApp {
     }
 
     /// Stage `prompt` to run right after the active turn settles (POST /queue).
-    /// Replaces any existing queued prompt for the session.
+    /// Queued prompts stack: each runs after the one before it.
     pub fn queue_prompt_for_pane(
         &mut self,
         pane_id: String,
@@ -70,6 +70,47 @@ impl ConsoleDesktopApp {
         attachments: Vec<ImageAttachment>,
         annotations: Vec<console_core::BrowserElementAnnotation>,
         context_files: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.stage_prompt_for_pane(
+            pane_id,
+            prompt,
+            attachments,
+            annotations,
+            context_files,
+            false,
+            cx,
+        );
+    }
+
+    /// A suggestion chip tapped mid-run: staged like any prompt, but whatever
+    /// the user has typed in the composer stays put.
+    pub fn queue_suggestion_for_pane(
+        &mut self,
+        pane_id: String,
+        prompt: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.stage_prompt_for_pane(
+            pane_id,
+            prompt,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            true,
+            cx,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn stage_prompt_for_pane(
+        &mut self,
+        pane_id: String,
+        prompt: String,
+        attachments: Vec<ImageAttachment>,
+        annotations: Vec<console_core::BrowserElementAnnotation>,
+        context_files: Vec<String>,
+        keep_draft: bool,
         cx: &mut Context<Self>,
     ) {
         if prompt.trim().is_empty() {
@@ -84,7 +125,7 @@ impl ConsoleDesktopApp {
             context_files: if context_files.is_empty() {
                 None
             } else {
-                Some(context_files.clone())
+                Some(context_files)
             },
             model_id: self
                 .pane_selected_model(&pane_id)
@@ -99,12 +140,12 @@ impl ConsoleDesktopApp {
             attachments: if attachments.is_empty() {
                 None
             } else {
-                Some(attachments.clone())
+                Some(attachments)
             },
             annotations: if annotations.is_empty() {
                 None
             } else {
-                Some(annotations.clone())
+                Some(annotations)
             },
         };
         let queued_item = console_core::QueuedPrompt {
@@ -121,54 +162,58 @@ impl ConsoleDesktopApp {
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         self.add_queued_prompt_for_session(&session_id, queued_item);
-
-        self.composer_for_pane(&pane_id)
-            .update(cx, |input, cx| input.clear(cx));
-        self.set_attachments_for_pane(&pane_id, Vec::new());
-        self.set_annotations_for_pane(&pane_id, Vec::new());
-        self.clear_draft_for_session(Some(&session_id), cx);
-        self.revoke_sidebar_draft(&session_id);
-        self.composer_for_pane(&pane_id).update(cx, |input, cx| {
-            // The server assigns the message id, so it is unknown here; the
-            // history is rebuilt from the transcript once the run settles.
-            input.record_prompt_history(
-                prompt.clone(),
-                dq.context_files.clone().unwrap_or_default(),
-                None,
-                cx,
-            );
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|s| s.id == session_id) {
+                session.settled_at = None;
+            }
         });
-        let is_first = self.queued_prompts_for_session(&session_id).len() == 1;
-        if is_first {
-            let client = self.client.clone();
-            let entity = cx.entity().downgrade();
-            cx.spawn(
-                async move |_, cx| match client.runs.queue_prompt(&session_id, dq).await {
-                    Ok(queued) => {
-                        let sid = queued.session_id.clone();
-                        let _ = cx.update(|cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.add_queued_prompt_for_session(&sid, queued);
-                                    cx.notify();
-                                });
-                            }
-                        });
-                    }
-                    Err(err) => {
-                        let msg = format!("Unable to queue prompt: {err}");
-                        let _ = cx.update(|cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.set_error_for_session(&session_id, msg, cx);
-                                });
-                            }
-                        });
-                    }
-                },
-            )
-            .detach();
+
+        if !keep_draft {
+            self.composer_for_pane(&pane_id)
+                .update(cx, |input, cx| input.clear(cx));
+            self.set_attachments_for_pane(&pane_id, Vec::new());
+            self.set_annotations_for_pane(&pane_id, Vec::new());
+            self.clear_draft_for_session(Some(&session_id), cx);
+            self.revoke_sidebar_draft(&session_id);
+            self.composer_for_pane(&pane_id).update(cx, |input, cx| {
+                // The server assigns the message id, so it is unknown here; the
+                // history is rebuilt from the transcript once the run settles.
+                input.record_prompt_history(
+                    prompt.clone(),
+                    dq.context_files.clone().unwrap_or_default(),
+                    None,
+                    cx,
+                );
+            });
         }
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(
+            async move |_, cx| match client.runs.queue_prompt(&session_id, dq).await {
+                Ok(queued) => {
+                    let sid = queued.session_id.clone();
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.add_queued_prompt_for_session(&sid, queued);
+                                cx.notify();
+                            });
+                        }
+                    });
+                }
+                Err(err) => {
+                    let msg = format!("Unable to queue prompt: {err}");
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.set_error_for_session(&session_id, msg, cx);
+                            });
+                        }
+                    });
+                }
+            },
+        )
+        .detach();
         cx.notify();
     }
 
@@ -183,7 +228,7 @@ impl ConsoleDesktopApp {
         };
         self.remove_queued_prompt_for_session(&session_id, &prompt_id);
         cx.notify();
-        self.sync_server_queue_for_session(&session_id, cx);
+        self.delete_server_queued_prompt(&session_id, &prompt_id, cx);
     }
 
     pub fn edit_queued_prompt_for_pane(
@@ -203,7 +248,7 @@ impl ConsoleDesktopApp {
             console_core::queued_attachments_from_proto(&queued.attachments).unwrap_or_default();
         let annotations =
             console_core::queued_annotations_from_proto(&queued.annotations).unwrap_or_default();
-        let context_files = queued.context_files.clone();
+        let context_files = queued.context_files;
         self.composer_for_pane(&pane_id).update(cx, |input, cx| {
             input.set_content_with_context_files(prompt.clone(), context_files, cx)
         });
@@ -214,42 +259,26 @@ impl ConsoleDesktopApp {
             self.set_annotations_for_pane(&pane_id, annotations);
         }
         cx.notify();
-        self.sync_server_queue_for_session(&session_id, cx);
+        self.delete_server_queued_prompt(&session_id, &prompt_id, cx);
     }
 
-    fn queued_prompt_to_run_dto(queued: &console_core::QueuedPrompt) -> RunPromptDto {
-        RunPromptDto {
-            prompt: queued.prompt.clone(),
-            context_files: console_core::queued_strings_from_proto(&queued.context_files),
-            model_id: queued.model_id.clone(),
-            provider: queued.provider.clone(),
-            approval_mode: queued.approval_mode.clone(),
-            thinking_level: console_core::queued_thinking_from_proto(
-                queued.thinking_level.as_deref(),
-            ),
-            attachments: console_core::queued_attachments_from_proto(&queued.attachments),
-            annotations: console_core::queued_annotations_from_proto(&queued.annotations),
-        }
-    }
-
-    /// Mirror the local queue onto the server's single staged prompt: when no
-    /// card remains, discard the staged copy; otherwise stage the next card.
-    fn sync_server_queue_for_session(&mut self, session_id: &str, cx: &mut Context<Self>) {
+    /// Drop one card from the server's queue so it does not run later too.
+    fn delete_server_queued_prompt(
+        &mut self,
+        session_id: &str,
+        prompt_id: &str,
+        cx: &mut Context<Self>,
+    ) {
         let client = self.client.clone();
         let session_id = session_id.to_string();
-        let remaining = self.queued_prompts_for_session(&session_id);
-        if remaining.is_empty() {
-            cx.spawn(async move |_, _| {
-                let _ = client.runs.clear_queued_prompt(&session_id).await;
-            })
-            .detach();
-        } else {
-            let next = Self::queued_prompt_to_run_dto(&remaining[0]);
-            cx.spawn(async move |_, _| {
-                let _ = client.runs.queue_prompt(&session_id, next).await;
-            })
-            .detach();
-        }
+        let prompt_id = prompt_id.to_string();
+        cx.spawn(async move |_, _| {
+            let _ = client
+                .runs
+                .delete_queued_prompt(&session_id, &prompt_id)
+                .await;
+        })
+        .detach();
     }
 
     /// Send a queued prompt immediately as a fresh run (the send path for an
@@ -269,8 +298,8 @@ impl ConsoleDesktopApp {
             return;
         };
         cx.notify();
-        self.sync_server_queue_for_session(&session_id, cx);
-        self.active_pane_id = Some(pane_id.clone());
+        self.delete_server_queued_prompt(&session_id, &prompt_id, cx);
+        self.active_pane_id = Some(pane_id);
         self.selected_session_id = Some(session_id.clone());
         self.start_prompt_run(
             PromptStart {
@@ -338,8 +367,17 @@ impl ConsoleDesktopApp {
         };
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
+        let queued_id = queued.id;
         cx.spawn(async move |_, cx| {
+            // The server still holds this card; take it out first, or it would
+            // run again after the steered prompt.
+            let _ = client
+                .runs
+                .delete_queued_prompt(&session_id, &queued_id)
+                .await;
+            let requeue = dto.clone();
             if let Err(err) = client.runs.steer(&session_id, dto).await {
+                let _ = client.runs.queue_prompt(&session_id, requeue).await;
                 let msg = format!("Unable to steer run: {err}");
                 let _ = cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
@@ -357,8 +395,8 @@ impl ConsoleDesktopApp {
     }
 
     /// Cmd/Ctrl+Enter, and the queued card's "steer / send now". While a
-    /// turn is running it steers or queues (spec §5.1: SubmitSteer falls
-    /// back to queue when no staged prompt exists). When the session is
+    /// turn is running it steers — the staged queued prompt if one exists,
+    /// otherwise the freshly typed composer text. When the session is
     /// idle there is nothing to pivot, so it sends instead — either the
     /// staged prompt or the composer text as a fresh run.
     pub fn submit_steer_for_pane(
@@ -385,14 +423,93 @@ impl ConsoleDesktopApp {
         if !running {
             self.active_pane_id = Some(pane_id.clone());
             self.selected_session_id = self.active_session_for_pane(&pane_id);
-            let attachments = (*self.attachments_for_pane(&pane_id)).clone();
-            let annotations = (*self.annotations_for_pane(&pane_id)).clone();
+            let attachments = self.attachments_for_pane(&pane_id).to_vec();
+            let annotations = self.annotations_for_pane(&pane_id).to_vec();
             self.submit_prompt_with_context(prompt, attachments, annotations, context_files, cx);
             return;
         }
-        let attachments = (*self.attachments_for_pane(&pane_id)).clone();
-        let annotations = (*self.annotations_for_pane(&pane_id)).clone();
-        self.queue_prompt_for_pane(pane_id, prompt, attachments, annotations, context_files, cx);
+        let attachments = self.attachments_for_pane(&pane_id).to_vec();
+        let annotations = self.annotations_for_pane(&pane_id).to_vec();
+        let Some(session_id) = self.active_session_for_pane(&pane_id) else {
+            return;
+        };
+        self.set_attachments_for_pane(&pane_id, Vec::new());
+        self.set_annotations_for_pane(&pane_id, Vec::new());
+        self.steer_composer_prompt(
+            pane_id,
+            session_id,
+            prompt,
+            attachments,
+            annotations,
+            context_files,
+            cx,
+        );
+    }
+
+    /// Steer freshly typed composer text into the running turn. If the run
+    /// settles before the steer lands, queue the prompt instead so it is
+    /// not silently lost.
+    fn steer_composer_prompt(
+        &mut self,
+        pane_id: String,
+        session_id: String,
+        prompt: String,
+        attachments: Vec<ImageAttachment>,
+        annotations: Vec<console_core::BrowserElementAnnotation>,
+        context_files: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let dto = RunPromptDto {
+            prompt: prompt.clone(),
+            context_files: if context_files.is_empty() {
+                None
+            } else {
+                Some(context_files.clone())
+            },
+            model_id: self
+                .pane_selected_model(&pane_id)
+                .as_ref()
+                .map(|m| m.model_id.clone()),
+            provider: self
+                .pane_selected_model(&pane_id)
+                .as_ref()
+                .map(|m| m.provider.clone()),
+            approval_mode: Some(self.pane_approval_mode(&pane_id).value().to_string()),
+            thinking_level: self.pane_thinking_level(&pane_id),
+            attachments: if attachments.is_empty() {
+                None
+            } else {
+                Some(attachments.clone())
+            },
+            annotations: if annotations.is_empty() {
+                None
+            } else {
+                Some(annotations.clone())
+            },
+        };
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            if let Err(err) = client.runs.steer(&session_id, dto).await {
+                let msg = format!("Unable to steer run: {err}");
+                let _ = cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.queue_prompt_for_pane(
+                                pane_id.clone(),
+                                prompt.clone(),
+                                attachments.clone(),
+                                annotations.clone(),
+                                context_files.clone(),
+                                cx,
+                            );
+                            this.set_error_for_session(&session_id, msg, cx);
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
     }
 
     /// Composer submit (Enter): a normal turn. See `start_prompt_run` for
@@ -421,6 +538,25 @@ impl ConsoleDesktopApp {
         );
     }
 
+    /// A suggestion chip click: a normal turn that leaves whatever the user
+    /// has typed, attached, or annotated in the composer untouched.
+    pub fn submit_suggestion(&mut self, prompt: String, cx: &mut Context<Self>) {
+        self.start_prompt_run(
+            PromptStart {
+                prompt,
+                attachments: Vec::new(),
+                annotations: Vec::new(),
+                context_files: Vec::new(),
+                model_id: None,
+                provider: None,
+                approval_mode: None,
+                thinking_level: None,
+                keep_draft: true,
+            },
+            cx,
+        );
+    }
+
     fn start_prompt_run(&mut self, start: PromptStart, cx: &mut Context<Self>) {
         if start.prompt.trim().is_empty() {
             return;
@@ -441,9 +577,7 @@ impl ConsoleDesktopApp {
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
         self.clear_error_for_pane(&run_pane_id, cx);
-        let active_session = self
-            .active_session_for_pane(&run_pane_id)
-            .map(|s| s.to_string());
+        let active_session = self.active_session_for_pane(&run_pane_id);
         if !keep_draft {
             self.clear_draft_for_session(active_session.as_deref(), cx);
             if let Some(ref sid) = active_session {
@@ -451,15 +585,14 @@ impl ConsoleDesktopApp {
             }
             self.composer_for_pane(&run_pane_id)
                 .update(cx, |input, cx| {
-                    input.record_prompt_history(
-                        prompt.clone(),
-                        context_files.clone(),
-                        None,
-                        cx,
-                    );
+                    input.record_prompt_history(prompt.clone(), context_files.clone(), None, cx);
                 });
         }
 
+        let approval_mode = Some(
+            queued_approval_mode
+                .unwrap_or_else(|| self.pane_approval_mode(&run_pane_id).value().to_string()),
+        );
         let user_msg = AgentMessage::User {
             id: None,
             content: prompt.clone(),
@@ -479,9 +612,11 @@ impl ConsoleDesktopApp {
                 Some(annotations.clone())
             },
             created_at: Some(chrono::Utc::now().timestamp()),
+            approval_mode: approval_mode.clone(),
+            source: None,
         };
         self.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-            t.push_message(user_msg, cx);
+            t.push_message(user_msg.clone(), cx);
             t.begin_streaming(cx);
         });
 
@@ -489,30 +624,23 @@ impl ConsoleDesktopApp {
         // ones, so a card the user queued with a different model still runs
         // the way it was queued.
         let selected_model = self.pane_selected_model(&run_pane_id);
-        let model_id = queued_model_id.or_else(|| {
-            selected_model
-                .as_ref()
-                .map(|m| m.model_id.clone())
-        });
-        let provider = queued_provider.or_else(|| {
-            selected_model.as_ref().map(|m| m.provider.clone())
-        });
-        let approval_mode = Some(queued_approval_mode.unwrap_or_else(|| {
-            self.pane_approval_mode(&run_pane_id).value().to_string()
-        }));
+        let model_id =
+            queued_model_id.or_else(|| selected_model.as_ref().map(|m| m.model_id.clone()));
+        let provider =
+            queued_provider.or_else(|| selected_model.as_ref().map(|m| m.provider.clone()));
         let thinking_level = queued_thinking.or_else(|| self.pane_thinking_level(&run_pane_id));
         let active_sid = self.active_session_for_pane(&run_pane_id);
         let session_project_id = self.pane_real_project_id(&run_pane_id);
         let session_cwd = self
             .selected_project_for_pane(&run_pane_id)
-            .map(|project| project.path.clone());
+            .map(|project| project.path);
         let client = self.client.clone();
-        let transport = self.transport.clone();
+        let transport = self.transport;
 
         if !keep_draft {
             self.composer_for_pane(&run_pane_id)
                 .update(cx, |input, cx| {
-                    input.set_content("", cx);
+                    input.clear(cx);
                 });
             self.set_attachments_for_pane(&run_pane_id, Vec::new());
             self.set_annotations_for_pane(&run_pane_id, Vec::new());
@@ -523,6 +651,13 @@ impl ConsoleDesktopApp {
         // id is resolved after creation inside the spawned run.
         let run_started_at = chrono::Utc::now().timestamp();
         let initial_run_token = if let Some(ref sid) = active_sid {
+            super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                if let Some(session) = sessions.iter_mut().find(|s| &s.id == sid) {
+                    let count = session.message_count.unwrap_or(0);
+                    session.message_count = Some(count + 1);
+                    session.settled_at = None;
+                }
+            });
             self.set_session_running(sid, Some(run_started_at));
             self.next_run_token_for_session(sid)
         } else {
@@ -532,6 +667,7 @@ impl ConsoleDesktopApp {
 
         // Spawn async streaming run
         cx.spawn(async move |entity, cx| {
+            let mut run_pane_id = run_pane_id;
             // Resolve or create session ID
             let (session_id, run_token) = match active_sid {
                 Some(id) => (id, initial_run_token),
@@ -551,24 +687,46 @@ impl ConsoleDesktopApp {
                     }).await {
                         Ok(s) => {
                             let sid = s.id.clone();
-                            let new_session = s;
+                            let mut new_session = s;
+                            new_session.message_count = Some(1);
                             let mut assigned_token = 0;
+                            let mut resolved_pane = run_pane_id.clone();
                             cx.update(|cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
-                                        this.save_transcript_scroll_position(cx);
-                                        this.apply_session_header_for_pane(&run_pane_id, &new_session, cx);
-                                        if this.active_pane_id.as_deref() == Some(run_pane_id.as_str()) {
+                                        // The new chat replaces this pane's
+                                        // transcript, so the chat it was
+                                        // showing keeps its position.
+                                        this.save_pane_scroll_position(&run_pane_id, cx);
+                                        super::types::rc_slice_edit(&mut this.sessions, |v| v.insert(0, new_session.clone()));
+                                        this.switch_workspace_for_session(&sid, &run_pane_id, cx);
+                                        let target_pane = this
+                                            .active_pane_id
+                                            .clone()
+                                            .unwrap_or_else(|| run_pane_id.clone());
+                                        if target_pane != run_pane_id {
+                                            this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
+                                                t.finish_streaming(cx);
+                                            });
+                                            this.transcript_for_pane(&target_pane).update(cx, |t, cx| {
+                                                t.set_turns(Vec::new(), cx);
+                                                t.push_message(user_msg, cx);
+                                                t.begin_streaming(cx);
+                                            });
+                                        }
+                                        this.apply_session_header_for_pane(&target_pane, &new_session, cx);
+                                        if this.active_pane_id.as_deref() == Some(target_pane.as_str()) {
                                             this.selected_session_id = Some(sid.clone());
                                         }
-                                        Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
-                                        this.open_chat_tab_in_pane(&run_pane_id, sid.clone(), new_session.title.clone());
+                                        this.open_chat_tab_in_pane(&target_pane, sid.clone(), new_session.title.clone(), cx);
                                         this.set_session_running(&sid, Some(run_started_at));
                                         assigned_token = this.next_run_token_for_session(&sid);
+                                        resolved_pane = target_pane;
                                         cx.notify();
                                     });
                                 }
                             });
+                            run_pane_id = resolved_pane;
                             (sid, assigned_token)
                         }
                         Err(error) => {
@@ -721,7 +879,7 @@ impl ConsoleDesktopApp {
                                     this.apply_session_header_for_pane(&run_pane_id, &detail.header, cx);
                                     this.composer_for_pane(&run_pane_id).update(cx, |input, cx| {
                                         input.set_prompt_history(
-                                            user_prompt_history(&detail.messages),
+                                            user_prompt_history(&detail.turns),
                                             cx,
                                         );
                                     });
@@ -731,13 +889,14 @@ impl ConsoleDesktopApp {
                                         cx,
                                     );
                                     this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                        if detail.messages.len() >= t.message_count() {
-                                            t.set_messages(detail.messages, cx);
+                                        if detail.turns.len() >= t.turn_count() {
+                                            t.set_turns(detail.turns, cx);
                                         } else {
-                                            t.adopt_user_message_ids(&detail.messages, cx);
+                                            t.adopt_user_message_ids(&detail.turns, cx);
                                         }
                                     });
                                     this.refresh_turn_changes_for_pane(&run_pane_id, &session_id, cx);
+                                    this.load_background_work(session_id.clone(), cx);
                                 }
                                 cx.notify();
                             });
@@ -767,7 +926,12 @@ impl ConsoleDesktopApp {
                             .as_deref()
                             == Some(run_session_id.as_str());
                         if server_run_may_be_active {
-                            this.set_session_running(&run_session_id, Some(run_started_at));
+                            let started_at = this
+                                .running_sessions
+                                .get(&run_session_id)
+                                .copied()
+                                .unwrap_or(run_started_at);
+                            this.set_session_running(&run_session_id, Some(started_at));
                             this.set_error_for_session(
                                 &run_session_id,
                                 "The server is still completing this run. Use Stop before sending another prompt.",
@@ -779,7 +943,7 @@ impl ConsoleDesktopApp {
                             // still working this run.
                             if pane_shows_run {
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                    t.resume_streaming(run_started_at, cx);
+                                    t.resume_streaming(started_at, cx);
                                 });
                             }
                         } else {
@@ -835,6 +999,7 @@ impl ConsoleDesktopApp {
                                         label: preview.label.clone(),
                                         kind_flags: preview.kind_flags,
                                         icon: preview.icon.clone(),
+                                        summary: None,
                                     },
                                     cx,
                                 );
@@ -848,29 +1013,31 @@ impl ConsoleDesktopApp {
                 if let Some(turn) = turn
                     .as_ref()
                     .map(console_core::AssistantMessage::from_proto_assistant)
+                    && pane_shows_run
                 {
-                    if pane_shows_run {
-                        self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
-                            t.finalize_assistant_message(turn, cx);
-                        });
-                    }
+                    self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                        t.finalize_assistant_message(turn, cx);
+                    });
                 }
-            }
-            AgentSessionEvent::PermissionRequest { request } => {
-                self.set_pending_permission_for_session(
-                    run_session_id,
-                    Some(console_core::PermissionRequest::from_proto(&request)),
-                );
-                self.set_pending_question_for_session(run_session_id, None);
             }
             AgentSessionEvent::AskQuestion { request } => {
                 self.set_pending_question_for_session(
                     run_session_id,
                     Some(console_core::AskQuestionRequest::from_proto(&request)),
                 );
-                self.set_pending_permission_for_session(run_session_id, None);
                 self.clear_question_selected_for_session(run_session_id);
                 self.clear_question_inputs_for_session(run_session_id, cx);
+            }
+            AgentSessionEvent::QuestionResolved { request_id } => {
+                if self
+                    .pending_questions
+                    .get(run_session_id)
+                    .is_some_and(|q| q.request_id == request_id)
+                {
+                    self.set_pending_question_for_session(run_session_id, None);
+                    self.clear_question_selected_for_session(run_session_id);
+                    self.clear_question_inputs_for_session(run_session_id, cx);
+                }
             }
             AgentSessionEvent::BrowserAction { request } => {
                 self.handle_browser_action(
@@ -914,7 +1081,7 @@ impl ConsoleDesktopApp {
                         );
                     });
                 }
-                self.maybe_refresh_inspector(cx);
+                self.refresh_file_tree(cx);
             }
             AgentSessionEvent::TodoUpdate { items, .. } => {
                 self.set_todo_items_for_session(run_session_id, items);
@@ -926,38 +1093,39 @@ impl ConsoleDesktopApp {
                     name,
                     role,
                     prompt,
-                    max_turns,
-                } = event.clone();
+                    model: _,
+                } = event;
                 // Wire optionals are absent when the server omits them; the
                 // session rows below use plain strings.
                 let parent_tool_call_id = parent_tool_call_id.unwrap_or_default();
                 let list = self
                     .session_subagents
                     .entry(run_session_id.to_string())
-                    .or_insert_with(|| Rc::new(Vec::new()));
-                let list_mut = Rc::make_mut(list);
-                if let Some(existing) = list_mut.iter_mut().find(|s| s.subagent_id == subagent_id) {
-                    existing.name = name;
-                    existing.role = role;
-                    existing.prompt = prompt;
-                    existing.max_turns = max_turns as i32;
-                    existing.status = "running".to_string();
-                } else {
-                    list_mut.push(console_core::types::SubagentInfo {
-                        subagent_id,
-                        parent_tool_call_id,
-                        name,
-                        role,
-                        prompt,
-                        max_turns: max_turns as i32,
-                        current_turn: 1,
-                        status: "running".to_string(),
-                        summary: None,
-                        error: None,
-                        activities: Vec::new(),
-                        ..Default::default()
-                    });
-                }
+                    .or_insert_with(|| Rc::from([]));
+                super::types::rc_slice_edit(list, |list_mut| {
+                    if let Some(existing) =
+                        list_mut.iter_mut().find(|s| s.subagent_id == subagent_id)
+                    {
+                        existing.name = name;
+                        existing.role = role;
+                        existing.prompt = prompt;
+                        existing.status = "running".to_string();
+                    } else {
+                        list_mut.push(console_core::types::SubagentInfo {
+                            subagent_id,
+                            parent_tool_call_id,
+                            name,
+                            role,
+                            prompt,
+                            current_turn: 1,
+                            status: "running".to_string(),
+                            summary: None,
+                            error: None,
+                            activities: Vec::new(),
+                            ..Default::default()
+                        });
+                    }
+                });
             }
             AgentSessionEvent::SubagentActivity { event } => {
                 let console_core::SubagentActivityEvent {
@@ -968,38 +1136,39 @@ impl ConsoleDesktopApp {
                     args,
                     status,
                     error,
-                } = event.clone();
+                } = event;
                 let tool_call_id = tool_call_id.unwrap_or_default();
                 let tool_name = tool_name.unwrap_or_default();
                 if let Some(list) = self.session_subagents.get_mut(run_session_id) {
-                    let list_mut = Rc::make_mut(list);
-                    if let Some(subagent) =
-                        list_mut.iter_mut().find(|s| s.subagent_id == subagent_id)
-                    {
-                        subagent.current_turn = subagent.current_turn.max(turn_index);
-                        if let Some(act) = subagent
-                            .activities
-                            .iter_mut()
-                            .find(|a| a.tool_call_id == tool_call_id)
+                    super::types::rc_slice_update(list, |list_mut| {
+                        if let Some(subagent) =
+                            list_mut.iter_mut().find(|s| s.subagent_id == subagent_id)
                         {
-                            act.status = status;
-                            if error.is_some() {
-                                act.error = error;
-                            }
-                        } else {
-                            subagent
+                            subagent.current_turn = subagent.current_turn.max(turn_index);
+                            if let Some(act) = subagent
                                 .activities
-                                .push(console_core::types::SubagentActivityItem {
-                                    turn_index,
-                                    tool_call_id,
-                                    tool_name,
-                                    summary: None,
-                                    args,
-                                    status,
-                                    error,
-                                });
+                                .iter_mut()
+                                .find(|a| a.tool_call_id == tool_call_id)
+                            {
+                                act.status = status;
+                                if error.is_some() {
+                                    act.error = error;
+                                }
+                            } else {
+                                subagent.activities.push(
+                                    console_core::types::SubagentActivityItem {
+                                        turn_index,
+                                        tool_call_id,
+                                        tool_name,
+                                        summary: None,
+                                        args,
+                                        status,
+                                        error,
+                                    },
+                                );
+                            }
                         }
-                    }
+                    });
                 }
             }
             AgentSessionEvent::SubagentEnd { event } => {
@@ -1009,23 +1178,24 @@ impl ConsoleDesktopApp {
                     summary,
                     error,
                     total_turns,
-                } = event.clone();
+                } = event;
                 if let Some(list) = self.session_subagents.get_mut(run_session_id) {
-                    let list_mut = Rc::make_mut(list);
-                    if let Some(subagent) =
-                        list_mut.iter_mut().find(|s| s.subagent_id == subagent_id)
-                    {
-                        subagent.status = status;
-                        if summary.is_some() {
-                            subagent.summary = summary;
+                    super::types::rc_slice_update(list, |list_mut| {
+                        if let Some(subagent) =
+                            list_mut.iter_mut().find(|s| s.subagent_id == subagent_id)
+                        {
+                            subagent.status = status;
+                            if summary.is_some() {
+                                subagent.summary = summary;
+                            }
+                            if error.is_some() {
+                                subagent.error = error;
+                            }
+                            if total_turns > 0 {
+                                subagent.current_turn = total_turns;
+                            }
                         }
-                        if error.is_some() {
-                            subagent.error = error;
-                        }
-                        if total_turns > 0 {
-                            subagent.current_turn = total_turns as i32;
-                        }
-                    }
+                    });
                 }
             }
             AgentSessionEvent::BackgroundWorkStarted { work }
@@ -1037,9 +1207,34 @@ impl ConsoleDesktopApp {
                 // transcript itself is untouched.
                 self.upsert_background_work(run_session_id, work, cx);
             }
-            AgentSessionEvent::BackgroundWorkContinue { .. } => {
-                // The server resumed an idle session; the wake turn is hidden
-                // and its output streams like any other turn.
+            AgentSessionEvent::BackgroundWorkContinue { message, work } => {
+                for item in work {
+                    self.upsert_background_work(run_session_id, item, cx);
+                }
+                // Record the wake for post-reload boundary reconstruction and
+                // the resumed-attach timer seed, then split the transcript's
+                // run grouping so wake-turn tool calls don't merge into the
+                // previous prompt's block.
+                let records = self
+                    .wake_records
+                    .entry(run_session_id.to_string())
+                    .or_default();
+                records.push(console_core::WakeRecord {
+                    message: message.clone(),
+                    at: chrono::Utc::now().timestamp(),
+                });
+                if records.len() > 16 {
+                    let excess = records.len() - 16;
+                    records.drain(..excess);
+                }
+                if pane_shows_run {
+                    let at = chrono::Utc::now().timestamp();
+                    self.wake_boundary_pushed_at
+                        .insert(run_session_id.to_string(), at);
+                    self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                        t.push_run_boundary(message.clone(), at, cx);
+                    });
+                }
             }
             AgentSessionEvent::Compaction { summary, .. } => {
                 self.set_agent_notice_for_session(
@@ -1051,8 +1246,30 @@ impl ConsoleDesktopApp {
                     }),
                 );
             }
-            AgentSessionEvent::TurnStart { .. } => {
+            AgentSessionEvent::TurnStart { prompt, source } => {
                 self.set_agent_notice_for_session(run_session_id, None);
+                if source.is_some() && pane_shows_run {
+                    let already_present = self
+                        .transcript_for_pane(run_pane_id)
+                        .read(cx)
+                        .has_trailing_user_message(&prompt, source.as_deref());
+                    if !already_present {
+                        let user_msg = console_core::AgentMessage::User {
+                            id: None,
+                            content: prompt,
+                            attachments: None,
+                            context_files: None,
+                            annotations: None,
+                            created_at: Some(chrono::Utc::now().timestamp()),
+                            approval_mode: None,
+                            source,
+                        };
+                        self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                            t.push_message(user_msg, cx);
+                            t.begin_streaming(cx);
+                        });
+                    }
+                }
             }
             AgentSessionEvent::ContextUpdate { context } => {
                 self.context_usage
@@ -1060,10 +1277,9 @@ impl ConsoleDesktopApp {
                 cx.notify();
             }
             AgentSessionEvent::TurnEnd { .. } => {
-                self.set_pending_permission_for_session(run_session_id, None);
                 self.set_pending_question_for_session(run_session_id, None);
                 self.clear_question_selected_for_session(run_session_id);
-                self.maybe_refresh_inspector(cx);
+                self.refresh_file_tree(cx);
             }
             AgentSessionEvent::SessionEnd => {
                 // A mid-chain sessionEnd (server auto-popped a queued prompt
@@ -1072,7 +1288,6 @@ impl ConsoleDesktopApp {
                 // `is_session_running` is false and would miss the queued
                 // turn's events, leaving the UI stale until the tab reloads.
                 let chained = !self.queued_prompts_for_session(run_session_id).is_empty();
-                self.set_pending_permission_for_session(run_session_id, None);
                 self.set_pending_question_for_session(run_session_id, None);
                 self.clear_question_selected_for_session(run_session_id);
                 self.clear_question_inputs_for_session(run_session_id, cx);
@@ -1083,20 +1298,39 @@ impl ConsoleDesktopApp {
                             t.finish_streaming(cx);
                         });
                     }
+                    // The user is watching this chat finish: that is seeing
+                    // the result, so it must not light up unread. The server
+                    // marked it unread when the run ended, so report the read
+                    // now; the dot never needs to appear on a chat on screen.
+                    if pane_shows_run && self.is_window_active {
+                        self.schedule_read_after_finish(run_session_id, cx);
+                    }
                 }
-                self.maybe_refresh_inspector(cx);
+                self.refresh_file_tree(cx);
             }
-            AgentSessionEvent::SessionStart => {
+            AgentSessionEvent::SessionStart {
+                started_at: server_started_at,
+                elapsed_ms,
+            } => {
                 self.set_agent_notice_for_session(run_session_id, None);
+                self.clear_suggestions(run_session_id, cx);
                 // A chained queued turn re-announces sessionStart on the same
                 // stream. Re-engage streaming so the auto-sent prompt visibly
                 // keeps working even if queueUpdated(null) arrived out of
                 // order or with an empty local queue.
-                let started_at = self
-                    .running_sessions
-                    .get(run_session_id)
-                    .copied()
-                    .unwrap_or_else(|| chrono::Utc::now().timestamp());
+                let started_at = if let Some(elapsed_ms) = elapsed_ms.filter(|ms| *ms >= 0) {
+                    chrono::Utc::now().timestamp() - elapsed_ms / 1000
+                } else if let Some(value) = server_started_at
+                    .as_deref()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                {
+                    value.timestamp()
+                } else {
+                    self.running_sessions
+                        .get(run_session_id)
+                        .copied()
+                        .unwrap_or_else(|| chrono::Utc::now().timestamp())
+                };
                 self.set_session_running(run_session_id, Some(started_at));
                 if pane_shows_run {
                     self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
@@ -1105,24 +1339,53 @@ impl ConsoleDesktopApp {
                 }
             }
             AgentSessionEvent::SessionTitleUpdated { title } => {
-                if let Some(session) = Rc::make_mut(&mut self.sessions)
-                    .iter_mut()
-                    .find(|session| session.id == run_session_id)
-                {
-                    session.title = title.clone();
-                }
+                super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                    if let Some(session) = sessions
+                        .iter_mut()
+                        .find(|session| session.id == run_session_id)
+                    {
+                        session.title = title.clone();
+                    }
+                });
                 self.update_session_title_in_panes(run_session_id, &title, cx);
             }
-            AgentSessionEvent::QueueUpdated { queued_prompt } => {
-                if let Some(q) = queued_prompt {
-                    self.add_queued_prompt_for_session(run_session_id, q);
+            AgentSessionEvent::SessionApprovalModeUpdated { approval_mode } => {
+                let mode = console_core::ApprovalMode::from_value(&approval_mode);
+                super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                    if let Some(session) = sessions
+                        .iter_mut()
+                        .find(|session| session.id == run_session_id)
+                    {
+                        session.approval_mode = mode.value().to_string();
+                    }
+                });
+                self.set_pane_approval_mode(run_pane_id, mode);
+                let pane_ids: Vec<String> = self.workspace_pane_states.keys().cloned().collect();
+                for pane_id in pane_ids {
+                    if self.active_session_for_pane(&pane_id).as_deref() == Some(run_session_id) {
+                        self.set_pane_approval_mode(&pane_id, mode);
+                    }
+                }
+                cx.notify();
+            }
+            AgentSessionEvent::QueueUpdated {
+                queued_prompts,
+                drained,
+                ..
+            } => {
+                let remote = queued_prompts.unwrap_or_default();
+                if !drained {
+                    // Queued, edited, deleted here or elsewhere, or cleared by
+                    // a stop: the server's list is the queue, and no turn began.
+                    self.set_queue_from_server(run_session_id, remote);
                 } else {
                     let list = self.queued_prompts_for_session(run_session_id);
                     if !list.is_empty() {
                         // Optimistic fast path: pop the card, paint the user
                         // bubble, and re-engage streaming for the next turn.
-                        let mut list = list;
-                        let popped = list.remove(0);
+                        let popped = list[0].clone();
+                        self.remove_queued_prompt_for_session(run_session_id, &popped.id);
+                        self.set_queue_from_server(run_session_id, remote);
                         let user_msg = console_core::AgentMessage::User {
                             id: None,
                             content: popped.prompt,
@@ -1136,6 +1399,10 @@ impl ConsoleDesktopApp {
                                 &popped.annotations,
                             ),
                             created_at: Some(chrono::Utc::now().timestamp()),
+                            approval_mode: popped.approval_mode.clone().or_else(|| {
+                                Some(self.pane_approval_mode(run_pane_id).value().to_string())
+                            }),
+                            source: None,
                         };
                         if pane_shows_run {
                             self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
@@ -1143,47 +1410,16 @@ impl ConsoleDesktopApp {
                                 t.begin_streaming(cx);
                             });
                         }
-                        if list.is_empty() {
-                            self.set_queued_prompt_for_session(run_session_id, None);
-                        } else {
-                            let next = list[0].clone();
-                            self.queued_prompts.insert(run_session_id.to_string(), list);
-                            let client = self.client.clone();
-                            let sid = run_session_id.to_string();
-                            let dq = console_core::RunPromptDto {
-                                prompt: next.prompt,
-                                context_files: console_core::queued_strings_from_proto(
-                                    &next.context_files,
-                                ),
-                                model_id: next.model_id,
-                                provider: next.provider,
-                                approval_mode: next.approval_mode,
-                                thinking_level: console_core::queued_thinking_from_proto(
-                                    next.thinking_level.as_deref(),
-                                ),
-                                attachments: console_core::queued_attachments_from_proto(
-                                    &next.attachments,
-                                ),
-                                annotations: console_core::queued_annotations_from_proto(
-                                    &next.annotations,
-                                ),
-                            };
-                            cx.spawn(async move |_, _| {
-                                let _ = client.runs.queue_prompt(&sid, dq).await;
-                            })
-                            .detach();
-                        }
                     } else {
+                        self.set_queue_from_server(run_session_id, remote);
                         // The server auto-sent a queued turn we hold no local
                         // record of (e.g. the optimistic entry was replaced by
                         // id). Stay marked running and refresh from canonical
                         // state so the new turn paints live instead of only
-                        // after a tab reload.
-                        let started_at = self
-                            .running_sessions
-                            .get(run_session_id)
-                            .copied()
-                            .unwrap_or_else(|| chrono::Utc::now().timestamp());
+                        // after a tab reload. A drained prompt is a new turn
+                        // (e.g. a steer), so its timer starts from zero rather
+                        // than inheriting the previous prompt's start.
+                        let started_at = chrono::Utc::now().timestamp();
                         self.set_session_running(run_session_id, Some(started_at));
                         if pane_shows_run {
                             self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
@@ -1210,10 +1446,8 @@ impl ConsoleDesktopApp {
                                                 this.transcript_for_pane(&pane).update(
                                                     cx,
                                                     |t, cx| {
-                                                        if detail.messages.len()
-                                                            >= t.message_count()
-                                                        {
-                                                            t.set_messages(detail.messages, cx);
+                                                        if detail.turns.len() >= t.turn_count() {
+                                                            t.set_turns(detail.turns, cx);
                                                             t.resume_streaming(started_at, cx);
                                                         }
                                                     },
@@ -1250,18 +1484,35 @@ impl ConsoleDesktopApp {
         &mut self,
         pane_id: String,
         session_id: String,
+        wake_at: Option<i64>,
         cx: &mut Context<Self>,
     ) {
         if self.is_session_running(&session_id) {
             return;
         }
 
-        let now = chrono::Utc::now().timestamp();
+        // Resume the elapsed timer. A wake re-attach (`resumed` notification)
+        // passes `wake_at` — the boundary's timestamp — because the run that
+        // just started is the wake turn, not the original prompt; seeding from
+        // `latest_user_prompt_at` would count the whole background-job idle
+        // stretch. Other attaches keep the prompt's persisted send time so a
+        // run re-attached after a restart does not restart from zero.
+        let now = wake_at
+            .or_else(|| {
+                if self.active_session_for_pane(&pane_id).as_deref() == Some(session_id.as_str()) {
+                    self.transcript_for_pane(&pane_id)
+                        .read(cx)
+                        .latest_user_prompt_at()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| chrono::Utc::now().timestamp());
         self.set_session_running(&session_id, Some(now));
         let run_token = self.next_run_token_for_session(&session_id);
 
         let client = self.client.clone();
-        let transport = self.transport.clone();
+        let transport = self.transport;
         let entity = cx.entity().downgrade();
         let run_pane_id = pane_id.clone();
         let run_session_id = session_id.clone();
@@ -1369,10 +1620,10 @@ impl ConsoleDesktopApp {
                                     cx,
                                 );
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                    if detail.messages.len() >= t.message_count() {
-                                        t.set_messages(detail.messages, cx);
+                                    if detail.turns.len() >= t.turn_count() {
+                                        t.set_turns(detail.turns, cx);
                                     } else {
-                                        t.adopt_user_message_ids(&detail.messages, cx);
+                                        t.adopt_user_message_ids(&detail.turns, cx);
                                     }
                                     t.finish_streaming(cx);
                                 });

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +23,7 @@ import com.console.mobile.core.util.getFileName
 import com.console.mobile.SharedNative
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.components.common.new.BaseSheet
+import com.console.mobile.ui.components.common.new.LoadingState
 import com.console.mobile.ui.components.common.new.SectionCard
 import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionFileChange
@@ -70,11 +70,7 @@ fun ChatDiffSheet(
         containerColor = NewTheme.Black,
     ) {
         when {
-            loading -> {
-                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = NewTheme.TextPrimary, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                }
-            }
+            loading -> LoadingState("Loading diff…")
             error != null -> {
                 Text(error ?: "Failed to load diff", color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             }
@@ -82,7 +78,7 @@ fun ChatDiffSheet(
                 DiffView(
                     diff = SharedNative.parseDiff(diffText ?: ""),
                     filePath = change.path,
-                    maxCollapsedLines = 120,
+                    maxCollapsedLines = DIFF_PREVIEW_LINES,
                     showFileHeader = false,
                 )
             }

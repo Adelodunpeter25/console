@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import com.console.mobile.AppContainer
 import com.console.mobile.core.util.ScrollMemory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.drop
@@ -60,6 +61,14 @@ internal class ChatTranscriptScroll(
         following = true
     }
 
+    internal suspend fun restoreRememberedPosition(position: ScrollMemory.Position) {
+        settledInitialPage = true
+        following = false
+        try {
+            listState.scrollToItem(position.index, position.offset)
+        } catch (_: Exception) {}
+    }
+
     internal fun captureAnchor(sizeBefore: Int) {
         anchor = ListAnchor(
             index = listState.firstVisibleItemIndex,
@@ -89,35 +98,44 @@ internal class ChatTranscriptScroll(
 @Composable
 internal fun rememberChatTranscriptScroll(
     sessionId: String,
+    sessionReady: Boolean,
     messagesLoaded: Boolean,
     displaySize: Int,
     hasMoreMessages: Boolean,
     loadingOlder: Boolean,
     loadOlder: () -> Boolean,
+    running: Boolean,
+    isStreaming: Boolean,
     onDragStarted: () -> Unit,
 ): ChatTranscriptScroll {
-    // Only trust the remembered position when the messages are still loaded;
-    // otherwise a fresh load should start at the bottom as usual.
     val restored = remember(sessionId) {
-        ScrollMemory.get(sessionId)?.takeIf { messagesLoaded }
+        ScrollMemory.get(sessionId)
+            ?: AppContainer.preferencesStore.loadTranscriptScroll(sessionId)?.also {
+                ScrollMemory.save(sessionId, it.index, it.offset, it.atEnd)
+            }
     }
     val listState = key(sessionId) {
+        val initialIndex = when {
+            restored != null && !restored.atEnd -> restored.index
+            displaySize > 0 -> (displaySize - 1).coerceAtLeast(0)
+            else -> 0
+        }
+        val initialOffset = if (restored != null && !restored.atEnd) restored.offset else 0
         rememberLazyListState(
-            initialFirstVisibleItemIndex = restored?.index ?: 0,
-            initialFirstVisibleItemScrollOffset = restored?.offset ?: 0,
+            initialFirstVisibleItemIndex = initialIndex,
+            initialFirstVisibleItemScrollOffset = initialOffset,
         )
     }
     val scroll = remember(sessionId, listState) {
         ChatTranscriptScroll(
             listState = listState,
             following = restored?.atEnd ?: true,
-            settled = restored != null,
+            settled = false,
         )
     }
 
-    // Record the position as it moves. Saving only on dispose would race the
-    // next screen: during a navigation transition both are composed, so the
-    // incoming chat could read a stale entry.
+    // Record the position as it moves, but only after the initial position has
+    // settled so an unmeasured (0, 0) frame never clobbers the saved position.
     LaunchedEffect(sessionId, scroll) {
         snapshotFlow {
             Triple(
@@ -126,7 +144,13 @@ internal fun rememberChatTranscriptScroll(
                 !scroll.listState.canScrollForward,
             )
         }.collect { (index, offset, atEnd) ->
-            ScrollMemory.save(sessionId, index, offset, atEnd)
+            if (scroll.settledInitialPage) {
+                ScrollMemory.save(sessionId, index, offset, atEnd)
+                AppContainer.preferencesStore.saveTranscriptScroll(
+                    sessionId,
+                    ScrollMemory.Position(index, offset, atEnd),
+                )
+            }
         }
     }
 
@@ -148,34 +172,48 @@ internal fun rememberChatTranscriptScroll(
         }
     }
 
+    // Only auto-scroll to the bottom when new items are added, or when the last item
+    // grows while an agent run/stream is actively in progress. This prevents double-tap
+    // text selection or popup appearance on idle messages from slamming the transcript.
+    val isActiveRun by rememberUpdatedState(running || isStreaming)
+    var previousTotalCount by remember(sessionId) { mutableStateOf(0) }
     LaunchedEffect(scroll) {
         snapshotFlow {
             val info = scroll.listState.layoutInfo
             val last = info.visibleItemsInfo.lastOrNull()
             Triple(info.totalItemsCount, last?.index, last?.size)
-        }.collect {
-            if (scroll.following && !scroll.listState.isScrollInProgress) {
+        }.collect { (totalCount, _, _) ->
+            val hasNewItems = totalCount > previousTotalCount
+            previousTotalCount = totalCount
+            if (scroll.following && !scroll.listState.isScrollInProgress && (hasNewItems || isActiveRun)) {
                 try { scroll.listState.scrollToBottom() } catch (_: Exception) {}
             }
         }
     }
 
-    LaunchedEffect(sessionId, displaySize, scroll) {
-        if (scroll.settledInitialPage || displaySize <= 0) return@LaunchedEffect
-        scroll.settleAtBottom()
-        try { scroll.listState.scrollToBottom() } catch (_: Exception) {}
+    LaunchedEffect(sessionId, sessionReady, messagesLoaded, displaySize, scroll) {
+        if (scroll.settledInitialPage || !sessionReady || displaySize <= 0) return@LaunchedEffect
+        val remembered = restored
+        if (remembered != null && !remembered.atEnd) {
+            scroll.restoreRememberedPosition(remembered)
+        } else {
+            scroll.settleAtBottom()
+            try { scroll.listState.scrollToBottom() } catch (_: Exception) {}
+        }
     }
 
-    // Older-message pagination.
+    // Older-message pagination. Gate on messagesLoaded rather than displaySize > 0
+    // so a tail page filled entirely with hidden tool-call/result rows still
+    // pages older history until a visible message arrives.
     val atTop = scroll.listState.firstVisibleItemIndex <= 0
     val loadOlderNow = rememberUpdatedState(loadOlder)
-    LaunchedEffect(scroll, atTop, hasMoreMessages, loadingOlder, displaySize) {
+    LaunchedEffect(scroll, atTop, messagesLoaded, hasMoreMessages, loadingOlder, displaySize) {
         if (!atTop) {
             scroll.resetAutoLoad()
             return@LaunchedEffect
         }
-        if (scroll.autoLoadBlocked || !hasMoreMessages || loadingOlder || displaySize <= 0) return@LaunchedEffect
-        scroll.captureAnchor(displaySize)
+        if (scroll.autoLoadBlocked || !messagesLoaded || !hasMoreMessages || loadingOlder) return@LaunchedEffect
+        if (displaySize > 0) scroll.captureAnchor(displaySize)
         if (scroll.listState.canScrollForward) scroll.stopFollowing()
         if (!loadOlderNow.value()) scroll.blockAutoLoad()
     }

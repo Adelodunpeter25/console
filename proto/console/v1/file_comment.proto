@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+enum FileCommentSide {
+  FILE_COMMENT_SIDE_NEW = 0;
+  FILE_COMMENT_SIDE_OLD = 1;
+}
+
+// A durable comment on lines of a file or its diff, kept per project until
+// deleted (/api/projects/:projectId/comments).
+message FileComment {
+  string id = 1;
+  string project_id = 2;
+  // Project-relative path.
+  string path = 3;
+  // NEW numbers the current file (always used outside a diff); OLD the
+  // pre-change file, for removed rows in a diff.
+  FileCommentSide side = 4;
+  uint32 start_line = 5;
+  uint32 end_line = 6;
+  string text = 7;
+  // The commented line(s) when written, so a client can flag the comment as
+  // outdated once they change.
+  string snippet = 8;
+  int64 created_at = 9;
+  int64 updated_at = 10;
+}
+
+message CreateFileCommentRequest {
+  string path = 1;
+  FileCommentSide side = 2;
+  uint32 start_line = 3;
+  uint32 end_line = 4;
+  string text = 5;
+  string snippet = 6;
+}
+
+message UpdateFileCommentRequest {
+  string text = 1;
+}

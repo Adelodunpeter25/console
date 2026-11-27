@@ -102,29 +102,31 @@ class ConsoleAnalyzeManager(
         val builder = MappedSpans.Builder()
         val raw = text.toString()
         val lines = raw.split("\n")
-        lines.forEachIndexed { index, line ->
-            if (index % 200 == 0 && delegate.isCancelled) return@forEachIndexed
-            // TOML/INI section header: whole line in type color.
-            if (language in SECTION_LANGUAGES &&
-                line.trim().startsWith("[") && line.trim().endsWith("]")
-            ) {
-                builder.addIfNeeded(index, 0, TextStyle.makeStyle(EditorColorScheme.IDENTIFIER_NAME))
-                return@forEachIndexed
-            }
-            var cursor = 0
-            if (language in KEY_LANGUAGES) {
-                val keyMatch = KEY_LINE_REGEX.find(line)
-                if (keyMatch != null) {
-                    val keyStart = keyMatch.groupValues[1].length
-                    builder.addIfNeeded(index, keyStart, TextStyle.makeStyle(EditorColorScheme.FUNCTION_NAME))
-                    builder.addIfNeeded(index, keyStart + keyMatch.groupValues[2].length, TextStyle.makeStyle(EditorColorScheme.TEXT_NORMAL))
-                    cursor = keyMatch.range.last + 1
+        if (isHighlightableLanguage(language)) {
+            lines.forEachIndexed { index, line ->
+                if (index % 200 == 0 && delegate.isCancelled) return@forEachIndexed
+                // TOML/INI section header: whole line in type color.
+                if (language in SECTION_LANGUAGES &&
+                    line.trim().startsWith("[") && line.trim().endsWith("]")
+                ) {
+                    builder.addIfNeeded(index, 0, TextStyle.makeStyle(EditorColorScheme.IDENTIFIER_NAME))
+                    return@forEachIndexed
                 }
-            }
-            CODE_TOKEN_REGEX.findAll(line, startIndex = cursor).forEach { m ->
-                val id = soraColorId(m.value, line, m.range.last + 1)
-                if (id != EditorColorScheme.TEXT_NORMAL) {
-                    builder.addIfNeeded(index, m.range.first, TextStyle.makeStyle(id))
+                var cursor = 0
+                if (language in KEY_LANGUAGES) {
+                    val keyMatch = KEY_LINE_REGEX.find(line)
+                    if (keyMatch != null) {
+                        val keyStart = keyMatch.groupValues[1].length
+                        builder.addIfNeeded(index, keyStart, TextStyle.makeStyle(EditorColorScheme.FUNCTION_NAME))
+                        builder.addIfNeeded(index, keyStart + keyMatch.groupValues[2].length, TextStyle.makeStyle(EditorColorScheme.TEXT_NORMAL))
+                        cursor = keyMatch.range.last + 1
+                    }
+                }
+                CODE_TOKEN_REGEX.findAll(line, startIndex = cursor).forEach { m ->
+                    val id = soraColorId(m.value, line, m.range.last + 1)
+                    if (id != EditorColorScheme.TEXT_NORMAL) {
+                        builder.addIfNeeded(index, m.range.first, TextStyle.makeStyle(id))
+                    }
                 }
             }
         }
@@ -165,6 +167,15 @@ class ConsoleLanguage(
     }
 }
 
+/** Jump once per (text, line): `update` runs on every recomposition and must not fight the user's scrolling. */
+private fun scrollToLine(editor: CodeEditor, code: String, line: Int?) {
+    if (line == null) return
+    val key = code.hashCode() to line
+    if (editor.tag == key) return
+    editor.tag = key
+    editor.post { editor.jumpToLine((line - 1).coerceIn(0, (editor.lineCount - 1).coerceAtLeast(0))) }
+}
+
 @Composable
 fun CodeViewer(
     code: String,
@@ -176,6 +187,8 @@ fun CodeViewer(
     removeLines: Set<Int> = emptySet(),
     /** What the viewer sits on, so the pinned line-number gutter blends in. */
     gutterColor: androidx.compose.ui.graphics.Color = NewTheme.Background,
+    /** 1-based line to scroll to once the text is in. */
+    jumpToLine: Int? = null,
 ) {
     val colorScheme = remember(gutterColor) { ConsoleColorScheme(gutterColor) }
     val soraLanguage = remember(language, addLines, removeLines) {
@@ -214,12 +227,14 @@ fun CodeViewer(
                 setScrollBarEnabled(true)
                 tabWidth = 4
                 setText(code)
+                scrollToLine(this, code, jumpToLine)
             }
         },
         update = { editor ->
             if (editor.editorLanguage !== soraLanguage) editor.setEditorLanguage(soraLanguage)
             if (editor.isLineNumberEnabled != showLineNumbers) editor.isLineNumberEnabled = showLineNumbers
             if (editor.text.toString() != code) editor.setText(code)
+            scrollToLine(editor, code, jumpToLine)
         },
         onRelease = { it.release() },
     )

@@ -5,15 +5,46 @@
 //! geometry of the virtualized rows, including the live scroll offset, which
 //! lets the cards ride scrolling without being inserted into the list.
 
+use crate::primitives::file_type_icon;
+use crate::theme::Theme;
 use gpui::{
-    AnyElement, App, DispatchPhase, Entity, IntoElement, ParentElement, RenderOnce, ScrollWheelEvent,
+    AnyElement, App, DispatchPhase, Entity, IntoElement, ParentElement, RenderOnce, ScrollEvent,
     Styled, Window, canvas, div, px,
 };
 use std::rc::Rc;
 
-/// Room kept free under a file/diff viewer so its last lines can scroll up
-/// above the floating composer's resting bar (bar height + its padding).
-pub const FLOATING_COMPOSER_INSET: f32 = 78.0;
+/// Render a path header row (file icon + directory + filename).
+pub fn file_path_header(path: &str, theme: &Theme) -> impl IntoElement + use<> {
+    let (dir, name) = match path.rfind('/') {
+        Some(i) => (path[..=i].to_string(), path[i + 1..].to_string()),
+        None => (String::new(), path.to_string()),
+    };
+    div()
+        .flex_none()
+        .w_full()
+        .px(px(12.0))
+        .py(px(8.0))
+        .bg(gpui::rgb(0x000000))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .max_w_full()
+                .py(px(4.0))
+                .child(file_type_icon(path, 16.0))
+                .child(
+                    div()
+                        .flex()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .text_size(px(13.0))
+                        .whitespace_nowrap()
+                        .child(div().text_color(theme.text_tertiary).child(dir))
+                        .child(div().flex_none().text_color(theme.text).child(name)),
+                ),
+        )
+}
 
 /// Invisible overlay that reports wheel scrolling anywhere over its bounds.
 /// Listens in the capture phase because the scrolling list stops propagation
@@ -23,8 +54,8 @@ pub fn scroll_watch(on_scroll: impl Fn(&mut Window, &mut App) + 'static) -> impl
     canvas(
         |_, _, _| (),
         move |bounds, _, window, _cx| {
-            let on_scroll = on_scroll.clone();
-            window.on_mouse_event(move |event: &ScrollWheelEvent, phase, window, cx| {
+            let on_scroll = on_scroll;
+            window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
                 if phase == DispatchPhase::Capture && bounds.contains(&event.position) {
                     on_scroll(window, cx);
                 }
@@ -65,6 +96,7 @@ impl FileCommentOverlay {
 pub struct FileViewer {
     view: Entity<editor_ui::EditorView>,
     comments: Vec<FileCommentOverlay>,
+    path: Option<String>,
 }
 
 impl FileViewer {
@@ -72,7 +104,14 @@ impl FileViewer {
         Self {
             view,
             comments: Vec::new(),
+            path: None,
         }
+    }
+
+    /// Shows this (already display-ready) path in a header row above the code.
+    pub fn path(mut self, path: impl Into<String>) -> Self {
+        self.path = Some(path.into());
+        self
     }
 
     pub fn comments(mut self, comments: Vec<FileCommentOverlay>) -> Self {
@@ -83,7 +122,11 @@ impl FileViewer {
 
 impl RenderOnce for FileViewer {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let Self { view, comments } = self;
+        let Self {
+            view,
+            comments,
+            path,
+        } = self;
         let anchors = {
             let editor = view.read(cx);
             comments
@@ -106,8 +149,9 @@ impl RenderOnce for FileViewer {
             .zip(anchors)
             .filter_map(|(comment, anchor)| {
                 let anchor = anchor?;
-                let raw_top =
-                    anchor.top_padding + anchor.line_height * anchor.row_after as f32 + anchor.scroll_y;
+                let raw_top = anchor.top_padding
+                    + anchor.line_height * anchor.row_after as f32
+                    + anchor.scroll_y;
                 // Cards ride scrolling: once the range they hang under has
                 // scrolled out of view (above, or below the fold) the card is
                 // dropped instead of being pinned to the viewport edge.
@@ -121,8 +165,8 @@ impl RenderOnce for FileViewer {
                     return None;
                 }
                 let top = if anchor.viewport_height > px(0.0) {
-                    let max_top = (anchor.viewport_height - px(FILE_COMMENT_CARD_ESTIMATE))
-                        .max(px(0.0));
+                    let max_top =
+                        (anchor.viewport_height - px(FILE_COMMENT_CARD_ESTIMATE)).max(px(0.0));
                     raw_top.min(max_top)
                 } else {
                     raw_top
@@ -137,20 +181,26 @@ impl RenderOnce for FileViewer {
                 )
             });
 
-        div()
+        let body = div()
             .relative()
-            .size_full()
+            .flex_1()
+            .min_h_0()
+            .w_full()
             .overflow_hidden()
             .bg(gpui::rgb(0x000000))
-            .child(
-                div()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .right_0()
-                    .bottom(px(FLOATING_COMPOSER_INSET))
-                    .child(view),
-            )
-            .children(overlays)
+            .child(div().absolute().inset_0().child(view))
+            .children(overlays);
+
+        let header = path.map(|p| {
+            let theme = Theme::current(cx);
+            file_path_header(&p, &theme)
+        });
+
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .children(header)
+            .child(body)
     }
 }

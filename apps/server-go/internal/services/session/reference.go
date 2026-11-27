@@ -11,8 +11,8 @@
 package session
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"strings"
 	"unicode"
 
@@ -217,6 +217,7 @@ func renderTranscript(messages []json.RawMessage) string {
 			User *struct {
 				Content   string `json:"content"`
 				Synthetic bool   `json:"synthetic"`
+				Source    string `json:"source"`
 			} `json:"user"`
 			Assistant *struct {
 				Content []json.RawMessage `json:"content"`
@@ -227,7 +228,7 @@ func renderTranscript(messages []json.RawMessage) string {
 		}
 		switch {
 		case msg.User != nil:
-			if msg.User.Synthetic || strings.TrimSpace(msg.User.Content) == "" {
+			if msg.User.Synthetic || msg.User.Source != "" || strings.TrimSpace(msg.User.Content) == "" {
 				continue
 			}
 			lines = append(lines, "User: "+strings.TrimSpace(msg.User.Content))

@@ -109,7 +109,12 @@ func StateForConversation(conversationID string) *SessionState {
 	if s, ok := stateStore[conversationID]; ok {
 		return s
 	}
-	s := NewSessionState()
+	var s *SessionState
+	if saved, ok := loadPersistedStates()[conversationID]; ok {
+		s = saved.restore()
+	} else {
+		s = NewSessionState()
+	}
 	stateStore[conversationID] = s
 	return s
 }

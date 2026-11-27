@@ -2,8 +2,8 @@
 package claude
 
 import (
+	"github.com/MoeForge/moego/regexp"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,7 +32,7 @@ const RefreshSkewMs = 5 * 60_000
 // defaultCodeVersion is the pinned fallback Claude Code CLI version on the
 // Anthropic wire, used until (if ever) a server rejection names a newer
 // required one — see AdoptRequiredClaudeCodeVersion.
-const defaultCodeVersion = "2.1.314"
+const defaultCodeVersion = "2.1.325"
 
 // SDKVersion is the @anthropic-ai/sdk version bundled by Claude Code.
 const SDKVersion = "0.112.1"

@@ -1,8 +1,8 @@
 package bench
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"os"
 	"sort"

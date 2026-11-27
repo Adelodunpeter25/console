@@ -24,15 +24,15 @@ pub fn to_relative_path(path: &str, cwd: Option<&str>) -> String {
         return path;
     };
     let cwd = cwd.trim_end_matches('/');
-    if !cwd.is_empty() {
-        if let Some(rest) = path.strip_prefix(cwd) {
-            return rest.trim_start_matches('/').to_owned();
-        }
+    if !cwd.is_empty()
+        && let Some(rest) = path.strip_prefix(cwd)
+    {
+        return rest.trim_start_matches('/').to_owned();
     }
     path
 }
 
-pub fn argument_path<'a>(arguments: &'a Value) -> Option<&'a str> {
+pub fn argument_path(arguments: &Value) -> Option<&str> {
     let object = arguments.as_object()?;
     PATH_KEYS
         .into_iter()
@@ -63,6 +63,9 @@ pub fn argument_summary(name: &str, arguments: &Value, cwd: Option<&str>) -> Opt
     // noise in a one-line row; the calls it makes say what it did.
     if matches!(name, "console" | "computer") {
         return string("code").and_then(|code| script_calls(name, code));
+    }
+    if name == "code" {
+        return string("code").and_then(code_argument_summary);
     }
     if name == "memory" {
         let op = string("op").unwrap_or("memory");
@@ -165,7 +168,10 @@ pub fn script_calls(root: &str, code: &str) -> Option<String> {
             _ => {}
         }
         let at_boundary = i == 0 || !is_ident_byte(bytes[i - 1]) && bytes[i - 1] != b'.';
-        if at_boundary && bytes[i..].starts_with(root_b) && bytes.get(i + root_b.len()) == Some(&b'.') {
+        if at_boundary
+            && bytes[i..].starts_with(root_b)
+            && bytes.get(i + root_b.len()) == Some(&b'.')
+        {
             let mut j = i + root_b.len() + 1;
             let start = j;
             while j < bytes.len() && (is_ident_byte(bytes[j]) || bytes[j] == b'.') {
@@ -190,6 +196,113 @@ pub fn script_calls(root: &str, code: &str) -> Option<String> {
         return None;
     }
     Some(truncate(&calls.join(", "), 72))
+}
+
+/// Extracts a concise one-line summary of what a Code Mode script is doing.
+pub fn code_argument_summary(code: &str) -> Option<String> {
+    let trimmed = code.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // 1. Shell command: $`cmd` or $'cmd' or $("cmd")
+    if let Some(cmd) = extract_shell_command(trimmed) {
+        return Some(truncate(&format!("$ {cmd}"), 72));
+    }
+
+    // 2. Common tool helper functions: file("..."), edit("..."), etc.
+    for prefix in [
+        "file",
+        "edit",
+        "write",
+        "glob",
+        "grep",
+        "fetch",
+        "webSearch",
+        "webFetch",
+        "todo",
+        "visualize",
+        "readChat",
+        "readSkill",
+    ] {
+        if let Some(arg) = extract_helper_call(trimmed, prefix) {
+            return Some(truncate(&format!("{prefix}({arg})"), 72));
+        }
+    }
+
+    // 3. Subkernel calls: browser.open, console.ports.list, etc.
+    if let Some(browser_call) = script_calls("browser", trimmed) {
+        return Some(truncate(&format!("browser.{browser_call}"), 72));
+    }
+    if let Some(console_call) = script_calls("console", trimmed) {
+        return Some(truncate(&format!("console.{console_call}"), 72));
+    }
+
+    // 4. First non-empty non-comment line
+    for line in trimmed.lines() {
+        let line = line.trim();
+        if line.is_empty()
+            || line.starts_with("//")
+            || line.starts_with("/*")
+            || line.starts_with('*')
+        {
+            continue;
+        }
+        let clean = line
+            .trim_start_matches("const ")
+            .trim_start_matches("let ")
+            .trim_start_matches("var ")
+            .trim_start_matches("return ")
+            .trim_start_matches("await ")
+            .trim();
+        return Some(truncate(&single_line(clean), 72));
+    }
+
+    None
+}
+
+fn extract_shell_command(code: &str) -> Option<String> {
+    let idx = code.find('$')?;
+    let rest = code[idx + 1..].trim_start();
+    if let Some(cmd) = rest.strip_prefix('`').and_then(|s| s.split('`').next()) {
+        let cmd = cmd.trim();
+        if !cmd.is_empty() {
+            return Some(cmd.to_owned());
+        }
+    }
+    if let Some(cmd) = rest.strip_prefix('\'').and_then(|s| s.split('\'').next()) {
+        let cmd = cmd.trim();
+        if !cmd.is_empty() {
+            return Some(cmd.to_owned());
+        }
+    }
+    if let Some(inner) = rest.strip_prefix('(') {
+        let inner = inner.trim_start();
+        for q in ['"', '\'', '`'] {
+            if let Some(cmd) = inner.strip_prefix(q).and_then(|s| s.split(q).next()) {
+                let cmd = cmd.trim();
+                if !cmd.is_empty() {
+                    return Some(cmd.to_owned());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn extract_helper_call<'a>(code: &'a str, name: &str) -> Option<&'a str> {
+    let idx = code.find(name)?;
+    let after = code[idx + name.len()..].trim_start();
+    let inner = after.strip_prefix('(')?.trim_start();
+    for q in ['"', '\'', '`'] {
+        if let Some(arg) = inner.strip_prefix(q).and_then(|s| s.split(q).next()) {
+            let arg = arg.trim();
+            if !arg.is_empty() {
+                return Some(arg);
+            }
+        }
+    }
+    None
 }
 
 fn is_ident_byte(b: u8) -> bool {

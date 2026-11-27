@@ -19,6 +19,7 @@ import com.console.mobile.data.model.PairingRequest
 import com.console.mobile.data.model.PLATFORM_ANDROID
 import com.console.mobile.data.model.parsePairingUrl
 import com.console.mobile.core.util.normalizeBackendUrl
+import com.console.mobile.core.util.reachableUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -78,7 +79,7 @@ class AuthRepository(
         val baseUrl = normalizeBackendUrl(host)
             ?: throw ApiException("That host cannot be used.")
         val paired = api.pairWithUrl(
-            baseUrl,
+            reachableUrl(baseUrl),
             PairingRequest(
                 grant = code.trim(),
                 device_name = deviceName,
@@ -114,7 +115,7 @@ class AuthRepository(
             throw ApiException(error.message ?: "That is not a pairing URL.")
         }
         val paired = api.pairWithUrl(
-            parsed.baseUrl,
+            reachableUrl(parsed.baseUrl),
             PairingRequest(
                 grant = parsed.code,
                 device_name = deviceName,
@@ -145,7 +146,7 @@ class AuthRepository(
         val normalized = normalizeBackendUrl(url) ?: return@withContext false
         try {
             val request = Request.Builder()
-                .url("${normalized.trimEnd('/')}/api/projects")
+                .url("${reachableUrl(normalized).trimEnd('/')}/api/projects")
                 .get()
                 .apply {
                     tokenStore.tokenFor(normalized)?.let { header("Authorization", "Bearer $it") }
@@ -383,6 +384,55 @@ class AuthRepository(
             throw e
         }
     }
+
+    /**
+     * Read whether speech-to-text is configured. The response reports only
+     * that a pair exists and where it came from — the token lives on the
+     * server and no endpoint will hand it back.
+     */
+    suspend fun loadSttStatus() {
+        try {
+            val status = withContext(Dispatchers.IO) { api.getSttStatus() }
+            authState.patch { it.copy(sttStatus = status) }
+        } catch (e: Exception) {
+            // Decorative like provider credentials below: a failed fetch must
+            // not block the page, and the composer simply stays disabled.
+            authState.patch { it.copy(error = e.message ?: "Couldn't read speech-to-text status") }
+        }
+    }
+
+    /**
+     * Store the Cloudflare account pair on the server. Both halves are
+     * required every time: the token is never returned, so a partial update
+     * cannot preserve it. The pair is handed straight to the server and
+     * dropped, like the GitHub token above.
+     */
+    suspend fun setSttConfig(accountId: String, apiToken: String) {
+        authState.patch { it.copy(sttBusy = true) }
+        try {
+            val response = withContext(Dispatchers.IO) { api.setSttConfig(accountId, apiToken) }
+            authState.patch { it.copy(sttBusy = false, sttStatus = response.status ?: it.sttStatus) }
+        } catch (e: Exception) {
+            authState.patch { it.copy(sttBusy = false) }
+            throw e
+        }
+    }
+
+    /** Remove the stored pair. An environment-supplied pair survives this. */
+    suspend fun clearSttConfig() {
+        authState.patch { it.copy(sttBusy = true) }
+        try {
+            withContext(Dispatchers.IO) { api.clearSttConfig() }
+            authState.patch { it.copy(sttBusy = false, sttStatus = null) }
+        } catch (e: Exception) {
+            authState.patch { it.copy(sttBusy = false) }
+            throw e
+        }
+    }
+
+    /** Transcribe one recorded clip. The audio is sent once and dropped. */
+    suspend fun transcribeStt(audio: ByteArray, fileName: String, contentType: String): String =
+        withContext(Dispatchers.IO) { api.transcribeStt(audio, fileName, contentType).text }
 
     suspend fun saveProjectId(provider: String, projectId: String?) {
         authState.patch { it.copy(savingProjectId = true, error = null) }

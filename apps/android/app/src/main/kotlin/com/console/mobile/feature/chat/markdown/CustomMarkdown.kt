@@ -16,15 +16,23 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,9 +45,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.Placeholder
@@ -59,7 +70,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.console.mobile.core.util.FILE_LINK_PREFIX
+import com.console.mobile.core.util.BARE_FILE_PATH_REGEX
+import com.console.mobile.core.util.BARE_FILE_URL_REGEX
 import com.console.mobile.core.util.PageTitles
+import com.console.mobile.core.util.isBareFilePathMatch
+import com.console.mobile.core.util.stripLineSuffix
+import com.console.mobile.core.util.withLineSuffix
 import com.console.mobile.core.util.bareWebUrls
 import com.console.mobile.core.util.faviconHostOrNull
 import com.console.mobile.core.util.fileLinkTarget
@@ -67,6 +83,8 @@ import com.console.mobile.core.util.filePathOrNull
 import com.console.mobile.ui.components.Favicon
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleMonoFamily
+import com.console.mobile.ui.code.highlightCode
+import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
@@ -82,23 +100,57 @@ import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
 import org.intellij.markdown.flavours.gfm.GFMTokenTypes
 import org.intellij.markdown.parser.MarkdownParser
 
+/** Format selected text as a markdown blockquote with a trailing blank line. */
+internal fun formatCiteQuote(text: String): String {
+    val trimmed = text.trim()
+    if (trimmed.isEmpty()) return ""
+    return trimmed.lines().joinToString("\n") { "> $it" } + "\n\n"
+}
+
 /** Native markdown renderer used by chat, tools, subagents, and the file viewer. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun CustomMarkdown(content: String, modifier: Modifier = Modifier, streaming: Boolean = false) {
+fun CustomMarkdown(
+    content: String,
+    modifier: Modifier = Modifier,
+    streaming: Boolean = false,
+    onReply: ((String) -> Unit)? = null,
+) {
     if (content.isBlank()) return
-    SelectionContainer(modifier = modifier) {
-        // The parser object survives token updates. Streaming updates only replace
-        // the unstable tail when possible; completed blocks retain their model.
-        val parser = remember { StreamingMarkdownParser() }
-        // A title arriving later must rebuild blocks that were parsed without it.
-        val blocks = parser.update(content, streaming, PageTitles.version)
-        // Only settled text is looked up, so a URL still streaming in is never fetched.
-        LaunchedEffect(content, streaming) {
-            if (!streaming) bareWebUrls(content).forEach(PageTitles::request)
+    val view = LocalView.current
+    @Suppress("DEPRECATION")
+    val clipboardManager = LocalClipboardManager.current
+    val toolbar = remember(view, onReply) {
+        SelectionActionToolbar(view, onReply) { clipboardManager.getText()?.text.orEmpty() }
+    }
+    DisposableEffect(toolbar) { onDispose { toolbar.hide() } }
+
+    val noOpBringIntoView = remember {
+        object : BringIntoViewSpec {
+            override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = 0f
         }
-        Column(Modifier.fillMaxWidth()) {
-            MdBlocks(blocks, NewTheme.TextPrimary, 15.sp, 22.sp, 6.dp)
-            if (streaming) Text("▍", color = NewTheme.TextMuted, fontSize = 14.sp)
+    }
+    CompositionLocalProvider(
+        LocalTextToolbar provides toolbar,
+        LocalBringIntoViewSpec provides noOpBringIntoView,
+    ) {
+        SelectionContainer(modifier = modifier) {
+            // The parser object survives token updates. Streaming updates only replace
+            // the unstable tail when possible; completed blocks retain their model.
+            val parser = remember { StreamingMarkdownParser() }
+            // A title arriving later must rebuild blocks that were parsed without it.
+            val pageTitlesVersion = PageTitles.version
+            val blocks = remember(content, streaming, pageTitlesVersion) {
+                parser.update(content, streaming, pageTitlesVersion)
+            }
+            // Only settled text is looked up, so a URL still streaming in is never fetched.
+            LaunchedEffect(content, streaming) {
+                if (!streaming) bareWebUrls(content).forEach(PageTitles::request)
+            }
+            Column(Modifier.fillMaxWidth()) {
+                MdBlocks(blocks, NewTheme.TextPrimary, 15.sp, 22.sp, 6.dp)
+                if (streaming) Text("▍", color = NewTheme.TextMuted, fontSize = 14.sp)
+            }
         }
     }
 }
@@ -203,6 +255,13 @@ private fun AnnotatedString.Builder.appendIcon(kind: String, value: String) {
 
 @Composable
 private fun MarkdownImage(url: String, alt: String) {
+    // Workspace paths (no scheme) resolve against the session cwd and load
+    // through the authenticated fs endpoint; remote/data URLs use Coil.
+    val path = com.console.mobile.core.util.chatImagePath(url)
+    if (path != null) {
+        com.console.mobile.feature.chat.visual.WorkspaceImage(path = path, alt = alt.ifBlank { null })
+        return
+    }
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         AsyncImage(
             model = url,
@@ -231,7 +290,7 @@ private fun ListView(block: MdBlock.ListBlock, color: Color) {
     }
 }
 
-private enum class TableAlign { LEFT, CENTER, RIGHT }
+internal enum class TableAlign { LEFT, CENTER, RIGHT }
 
 @Composable
 private fun TableView(block: MdBlock.Table) {
@@ -278,14 +337,14 @@ private fun TableRowView(cells: List<AnnotatedString>, widths: List<Dp>, align: 
 
 @Composable
 private fun CodeBlock(language: String, code: String) {
+    @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var copied by remember(code) { mutableStateOf(false) }
     val capped = remember(code) { code.trimEnd() }
     val normalizedLang = remember(language) { language.trim().lowercase() }
-    // Keep code in the parent chat scroll. Sora's vertical scroll inside a
-    // LazyColumn made long conversations feel like nested-scroll traps. Plain
-    // Compose text grows naturally and only scrolls horizontally for long lines.
+    val highlighted = remember(capped, normalizedLang) { highlightCode(capped, normalizedLang) }
+
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             com.console.mobile.ui.components.FileLanguageIcon(language, 13)
@@ -296,7 +355,7 @@ private fun CodeBlock(language: String, code: String) {
             }) { if (copied) Icon(TablerIcons.Outline.Check, "Copied", tint = NewTheme.Success) else Icon(TablerIcons.Outline.Copy, "Copy code", tint = NewTheme.TextSecondary) }
         }
         Text(
-            capped,
+            highlighted,
             color = NewTheme.TextPrimary,
             fontFamily = ConsoleMonoFamily,
             fontSize = 13.sp,
@@ -309,7 +368,7 @@ private fun CodeBlock(language: String, code: String) {
 }
 
 @Immutable
-private sealed interface MdBlock {
+internal sealed interface MdBlock {
     @Immutable data class Code(val language: String, val code: String) : MdBlock
     @Immutable data class Image(val url: String, val alt: String) : MdBlock
     @Immutable data class Math(val expression: String, val display: Boolean) : MdBlock
@@ -321,8 +380,9 @@ private sealed interface MdBlock {
     @Immutable data class Table(val header: List<AnnotatedString>, val rows: List<List<AnnotatedString>>, val align: List<TableAlign>) : MdBlock
 }
 
-@Immutable private data class MdListItem(val checked: Boolean?, val blocks: List<MdBlock>)
+@Immutable internal data class MdListItem(val checked: Boolean?, val blocks: List<MdBlock>)
 
+@Suppress("DEPRECATION")
 private val PARSER = MarkdownParser(GFMFlavourDescriptor())
 private val ATX_LEVELS = mapOf(
     MarkdownElementTypes.ATX_1 to 1, MarkdownElementTypes.ATX_2 to 2, MarkdownElementTypes.ATX_3 to 3,
@@ -370,8 +430,8 @@ private class StreamingMarkdownParser {
     }
 }
 
-private fun parseBlocks(src: String): List<MdBlock> {
-    val root = PARSER.buildMarkdownTreeFromString(src)
+internal fun parseBlocks(src: String): List<MdBlock> {
+    val root = PARSER.buildMarkdownTreeFromString(src as CharSequence)
     val refs = root.children.filter { it.type == MarkdownElementTypes.LINK_DEFINITION }.associate { definitionKey(it, src) to definitionUrl(it, src) }
     return blocksOf(root.children, src, refs)
 }
@@ -397,12 +457,12 @@ private fun blocksOf(nodes: List<ASTNode>, src: String, refs: Map<String, String
                         var cursor = n.startOffset
                         for (image in images) {
                             val before = src.substring(cursor, image.startOffset)
-                            if (before.isNotBlank()) out += MdBlock.Paragraph(inlineOf(PARSER.buildMarkdownTreeFromString(before).children.flatMap { it.children }, before, refs))
+                            if (before.isNotBlank()) out += MdBlock.Paragraph(inlineOf(PARSER.buildMarkdownTreeFromString(before as CharSequence).children.flatMap { it.children }, before, refs))
                             imageInfo(image, src, refs)?.let { out += MdBlock.Image(it.first, it.second) }
                             cursor = image.endOffset
                         }
                         val after = src.substring(cursor, n.endOffset)
-                        if (after.isNotBlank()) out += MdBlock.Paragraph(inlineOf(PARSER.buildMarkdownTreeFromString(after).children.flatMap { it.children }, after, refs))
+                        if (after.isNotBlank()) out += MdBlock.Paragraph(inlineOf(PARSER.buildMarkdownTreeFromString(after as CharSequence).children.flatMap { it.children }, after, refs))
                     }
                 }
             }
@@ -500,10 +560,10 @@ private inline fun AnnotatedString.Builder.link(url: String, block: () -> Unit) 
     // File paths get their file-type icon and open in the Files tab; web
     // links get the site favicon.
     val host = faviconHostOrNull(url)
-    val path = if (host == null) fileLinkTarget(url) else null
+    val path = if (host == null) fileLinkTarget(url)?.let { withLineSuffix(it, url) } else null
     when {
         host != null -> appendIcon("favicon", host)
-        path != null -> appendIcon("file", path)
+        path != null -> appendIcon("file", stripLineSuffix(path))
     }
     pushLink(LinkAnnotation.Url(if (path != null) FILE_LINK_PREFIX + path else url, LINK_STYLES)); block(); pop()
 }
@@ -513,7 +573,7 @@ private fun AnnotatedString.Builder.appendInline(nodes: List<ASTNode>, src: Stri
     for (n in nodes) when (n.type) {
         MarkdownTokenTypes.WHITE_SPACE -> append(src, n.startOffset, n.endOffset)
         MarkdownTokenTypes.EOL -> append('\n')
-        MarkdownTokenTypes.TEXT -> appendUnescaped(src, n.startOffset, n.endOffset)
+        MarkdownTokenTypes.TEXT -> if (linked) appendUnescaped(src, n.startOffset, n.endOffset) else appendLinkifiedText(src, n.startOffset, n.endOffset)
         MarkdownTokenTypes.HARD_LINE_BREAK -> Unit
         MarkdownTokenTypes.BLOCK_QUOTE -> Unit
         MarkdownElementTypes.EMPH -> styled(ITALIC_SPAN) { appendInline(withoutMarkers(n.children), src, refs, linked) }
@@ -521,12 +581,13 @@ private fun AnnotatedString.Builder.appendInline(nodes: List<ASTNode>, src: Stri
         GFMElementTypes.STRIKETHROUGH -> styled(STRIKE_SPAN) { appendInline(withoutMarkers(n.children), src, refs, linked) }
         MarkdownElementTypes.CODE_SPAN -> {
             val code = n.children.filter { it.type != MarkdownTokenTypes.BACKTICK }
-            val path = if (linked) null else filePathOrNull(code.joinToString("") { it.text(src) })
+            val codeText = code.joinToString("") { it.text(src) }
+            val path = if (linked) null else filePathOrNull(codeText)?.let { withLineSuffix(it, codeText) }
             if (path == null) {
                 styled(CODE_SPAN) { code.forEach { append(src, it.startOffset, it.endOffset) } }
             } else {
                 // A path in backticks: icon, then a tappable code chip that opens the file.
-                appendIcon("file", path)
+                appendIcon("file", stripLineSuffix(path))
                 pushLink(LinkAnnotation.Url(FILE_LINK_PREFIX + path, LINK_STYLES))
                 styled(CODE_SPAN) { code.forEach { append(src, it.startOffset, it.endOffset) } }
                 pop()
@@ -560,7 +621,16 @@ private fun appendInlineLink(builder: AnnotatedString.Builder, n: ASTNode, src: 
     val dest = n.children.firstOrNull { it.type == MarkdownElementTypes.LINK_DESTINATION }
     val url = dest?.text(src)?.trim()?.removeSurrounding("<", ">") ?: ""
     val inner = label?.children?.filterNot { it.type == MarkdownTokenTypes.LBRACKET || it.type == MarkdownTokenTypes.RBRACKET }.orEmpty()
-    if (linked) builder.appendInline(inner, src, refs, true) else builder.link(url) { builder.appendInline(inner, src, refs, true) }
+    if (linked) {
+        builder.appendInline(inner, src, refs, true)
+    } else {
+        val labelText = inner.joinToString("") { it.text(src) }.trim()
+        val isBare = labelText == url || labelText == url.trimEnd('/') || labelText == url.removePrefix("https://").removePrefix("http://").trimEnd('/')
+        val title = if (isBare) PageTitles.get(url) else null
+        builder.link(url) {
+            if (title != null) builder.append(title) else builder.appendInline(inner, src, refs, true)
+        }
+    }
 }
 
 private fun imageInfo(n: ASTNode, src: String, refs: Map<String, String>): Pair<String, String>? {
@@ -587,6 +657,95 @@ private fun formatMath(text: String): String {
     listOf("\\rightarrow" to "→", "\\leftarrow" to "←", "\\Rightarrow" to "⇒", "\\Leftarrow" to "⇐", "\\leftrightarrow" to "↔", "\\to" to "→", "\\leq" to "≤", "\\geq" to "≥", "\\neq" to "≠", "\\approx" to "≈", "\\times" to "×", "\\cdot" to "·", "\\pm" to "±", "\\dots" to "…", "\\infty" to "∞").forEach { (from, to) -> out = out.replace(from, to) }
     return out
 }
+private val BARE_WEB_URL_REGEX = Regex("https?://[^\\s<>\"`]+")
+
+private fun trimmedBareUrl(raw: String): String {
+    var end = raw.length
+    var parens = raw.count { it == '(' } - raw.count { it == ')' }
+    var brackets = raw.count { it == '[' } - raw.count { it == ']' }
+    var braces = raw.count { it == '{' } - raw.count { it == '}' }
+    while (end > 0) {
+        val last = raw[end - 1]
+        val shouldTrim = when (last) {
+            '.', ',', ':', ';', '?', '!', '\'', '"' -> true
+            ')' -> if (parens < 0) { parens++; true } else false
+            ']' -> if (brackets < 0) { brackets++; true } else false
+            '}' -> if (braces < 0) { braces++; true } else false
+            else -> false
+        }
+        if (!shouldTrim) break
+        end--
+    }
+    return raw.substring(0, end)
+}
+
+private fun AnnotatedString.Builder.appendLinkifiedText(src: String, start: Int, end: Int) {
+    val slice = src.substring(start, end)
+    var cursor = start
+    for (match in BARE_WEB_URL_REGEX.findAll(slice)) {
+        val raw = match.value
+        val trimmed = trimmedBareUrl(raw)
+        val rest = when {
+            trimmed.startsWith("https://", ignoreCase = true) -> trimmed.substring(8)
+            trimmed.startsWith("http://", ignoreCase = true) -> trimmed.substring(7)
+            else -> ""
+        }
+        if (rest.isEmpty()) continue
+
+        val matchStart = start + match.range.first
+        val matchEnd = matchStart + trimmed.length
+        val rawEnd = start + match.range.last + 1
+
+        if (matchStart > cursor) {
+            appendFileLinkified(src, cursor, matchStart)
+        }
+        link(trimmed) {
+            append(PageTitles.get(trimmed) ?: trimmed)
+        }
+        if (rawEnd > matchEnd) {
+            append(src, matchEnd, rawEnd)
+        }
+        cursor = rawEnd
+    }
+    if (cursor < end) {
+        appendFileLinkified(src, cursor, end)
+    }
+}
+
+/** Plain text between web URLs: `file://` URLs and bare paths become file links, as on desktop. */
+private fun AnnotatedString.Builder.appendFileLinkified(src: String, start: Int, end: Int) {
+    val text = src.substring(start, end)
+    var cursor = 0
+    fun filePath(target: String, shown: String) {
+        appendIcon("file", stripLineSuffix(target))
+        pushLink(LinkAnnotation.Url(FILE_LINK_PREFIX + target, LINK_STYLES))
+        styled(CODE_SPAN) { append(shown) }
+        pop()
+    }
+    for (m in BARE_FILE_URL_REGEX.findAll(text)) {
+        val shown = trimmedBareUrl(m.value)
+        val target = fileLinkTarget(shown)?.let { withLineSuffix(it, shown) }
+        if (shown.isEmpty() || target == null || m.range.first < cursor) continue
+        appendFilePaths(text, cursor, m.range.first, ::filePath)
+        filePath(target, shown)
+        cursor = m.range.first + shown.length
+    }
+    appendFilePaths(text, cursor, text.length, ::filePath)
+}
+
+private fun AnnotatedString.Builder.appendFilePaths(text: String, from: Int, to: Int, filePath: (String, String) -> Unit) {
+    if (from >= to) return
+    val seg = text.substring(from, to)
+    var cursor = 0
+    for (m in BARE_FILE_PATH_REGEX.findAll(seg)) {
+        if (!isBareFilePathMatch(seg, m.range.first, m.value)) continue
+        if (m.range.first > cursor) appendUnescaped(seg, cursor, m.range.first)
+        filePath(m.value, m.value)
+        cursor = m.range.last + 1
+    }
+    if (cursor < seg.length) appendUnescaped(seg, cursor, seg.length)
+}
+
 private fun AnnotatedString.Builder.appendUnescaped(src: String, start: Int, end: Int) {
     var run = start; var i = start
     while (i < end) { if (src[i] == '\\' && i + 1 < end && isAsciiPunctuation(src[i + 1])) { append(src, run, i); append(src[i + 1]); i += 2; run = i } else i++ }

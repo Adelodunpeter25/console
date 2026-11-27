@@ -95,14 +95,14 @@ func TestStorageReportOnRealCopies(t *testing.T) {
 	}
 	mb := func(b int64) float64 { return float64(b) / 1048576 }
 	t.Logf("%d sessions, %d messages", sessions, msgs)
-	t.Logf("  content column (kept during transition) : %7.2f MB", mb(contentBytes))
+	t.Logf("  content column (dropped by stage 6)     : %7.2f MB", mb(contentBytes))
 	t.Logf("  skeleton column                         : %7.2f MB", mb(skeletonBytes))
 	t.Logf("  searchable text column                  : %7.2f MB", mb(textBytes))
 	t.Logf("  part bodies in the database (raw)       : %7.2f MB", mb(partBytes))
 	t.Logf("  image files on disk                     : %7.2f MB", mb(imgFileBytes))
 	after := skeletonBytes + textBytes + partBytes
-	t.Logf("  => AFTER dropping content: database holds %.2f MB (+ %.2f MB images as files) vs %.2f MB today", mb(after), mb(imgFileBytes), mb(contentBytes))
-	t.Logf("  => reading a message's words now touches %.2f MB (text) instead of %.2f MB", mb(textBytes), mb(contentBytes))
+	t.Logf("  => after the drop the database holds %.2f MB (+ %.2f MB images as files); content measured %.2f MB before it was dropped", mb(after), mb(imgFileBytes), mb(contentBytes))
+	t.Logf("  => reading a message's words now touches %.2f MB (text)", mb(textBytes))
 }
 
 // Searches copies of the developer's real history through the same Search the

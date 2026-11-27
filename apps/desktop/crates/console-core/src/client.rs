@@ -17,14 +17,18 @@ pub struct ConsoleClient {
     pub auth: AuthService,
     pub server_auth: ServerAuthService,
     pub drafts: DraftService,
+    pub file_comments: FileCommentService,
     pub model_favorites: ModelFavoriteService,
     pub notifications: NotificationService,
     pub usage: UsageService,
     pub settings: SettingsService,
+    pub stt: SttService,
     pub ports: PortService,
     pub local_forwards: LocalForwardManager,
     pub scripts: ProjectScriptsService,
     pub mcp: McpService,
+    pub automations: AutomationService,
+    pub webhooks: WebhookService,
 }
 
 impl ConsoleClient {
@@ -51,15 +55,19 @@ impl ConsoleClient {
             auth: AuthService::new(transport.clone()),
             server_auth: ServerAuthService::new(transport.clone()),
             drafts: DraftService::new(transport.clone()),
+            file_comments: FileCommentService::new(transport.clone()),
             model_favorites: ModelFavoriteService::new(transport.clone()),
             notifications: NotificationService::new(transport.clone()),
             usage: UsageService::new(transport.clone()),
             settings: SettingsService::new(transport.clone()),
+            stt: SttService::new(transport.clone()),
             ports: PortService::new(transport.clone()),
             local_forwards: LocalForwardManager::new(transport.clone()),
             scripts: ProjectScriptsService::new(transport.clone()),
             mcp: McpService::new(transport.clone()),
-            transport: transport.clone(),
+            automations: AutomationService::new(transport.clone()),
+            webhooks: WebhookService::new(transport.clone()),
+            transport,
         }
     }
 

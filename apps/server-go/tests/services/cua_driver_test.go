@@ -6,7 +6,6 @@ package tests
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -109,32 +108,6 @@ func TestLibraryPathOverrideEmptyIsNotAnError(t *testing.T) {
 	}
 	if got != "" {
 		t.Fatalf("got %q, want empty", got)
-	}
-}
-
-// TestOptionsMarshalIsAlwaysAJSONObject guards the ABI contract: create_v1
-// takes a JSON object and fails closed on unknown fields, so an empty options
-// set must still serialize as "{}" and never as nil or an empty string.
-func TestOptionsMarshalIsAlwaysAJSONObject(t *testing.T) {
-	// The encoding happens inside Open, which needs the library, so assert the
-	// property through the exported entry point: with no library the call must
-	// fail at load time rather than panicking on an empty byte slice.
-	t.Setenv("CUA_DRIVER_DISABLED", "1")
-	if _, err := cua.Open(cua.Options{}); err == nil {
-		t.Fatal("expected a load failure")
-	}
-}
-
-// TestMissingLibraryPathIsNotSilentlyIgnored documents that an env override
-// pointing nowhere produces an error rather than falling through to a
-// different candidate.
-func TestMissingLibraryPathIsNotSilentlyIgnored(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "definitely-absent.so")
-	if _, err := os.Stat(missing); err == nil {
-		t.Skip("path unexpectedly exists")
-	}
-	if filepath.IsAbs(missing) != true {
-		t.Fatal("temp paths must be absolute for this test to mean anything")
 	}
 }
 

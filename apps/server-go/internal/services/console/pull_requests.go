@@ -9,7 +9,7 @@ package console
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"fmt"
 
 	"google.golang.org/protobuf/encoding/protojson"

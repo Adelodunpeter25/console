@@ -29,8 +29,9 @@ use std::rc::Rc;
 use gpui::{
     AnyElement, App, Bounds, Display, Element, ElementId, FocusHandle, FontWeight, GlobalElementId,
     InspectorElementId, InteractiveElement, IntoElement, KeyDownEvent, LayoutId, MouseButton,
-    MouseDownEvent, ParentElement, Pixels, Point, Position, RenderOnce, SharedString, Size, Style,
-    Styled, Window, actions, anchored, canvas, deferred, div, prelude::FluentBuilder, px,
+    MouseDownEvent, ParentElement, Pixels, Point, Position, RenderOnce, ScrollHandle, SharedString,
+    Size, StatefulInteractiveElement, Style, Styled, Window, actions, anchored, canvas, deferred,
+    div, prelude::FluentBuilder, px,
 };
 
 actions!(
@@ -223,6 +224,9 @@ pub struct ContextMenuHandle {
     /// Stable focus identity shared by dropdown and keyboard context triggers.
     trigger_focus: FocusHandle,
     focus: FocusHandle,
+    /// Scroll state of the menu's row list, shared across frames so keyboard
+    /// navigation can keep the highlighted row in view.
+    scroll: ScrollHandle,
     /// The trigger's bounds as of the last frame, so a dropdown can align under
     /// it. Recorded by a zero-cost canvas inside the trigger.
     trigger_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
@@ -230,7 +234,7 @@ pub struct ContextMenuHandle {
     /// The composer's caret preservation is one of these; a site can add its
     /// own on top.
     #[allow(clippy::type_complexity)]
-    on_toggle: Rc<Vec<Rc<dyn Fn(bool, &mut Window, &mut App)>>>,
+    on_toggle: Rc<[Rc<dyn Fn(bool, &mut Window, &mut App)>]>,
 }
 
 impl ContextMenuHandle {
@@ -239,17 +243,18 @@ impl ContextMenuHandle {
             state: Rc::new(RefCell::new(MenuState::default())),
             trigger_focus: cx.focus_handle(),
             focus: cx.focus_handle(),
+            scroll: ScrollHandle::default(),
             trigger_bounds: Rc::new(Cell::new(None)),
-            on_toggle: Rc::new(Vec::new()),
+            on_toggle: Rc::from([]),
         }
     }
 
     /// Observe open/close transitions. Called only on an actual change, in the
     /// order the observers were added.
     pub fn on_toggle(mut self, handler: impl Fn(bool, &mut Window, &mut App) + 'static) -> Self {
-        let mut handlers = (*self.on_toggle).clone();
+        let mut handlers = self.on_toggle.to_vec();
         handlers.push(Rc::new(handler));
-        self.on_toggle = Rc::new(handlers);
+        self.on_toggle = Rc::from(handlers);
         self
     }
 
@@ -268,6 +273,28 @@ impl ContextMenuHandle {
     /// the dispatch path, which is what lets `escape` dismiss it.
     pub fn focus_handle(&self) -> &FocusHandle {
         &self.focus
+    }
+
+    /// Keyboard cursor over a popover's own row list (the model picker).
+    /// Shares the slot `MenuCard` uses for its entries; a popover never
+    /// renders a `MenuCard`, so the two never contend. Reset on open/close
+    /// with the rest of `MenuState`.
+    pub fn highlighted(&self) -> Option<usize> {
+        self.state.borrow().highlighted
+    }
+
+    pub fn set_highlighted(&self, highlighted: Option<usize>) {
+        self.state.borrow_mut().highlighted = highlighted;
+    }
+
+    /// The scroll handle the row list tracks, so keyboard navigation can keep
+    /// the highlighted row in view — the same handle `MenuCard` uses.
+    pub fn scroll_handle(&self) -> ScrollHandle {
+        self.scroll.clone()
+    }
+
+    pub fn scroll_to_item(&self, index: usize) {
+        self.scroll.scroll_to_item(index);
     }
 
     /// Stable focus identity for a keyboard-operable menu trigger.
@@ -656,14 +683,6 @@ impl Element for FloatingSurface {
     }
 }
 
-impl IntoElement for FloatingSurface {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
-        self
-    }
-}
-
 /// A dropdown menu anchored under its trigger, toggled by a left click.
 ///
 /// Unlike a context menu it aligns to the trigger rather than the pointer, so
@@ -687,7 +706,7 @@ where
             id: id.clone(),
             handle: handle.clone(),
             items: items.clone(),
-            context_style: false,
+            context_style: true,
         }
         .into_any_element()
     })
@@ -723,6 +742,28 @@ where
             .into_any_element()
         },
     )
+}
+
+/// Toggle a [`dropdown_menu`] as if its trigger were clicked, for keyboard shortcuts.
+pub fn toggle_dropdown(
+    handle: &ContextMenuHandle,
+    align: MenuAlign,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if handle.is_open() {
+        handle.close(window, cx);
+        window.refresh();
+        return;
+    }
+    let Some(anchor) = handle
+        .trigger_bounds
+        .get()
+        .map(|bounds| align.anchor_point(bounds, px(TRIGGER_GAP)))
+    else {
+        return;
+    };
+    open_menu(handle, anchor, SurfaceFocus::Card, true, window, cx);
 }
 
 /// Toggle a [`popover`] as if its trigger were clicked, for keyboard shortcuts.
@@ -850,7 +891,7 @@ impl RenderOnce for PopoverCard {
                 }
             })
             .on_mouse_down_out({
-                let handle = self.handle.clone();
+                let handle = self.handle;
                 move |event, window, cx| handle.dismiss_on_down_out(event, window, cx)
             })
             .child(body)
@@ -871,6 +912,21 @@ pub fn context_menu<E>(
 where
     E: ParentElement + Styled + InteractiveElement + IntoElement + 'static,
 {
+    context_menu_where(element, id, handle, |_| true, items)
+}
+
+/// [`context_menu`] that only opens when `hit` accepts the pointer position,
+/// for elements where just part of the surface (one link in a paragraph) has a menu.
+pub fn context_menu_where<E>(
+    element: E,
+    id: impl Into<ElementId>,
+    handle: &ContextMenuHandle,
+    hit: impl Fn(Point<Pixels>) -> bool + 'static,
+    items: impl Fn(&mut App) -> Vec<MenuItem> + 'static,
+) -> AnyElement
+where
+    E: ParentElement + Styled + InteractiveElement + IntoElement + 'static,
+{
     let id: ElementId = id.into();
     let open_at = handle.state.borrow().open;
     let handle_for_down = handle.clone();
@@ -881,6 +937,9 @@ where
         .on_mouse_down(
             MouseButton::Right,
             move |event: &MouseDownEvent, window, cx| {
+                if !hit(event.position) {
+                    return;
+                }
                 open_menu(
                     &handle_for_down,
                     event.position,
@@ -936,7 +995,7 @@ impl RenderOnce for MenuCard {
         let highlighted = self.handle.state.borrow().highlighted;
         let context_style = self.context_style;
 
-        let mut card = div()
+        let card = div()
             .id(self.id)
             .occlude()
             .track_focus(&self.handle.focus)
@@ -954,12 +1013,12 @@ impl RenderOnce for MenuCard {
             })
             .min_w(px(if context_style { 200.0 } else { 176.0 }))
             .max_w(px(if context_style { 300.0 } else { 320.0 }))
-            .py(px(if context_style { 4.0 } else { 4.0 }))
+            .py(px(4.0))
             .rounded(px(if context_style { 10.0 } else { 9.0 }))
             .border_1()
             .border_color(theme.border_strong)
             .bg(if context_style {
-                theme.inset
+                theme.menu
             } else {
                 theme.raised
             })
@@ -968,15 +1027,27 @@ impl RenderOnce for MenuCard {
             .flex_col()
             .on_key_down({
                 let handle = self.handle.clone();
-                let focusable = focusable.clone();
                 let items = self.items.clone();
                 move |event: &KeyDownEvent, window, cx| {
                     on_menu_key(&handle, &focusable, &items, event, window, cx);
                 }
             });
 
+        // The rows scroll once they outgrow roughly seven entries — a long
+        // repo or branch list used to overflow the window edge instead.
+        // One card renders at a time, so a fixed id is enough for the
+        // stateful scroll div. The handle is shared with the keyboard
+        // handler so arrow keys keep the highlighted row in view.
+        let mut list = div()
+            .id("menu-scroll-list")
+            .overflow_y_scroll()
+            .track_scroll(&self.handle.scroll)
+            .flex()
+            .flex_col()
+            .max_h(px(if context_style { 232.0 } else { 190.0 }));
+
         for (index, item) in items.into_iter().enumerate() {
-            card = card.child(match item {
+            list = list.child(match item {
                 MenuItem::Separator => div()
                     .my(px(if context_style { 6.0 } else { 4.0 }))
                     .mx(px(if context_style { 0.0 } else { 6.0 }))
@@ -1022,7 +1093,7 @@ impl RenderOnce for MenuCard {
                     .text_color(color)
                     .when(selected, |element| element.font_weight(FontWeight::MEDIUM))
                     .when_some(item_icon, |element, path| {
-                        element.child(icon(path, 12.0, color))
+                        element.child(icon(path, if context_style { 14.0 } else { 12.0 }, color))
                     })
                     .child(div().flex_1().min_w_0().truncate().child(label))
                     .when_some(shortcut, |element, shortcut| {
@@ -1059,7 +1130,7 @@ impl RenderOnce for MenuCard {
                 }
             });
         }
-        card
+        card.child(list)
     }
 }
 
@@ -1080,7 +1151,7 @@ fn row(
         .id(index)
         .mx(px(4.0))
         .px(px(if context_style { 12.0 } else { 8.0 }))
-        .min_h(px(if context_style { 32.0 } else { 26.0 }))
+        .min_h(px(if context_style { 30.0 } else { 26.0 }))
         .rounded(px(if context_style { 7.0 } else { 6.0 }))
         .flex()
         .items_center()
@@ -1100,15 +1171,13 @@ fn row(
         })
 }
 
-fn focusable_indexes(items: &[MenuItem]) -> Rc<Vec<usize>> {
-    Rc::new(
-        items
-            .iter()
-            .enumerate()
-            .filter(|(_, item)| item.is_focusable())
-            .map(|(index, _)| index)
-            .collect(),
-    )
+fn focusable_indexes(items: &[MenuItem]) -> Rc<[usize]> {
+    items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| item.is_focusable())
+        .map(|(index, _)| index)
+        .collect()
 }
 
 /// The next highlighted item index for a navigation key, wrapping at both ends.
@@ -1154,6 +1223,9 @@ fn on_menu_key(
     let current = handle.state.borrow().highlighted;
     if let Some(next) = next_highlight(focusable, current, key) {
         handle.state.borrow_mut().highlighted = Some(next);
+        // Keep the new highlight inside the scroll viewport; applied at the
+        // next paint against the shared scroll handle.
+        handle.scroll.scroll_to_item(next);
         window.refresh();
         cx.stop_propagation();
         return;

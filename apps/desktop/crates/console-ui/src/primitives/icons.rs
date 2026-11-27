@@ -4,7 +4,7 @@
 //! migrated in batches. New code should prefer [`app_icon`], [`ProviderIcon`],
 //! and [`FileTypeIcon`] so asset paths are centralized and checked in one place.
 
-use gpui::{Hsla, Styled, Svg, px, svg};
+use gpui::{Hsla, Img, Styled, Svg, img, px, svg};
 
 /// An icon from the root `assets/icons` directory.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -27,6 +27,7 @@ pub enum IconName {
     Alert,
     Circle,
     WindowRestore,
+    OpenInWindow,
     Smartphone,
     ChevronDown,
     Hexagon,
@@ -104,6 +105,9 @@ pub enum IconName {
     PanelBottom,
     Document,
     Check,
+    Done,
+    Unread,
+    MailUnread,
     Dash,
     HardDrive,
     CaseSensitive,
@@ -129,6 +133,7 @@ pub enum IconName {
     ThumbsUp,
     BatteryLow,
     Play,
+    Mic,
     PanelLeftClose,
     Redo,
     ArrowUpRight,
@@ -176,6 +181,7 @@ pub enum IconName {
     ArrowLeft,
     Ellipsis,
     Laptop,
+    Computer,
     Cloud,
     Rewind,
     FoldVertical,
@@ -217,6 +223,7 @@ pub enum ProviderIcon {
     Cursor,
     Amp,
     Pi,
+    Devin,
 }
 
 /// File-type logos from `assets/icons/file-types`.
@@ -346,6 +353,7 @@ impl IconName {
             Self::Alert => "icons/alert.svg",
             Self::Circle => "icons/circle.svg",
             Self::WindowRestore => "icons/window-restore.svg",
+            Self::OpenInWindow => "icons/open-in-window.svg",
             Self::Smartphone => "icons/smartphone.svg",
             Self::ChevronDown => "icons/chevron-down.svg",
             Self::Hexagon => "icons/hexagon.svg",
@@ -423,6 +431,9 @@ impl IconName {
             Self::PanelBottom => "icons/panel-bottom.svg",
             Self::Document => "icons/document.svg",
             Self::Check => "icons/check.svg",
+            Self::Done => "icons/done.svg",
+            Self::Unread => "icons/unread.svg",
+            Self::MailUnread => "icons/mail-unread.svg",
             Self::Dash => "icons/dash.svg",
             Self::HardDrive => "icons/hard-drive.svg",
             Self::CaseSensitive => "icons/case-sensitive.svg",
@@ -448,6 +459,7 @@ impl IconName {
             Self::ThumbsUp => "icons/thumbs-up.svg",
             Self::BatteryLow => "icons/battery-low.svg",
             Self::Play => "icons/play.svg",
+            Self::Mic => "icons/mic.svg",
             Self::PanelLeftClose => "icons/panel-left-close.svg",
             Self::Redo => "icons/redo.svg",
             Self::ArrowUpRight => "icons/arrow-up-right.svg",
@@ -495,6 +507,7 @@ impl IconName {
             Self::ArrowLeft => "icons/arrow-left.svg",
             Self::Ellipsis => "icons/ellipsis.svg",
             Self::Laptop => "icons/laptop.svg",
+            Self::Computer => "icons/computer.svg",
             Self::Cloud => "icons/cloud.svg",
             Self::Rewind => "icons/rewind.svg",
             Self::FoldVertical => "icons/fold-vertical.svg",
@@ -551,6 +564,7 @@ impl ProviderIcon {
             "cursor" => Self::Cursor,
             "amp" => Self::Amp,
             "pi" => Self::Pi,
+            "devin" => Self::Devin,
             _ => Self::Openai,
         }
     }
@@ -568,6 +582,17 @@ impl ProviderIcon {
             Self::Cursor => "icons/provider-cursor.svg",
             Self::Amp => "icons/provider-amp.svg",
             Self::Pi => "icons/provider-pi.svg",
+            Self::Devin => "icons/providers/devin.svg",
+        }
+    }
+
+    /// The provider's full-color mark, for providers whose logo is more than
+    /// one flat tint. Drawn as an image so the authored colors survive; the
+    /// flat glyph from [`Self::path`] stays the choice wherever a tint applies.
+    pub const fn color_path(self) -> Option<&'static str> {
+        match self {
+            Self::Antigravity => Some("icons/providers/antigravity-color.svg"),
+            _ => None,
         }
     }
 }
@@ -790,6 +815,14 @@ impl FileTypeIcon {
 /// Render a typed application icon.
 pub fn app_icon(name: IconName, size: f32, color: Hsla) -> Svg {
     name.render(size, color)
+}
+
+/// The provider's full-color logo as an image, when it has one. `None` means
+/// the provider is a single-tint mark: use [`provider_app_icon`].
+pub fn provider_color_icon(provider: &str, size: f32) -> Option<Img> {
+    ProviderIcon::from_name(provider)
+        .color_path()
+        .map(|path| img(path).w(px(size)).h(px(size)).flex_none())
 }
 
 /// Render a typed provider icon.

@@ -5,12 +5,11 @@
 
 use console_core::{
     ApprovalMode, AskQuestionRequest, ConsoleClient, GitBranchInfo, ImageAttachment, Model,
-    PermissionRequest, ProjectInfo, ProviderCatalogEntry, QueuedPrompt, SelectedModel,
-    SessionHeader, ThinkingLevel, TodoItem, WorkspaceNode,
+    ProjectInfo, ProviderCatalogEntry, QueuedPrompt, SelectedModel, SessionHeader, ThinkingLevel,
+    TodoItem, WorkspaceNode,
 };
 use console_ui::markdown::render::TranscriptSelection;
 use console_ui::terminal::TerminalView;
-use console_ui::utils::SessionDateGroup;
 use console_ui::{
     CommandPalette, ComposerInput, ContextMenuHandle, FloatingComposerState, GlobalSearchPanel,
     PickerTab, ProjectBrowsePalette, QuickOpenPalette, TranscriptView,
@@ -25,7 +24,6 @@ use crate::types::WorkspacePaneState;
 pub struct WorkspaceTerminalState {
     pub terminals: Vec<(usize, Entity<TerminalView>)>,
     pub active_idx: usize,
-    pub next_id: usize,
     /// Open script log tabs, keyed by script id.
     pub script_logs: Vec<String>,
     /// None selects a terminal; Some selects a script log id.
@@ -51,6 +49,49 @@ pub enum ImageFileState {
     },
 }
 
+/// What the file tab needs to render a video/audio/PDF/details file: the
+/// probed media metadata plus the media URL's kind. `media_url` is filled in
+/// when the view entity is created (needs the auth token, which is async).
+#[derive(Clone, Debug)]
+pub struct FileMediaDetails {
+    /// `None` for `Details` files: they get the metadata card, not a player.
+    pub kind: Option<console_ui::MediaFileKind>,
+    /// Server mime label from the media probe, or a coarse label for details
+    /// files ("Archive", "Executable", ...).
+    pub mime_label: String,
+    pub size_bytes: Option<u64>,
+}
+
+impl FileMediaDetails {
+    /// Whether this file gets a player (`Video`/`Audio`/`Pdf`) or the details
+    /// card (`Details`).
+    pub fn player_kind(&self) -> Option<console_ui::MediaFileKind> {
+        self.kind
+    }
+
+    /// Coarse label for a `Details` file kind, derived from its extension.
+    pub fn details_label(path: &str) -> String {
+        let ext = std::path::Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match ext.as_str() {
+            "zip" | "tar" | "gz" | "tgz" | "bz2" | "xz" | "7z" | "rar" | "jar" | "war" => {
+                "Archive".to_string()
+            }
+            "exe" | "dll" | "so" | "dylib" | "a" | "o" | "obj" | "bin" | "iso" | "dmg" | "pkg"
+            | "deb" | "rpm" | "apk" | "ipa" | "node" => "Executable".to_string(),
+            "ttf" | "otf" | "woff" | "woff2" | "eot" => "Font".to_string(),
+            "wasm" => "WebAssembly".to_string(),
+            "psd" => "Photoshop".to_string(),
+            "db" | "sqlite" | "sqlite3" => "Database".to_string(),
+            "class" | "pyc" => "Compiled".to_string(),
+            _ => ext.to_uppercase(),
+        }
+    }
+}
+
 /// A line range picked from an editor's comment gutter. Paths are absolute
 /// when they arrive and become project-relative in the chat prompt.
 #[derive(Clone, Debug)]
@@ -58,6 +99,40 @@ pub(crate) struct FileCommentRequest {
     pub path: String,
     pub start_line: u32,
     pub end_line: u32,
+    /// Picked on a removed diff row: the lines number the pre-change file.
+    pub old_side: bool,
+}
+
+/// A save handed off by an editor's save handler.
+///
+/// The handler itself is synchronous (the package's `SaveHandler` contract),
+/// so it only enqueues here and returns `SaveStatus::Deferred`; the host task
+/// owns the API call and reports back with `EditorState::mark_saved`. `text`
+/// already carries the document's line ending — send it verbatim.
+#[derive(Clone, Debug)]
+pub(crate) struct FileSaveRequest {
+    pub path: String,
+    pub text: String,
+    pub revision: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InMemoryDraftMention {
+    pub start: usize,
+    pub end: usize,
+    pub path: String,
+    pub label: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct InMemoryDraft {
+    pub prompt: String,
+    pub updated_at: i64,
+    pub mentions: Vec<InMemoryDraftMention>,
+    pub context_files: Vec<String>,
+    pub attachments: Vec<console_core::ImageAttachment>,
+    pub annotations: Vec<console_core::BrowserElementAnnotation>,
+    pub floating: Option<console_proto::FloatingDraftChoices>,
 }
 
 pub struct ConsoleDesktopApp {
@@ -68,11 +143,16 @@ pub struct ConsoleDesktopApp {
     /// Shared session history for the sidebar/titlebar. `Rc` so per-frame
     /// renders clone a refcount, not the vector; mutations go through
     /// `Rc::make_mut`.
-    pub sessions: Rc<Vec<SessionHeader>>,
+    pub sessions: Rc<[SessionHeader]>,
     pub selected_session_id: Option<String>,
     /// Session currently being renamed inline in the sidebar.
     pub(crate) session_rename_id: Option<String>,
     pub(crate) session_rename_input: Entity<ComposerInput>,
+    pub sidebar_search_active: bool,
+    pub sidebar_search_query: String,
+    pub(crate) sidebar_search_input: Entity<ComposerInput>,
+    pub(crate) sidebar_search_task: Option<gpui::Task<()>>,
+    pub(crate) palette_search_task: Option<gpui::Task<()>>,
     /// The workspace pane tree (tabs, splits). Starts as a single leaf.
     pub workspace_root: WorkspaceNode,
     /// Cached workspace pane trees per project (keyed by Some(project_id) or None for no-project chats).
@@ -85,8 +165,6 @@ pub struct ConsoleDesktopApp {
     pub(crate) workspaces_dirty: std::cell::Cell<bool>,
     pub(crate) last_workspaces_persist: std::cell::Cell<Option<std::time::Instant>>,
     pub(crate) persisted_workspaces_bytes: std::cell::RefCell<Option<Vec<u8>>>,
-    /// Trailing timer latch for draft file saves (see `schedule_drafts_save`).
-    pub(crate) drafts_save_pending: bool,
     /// Sessions with a debounced server draft push in flight.
     pub(crate) drafts_push_pending: std::collections::HashSet<String>,
     /// User-picked folder per session awaiting server confirmation
@@ -97,7 +175,7 @@ pub struct ConsoleDesktopApp {
     pub active_pane_id: Option<String>,
     /// Shared with every pane's model picker; cloned per frame as a refcount
     /// bump.
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     /// Live-fetched models per provider, keyed by provider name. Populated
     /// lazily by `load_models_for_provider`; until a provider's entry exists,
     /// the picker falls back to the static `models` embedded in
@@ -111,11 +189,8 @@ pub struct ConsoleDesktopApp {
     pub favorites: Rc<std::collections::HashSet<String>>,
     pub approval_mode: ApprovalMode,
     pub thinking_level: Option<ThinkingLevel>,
-    /// Global fallback for the per-pane approval-mode MRU history, used when
-    /// a pane has no state entry yet (same pattern as `approval_mode` above).
-    pub(crate) approval_mode_history: Vec<ApprovalMode>,
     pub model_menu: ContextMenuHandle,
-    pub approval_menu: ContextMenuHandle,
+    pub thinking_menu: ContextMenuHandle,
     pub usage_menu: ContextMenuHandle,
     /// Anchors the floating task list to this pane's tasks pill.
     pub tasks_menu: ContextMenuHandle,
@@ -123,11 +198,13 @@ pub struct ConsoleDesktopApp {
     pub subagents_menu: ContextMenuHandle,
     /// Anchors the shells popover to this pane's shells pill.
     pub shells_menu: ContextMenuHandle,
+    /// Anchors the automations & webhooks popover to this pane's pill.
+    pub automations_menu: ContextMenuHandle,
     /// Shared with the sidebar and footer; cloned per frame as a refcount
     /// bump.
-    pub projects: Rc<Vec<ProjectInfo>>,
+    pub projects: Rc<[ProjectInfo]>,
     pub selected_project_id: Option<String>,
-    pub branches: Rc<Vec<GitBranchInfo>>,
+    pub branches: Rc<[GitBranchInfo]>,
     pub branch_loaded: bool,
     pub branch_is_git_repository: bool,
     pub branch_pending: bool,
@@ -145,6 +222,8 @@ pub struct ConsoleDesktopApp {
         String,
         crate::state::transcript_scroll::TranscriptScrollPosition,
     >,
+    /// True while a debounced write of the scroll positions is queued.
+    pub(crate) transcript_scroll_save_pending: std::cell::Cell<bool>,
     pub(crate) transcript_pagination:
         std::collections::HashMap<String, crate::state::pagination::SessionPaginationState>,
     pub(crate) pagination_in_flight: std::collections::HashSet<String>,
@@ -152,34 +231,39 @@ pub struct ConsoleDesktopApp {
     pub question_input: Entity<ComposerInput>,
     /// staged composer images keyed by pane. Values are `Rc` so per-frame
     /// renders clone a refcount instead of megabyte base64 payloads.
-    pub attachments: std::collections::HashMap<String, Rc<Vec<ImageAttachment>>>,
+    pub attachments: std::collections::HashMap<String, Rc<[ImageAttachment]>>,
     /// Staged browser element annotations keyed by pane (plan §8.4 C).
     /// Parallel to `attachments` rather than a mixed enum, so chips,
     /// drafts, and queue threading stay type-specific.
     pub browser_annotations:
-        std::collections::HashMap<String, Rc<Vec<console_core::BrowserElementAnnotation>>>,
+        std::collections::HashMap<String, Rc<[console_core::BrowserElementAnnotation]>>,
     /// Composer history recall swaps the staged chips as the user steps
     /// through past prompts, so the chips that were staged before stepping
     /// back are parked here and restored when they step forward onto the
     /// uncommitted draft again. Keyed by pane; removed once navigation ends.
-    pub(crate) history_draft_attachments:
-        std::collections::HashMap<String, Rc<Vec<ImageAttachment>>>,
-    pub(crate) history_draft_annotations: std::collections::HashMap<
-        String,
-        Rc<Vec<console_core::BrowserElementAnnotation>>,
-    >,
+    pub(crate) history_draft_attachments: std::collections::HashMap<String, Rc<[ImageAttachment]>>,
+    pub(crate) history_draft_annotations:
+        std::collections::HashMap<String, Rc<[console_core::BrowserElementAnnotation]>>,
     /// Run-derived interactive and display state. All of these are keyed by
-    /// session id (not pane id) so a run's permission prompt, question, todos,
+    /// session id (not pane id) so a run's question, todos,
     /// and notices stay attached to the chat that owns the run. Switching a
     /// pane to another chat surfaces that chat's state instead of leaking the
     /// background run's state onto it.
-    pub pending_permissions: std::collections::HashMap<String, PermissionRequest>,
     pub pending_questions: std::collections::HashMap<String, AskQuestionRequest>,
+    /// Request ids already answered locally. A bootstrap fetched before the
+    /// answer landed can still list the question and must not revive it.
+    pub answered_question_ids: std::collections::HashSet<String>,
     pub question_selected: std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub todo_items: std::collections::HashMap<String, Vec<TodoItem>>,
     /// Staged next-turn prompt per session, persisted on the server and
     /// broadcast as `queueUpdated` via SSE.
     pub queued_prompts: std::collections::HashMap<String, Vec<QueuedPrompt>>,
+    /// Follow-up prompt chips per session, pushed once a run settles. Never
+    /// persisted; dropped on typing, sending, or the next run.
+    pub suggestions: std::collections::HashMap<String, Vec<String>>,
+    /// Horizontal scroll state of each pane's pills row, kept across
+    /// renders so the edge fades know which way there is more to scroll.
+    pub pills_scrolls: std::collections::HashMap<String, gpui::ScrollHandle>,
     pub agent_notices: std::collections::HashMap<String, String>,
     /// App-level error banner (not tied to any chat); shown in every pane.
     pub error_message: Option<super::errors::BannerError>,
@@ -199,6 +283,15 @@ pub struct ConsoleDesktopApp {
     /// pane to a different chat never transfers the working indicator or
     /// streamed text.
     pub running_sessions: std::collections::HashMap<String, i64>,
+    /// Recorded `backgroundWorkContinue` frames per session. Drives wake-turn
+    /// run-boundary reconstruction after history reloads and the wake-time
+    /// timer seed on `resumed` re-attach. FIFO-capped per session.
+    pub wake_records: std::collections::HashMap<String, Vec<console_core::WakeRecord>>,
+    /// Last transcript boundary push per session, keyed like `wake_records`.
+    /// `backgroundWorkContinue` may be missed by a re-attaching client (the hub
+    /// only replays with `?since=`), so resume-attach pushes the boundary
+    /// itself; this timestamp dedupes against the live push.
+    pub wake_boundary_pushed_at: std::collections::HashMap<String, i64>,
     /// Monotonic token per session incremented on each prompt submission.
     /// Ensures out-of-order or late settling calls cannot overwrite newer runs.
     pub session_run_tokens: std::collections::HashMap<String, u64>,
@@ -207,17 +300,10 @@ pub struct ConsoleDesktopApp {
     pub(crate) stream_render_pending: std::collections::HashMap<String, bool>,
     pub sidebar_visible: bool,
     pub sidebar_width: f32,
-    pub right_sidebar_visible: bool,
-    pub right_sidebar_width: f32,
-    pub(crate) right_sidebar_resize_start: Option<(f32, f32)>,
-    pub right_sidebar_bottom_height: f32,
-    pub(crate) right_sidebar_bottom_resize_start: Option<(f32, f32)>,
-    pub right_sidebar_bottom_collapsed: bool,
     pub right_sidebar_terminals_by_cwd: std::collections::HashMap<String, WorkspaceTerminalState>,
     pub(crate) persisted_bottom_terminals: std::collections::HashMap<String, (usize, usize)>,
     pub(crate) persisted_script_tabs:
         std::collections::HashMap<String, crate::persistence::PersistedScriptTabs>,
-    pub right_sidebar_bottom_run_selected: bool,
     pub project_scripts_by_project:
         std::collections::HashMap<String, super::project_scripts::ProjectScriptsPanelState>,
     pub(crate) project_script_streams:
@@ -228,61 +314,73 @@ pub struct ConsoleDesktopApp {
     /// scripts in the same project sharing a shortcut) are omitted and surfaced
     /// via `shortcut_conflict` on the row's view model instead.
     pub active_project_shortcuts: std::collections::HashMap<String, String>,
-    pub inspector_active_tab: console_ui::InspectorTab,
-    pub inspector_open_auxiliary_tabs: Vec<console_ui::AuxiliaryTab>,
     pub device_view: Option<gpui::Entity<console_ui::DeviceViewer>>,
+    pub computer_view: Option<gpui::Entity<console_ui::ComputerViewer>>,
     pub forwarded_ports_by_project:
-        std::collections::HashMap<String, Rc<Vec<console_core::ForwardedPort>>>,
+        std::collections::HashMap<String, Rc<[console_core::ForwardedPort]>>,
     pub ports_menu_handle: console_ui::ContextMenuHandle,
     /// In-window menu bar dropdowns (Windows/Linux; macOS uses the native menu).
     pub menubar_file_menu: console_ui::ContextMenuHandle,
     pub menubar_edit_menu: console_ui::ContextMenuHandle,
-    pub inspector_add_tab_menu: console_ui::ContextMenuHandle,
-    pub inspector_search_query: String,
-    pub inspector_tree: Rc<Vec<console_ui::FileTreeNode>>,
-    pub inspector_working_changes: Rc<Vec<console_core::types::GitFileEntry>>,
-    /// Derived from `inspector_working_changes`; only set through
-    /// `set_inspector_working_changes` so the two cannot disagree.
-    pub inspector_git_badges: Rc<std::collections::HashMap<String, console_ui::GitBadge>>,
+    /// The pane created by opening a tab in a new split, until its grow-in
+    /// animation has been handed to the next render.
+    pub(crate) new_split_pane: Option<String>,
+    /// The `+` dropdown's open state, one per workspace pane.
+    pub(crate) new_tab_menus: std::collections::HashMap<String, console_ui::ContextMenuHandle>,
+    pub file_tree_nodes: Rc<[console_ui::FileTreeNode]>,
+    pub working_changes: Rc<[console_core::types::GitFileEntry]>,
+    /// Derived from `working_changes`; only set through
+    /// `set_working_changes` so the two cannot disagree.
+    pub git_badges: Rc<std::collections::HashMap<String, console_ui::GitBadge>>,
     /// One live fs-watch SSE stream per inspector target: the cwd it watches
     /// plus its task. Dropping the task cancels the stream, so replacing this
     /// on target change is what prevents duplicate stream accumulation.
-    pub(crate) inspector_fs_watch: Option<(String, gpui::Task<()>)>,
-    /// Same as `inspector_fs_watch` for the git-status watch stream.
-    pub(crate) inspector_git_watch: Option<(String, gpui::Task<()>)>,
+    pub(crate) file_tree_fs_watch: Option<(String, gpui::Task<()>)>,
+    /// Same as `file_tree_fs_watch` for the git-status watch stream.
+    pub(crate) file_tree_git_watch: Option<(String, gpui::Task<()>)>,
     /// One live forwarded-port SSE stream for the active backend environment.
     pub(crate) port_stream: Option<gpui::Task<()>>,
+    /// Live automations and webhook subscriptions fed by SSE streams.
+    pub automations: Vec<console_core::Automation>,
+    pub webhooks: Vec<console_core::WebhookSubscription>,
+    pub(crate) automation_stream: Option<gpui::Task<()>>,
+    pub(crate) webhook_stream: Option<gpui::Task<()>>,
     /// Trailing-debounce latch so bursts of fs events fetch the tree once.
     pub(crate) fs_tree_fetch_pending: bool,
-    pub inspector_session_changes: Rc<Vec<console_core::types::SessionFileChange>>,
-    pub inspector_changes_scope: console_core::types::ChangesScope,
-    pub inspector_changes_scope_menu: console_ui::ContextMenuHandle,
     /// Fetched change list for each open "View all" review tab, keyed by the
     /// tab id (`changesReview:<sessionId>:<Scope>`). Populated once on open;
     /// `diffText` per row is already included by the `GET /changes` response
     /// with a resolved scope, so no per-file follow-up fetch is needed.
     pub(crate) changes_review_data:
-        std::collections::HashMap<String, Rc<Vec<console_core::types::SessionFileChange>>>,
-    /// Paths collapsed in a given review tab (local UI state, not persisted).
-    /// A file starts collapsed iff it was already reviewed when the tab's
-    /// data was fetched; toggling reviewed flips membership here too.
-    pub(crate) changes_review_collapsed:
+        std::collections::HashMap<String, Rc<[console_core::types::SessionFileChange]>>,
+    /// Paths expanded in a given review tab (local UI state, not persisted).
+    /// Every file starts collapsed by default.
+    pub(crate) changes_review_expanded:
         std::collections::HashMap<String, std::collections::HashSet<String>>,
-    pub inspector_expanded_folders: Rc<std::collections::HashSet<String>>,
-    pub inspector_selected_path: Option<String>,
+    /// Tree contents and expanded folders for each open Files tab, keyed by tab id.
+    pub(crate) file_tree_data: std::collections::HashMap<String, Rc<[console_ui::FileTreeNode]>>,
+    pub(crate) file_tree_expanded:
+        std::collections::HashMap<String, std::collections::HashSet<String>>,
+    pub(crate) file_tree_scrolls: std::collections::HashMap<String, gpui::ScrollHandle>,
+    pub file_tree_selected_path: Option<String>,
     pub session_subagents:
-        std::collections::HashMap<String, Rc<Vec<console_core::types::SubagentInfo>>>,
+        std::collections::HashMap<String, Rc<[console_core::types::SubagentInfo]>>,
     /// Background work per session id (detached shells, subagents), fed by the
     /// run stream and hydrated from the work list endpoint.
     pub session_background_work:
-        std::collections::HashMap<String, Rc<Vec<console_core::BackgroundWork>>>,
-    pub preview_tab: Option<(String, std::time::Instant)>,
+        std::collections::HashMap<String, Rc<[console_core::BackgroundWork]>>,
     pub open_file_contents: std::collections::HashMap<String, String>,
     /// Why a file tab could not load, by path. A path in here is not asked
     /// for again until the tab is reopened, so a missing file shows its error
     /// instead of re-requesting every frame.
     pub open_file_errors: std::collections::HashMap<String, String>,
     pub open_image_contents: std::collections::HashMap<String, ImageFileState>,
+    /// Media metadata for video/audio/PDF/details file tabs, probed via the
+    /// media endpoint (or the parent listing for details). Keyed by path.
+    pub open_media_contents: std::collections::HashMap<String, FileMediaDetails>,
+    /// Live webview surfaces for media file tabs, keyed by path.
+    pub file_media_views:
+        std::collections::HashMap<String, gpui::Entity<console_ui::FileMediaView>>,
     pub svg_preview_mode: std::collections::HashMap<String, console_ui::SvgViewMode>,
     pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
     pub viewer_list_states: std::collections::HashMap<String, ListState>,
@@ -297,6 +395,33 @@ pub struct ConsoleDesktopApp {
             gpui::Entity<editor_ui::EditorView>,
         ),
     >,
+    pub viewer_editor_subscriptions: std::collections::HashMap<String, Vec<gpui::Subscription>>,
+    /// Last observed dirty flag per open file, so the editor observer only
+    /// repaints the app when the flag actually flips rather than on every
+    /// keystroke.
+    pub(crate) dirty_file_paths_cache: std::collections::HashMap<String, bool>,
+    /// The ETag each open file's content was loaded at. Sent as `base_etag`
+    /// on save so the server refuses a buffer that went stale behind us.
+    /// Kept unchanged while a dirty buffer survives an external content change
+    /// precisely so that save is caught.
+    pub viewer_file_etags: std::collections::HashMap<String, String>,
+    /// Editor saves waiting on the API, consumed by the host task. The save
+    /// handler is synchronous, so it only enqueues and reports `Deferred`.
+    pub(crate) file_save_tx: tokio::sync::mpsc::UnboundedSender<FileSaveRequest>,
+    /// Set while a save for that path is in flight, so two quick cmd-s presses
+    /// land at the server in order and the later one reuses the etag the
+    /// earlier one returned.
+    pub(crate) file_saves_in_flight: std::collections::HashSet<String>,
+    /// Paths with a save queued behind the in-flight one, so a burst of cmd-s
+    /// collapses into one follow-up save rather than an unbounded queue.
+    pub(crate) file_saves_pending: std::collections::HashSet<String>,
+    /// Paths whose tab is waiting on a save before closing. The close is
+    /// retried from `finish_file_save`, so a dirty tab's X cannot outrun the
+    /// write it asked for.
+    pub(crate) file_closes_awaiting_save: std::collections::HashMap<String, (String, String)>,
+    /// Pending 1-based target line to select/scroll to when a file's EditorView is created/rendered.
+    pub pending_file_line: std::collections::HashMap<String, u32>,
+
     /// Comment-gutter selections from editor views. The editor reports through
     /// a plain callback (no app context), so handlers push here and a spawned
     /// task opens the card on the app's behalf.
@@ -332,14 +457,7 @@ pub struct ConsoleDesktopApp {
         [f32; 2],
         gpui::Size<gpui::Pixels>,
     )>,
-    /// Calendar-period groups the user collapsed in the sidebar. Shared with
-    /// the sidebar; cloned per frame as a refcount bump.
-    pub collapsed_groups: Rc<std::collections::HashSet<SessionDateGroup>>,
-    /// Which axis the sidebar session list is sectioned by (date buckets or
-    /// project sections). Persisted; defaults to date.
-    pub sidebar_sort_mode: console_ui::utils::SidebarSortMode,
-    /// Collapsed project sections (project id, or "none") in project sort
-    /// mode. Shared with the sidebar; cloned per frame as a refcount bump.
+    /// Collapsed project sections (project id, or "none"). Shared with the sidebar; cloned per frame as a refcount bump.
     pub collapsed_projects: Rc<std::collections::HashSet<String>>,
     /// Last window frame known to be on disk. Seeded from storage at startup
     /// and compared in memory each render, so unchanged frames perform no I/O.
@@ -411,6 +529,24 @@ pub struct ConsoleDesktopApp {
     pub github_form_open: bool,
     /// Server-authored failure text, shown verbatim. Cleared on any new action.
     pub github_error: Option<String>,
+    /// The connected GitHub account's repositories for the project menu's
+    /// GitHub section. None until the first fetch; a failed fetch surfaces
+    /// `github_repos_error` instead, so "none" never means "unreachable".
+    pub github_repos: Option<std::rc::Rc<[console_core::types::GithubRepo]>>,
+    /// True while the repo list is being fetched.
+    pub github_repos_loading: bool,
+    /// Failure text for the repo list and repo-task actions, shown verbatim
+    /// in the menu's GitHub section. Cleared on any retry.
+    pub github_repos_error: Option<String>,
+    /// Whether a repo-list fetch has completed at least once for the active
+    /// server. The project menus fetch on open until this is true, so the
+    /// list is ready by the second open without a boot-time request that
+    /// would race the environment's base URL.
+    pub github_repos_loaded: bool,
+    /// The repo a task (clone + open or clone + select) is cloning right
+    /// now, so the footer chip and the floating card can show "Cloning
+    /// <name>…" and a second tap waits instead of firing a duplicate clone.
+    pub repo_task_cloning: Option<String>,
     /// Pasted provider API keys, keyed by provider id. Carries only whether a
     /// key exists and where it came from — never the key, which lives on the
     /// server and is not readable through any endpoint. See
@@ -424,12 +560,36 @@ pub struct ConsoleDesktopApp {
     pub provider_credential_forms_open: std::collections::HashSet<String>,
     /// Server-authored failure text for the key fields, shown verbatim.
     pub provider_credential_error: Option<String>,
+    /// Speech-to-text credential state. Separate from provider credentials
+    /// because it is a pair (account ID + API token) for a server-side Whisper
+    /// model, not a chat provider key. See state/stt.rs.
+    pub stt_status: Option<console_core::types::SttStatus>,
+    /// True while the pair is being saved or removed, so the row can disable
+    /// its buttons rather than firing duplicate requests.
+    pub stt_busy: bool,
+    /// Whether the credentials form is showing.
+    pub stt_form_open: bool,
+    /// Server-authored failure text, shown verbatim. Cleared on any new action.
+    pub stt_error: Option<String>,
+    /// The live microphone capture. `Some` while recording; the stream keeps
+    /// running until `stop_speech_recording` takes it.
+    pub stt_recorder: Option<crate::recording::Recorder>,
+    /// The pane the take will be dictated into when it is transcribed.
+    pub stt_recording_pane: Option<String>,
+    /// When the current take started, for the elapsed-time display.
+    pub stt_recording_started_at: Option<std::time::Instant>,
+    /// Elapsed seconds of the current take, ticked by a spawn loop so the
+    /// composer can repaint the `0:07` label.
+    pub stt_recording_secs: u32,
+    /// True while a finished take is being transcribed.
+    pub stt_transcribing: bool,
+    /// Failure text for the recording flow, shown by the composer. Cleared
+    /// on any new action.
+    pub stt_mic_error: Option<String>,
     // Server device pairing.
     /// The device this app is paired as on the active server. `None` means
     /// "not paired" — the server rejects every request in that state.
     pub server_device: Option<console_core::services::ServerDevice>,
-    /// Devices paired with the active server, for the device list.
-    pub server_devices: Vec<console_core::services::ServerDevice>,
     /// A short-lived pairing grant for another device (the QR flow).
     pub server_pairing_grant: Option<console_core::services::PairingGrantData>,
     /// True while a pairing or device request is in flight.
@@ -505,14 +665,32 @@ pub struct ConsoleDesktopApp {
     pub chrome_profiles_loading: bool,
     pub chrome_importing: bool,
     pub chrome_status: Option<String>,
-    pub drafts: std::collections::HashMap<String, crate::persistence::store::PersistedDraft>,
+    pub update_status: console_ui::settings::UpdateStatus,
+    pub drafts: std::collections::HashMap<String, InMemoryDraft>,
     /// Session IDs whose draft is confirmed for sidebar display.
     /// Only updated when a tab closes (or submit). Typing never touches this —
     /// so the sidebar stays frozen while a tab is open.
     pub sidebar_draft_ids: std::collections::HashSet<String>,
-    pub drafts_collapsed: bool,
     pub pinned_collapsed: bool,
+    pub workspaces_collapsed: bool,
     pub settled_collapsed: bool,
     pub is_window_active: bool,
     pub _subscriptions: Vec<Subscription>,
+}
+
+pub(crate) fn rc_slice_edit<T: Clone>(rc: &mut Rc<[T]>, f: impl FnOnce(&mut Vec<T>)) {
+    let mut vec = rc.to_vec();
+    f(&mut vec);
+    *rc = Rc::from(vec);
+}
+
+pub(crate) fn rc_slice_update<T: Clone, R>(rc: &mut Rc<[T]>, f: impl FnOnce(&mut [T]) -> R) -> R {
+    if let Some(slice) = Rc::get_mut(rc) {
+        f(slice)
+    } else {
+        let mut vec = rc.to_vec();
+        let res = f(&mut vec);
+        *rc = Rc::from(vec);
+        res
+    }
 }

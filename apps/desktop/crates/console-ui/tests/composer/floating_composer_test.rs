@@ -4,7 +4,46 @@
 //! decisions that decide what a launch actually creates.
 
 use console_core::SlashCommandInfo;
-use console_ui::common::{AutocompleteItem, AutocompleteView, BranchChoice};
+use console_ui::common::{
+    AutocompleteItem, AutocompleteView, BranchChoice, PendingPaste, resolve_pending_pastes,
+};
+
+fn pending(id: usize, lines: usize, text: &str) -> PendingPaste {
+    PendingPaste {
+        path: format!("pending-paste:{id}"),
+        label: format!("pasted {lines} lines"),
+        text: text.to_string(),
+    }
+}
+
+#[test]
+fn uploaded_paste_swaps_placeholder_for_server_path() {
+    let files = vec!["src/main.rs".to_string(), "pending-paste:1".to_string()];
+    let resolved = vec![(
+        pending(1, 30, "raw"),
+        Some("/p/pastes/s/pasted-1.txt".into()),
+    )];
+    let (prompt, files) =
+        resolve_pending_pastes("see main.rs and pasted 30 lines please", &files, &resolved);
+    assert_eq!(prompt, "see main.rs and pasted 30 lines please");
+    assert_eq!(files, vec!["src/main.rs", "/p/pastes/s/pasted-1.txt"]);
+}
+
+#[test]
+fn failed_paste_goes_inline_and_keeps_later_pastes_aligned() {
+    let files = vec!["pending-paste:1".to_string(), "pending-paste:2".to_string()];
+    let resolved = vec![
+        (pending(1, 30, "RAW ONE"), None),
+        (
+            pending(2, 30, "RAW TWO"),
+            Some("/p/pastes/s/pasted-2.txt".into()),
+        ),
+    ];
+    let (prompt, files) =
+        resolve_pending_pastes("pasted 30 lines then pasted 30 lines", &files, &resolved);
+    assert_eq!(prompt, "RAW ONE then pasted 30 lines");
+    assert_eq!(files, vec!["/p/pastes/s/pasted-2.txt"]);
+}
 
 #[test]
 fn default_branch_choice_is_the_project_itself() {
@@ -45,15 +84,6 @@ fn autocomplete_content_key_is_stable_for_equal_content() {
 }
 
 #[test]
-fn autocomplete_content_key_ignores_the_popup_itself() {
-    // Two independent builds of the same rows must compare equal even though
-    // they are distinct `AutocompleteView` values.
-    let a = view_of(&[("console", "one")]);
-    let b = view_of(&[("console", "one")]);
-    assert_eq!(a.content_key(), b.content_key());
-}
-
-#[test]
 fn autocomplete_content_key_changes_with_content() {
     let base = view_of(&[("console", "one")]);
     assert_ne!(
@@ -78,11 +108,53 @@ fn autocomplete_content_key_changes_with_content() {
 }
 
 #[test]
-fn empty_autocomplete_pops_share_a_key() {
-    // `None` is the steady state before typing; it must compare equal to
-    // itself or opening the card would ping a notify every frame.
-    let empty = AutocompleteView::new(Vec::new(), 0, false);
-    assert_eq!(empty.content_key(), empty.content_key());
+fn project_menu_section_renders_no_project_row() {
+    use console_core::ProjectInfo;
+    use console_ui::common::{ProjectMenuExtras, project_menu_section};
+    use console_ui::primitives::MenuItem;
+    use std::rc::Rc;
+
+    let projects: Rc<[ProjectInfo]> = Rc::from([ProjectInfo {
+        id: "p1".into(),
+        name: "Project 1".into(),
+        path: "/path/to/p1".into(),
+        created_at: 0,
+        updated_at: 0,
+    }]);
+
+    type SelectCb = Rc<dyn Fn(String, &mut gpui::Window, &mut gpui::App)>;
+    type ActionCb = Rc<dyn Fn(&mut gpui::Window, &mut gpui::App)>;
+    let on_select: SelectCb = Rc::new(|_, _, _| {});
+    let on_new: ActionCb = Rc::new(|_, _| {});
+    let on_none: ActionCb = Rc::new(|_, _| {});
+
+    let items = project_menu_section(
+        projects,
+        None,
+        true,
+        &on_select,
+        Some(&ProjectMenuExtras {
+            on_new_project: on_new,
+            on_no_project: on_none,
+            none_selected: true,
+        }),
+    );
+
+    let no_project_item = items.iter().find(|item| match item {
+        MenuItem::Entry { label, .. } => label == "No project",
+        _ => false,
+    });
+
+    assert!(
+        no_project_item.is_some(),
+        "No project item should be present"
+    );
+    if let Some(MenuItem::Entry { selected, .. }) = no_project_item {
+        assert!(
+            *selected,
+            "No project should be marked selected when none_selected is true"
+        );
+    }
 }
 
 /// Build a popup of command rows. The `ComposerInput` isn't needed —
@@ -130,4 +202,47 @@ fn picking_an_existing_branch_checks_it_out_in_the_project() {
     );
     assert_eq!(BranchChoice::Project.checkout_target(), None);
     assert_eq!(BranchChoice::NewWorktree.checkout_target(), None);
+}
+
+#[test]
+fn branch_menu_section_offers_no_remote_branches() {
+    // Remote-tracking rows are worktree base choices, not checkouts —
+    // `git switch` cannot check them out in place, so the shared section
+    // (the footer and the card's FromBranch mode) must hide them.
+    use console_core::GitBranchInfo;
+    use console_ui::common::branch_menu_section;
+    use console_ui::primitives::MenuItem;
+    use std::rc::Rc;
+
+    let branches: Rc<[GitBranchInfo]> = Rc::from([
+        GitBranchInfo {
+            name: "main".into(),
+            current: true,
+            remote: false,
+        },
+        GitBranchInfo {
+            name: "origin/develop".into(),
+            current: false,
+            remote: true,
+        },
+    ]);
+    let is_selected: Rc<dyn Fn(&GitBranchInfo) -> bool> = Rc::new(|info: &GitBranchInfo| {
+        BranchChoice::FromBranch(info.name.clone()) == BranchChoice::FromBranch("main".into())
+    });
+    type SelectCb = Rc<dyn Fn(String, &mut gpui::Window, &mut gpui::App)>;
+    let on_select: SelectCb = Rc::new(|_, _, _| {});
+
+    let items = branch_menu_section(branches, &is_selected, &on_select, true, &[], None);
+    let labels: Vec<&str> = items
+        .iter()
+        .filter_map(|item| match item {
+            MenuItem::Entry { label, .. } => Some(label.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert!(labels.contains(&"main"), "labels: {labels:?}");
+    assert!(
+        !labels.iter().any(|label| label.starts_with("origin/")),
+        "remote rows must not be checkout targets: {labels:?}"
+    );
 }

@@ -3,8 +3,8 @@
 package compaction
 
 import (
+	"github.com/MoeForge/moego/regexp"
 	"math"
-	"regexp"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"

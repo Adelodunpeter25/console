@@ -13,18 +13,28 @@ import com.console.mobile.R
 
 object LocalNotificationPresenter {
     const val CHANNEL_ID = "console_general"
+    const val UPDATE_CHANNEL_ID = "console_updates"
     const val EXTRA_THREAD_ID = "extra_thread_id"
 
     fun ensureChannelCreated(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Console",
-            NotificationManager.IMPORTANCE_HIGH,
-        )
-        nm.createNotificationChannel(channel)
+        if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Console",
+                NotificationManager.IMPORTANCE_HIGH,
+            )
+            nm.createNotificationChannel(channel)
+        }
+        if (nm.getNotificationChannel(UPDATE_CHANNEL_ID) == null) {
+            val channel = NotificationChannel(
+                UPDATE_CHANNEL_ID,
+                "App Updates",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            )
+            nm.createNotificationChannel(channel)
+        }
     }
 
     fun showNotification(context: Context, title: String, body: String, sessionId: String, subtitle: String = "") {

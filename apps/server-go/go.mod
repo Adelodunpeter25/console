@@ -1,12 +1,14 @@
 module github.com/Adelodunpeter25/console/apps/server-go
 
-go 1.25.0
+go 1.26.1
 
 require (
-	github.com/Adelodunpeter25/sim-go v0.0.0-20261026112708-265caf92d55b
+	github.com/Adelodunpeter25/iroh-go v0.0.0-20261107173249-9605c02ec0fb
+	github.com/Adelodunpeter25/sim-go v0.0.0-20261113115339-d943d8632ca3
 	github.com/BurntSushi/toml v1.6.0
+	github.com/MoeForge/moego v0.1.0-alpha.5
+	github.com/MoeForge/moejs v0.1.1
 	github.com/creack/pty v1.1.24
-	github.com/dop251/goja v0.0.0-20261006212518-44620e89763c
 	github.com/fasthttp/websocket v1.5.12
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gofiber/fiber/v2 v2.52.9
@@ -18,21 +20,18 @@ require (
 	golang.org/x/crypto v0.54.0
 	golang.org/x/image v0.40.0
 	golang.org/x/oauth2 v0.36.0
+	golang.org/x/sync v0.22.0
 	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.38.0
 )
 
 require (
-	github.com/dlclark/regexp2/v2 v2.8.1 // indirect
-	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
-	github.com/google/pprof v0.0.0-20250317173921-a4b03ec1a45e // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
@@ -60,7 +59,7 @@ require (
 	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/net v0.57.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.47.0
 	modernc.org/libc v1.65.10 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

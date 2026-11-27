@@ -23,8 +23,7 @@ option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/
 // - credentials themselves (access/refresh tokens, PATs) never cross this
 //   boundary.
 // - OAuth provider ids stay plain strings: codex | claude | antigravity |
-//   devin, with devin reserved and answering 501. A proto enum would force a
-//   client-wide rename for no gain.
+//   devin. A proto enum would force a client-wide rename for no gain.
 message ProviderAuthStatus {
   bool logged_in = 1;
   optional string email = 2;

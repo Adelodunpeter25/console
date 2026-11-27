@@ -39,7 +39,7 @@ func cleanSubtitle(title string) string {
 // IsAttentionKind reports events that need a "needs attention" banner.
 func IsAttentionKind(kind loop.EventKind) bool {
 	switch kind {
-	case loop.EventAskQuestion, loop.EventPermissionRequest, loop.EventError:
+	case loop.EventAskQuestion, loop.EventError:
 		return true
 	default:
 		return false
@@ -49,7 +49,7 @@ func IsAttentionKind(kind loop.EventKind) bool {
 // AttentionNotification builds the needs-attention banner for an event.
 func AttentionNotification(sessionID string, event loop.Event, sessionTitle string) *consolev1.NotificationEvent {
 	out := &consolev1.NotificationEvent{
-		Type: "notification", Kind: "needs_attention", SessionId: sessionID, Title: "Needs Attention",
+		Type: "notification", Kind: "needs_attention", SessionId: sessionID, Title: "Needs Your Attention",
 	}
 	if subtitle := cleanSubtitle(sessionTitle); subtitle != "" {
 		out.Subtitle = subtitle
@@ -59,12 +59,6 @@ func AttentionNotification(sessionID string, event loop.Event, sessionTitle stri
 		body := ""
 		if event.Ask != nil {
 			body = event.Ask.Question
-		}
-		out.Body = TruncateNotificationText(body, notificationBodyMax)
-	case loop.EventPermissionRequest:
-		body := ""
-		if event.Permission != nil {
-			body = event.Permission.ToolName + " is requesting permission"
 		}
 		out.Body = TruncateNotificationText(body, notificationBodyMax)
 	default:
@@ -96,6 +90,29 @@ func DoneNotification(sessionID, sessionTitle, summary string) *consolev1.Notifi
 func ResumedNotification(sessionID, message string) *consolev1.NotificationEvent {
 	return &consolev1.NotificationEvent{
 		Type: "notification", Kind: "resumed", SessionId: sessionID, Body: message,
+	}
+}
+
+// ReadStateNotification tells connected clients a chat's unread state changed,
+// so a device reading a chat clears its dot on the others without waiting for
+// the next session-list poll. Silent signal, like resume: no banner.
+func ReadStateNotification(sessionID string) *consolev1.NotificationEvent {
+	return &consolev1.NotificationEvent{
+		Type: "notification", Kind: "read_state", SessionId: sessionID,
+	}
+}
+
+// BackgroundWorkNotification tells clients a background shell status changed.
+func BackgroundWorkNotification(sessionID string) *consolev1.NotificationEvent {
+	return &consolev1.NotificationEvent{
+		Type: "notification", Kind: "background_work", SessionId: sessionID,
+	}
+}
+
+// NotifyReadState pushes the read-state signal.
+func (s *Service) NotifyReadState(sessionID string) {
+	if bus := s.notifier(); bus != nil {
+		bus.Push(ReadStateNotification(sessionID))
 	}
 }
 
@@ -135,8 +152,8 @@ func (s *Service) notifyEvent(ctx context.Context, sessionID string, event loop.
 		return
 	}
 	title := ""
-	if loaded, err := s.sessions.Load(sessionID, 0, 0); err == nil && loaded != nil {
-		title = loaded.Header.Title
+	if header, err := s.sessions.Header(sessionID); err == nil && header != nil {
+		title = header.Title
 	}
 	bus.Push(AttentionNotification(sessionID, event, title))
 }
@@ -148,8 +165,8 @@ func (s *Service) notifyDone(sessionID string) {
 		return
 	}
 	title := ""
-	if loaded, err := s.sessions.Load(sessionID, 0, 0); err == nil && loaded != nil {
-		title = loaded.Header.Title
+	if header, err := s.sessions.Header(sessionID); err == nil && header != nil {
+		title = header.Title
 	}
 	bus.Push(DoneNotification(sessionID, title, lastAssistantExcerpt(s.sessions, sessionID)))
 }
@@ -157,7 +174,8 @@ func (s *Service) notifyDone(sessionID string) {
 // lastAssistantExcerpt returns the latest assistant text turn for
 // done-banner previews.
 func lastAssistantExcerpt(sessions *services.SessionService, sessionID string) string {
-	loaded, err := sessions.Load(sessionID, 0, 0)
+	// Probe the newest 10 messages first to avoid a full transcript rebuild.
+	loaded, err := sessions.Load(sessionID, 10, 0)
 	if err != nil || loaded == nil {
 		return ""
 	}
@@ -165,6 +183,16 @@ func lastAssistantExcerpt(sessions *services.SessionService, sessionID string) s
 		msg, ok := decodeAssistantText(loaded.Messages[i])
 		if ok && msg != "" {
 			return msg
+		}
+	}
+	// Fall back to full history only if the last 10 had no assistant text.
+	if loaded.HasMore {
+		if full, err := sessions.Load(sessionID, 0, 0); err == nil && full != nil {
+			for i := len(full.Messages) - 1; i >= 0; i-- {
+				if msg, ok := decodeAssistantText(full.Messages[i]); ok && msg != "" {
+					return msg
+				}
+			}
 		}
 	}
 	return ""

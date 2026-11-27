@@ -297,3 +297,79 @@ func TestDeleteBranchGuards(t *testing.T) {
 		t.Fatalf("missing branch force: %v", err)
 	}
 }
+
+func initRepoWithRemote(t *testing.T) (remoteDir, setupDir, localDir string) {
+	t.Helper()
+	remoteDir = t.TempDir()
+	git(t, remoteDir, "init", "--bare", "-b", "main")
+
+	setupDir = t.TempDir()
+	git(t, setupDir, "clone", remoteDir, ".")
+	git(t, setupDir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "init")
+	git(t, setupDir, "push", "origin", "main")
+
+	localDir = t.TempDir()
+	git(t, localDir, "clone", remoteDir, ".")
+	return remoteDir, setupDir, localDir
+}
+
+func TestWorktreeAddFetchesSelectedRemoteBranch(t *testing.T) {
+	svc := gitsvc.NewWorktreeService()
+	_, setupDir, localDir := initRepoWithRemote(t)
+
+	git(t, setupDir, "checkout", "-b", "remote-feat")
+	git(t, setupDir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "commit 1")
+	git(t, setupDir, "push", "origin", "remote-feat")
+
+	git(t, localDir, "fetch", "origin", "remote-feat")
+	oldSha := strings.TrimSpace(git(t, localDir, "rev-parse", "origin/remote-feat"))
+
+	git(t, setupDir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "commit 2")
+	git(t, setupDir, "push", "origin", "remote-feat")
+	newSha := strings.TrimSpace(git(t, setupDir, "rev-parse", "HEAD"))
+	if oldSha == newSha {
+		t.Fatalf("expected different SHAs, got %s", oldSha)
+	}
+
+	wt := filepath.Join(t.TempDir(), "wt")
+	if err := svc.WorktreeAdd(localDir, wt, "new-worktree", "origin/remote-feat"); err != nil {
+		t.Fatalf("WorktreeAdd: %v", err)
+	}
+
+	wtSha := strings.TrimSpace(git(t, wt, "rev-parse", "HEAD"))
+	if wtSha != newSha {
+		t.Fatalf("worktree commit = %s; want latest remote commit %s", wtSha, newSha)
+	}
+}
+
+func TestWorktreeAddFetchesUncachedRemoteBranch(t *testing.T) {
+	svc := gitsvc.NewWorktreeService()
+	_, setupDir, localDir := initRepoWithRemote(t)
+
+	git(t, setupDir, "checkout", "-b", "brand-new")
+	git(t, setupDir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "brand new commit")
+	git(t, setupDir, "push", "origin", "brand-new")
+	newSha := strings.TrimSpace(git(t, setupDir, "rev-parse", "HEAD"))
+
+	wt := filepath.Join(t.TempDir(), "wt")
+	if err := svc.WorktreeAdd(localDir, wt, "new-worktree", "origin/brand-new"); err != nil {
+		t.Fatalf("WorktreeAdd for uncached remote branch: %v", err)
+	}
+
+	wtSha := strings.TrimSpace(git(t, wt, "rev-parse", "HEAD"))
+	if wtSha != newSha {
+		t.Fatalf("worktree commit = %s; want latest remote commit %s", wtSha, newSha)
+	}
+}
+
+func TestWorktreeAddRejectsNonExistentRemoteBranch(t *testing.T) {
+	svc := gitsvc.NewWorktreeService()
+	_, _, localDir := initRepoWithRemote(t)
+
+	wt := filepath.Join(t.TempDir(), "wt")
+	err := svc.WorktreeAdd(localDir, wt, "new-worktree", "origin/does-not-exist")
+	if err == nil {
+		t.Fatalf("expected error for non-existent remote branch, got nil")
+	}
+}
+

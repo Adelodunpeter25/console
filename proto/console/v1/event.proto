@@ -47,19 +47,8 @@ message ContextSnapshot {
 }
 
 // Interactive requests (Phase 4, fourth slice). Args cross as raw JSON bytes
-// like tool calls. requires_upgrade (desktop permission card) is client-only
-// UI state nothing populates, so it stays out of the schema. skippable is
-// optional but always set — the old shape had no omitempty, and clients
+// like tool calls. skippable is optional but always set — the old shape had no omitempty, and clients
 // distinguish explicit false from absent.
-message PermissionRequest {
-  string request_id = 1;
-  string tool_call_id = 2;
-  string tool_name = 3;
-  bytes args = 4;
-  string tier = 5;
-  optional string reason = 6;
-}
-
 message AskQuestionRequest {
   string request_id = 1;
   string question = 2;

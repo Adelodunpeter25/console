@@ -8,8 +8,8 @@ use crate::primitives::{
 use crate::theme::Theme;
 use console_core::{Model, ProviderCatalogEntry, SelectedModel};
 use gpui::{
-    App, ElementId, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
+    App, ElementId, Entity, FontWeight, InteractiveElement, IntoElement, KeyBinding, ParentElement,
+    RenderOnce, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -18,11 +18,47 @@ pub enum PickerTab {
     Provider(String),
 }
 
+/// Key context the open picker declares on its card, inside the popover's
+/// `ConsoleMenu`. The field-scoped bindings below mirror the command
+/// palette's: they beat the search field's own cursor keys because they
+/// match deeper in the dispatch stack.
+const PICKER_CONTEXT: &str = "ConsoleModelPicker";
+const PICKER_FIELD_CONTEXT: &str = "ConsoleModelPicker > ComposerInput";
+
+gpui::actions!(
+    console_model_picker,
+    [
+        ModelPickerNext,
+        ModelPickerPrevious,
+        ModelPickerConfirm,
+        ModelPickerNextTab,
+        ModelPickerPreviousTab
+    ]
+);
+
+/// Bind the picker's list keys. Called once at startup, after
+/// `primitives::menu::init`: the menu's `ConsoleMenu > ComposerInput`
+/// bindings match at the same dispatch depth, and ties go to whichever was
+/// registered last.
+pub fn init_model_picker_keybindings(cx: &mut App) {
+    for context in [PICKER_FIELD_CONTEXT, PICKER_CONTEXT] {
+        cx.bind_keys([
+            KeyBinding::new("down", ModelPickerNext, Some(context)),
+            KeyBinding::new("up", ModelPickerPrevious, Some(context)),
+            KeyBinding::new("ctrl-n", ModelPickerNext, Some(context)),
+            KeyBinding::new("ctrl-p", ModelPickerPrevious, Some(context)),
+            KeyBinding::new("enter", ModelPickerConfirm, Some(context)),
+            KeyBinding::new("tab", ModelPickerNextTab, Some(context)),
+            KeyBinding::new("shift-tab", ModelPickerPreviousTab, Some(context)),
+        ]);
+    }
+}
+
 pub fn provider_svg_path(provider: &str) -> &'static str {
     let provider = provider.to_ascii_lowercase();
     match provider.as_str() {
         "google" | "antigravity" | "opencode" | "codex" | "openai" | "chatgpt" | "claude"
-        | "anthropic" | "deepseek" | "grok" | "cursor" | "amp" | "pi" => {
+        | "anthropic" | "deepseek" | "grok" | "cursor" | "amp" | "pi" | "devin" => {
             IconName::provider(&provider).path()
         }
         _ => IconName::Sparkle.path(),
@@ -33,7 +69,7 @@ pub use console_shared::format::{format_context_window, format_model_name};
 
 #[derive(Clone, IntoElement)]
 pub struct ModelDropdownMenu {
-    providers: Rc<Vec<ProviderCatalogEntry>>,
+    providers: Rc<[ProviderCatalogEntry]>,
     selected: Option<SelectedModel>,
     active_tab: PickerTab,
     favorites: Rc<HashSet<String>>,
@@ -48,6 +84,9 @@ pub struct ModelDropdownMenu {
     /// Snapshot of [`search`] read in `view.rs` this frame; the list filters
     /// against it so typing re-renders without re-reading the entity here.
     search_query: String,
+    /// The popover's handle: owns the keyboard highlight cursor and the row
+    /// list's scroll state, both reset each time the menu opens.
+    menu: ContextMenuHandle,
     on_select: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     on_tab: Rc<dyn Fn(PickerTab, &mut Window, &mut App) + 'static>,
     on_favorite: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
@@ -56,13 +95,14 @@ pub struct ModelDropdownMenu {
 impl ModelDropdownMenu {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        providers: Rc<Vec<ProviderCatalogEntry>>,
+        providers: Rc<[ProviderCatalogEntry]>,
         selected: Option<SelectedModel>,
         active_tab: PickerTab,
         favorites: Rc<HashSet<String>>,
         models_by_provider: Rc<HashMap<String, Vec<Model>>>,
         search: Entity<ComposerInput>,
         search_query: String,
+        menu: ContextMenuHandle,
         on_select: impl Fn(String, String, &mut Window, &mut App) + 'static,
         on_tab: impl Fn(PickerTab, &mut Window, &mut App) + 'static,
         on_favorite: impl Fn(String, String, &mut Window, &mut App) + 'static,
@@ -75,6 +115,7 @@ impl ModelDropdownMenu {
             models_by_provider,
             search,
             search_query,
+            menu,
             on_select: Rc::new(on_select),
             on_tab: Rc::new(on_tab),
             on_favorite: Rc::new(on_favorite),
@@ -91,6 +132,7 @@ impl RenderOnce for ModelDropdownMenu {
         let on_select = self.on_select;
         let on_favorite = self.on_favorite;
         let search = self.search.clone();
+        let menu = self.menu.clone();
         // Lowercased once; the filter checks `model.id.contains(query)`, like
         // the Electron picker's `model.id.toLowerCase().includes(query)`.
         let query = self.search_query.trim().to_lowercase();
@@ -141,8 +183,43 @@ impl RenderOnce for ModelDropdownMenu {
             visible_models.retain(|(_, _, m)| m.id.to_lowercase().contains(&query));
         }
 
+        // Keyboard navigation state. The highlight lives on the menu handle
+        // (reset on open/close); until the user arrows, it resolves to the
+        // selected model's row — or the first row when that model isn't in
+        // the visible list — so Enter always has a sensible target.
+        let list_scroll = menu.scroll_handle();
+        let visible_keys: Rc<[(String, String)]> = visible_models
+            .iter()
+            .map(|(prov, _, m)| (prov.clone(), m.id.clone()))
+            .collect();
+        let highlight_ix = if visible_models.is_empty() {
+            None
+        } else {
+            Some(match menu.highlighted() {
+                Some(i) => i.min(visible_models.len() - 1),
+                None => visible_models
+                    .iter()
+                    .position(|(prov, _, m)| {
+                        selected_model
+                            .as_ref()
+                            .is_some_and(|s| s.provider == *prov && s.model_id == m.id)
+                    })
+                    .unwrap_or(0),
+            })
+        };
+        // Tab / shift-tab cycle the rail: Favorites first, then providers in
+        // catalog order, wrapping at both ends.
+        let picker_tabs: Rc<[PickerTab]> = std::iter::once(PickerTab::Favorites)
+            .chain(
+                self.providers
+                    .iter()
+                    .map(|p| PickerTab::Provider(p.name.clone())),
+            )
+            .collect();
+
         div()
             .id("model-dropdown-card")
+            .key_context(PICKER_CONTEXT)
             .w(px(400.0))
             .h(px(350.0))
             .rounded(px(13.0))
@@ -152,6 +229,80 @@ impl RenderOnce for ModelDropdownMenu {
             .shadow_xl()
             .overflow_hidden()
             .flex()
+            .on_action({
+                let menu = menu.clone();
+                let keys = visible_keys.clone();
+                let resolved = highlight_ix;
+                move |_: &ModelPickerNext, window, cx| {
+                    if keys.is_empty() {
+                        return;
+                    }
+                    let current = menu
+                        .highlighted()
+                        .map(|i| i.min(keys.len() - 1))
+                        .or(resolved)
+                        .unwrap_or(0);
+                    let next = (current + 1) % keys.len();
+                    menu.set_highlighted(Some(next));
+                    menu.scroll_to_item(next);
+                    window.refresh();
+                    cx.stop_propagation();
+                }
+            })
+            .on_action({
+                let menu = menu.clone();
+                let keys = visible_keys.clone();
+                let resolved = highlight_ix;
+                move |_: &ModelPickerPrevious, window, cx| {
+                    if keys.is_empty() {
+                        return;
+                    }
+                    let current = menu
+                        .highlighted()
+                        .map(|i| i.min(keys.len() - 1))
+                        .or(resolved)
+                        .unwrap_or(0);
+                    let next = (current + keys.len() - 1) % keys.len();
+                    menu.set_highlighted(Some(next));
+                    menu.scroll_to_item(next);
+                    window.refresh();
+                    cx.stop_propagation();
+                }
+            })
+            .on_action({
+                let menu = menu.clone();
+                let keys = visible_keys;
+                let resolved = highlight_ix;
+                let on_select = on_select.clone();
+                move |_: &ModelPickerConfirm, window, cx| {
+                    let ix = menu
+                        .highlighted()
+                        .map(|i| i.min(keys.len().saturating_sub(1)))
+                        .or(resolved);
+                    if let Some((prov, model_id)) = ix.and_then(|i| keys.get(i)) {
+                        (on_select)(prov.clone(), model_id.clone(), window, cx);
+                    }
+                    cx.stop_propagation();
+                }
+            })
+            .on_action({
+                let menu = menu.clone();
+                let tabs = picker_tabs.clone();
+                let active = active_tab.clone();
+                let on_tab = on_tab.clone();
+                move |_: &ModelPickerNextTab, window, cx| {
+                    cycle_picker_tab(&tabs, &active, 1, &menu, &on_tab, window, cx);
+                }
+            })
+            .on_action({
+                let menu = menu;
+                let tabs = picker_tabs;
+                let active = active_tab.clone();
+                let on_tab = on_tab.clone();
+                move |_: &ModelPickerPreviousTab, window, cx| {
+                    cycle_picker_tab(&tabs, &active, -1, &menu, &on_tab, window, cx);
+                }
+            })
             .on_click(|_, _, cx| {
                 cx.stop_propagation();
             })
@@ -277,6 +428,7 @@ impl RenderOnce for ModelDropdownMenu {
                             .w_full()
                             .p(px(8.0))
                             .overflow_y_scroll()
+                            .track_scroll(&list_scroll)
                             .flex()
                             .flex_col()
                             .gap_y(px(3.0))
@@ -302,11 +454,12 @@ impl RenderOnce for ModelDropdownMenu {
                                             }),
                                     )
                             })
-                            .children(visible_models.into_iter().map(
-                                |(prov_name, prov_display, m)| {
-                                    let is_selected = selected_model.as_ref().map_or(false, |s| {
+                            .children(visible_models.into_iter().enumerate().map(
+                                |(row_ix, (prov_name, prov_display, m))| {
+                                    let is_selected = selected_model.as_ref().is_some_and(|s| {
                                         s.provider == prov_name && s.model_id == m.id
                                     });
+                                    let is_highlighted = highlight_ix == Some(row_ix);
                                     let is_fav =
                                         self.favorites.contains(&format!("{}:{}", prov_name, m.id));
                                     let prov_clone = prov_name.clone();
@@ -326,8 +479,12 @@ impl RenderOnce for ModelDropdownMenu {
                                         .items_center()
                                         .justify_between()
                                         .cursor_default()
-                                        .when(is_selected, |s| s.bg(theme.overlay_strong))
-                                        .when(!is_selected, |s| s.hover(|h| h.bg(theme.overlay)))
+                                        .when(is_selected || is_highlighted, |s| {
+                                            s.bg(theme.overlay_strong)
+                                        })
+                                        .when(!(is_selected || is_highlighted), |s| {
+                                            s.hover(|h| h.bg(theme.overlay))
+                                        })
                                         .active(|a| a.opacity(0.85))
                                         .on_click({
                                             let p = prov_clone.clone();
@@ -424,13 +581,35 @@ impl RenderOnce for ModelDropdownMenu {
     }
 }
 
+/// Move the picker's rail selection by `delta` tabs, wrapping at both ends.
+/// The row highlight resets so it re-resolves against the new tab's list.
+fn cycle_picker_tab(
+    tabs: &[PickerTab],
+    active: &PickerTab,
+    delta: isize,
+    menu: &ContextMenuHandle,
+    on_tab: &Rc<dyn Fn(PickerTab, &mut Window, &mut App) + 'static>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if tabs.is_empty() {
+        return;
+    }
+    let position = tabs.iter().position(|tab| tab == active).unwrap_or(0);
+    let len = tabs.len() as isize;
+    let next = tabs[((position as isize + delta).rem_euclid(len)) as usize].clone();
+    menu.set_highlighted(None);
+    on_tab(next, window, cx);
+    cx.stop_propagation();
+}
+
 /// Compact provider/model selector used by settings role configuration.
 #[derive(Clone, IntoElement)]
 pub struct ModelRolePicker {
     pub label: &'static str,
     pub description: &'static str,
     pub selected: Option<SelectedModel>,
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
     pub active_tab: PickerTab,
     pub favorites: Rc<HashSet<String>>,
@@ -456,7 +635,7 @@ impl RenderOnce for ModelRolePicker {
                     format_model_name(&model.model_id)
                 )
             })
-            .unwrap_or_else(|| "Uses Default".to_string());
+            .unwrap_or_else(|| "Not set".to_string());
         let selected_provider = selected.as_ref().map(|s| s.provider.clone());
         let providers = self.providers;
         let models_by_provider = self.models_by_provider;
@@ -506,17 +685,11 @@ impl RenderOnce for ModelRolePicker {
             );
 
         let panel = {
-            let providers = providers.clone();
-            let models_by_provider = models_by_provider.clone();
-            let active_tab = active_tab.clone();
-            let search = search.clone();
             let on_tab = on_tab.clone();
             let on_select = on_select.clone();
             let on_clear = on_clear.clone();
             let on_favorite = on_favorite.clone();
-            let favorites = favorites.clone();
-            let selected_model = selected.clone();
-            let query = query.clone();
+            let selected_model = selected;
 
             move |handle: &ContextMenuHandle, _window: &mut Window, _cx: &mut App| {
                 let close_handle = handle.clone();
@@ -671,7 +844,7 @@ impl RenderOnce for ModelRolePicker {
                                     .flex()
                                     .flex_col()
                                     .gap(px(2.0))
-                                    // Optional "Use Default" button
+                                    // Optional "Not set" button
                                     .when_some(on_clear.clone(), |list, on_c| {
                                         let h = close_handle.clone();
                                         list.child(
@@ -690,7 +863,7 @@ impl RenderOnce for ModelRolePicker {
                                                 .items_center()
                                                 .gap(px(7.0))
                                                 .child(app_icon(
-                                                    IconName::Restart,
+                                                    IconName::Close,
                                                     13.0,
                                                     theme.text_tertiary,
                                                 ))
@@ -700,7 +873,7 @@ impl RenderOnce for ModelRolePicker {
                                                         .text_size(px(12.0))
                                                         .font_weight(FontWeight::MEDIUM)
                                                         .text_color(theme.text_secondary)
-                                                        .child("Use Default Model"),
+                                                        .child("Not set"),
                                                 ),
                                         )
                                     })

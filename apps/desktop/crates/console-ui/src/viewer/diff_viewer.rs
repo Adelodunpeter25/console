@@ -19,17 +19,36 @@ pub const DIFF_LINE_HEIGHT: f32 = 20.0;
 #[derive(IntoElement)]
 pub struct DiffViewer {
     view: Entity<editor_ui::DiffView>,
+    path: Option<String>,
 }
 
 impl DiffViewer {
     pub fn new(view: Entity<editor_ui::DiffView>) -> Self {
-        Self { view }
+        Self { view, path: None }
+    }
+
+    /// Shows this (already display-ready) path in a header row above the diff.
+    pub fn path(mut self, path: impl Into<String>) -> Self {
+        self.path = Some(path.into());
+        self
     }
 }
 
 impl RenderOnce for DiffViewer {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        div().size_full().bg(gpui::rgb(0x000000)).child(self.view)
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let header = self.path.map(|p| {
+            let theme = Theme::current(cx);
+            crate::viewer::file_path_header(&p, &theme)
+        });
+
+        div().size_full().flex().flex_col().children(header).child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .bg(gpui::rgb(0x000000))
+                .child(self.view),
+        )
     }
 }
 
@@ -98,12 +117,53 @@ pub fn build_editor_diff_capped(
     max_lines: usize,
     cx: &mut App,
 ) -> (EditorDiff, usize) {
+    build_editor_diff_capped_sized(raw, path, theme, max_lines, 12.0, DIFF_LINE_HEIGHT, cx)
+}
+
+/// [`build_editor_diff_capped`] with its own text size and row height, for
+/// views that are not laid out at the default 12px / 20px.
+pub fn build_editor_diff_capped_sized(
+    raw: &str,
+    path: &str,
+    theme: &Theme,
+    max_lines: usize,
+    font_size: f32,
+    line_height: f32,
+    cx: &mut App,
+) -> (EditorDiff, usize) {
     let mut parsed = parse_unified_diff(raw);
     let total = parsed.lines.len();
     parsed.lines.truncate(max_lines);
     (
-        build_from_result(editor_diff_from_parsed(&parsed), path, theme, cx),
+        build_from_result_sized(
+            editor_diff_from_parsed(&parsed),
+            path,
+            theme,
+            font_size,
+            line_height,
+            cx,
+        ),
         total,
+    )
+}
+
+/// [`build_editor_diff`] with its own text size and row height, without
+/// truncating lines.
+pub fn build_editor_diff_sized(
+    raw: &str,
+    path: &str,
+    theme: &Theme,
+    font_size: f32,
+    line_height: f32,
+    cx: &mut App,
+) -> EditorDiff {
+    build_from_result_sized(
+        editor_diff_result(raw),
+        path,
+        theme,
+        font_size,
+        line_height,
+        cx,
     )
 }
 
@@ -118,6 +178,17 @@ pub fn build_editor_diff_from_parsed(
 }
 
 fn build_from_result(result: DiffResult, path: &str, theme: &Theme, cx: &mut App) -> EditorDiff {
+    build_from_result_sized(result, path, theme, 12.0, DIFF_LINE_HEIGHT, cx)
+}
+
+fn build_from_result_sized(
+    result: DiffResult,
+    path: &str,
+    theme: &Theme,
+    font_size: f32,
+    line_height: f32,
+    cx: &mut App,
+) -> EditorDiff {
     let language = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
     let preset = if theme.is_dark {
         syntax::ThemePreset::GitHubDark
@@ -126,8 +197,8 @@ fn build_from_result(result: DiffResult, path: &str, theme: &Theme, cx: &mut App
     };
     let font = FontConfig {
         family: "JetBrains Mono".into(),
-        size: px(12.0),
-        line_height: px(DIFF_LINE_HEIGHT),
+        size: px(font_size),
+        line_height: px(line_height),
     };
     let line_count = result.lines.len();
     let state = cx.new(|_| {

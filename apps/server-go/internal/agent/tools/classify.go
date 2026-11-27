@@ -16,6 +16,8 @@ package tools
 
 import (
 	"fmt"
+	"github.com/MoeForge/moego/json"
+	"github.com/MoeForge/moego/regexp"
 	"strings"
 )
 
@@ -30,10 +32,10 @@ const (
 
 // builtinLabel is the exact-match label for a built-in tool name.
 func builtinLabel(name string) string {
-	switch name {
-	case "read_file":
+	switch CanonicalName(name) {
+	case "readFile":
 		return "Read File"
-	case "write_file":
+	case "writeFile":
 		return "Write File"
 	case "batchWrite":
 		return "Batch Write"
@@ -47,7 +49,7 @@ func builtinLabel(name string) string {
 		return "Search Code"
 	case "glob":
 		return "Find Files"
-	case "list_dir":
+	case "listDir":
 		return "List Directory"
 	case "webFetch":
 		return "Fetch URL"
@@ -55,10 +57,12 @@ func builtinLabel(name string) string {
 		return "Web Search"
 	case "browser":
 		return "Browser"
-	case "browser_reset":
+	case "browserReset":
 		return "Reset Browser"
-	case "visualize":
-		return "Visualize"
+	case "render":
+		return "Render"
+	case "preview":
+		return "Preview"
 	case "subagent":
 		return "Subagent"
 	case "ask":
@@ -69,7 +73,7 @@ func builtinLabel(name string) string {
 		return "Todo"
 	case "memory":
 		return "Memory"
-	case "read_chat":
+	case "readChat":
 		return "Read Chat"
 	case "readSkill":
 		return "Read Skill"
@@ -77,14 +81,20 @@ func builtinLabel(name string) string {
 		return "Load Tools"
 	case "console":
 		return "Console"
-	case "console_reset":
+	case "consoleReset":
 		return "Reset Console"
 	case "computer":
 		return "Computer"
-	case "computer_reset":
+	case "computerReset":
 		return "Reset Computer"
 	case "writePlan":
 		return "Write Plan"
+	case "requestFullAccess":
+		return "Request Full Access"
+	case "code":
+		return "Code"
+	case "codeReset":
+		return "Reset Code"
 	default:
 		return ""
 	}
@@ -115,9 +125,210 @@ func ToolLabel(name string) string {
 	return name
 }
 
+var shellCmdRegex = regexp.MustCompile("(?s)\\$\\s*(?:`([^`]+)`|['\"]([^'\"]+)['\"]|\\(\\s*[\"'`]([^\"'`]+)[\"'`]\\s*\\))")
+
+var codeHelperNames = []string{
+	"fileRaw", "readRaw", "file", "write", "edit", "glob", "grep", "list",
+	"fetch", "webFetch", "webSearch", "todo", "readChat", "readSkill",
+	"render", "preview", "ask", "askMany", "mcp", "tools", "store",
+	"spawnContext", "help",
+}
+
+func isCodeIdent(b byte) bool {
+	return (b >= 97 && b <= 122) || (b >= 65 && b <= 90) || (b >= 48 && b <= 57) || b == 95 || b == 36
+}
+
+func codeRootName(name string) bool {
+	return name == "console" || name == "browser" || name == "computer"
+}
+
+func codeTruncate(value string, max int) string {
+	value = strings.Join(strings.Fields(value), " ")
+	r := []rune(value)
+	if len(r) > max {
+		return string(r[:max-1]) + "…"
+	}
+	return value
+}
+
+func codeHelperLabel(name, rest string) string {
+	rest = strings.TrimSpace(rest)
+	if rest == "" {
+		return name + "()"
+	}
+	if rest[0] == 34 || rest[0] == 39 || rest[0] == 96 {
+		q := rest[0]
+		if end := strings.IndexByte(rest[1:], q); end >= 0 {
+			return name + "(" + codeTruncate(rest[1:1+end], 40) + ")"
+		}
+	}
+	if end := strings.IndexAny(rest, ",)"); end >= 0 {
+		rest = strings.TrimSpace(rest[:end])
+	}
+	if rest != "" && isCodeIdent(rest[0]) {
+		i := 0
+		for i < len(rest) && isCodeIdent(rest[i]) {
+			i++
+		}
+		return name + "(" + codeTruncate(rest[:i], 40) + ")"
+	}
+	return name + "()"
+}
+
+func codeSkip(code string, i int) int {
+	ch := code[i]
+	if ch == 39 || ch == 34 || ch == 96 {
+		j := i + 1
+		for j < len(code) {
+			if code[j] == 92 {
+				j += 2
+				continue
+			}
+			if code[j] == ch {
+				return j + 1 - i
+			}
+			j++
+		}
+		return len(code) - i
+	}
+	if ch == 47 && i+1 < len(code) && code[i+1] == 47 {
+		j := i + 2
+		for j < len(code) && code[j] != 10 {
+			j++
+		}
+		return j - i
+	}
+	if ch == 47 && i+1 < len(code) && code[i+1] == 42 {
+		j := i + 2
+		for j+1 < len(code) && !(code[j] == 42 && code[j+1] == 47) {
+			j++
+		}
+		if j+1 < len(code) {
+			j += 2
+		}
+		return j - i
+	}
+	return 0
+}
+
+func codeIsHelper(name string) bool {
+	for _, h := range codeHelperNames {
+		if h == name {
+			return true
+		}
+	}
+	return false
+}
+
+// codeScriptLabel names the script's real helper or subkernel calls.
+// Strings and comments are skipped so a mention inside them is not a call.
+func codeScriptLabel(code string) string {
+	trimmed := strings.TrimSpace(code)
+	if trimmed == "" {
+		return ""
+	}
+	if m := shellCmdRegex.FindStringSubmatch(trimmed); len(m) > 1 {
+		for _, part := range m[1:] {
+			if cmd := strings.TrimSpace(part); cmd != "" {
+				return codeTruncate("$ "+cmd, 50)
+			}
+		}
+	}
+	helper := ""
+	var roots []string
+	seen := map[string]bool{}
+	for i := 0; i < len(code); {
+		if n := codeSkip(code, i); n > 0 {
+			i += n
+			continue
+		}
+		if !isCodeIdent(code[i]) || (i > 0 && isCodeIdent(code[i-1])) {
+			i++
+			continue
+		}
+		j := i
+		for j < len(code) && isCodeIdent(code[j]) {
+			j++
+		}
+		name := code[i:j]
+		if codeRootName(name) && j < len(code) && code[j] == 46 {
+			p := j + 1
+			for p < len(code) && (isCodeIdent(code[p]) || code[p] == 46) {
+				p++
+			}
+			z := p
+			for z < len(code) && (code[z] == 32 || code[z] == 9 || code[z] == 10 || code[z] == 13) {
+				z++
+			}
+			if z < len(code) && code[z] == 40 {
+				full := name + "." + strings.Trim(code[j+1:p], ".")
+				if !seen[full] {
+					seen[full] = true
+					roots = append(roots, full)
+				}
+				i = z
+				continue
+			}
+		}
+		k := j
+		for k < len(code) && (code[k] == 32 || code[k] == 9 || code[k] == 10 || code[k] == 13) {
+			k++
+		}
+		if k < len(code) && code[k] == 40 && helper == "" && codeIsHelper(name) {
+			helper = codeHelperLabel(name, code[k+1:])
+		}
+		i = j
+	}
+	if helper != "" {
+		return helper
+	}
+	if len(roots) > 0 {
+		return codeTruncate(strings.Join(roots, ", "), 50)
+	}
+	for _, line := range strings.Split(trimmed, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") || strings.HasPrefix(line, "*") {
+			continue
+		}
+		for _, prefix := range []string{"const ", "let ", "var ", "return ", "await "} {
+			line = strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		}
+		if line != "" {
+			return codeTruncate(line, 50)
+		}
+	}
+	return ""
+}
+
+// codeScriptSummary extracts a concise one-line action label from a code tool's arguments.
+func codeScriptSummary(rawArgs json.RawMessage) string {
+	if len(rawArgs) == 0 {
+		return ""
+	}
+	var in struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(rawArgs, &in); err != nil || in.Code == "" {
+		return ""
+	}
+	return codeScriptLabel(in.Code)
+}
+
+// ToolCallLabel renders the display label for a tool call, using its arguments
+// (such as code scripts) when they carry descriptive details.
+func ToolCallLabel(name string, arguments json.RawMessage) string {
+	if name == "code" {
+		if summary := codeScriptSummary(arguments); summary != "" {
+			return summary
+		}
+		return "Code"
+	}
+	return ToolLabel(name)
+}
+
 // IsEditFile reports a file edit whose arguments carry oldContent/newContent.
 func IsEditFile(name string) bool {
-	switch name {
+	switch CanonicalName(name) {
 	case "editFile":
 		return true
 	}
@@ -126,8 +337,8 @@ func IsEditFile(name string) bool {
 
 // IsWriteFile reports a whole-file write: only the new content is known.
 func IsWriteFile(name string) bool {
-	switch name {
-	case "write_file", "batchWrite":
+	switch CanonicalName(name) {
+	case "writeFile", "batchWrite":
 		return true
 	}
 	return false
@@ -135,8 +346,8 @@ func IsWriteFile(name string) bool {
 
 // IsReadFile reports a call that reads file content into its result.
 func IsReadFile(name string) bool {
-	switch name {
-	case "read_file":
+	switch CanonicalName(name) {
+	case "readFile":
 		return true
 	}
 	return false
@@ -152,7 +363,7 @@ func IsFileTargetTool(name string) bool {
 
 // IsSubagent reports a subagent call, whose result is prose meant to be
 // read as markdown.
-func IsSubagent(name string) bool { return name == "subagent" }
+func IsSubagent(name string) bool { return CanonicalName(name) == "subagent" }
 
 // ToolIconKey is the icon key from the server's activity-icon table
 // (sparkle, terminal, pencil, file, folder, search, globe, chart, list,
@@ -161,39 +372,105 @@ func ToolIconKey(name string) string {
 	if _, _, ok := ParseMCPToolName(name); ok {
 		return "package"
 	}
-	switch name {
+	switch CanonicalName(name) {
 	case "bash", "bashJob":
 		return "terminal"
-	case "editFile", "write_file", "batchWrite":
+	case "editFile", "writeFile", "batchWrite", "requestFullAccess":
 		return "pencil"
-	case "read_file":
+	case "readFile":
 		return "file"
-	case "list_dir":
+	case "listDir":
 		return "folder"
 	case "grep", "glob":
 		return "search"
-	case "webSearch", "webFetch", "browser", "browser_reset":
+	case "webSearch", "webFetch", "browser", "browserReset":
 		return "globe"
-	case "visualize":
+	case "render", "preview":
 		return "chart"
 	case "todo":
 		return "list"
-	case "memory", "read_chat":
+	case "memory", "readChat":
 		// Cross-session recall: reading another chat is the same kind
 		// of act as recalling a stored memory.
 		return "memory"
 	case "loadTools":
 		return "package"
-	case "console", "console_reset":
+	case "console", "consoleReset":
 		// A script that drives the app: the terminal glyph, like bash.
 		return "terminal"
-	case "computer", "computer_reset":
+	case "computer", "computerReset":
 		return "globe"
+	case "code", "codeReset":
+		return "code"
 	case "writePlan":
 		return "file"
 	default:
 		return "wrench"
 	}
+}
+
+// ToolCallSummary derives the one-line detail shown beside a tool's label.
+// It mirrors the argument summaries previously computed by clients so the
+// server is the single source of truth for tool-call presentation.
+func ToolCallSummary(name string, arguments json.RawMessage) string {
+	if len(arguments) == 0 {
+		return ""
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(arguments, &obj); err != nil {
+		return ""
+	}
+	str := func(keys ...string) string {
+		for _, k := range keys {
+			if raw, ok := obj[k]; ok {
+				var s string
+				if json.Unmarshal(raw, &s) == nil && s != "" {
+					return s
+				}
+			}
+		}
+		return ""
+	}
+	if s := str("path", "filePath", "targetFile", "absolutePath"); s != "" {
+		return codeTruncate(s, 72)
+	}
+	if name == "bashJob" || name == "bash_job" {
+		action := str("action")
+		if action == "" {
+			action = "status"
+		}
+		if id := str("jobId"); id != "" {
+			return codeTruncate(action+" "+id, 72)
+		}
+		return action
+	}
+	if name == "memory" {
+		op := str("op")
+		if op == "" {
+			op = "memory"
+		}
+		if q := str("query"); q != "" {
+			return codeTruncate(op+" \""+q+"\"", 72)
+		}
+		if c := str("content"); c != "" {
+			return codeTruncate(op+" \""+codeTruncate(c, 60)+"\"", 72)
+		}
+		return op
+	}
+	if name == "loadTools" {
+		return codeTruncate(str("group"), 72)
+	}
+	if name == "code" || name == "console" || name == "computer" {
+		if code := str("code"); code != "" {
+			return codeScriptLabel(code)
+		}
+	}
+	for _, k := range []string{"command", "pattern", "query", "url", "directory", "question"} {
+		if s := str(k); s != "" {
+			return codeTruncate(s, 72)
+		}
+	}
+	return ""
 }
 
 // ToolKindFlags packs the classification predicates into the wire bitmask.

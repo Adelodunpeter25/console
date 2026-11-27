@@ -7,7 +7,7 @@
 package routes
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"errors"
 	"net/http"
 	"strconv"

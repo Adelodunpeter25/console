@@ -14,7 +14,6 @@ use console_core::{
     file_call_diffs,
 };
 use console_shared::tool::argument_path as shared_argument_path;
-use console_shared::tool::argument_summary as shared_argument_summary;
 use console_shared::tool::parse_read_file_output as shared_parse_read_file_output;
 use gpui::{
     AnyElement, App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window,
@@ -193,8 +192,8 @@ impl ToolCalls {
         call.display_label()
     }
 
-    fn argument_summary(&self, call: &ToolCall) -> Option<String> {
-        shared_argument_summary(&call.name, &call.arguments, self.cwd.as_deref())
+    fn argument_summary(call: &ToolCall) -> Option<String> {
+        call.summary.clone().filter(|value| !value.is_empty())
     }
 
     fn formatted_result(result: &ToolResult) -> String {
@@ -244,11 +243,10 @@ impl ToolCalls {
     /// clock (slow stride — the transcript is expensive to rebuild) so a
     /// running call reads as live, not stuck. Done/error stay static icons.
     fn status_element(icon: IconName, color: gpui::Hsla, pending: bool) -> AnyElement {
-        let svg = app_icon(icon, 13.0, color);
         if pending {
-            motion::spin_slow(svg)
+            motion::spin_slow(icon, 13.0, color)
         } else {
-            svg.into_any_element()
+            app_icon(icon, 13.0, color).into_any_element()
         }
     }
 
@@ -275,10 +273,11 @@ impl ToolCalls {
         theme: &Theme,
         cx: &mut App,
     ) -> Vec<EditorDiff> {
-        if let Some((cached_args, cached)) = self.state.borrow().editor_diffs.get(call_id) {
-            if cached_args == arguments && cached.len() == diffs.len() {
-                return cached.clone();
-            }
+        if let Some((cached_args, cached)) = self.state.borrow().editor_diffs.get(call_id)
+            && cached_args == arguments
+            && cached.len() == diffs.len()
+        {
+            return cached.clone();
         }
         let built: Vec<EditorDiff> = diffs
             .iter()
@@ -304,7 +303,8 @@ impl ToolCalls {
     ) -> AnyElement {
         let call_id = entry.call.id.clone();
         let open = self.state.borrow().expanded_calls.contains(&call_id);
-        let summary = self.argument_summary(&entry.call);
+        let label = Self::call_label(&entry.call);
+        let summary = Self::argument_summary(&entry.call).filter(|s| s != &label);
         let (status_icon, status_color) = Self::status_icon(&entry, &theme);
         let call_id_for_action = call_id.clone();
         let is_edit = entry.call.is_edit();
@@ -344,7 +344,7 @@ impl ToolCalls {
             .flex()
             .flex_col()
             .when(!first, |element| {
-                element.border_t_1().border_color(theme.border)
+                element.border_t_1().border_color(transparent_black())
             })
             .child(
                 div()
@@ -373,26 +373,31 @@ impl ToolCalls {
                             );
                         }
                     })
-                    .child(if entry.call.is_file_target() && file_path.is_some() {
-                        // File-targeting calls show the file's real type icon
-                        // (multicolor, like mobile) instead of the generic
-                        // monochrome tool glyph.
-                        file_type_icon(file_path.as_ref().unwrap(), 13.0).into_any_element()
-                    } else {
-                        icon(
-                            activity_icon_for_call(&entry.call),
-                            13.0,
-                            theme.text_tertiary,
-                        )
-                        .into_any_element()
-                    })
+                    .child(
+                        if let Some(path) =
+                            file_path.as_deref().filter(|_| entry.call.is_file_target())
+                        {
+                            // File-targeting calls show the file's real type icon
+                            // (multicolor, like mobile) instead of the generic
+                            // monochrome tool glyph.
+                            file_type_icon(path, 13.0).into_any_element()
+                        } else {
+                            icon(
+                                activity_icon_for_call(&entry.call),
+                                13.0,
+                                theme.text_tertiary,
+                            )
+                            .into_any_element()
+                        },
+                    )
                     .child(
                         div()
-                            .flex_none()
+                            .min_w_0()
+                            .truncate()
                             .text_size(px(12.0))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme.text_secondary)
-                            .child(Self::call_label(&entry.call)),
+                            .child(label),
                     )
                     .when_some(summary, |element, summary| {
                         element.child(
@@ -509,6 +514,14 @@ impl ToolCalls {
                         element.child(self.section(&call_id, "Arguments", arguments, theme))
                     })
                     .when_some(entry.result, |element, result| {
+                        if result.omitted_size > 0 && result.content.is_null() {
+                            let placeholder = if result.result_message_id.is_some() {
+                                "Loading…".to_owned()
+                            } else {
+                                format!("Result omitted ({} bytes)", result.omitted_size)
+                            };
+                            return element.child(self.section(&call_id, "Result", placeholder, theme));
+                        }
                         let raw = Self::formatted_result(&result);
                         if entry.call.is_read() {
                             element.child(self.read_file_section(
@@ -589,7 +602,8 @@ impl ToolCalls {
                     ))
                     .child(
                         div()
-                            .flex_none()
+                            .min_w_0()
+                            .truncate()
                             .text_size(px(12.0))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme.text_secondary)
@@ -626,15 +640,11 @@ impl ToolCalls {
             );
 
         if open {
-            row = row.child(
-                div()
-                    .border_t_1()
-                    .border_color(theme.border)
-                    .pl(px(10.0))
-                    .children(group.entries.into_iter().enumerate().map(|(index, entry)| {
-                        self.call_row(entry, theme, index == 0, on_action.clone(), window, cx)
-                    })),
-            );
+            row = row.child(div().pl(px(10.0)).children(
+                group.entries.into_iter().enumerate().map(|(index, entry)| {
+                    self.call_row(entry, theme, index == 0, on_action.clone(), window, cx)
+                }),
+            ));
         }
         row.into_any_element()
     }
@@ -677,6 +687,7 @@ impl ToolCalls {
             &palette,
             self.selection.clone(),
             self.link_handler.clone(),
+            self.cwd.clone(),
         );
         div()
             .py(px(6.0))
@@ -724,7 +735,7 @@ impl ToolCalls {
                     }
                     children.push(self.text_row(id, text, theme, is_streaming));
                 }
-                ActivityEvent::ToolCall(entry) => pending.push(entry.clone()),
+                ActivityEvent::ToolCall(entry) => pending.push((**entry).clone()),
             }
         }
         children.extend(self.flush_tool_groups(&mut pending, theme, window, cx));
@@ -845,11 +856,8 @@ impl RenderOnce for ToolCalls {
             header = header.child(div().ml_auto());
         }
 
-        let mut container = div()
-            .w_full()
-            .border_b_1()
-            .border_color(theme.border)
-            .children([header.into_any_element()]);
+        let mut container = div().w_full();
+        container = container.children([header.into_any_element()]);
 
         if expanded {
             container = container.child(
@@ -888,6 +896,7 @@ impl ToolCalls {
             &palette,
             self.selection.clone(),
             None,
+            self.cwd.clone(),
         );
         let (line_numbers, code_body) = shared_parse_read_file_output(&raw);
 
@@ -909,7 +918,7 @@ impl ToolCalls {
                     ))
                     .max_h(px(240.0))
                     .overflow_y_scroll()
-                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                    .on_scroll(|_, _, cx| cx.stop_propagation())
                     .rounded(px(5.0))
                     .bg(theme.inset)
                     .px(px(8.0))
@@ -953,6 +962,7 @@ impl ToolCalls {
             &palette,
             self.selection.clone(),
             self.link_handler.clone(),
+            self.cwd.clone(),
         );
 
         // Reuse or create the MarkdownView for this call so streaming repaints
@@ -984,7 +994,7 @@ impl ToolCalls {
                     ))
                     .max_h(px(320.0))
                     .overflow_y_scroll()
-                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                    .on_scroll(|_, _, cx| cx.stop_propagation())
                     .rounded(px(5.0))
                     .bg(theme.inset)
                     .px(px(8.0))
@@ -1012,8 +1022,13 @@ impl ToolCalls {
     ) -> impl IntoElement {
         let row = format!("tool-{call_id}-{label}");
         let palette = Palette::from_theme(&theme);
-        let ctx =
-            crate::chat::markdown_helpers::compact_ctx(row, &palette, self.selection.clone(), None);
+        let ctx = crate::chat::markdown_helpers::compact_ctx(
+            row,
+            &palette,
+            self.selection.clone(),
+            None,
+            self.cwd.clone(),
+        );
         div()
             .flex()
             .flex_col()
@@ -1032,7 +1047,7 @@ impl ToolCalls {
                     ))
                     .max_h(px(160.0))
                     .overflow_y_scroll()
-                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                    .on_scroll(|_, _, cx| cx.stop_propagation())
                     .rounded(px(5.0))
                     .bg(theme.inset)
                     .px(px(8.0))

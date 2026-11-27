@@ -2,8 +2,8 @@
 package compaction
 
 import (
-	"encoding/json"
-	"regexp"
+	"github.com/MoeForge/moego/json"
+	"github.com/MoeForge/moego/regexp"
 	"sort"
 	"strconv"
 	"strings"

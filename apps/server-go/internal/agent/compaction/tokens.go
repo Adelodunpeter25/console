@@ -4,8 +4,9 @@
 package compaction
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"math"
+	"unicode/utf8"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
@@ -32,11 +33,11 @@ func EstimateMessageTokens(history []any) int {
 	for _, m := range history {
 		switch msg := m.(type) {
 		case loop.UserMessage:
-			totalChars += len([]rune(msg.Content)) + loop.AnnotationChars(msg.Annotations)
+			totalChars += utf8.RuneCountInString(msg.Content) + loop.AnnotationChars(msg.Annotations)
 			imageTokens += len(msg.Attachments) * imageTokensEach
 		case *loop.UserMessage:
 			if msg != nil {
-				totalChars += len([]rune(msg.Content)) + loop.AnnotationChars(msg.Annotations)
+				totalChars += utf8.RuneCountInString(msg.Content) + loop.AnnotationChars(msg.Annotations)
 				imageTokens += len(msg.Attachments) * imageTokensEach
 			}
 		case loop.AssistantMessage:
@@ -67,16 +68,16 @@ func EstimateMessageTokens(history []any) int {
 // EstimatePayloadTokens counts the full wire payload: messages plus the
 // system prompt, tool definitions, and a flat wire margin.
 func EstimatePayloadTokens(history []any, systemPrompt string, defs []tools.Definition) PayloadEstimate {
-	proseChars := len([]rune(systemPrompt))
+	proseChars := utf8.RuneCountInString(systemPrompt)
 	codeChars, imageTokens := 0, 0
 	for _, m := range history {
 		switch msg := m.(type) {
 		case loop.UserMessage:
-			proseChars += len([]rune(msg.Content)) + loop.AnnotationChars(msg.Annotations)
+			proseChars += utf8.RuneCountInString(msg.Content) + loop.AnnotationChars(msg.Annotations)
 			imageTokens += len(msg.Attachments) * imageTokensEach
 		case *loop.UserMessage:
 			if msg != nil {
-				proseChars += len([]rune(msg.Content)) + loop.AnnotationChars(msg.Annotations)
+				proseChars += utf8.RuneCountInString(msg.Content) + loop.AnnotationChars(msg.Annotations)
 				imageTokens += len(msg.Attachments) * imageTokensEach
 			}
 		case loop.AssistantMessage:
@@ -107,7 +108,7 @@ func EstimatePayloadTokens(history []any, systemPrompt string, defs []tools.Defi
 	}
 	toolTokens := 0
 	for _, d := range defs {
-		toolTokens += int(math.Ceil(float64(len([]rune(d.Name))+len([]rune(d.Description))) / charsPerProseToken))
+		toolTokens += int(math.Ceil(float64(utf8.RuneCountInString(d.Name)+utf8.RuneCountInString(d.Description)) / charsPerProseToken))
 		toolTokens += toolSchemaOverheadTokens
 	}
 	tokens := int(math.Ceil(float64(proseChars)/charsPerProseToken)) +
@@ -125,16 +126,16 @@ func assistantSplit(content []any) (prose, code int) {
 	for _, part := range content {
 		switch part := part.(type) {
 		case loop.TextPart:
-			prose += len([]rune(part.Text))
+			prose += utf8.RuneCountInString(part.Text)
 		case loop.ThinkingPart:
-			prose += len([]rune(part.Text))
+			prose += utf8.RuneCountInString(part.Text)
 		case loop.ToolCallPart:
-			prose += len([]rune(part.Call.Name))
+			prose += utf8.RuneCountInString(part.Call.Name)
 			code += argsChars(part.Call.Arguments)
 		case map[string]any:
 			if t, _ := part["type"].(string); t == "text" || t == "thinking" {
 				if s, _ := part["text"].(string); s != "" {
-					prose += len([]rune(s))
+					prose += utf8.RuneCountInString(s)
 				}
 			}
 		}
@@ -143,19 +144,7 @@ func assistantSplit(content []any) (prose, code int) {
 }
 
 func argsChars(args json.RawMessage) int {
-	if len(args) == 0 {
-		return 0
-	}
-	// Raw JSON counts as code chars; invalid JSON gets a fixed fallback estimate.
-	var v any
-	if err := json.Unmarshal(args, &v); err != nil {
-		return 50
-	}
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return 50
-	}
-	return len(raw)
+	return len(args)
 }
 
 // resultChars returns the character count of a tool result's content with
@@ -164,7 +153,7 @@ func argsChars(args json.RawMessage) int {
 func resultChars(content any) (chars, images int) {
 	stripped, images := loop.SplitImageParts(content)
 	if s, ok := stripped.(string); ok {
-		return len([]rune(s)), images
+		return utf8.RuneCountInString(s), images
 	}
 	if stripped == nil {
 		return 0, images

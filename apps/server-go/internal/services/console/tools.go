@@ -9,7 +9,7 @@ package console
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
@@ -44,6 +44,26 @@ func NewConsoleTool(manager *Manager, sessionID, projectID, cwd, mode string) to
 	return &consoleTool{Tool: inner, manager: manager, sessionID: sessionID, projectID: projectID, cwd: cwd, mode: mode}
 }
 
+// MethodSignatures lists the methods available on the console object. It is
+// generated from the same catalog that registers the kernel methods, so the
+// capability listing cannot drift from what the kernel actually serves.
+func MethodSignatures() []string {
+	catalog := consoleCatalog()
+	out := make([]string, 0, len(catalog))
+	for _, def := range catalog {
+		out = append(out, "console."+def.name+def.signatureArgs())
+	}
+	return out
+}
+
+func (t *consoleTool) Methods() []string {
+	return MethodSignatures()
+}
+
+// PlanSafe lets plan mode invoke the console tool; per-method permissions are
+// enforced inside kernelMethods against the run's ceiling.
+func (t *consoleTool) PlanSafe() bool { return true }
+
 func (t *consoleTool) Execute(ctx context.Context, arguments json.RawMessage) (any, error) {
 	var in consoleInput
 	if err := json.Unmarshal(arguments, &in); err != nil {
@@ -73,7 +93,7 @@ type consoleResetTool struct {
 // NewConsoleResetTool builds the `console_reset` tool: clearing variables
 // changes nothing on the machine, so it is a read-tier lifecycle operation.
 func NewConsoleResetTool(manager *Manager, sessionID string) tools.Tool {
-	inner := tools.NewTool("console_reset",
+	inner := tools.NewTool("consoleReset",
 		"Forget the console session: clear every variable and binding created by prior console calls. The console object itself is reinstalled fresh.",
 		tools.TierRead,
 		func(ctx context.Context, in struct{}) (any, error) {

@@ -200,6 +200,8 @@ cat << PLIST > "$CONTENTS_DIR/Info.plist"
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Console needs microphone access to transcribe your speech into text.</string>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
 </dict>

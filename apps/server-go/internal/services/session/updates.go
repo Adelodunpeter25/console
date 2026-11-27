@@ -4,7 +4,8 @@ package session
 
 import (
 	"database/sql"
-	"encoding/json"
+	"fmt"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,32 @@ func (s *Service) ExpiredDeletedSessions(cutoffMillis int64) ([]string, error) {
 	rows, err := s.manager.Global().Query(
 		`SELECT id FROM sessions WHERE deleted_at IS NOT NULL AND deleted_at <= ? ORDER BY deleted_at ASC`,
 		cutoffMillis)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// ExpiredSettledSessions lists live session ids settled at or before the
+// cutoff (unix millis), oldest first. A chat touched since the cutoff is
+// skipped, and so is a pinned one: rows pinned and settled before the two
+// became mutually exclusive are kept rather than swept.
+func (s *Service) ExpiredSettledSessions(cutoffMillis int64) ([]string, error) {
+	rows, err := s.manager.Global().Query(
+		`SELECT id FROM sessions
+		 WHERE settled_at IS NOT NULL AND deleted_at IS NULL AND pinned_at IS NULL
+		   AND settled_at <= ? AND updated_at <= ?
+		 ORDER BY settled_at ASC`,
+		cutoffMillis, cutoffMillis)
 	if err != nil {
 		return nil, err
 	}
@@ -76,13 +103,16 @@ func (s *Service) PermanentDelete(sessionID string) (bool, error) {
 		if project != "" {
 			removeDbFile(utils.SessionDBPath(storageDir, project, sessionID))
 			_ = os.RemoveAll(utils.SessionImagesDir(storageDir, project, sessionID))
+			_ = os.RemoveAll(utils.SessionRendersDir(storageDir, project, sessionID))
 		} else if found := findSessionDbFile(storageDir, sessionID); found != "" {
 			removeDbFile(found)
-			// The images folder sits beside whichever database was found, which
-			// may belong to a different project than the index says.
-			_ = os.RemoveAll(strings.TrimSuffix(found, ".db") + ".images")
+			// The images and renders folders sit beside whichever database was found.
+			prefix := strings.TrimSuffix(found, ".db")
+			_ = os.RemoveAll(prefix + ".images")
+			_ = os.RemoveAll(prefix + ".renders")
 		} else {
 			_ = os.RemoveAll(utils.SessionImagesDir(storageDir, "", sessionID))
+			_ = os.RemoveAll(utils.SessionRendersDir(storageDir, "", sessionID))
 		}
 		// Cleanup scratch working directory for scratchpad sessions.
 		// Safety: only delete under the scratch root.
@@ -102,6 +132,10 @@ func (s *Service) PermanentDelete(sessionID string) (bool, error) {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
+	if n > 0 {
+		_, _ = s.manager.Global().Exec(`DELETE FROM automations WHERE session_id = ?`, sessionID)
+		_, _ = s.manager.Global().Exec(`DELETE FROM webhook_subscriptions WHERE session_id = ?`, sessionID)
+	}
 	return n > 0, nil
 }
 
@@ -191,10 +225,20 @@ func (s *Service) WorktreeOf(sessionID string) (*types.SessionWorktree, error) {
 
 // Header returns the indexed header, or nil for unknown/deleted sessions.
 func (s *Service) Header(sessionID string) (*types.SessionHeader, error) {
+	h, err := s.HeaderIncludingDeleted(sessionID)
+	if err != nil || h == nil || h.DeletedAt != nil {
+		return nil, err
+	}
+	return h, nil
+}
+
+// HeaderIncludingDeleted returns the indexed header even for a
+// soft-deleted (trashed) session; nil for an unknown id.
+func (s *Service) HeaderIncludingDeleted(sessionID string) (*types.SessionHeader, error) {
 	rows, err := s.manager.Global().Query(`
 		SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
 			thinking_level, pinned_at, settled_at, created_at, updated_at, message_count, status, deleted_at,
-			worktree_path, worktree_branch, worktree_repo
+			worktree_path, worktree_branch, worktree_repo, last_activity_at, last_read_at
 		FROM sessions WHERE id = ?`, sessionID)
 	if err != nil {
 		return nil, err
@@ -204,7 +248,7 @@ func (s *Service) Header(sessionID string) (*types.SessionHeader, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(headers) == 0 || headers[0].DeletedAt != nil {
+	if len(headers) == 0 {
 		return nil, nil
 	}
 	return &headers[0], nil
@@ -255,6 +299,14 @@ func (s *Service) UpdateCwd(sessionID, cwd string, newProjectID *string, project
 	}
 	now := utils.NowMillis()
 	trimmed := strings.TrimSpace(cwd)
+	// A project-linked update must land on a directory that exists — the
+	// usual way a session ends up pointing at a ghost is a project whose
+	// folder was deleted after registration.
+	if target != "" && trimmed != "" {
+		if _, err := os.Stat(trimmed); err != nil {
+			return fmt.Errorf("%w: %s", ErrCwdMissing, trimmed)
+		}
+	}
 	// A scratchpad session's cwd is its sandboxed dir, which Create makes
 	// on the create path only. Clients that clear the project on an
 	// existing session (the desktop's "No Folder" sends an explicit null)
@@ -298,6 +350,9 @@ func (s *Service) UpdateCwd(sessionID, cwd string, newProjectID *string, project
 			relocateImagesDir(
 				utils.SessionImagesDir(storageDir, oldProjectID, sessionID),
 				utils.SessionImagesDir(storageDir, target, sessionID))
+			relocateImagesDir(
+				utils.SessionRendersDir(storageDir, oldProjectID, sessionID),
+				utils.SessionRendersDir(storageDir, target, sessionID))
 		}
 	}
 	return nil
@@ -448,11 +503,12 @@ func (s *Service) UpdateThinkingLevel(sessionID, thinkingLevel string) error {
 }
 
 // SetPinned pins (now) or unpins (NULL) a session. Pinning reorders the
-// list without touching updated_at.
+// list without touching updated_at, and unsettles: pinned and settled are
+// mutually exclusive.
 func (s *Service) SetPinned(sessionID string, pinned bool) error {
 	if pinned {
 		_, err := s.manager.Global().Exec(
-			`UPDATE sessions SET pinned_at = ? WHERE id = ?`,
+			`UPDATE sessions SET pinned_at = ?, settled_at = NULL WHERE id = ?`,
 			utils.NowMillis(), sessionID)
 		return err
 	}

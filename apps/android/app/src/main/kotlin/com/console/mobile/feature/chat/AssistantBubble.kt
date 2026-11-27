@@ -48,6 +48,7 @@ fun AssistantBubble(
     messageId: String? = null,
     onFork: ((String) -> Unit)? = null,
     tokPerSec: Double? = null,
+    onReply: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val hasContent = !textContent.isNullOrEmpty() || !thinkingContent.isNullOrEmpty()
@@ -60,7 +61,7 @@ fun AssistantBubble(
             ThinkingBlock(text = thinkingContent, isStreaming = isStreaming)
         }
         if (!textContent.isNullOrEmpty()) {
-            CustomMarkdown(content = textContent, streaming = isStreaming)
+            CustomMarkdown(content = textContent, streaming = isStreaming, onReply = onReply)
         }
         if (!isStreaming && !showTyping && textContent.isNullOrEmpty() && thinkingContent.isNullOrEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically) {

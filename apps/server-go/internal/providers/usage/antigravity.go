@@ -6,7 +6,7 @@ package usage
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"math"
 	"net/http"
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/shared"
 )
 
 const antigravityFetchModelsPath = "/v1internal:fetchAvailableModels"
@@ -576,7 +577,7 @@ func FetchAntigravityUsage(ctx context.Context, client *http.Client, baseURL, ac
 		return nil, nil
 	}
 	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Second}
+		client = shared.PooledClient(10 * time.Second)
 	}
 
 	var endpoints []string

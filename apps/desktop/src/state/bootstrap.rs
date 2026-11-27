@@ -16,13 +16,17 @@ impl ConsoleDesktopApp {
     /// submits, a paste stages images, Backspace on an empty field drops the
     /// last attachment.
     pub(crate) fn wire_floating_composer_input(&mut self, cx: &mut Context<Self>) {
-        use console_ui::input::{ComposerAttachmentPaste, ComposerEvent};
+        use console_ui::input::{ComposerAttachmentPaste, ComposerEvent, ComposerLargePaste};
         let input = self.floating_composer.input.clone();
         self._subscriptions.push(cx.subscribe(
             &input,
             |this, _input, event: &ComposerEvent, cx| match event {
-                ComposerEvent::Submit(prompt, _) => {
-                    this.submit_floating_composer(prompt.clone(), cx);
+                ComposerEvent::Edited => {
+                    this.stash_floating_prompt(cx);
+                    cx.notify();
+                }
+                ComposerEvent::Submit(prompt, context_files) => {
+                    this.submit_floating_composer(prompt.clone(), context_files.clone(), cx);
                 }
                 ComposerEvent::BackspaceOnEmpty => {
                     let count = this.attachments_for_pane(FLOATING_KEY).len();
@@ -41,6 +45,26 @@ impl ConsoleDesktopApp {
                 cx.notify();
             },
         ));
+        self._subscriptions.push(cx.subscribe(
+            &input,
+            |this, _input, event: &ComposerLargePaste, cx| {
+                this.floating_composer
+                    .stage_pending_paste(event.text.clone(), cx);
+                cx.notify();
+            },
+        ));
+        self._subscriptions.push(cx.subscribe(
+            &input,
+            |this, _input, event: &console_ui::input::ComposerImagesRemoved, cx| {
+                this.remove_images_by_number(FLOATING_KEY, &event.0, cx);
+            },
+        ));
+        self._subscriptions.push(cx.subscribe(
+            &input,
+            |this, _input, event: &console_ui::input::ComposerImagePreview, cx| {
+                this.preview_attachment(FLOATING_KEY, event.0 - 1, cx);
+            },
+        ));
     }
 
     pub(crate) fn wire_palette_callbacks(&mut self, cx: &mut Context<Self>) {
@@ -50,11 +74,10 @@ impl ConsoleDesktopApp {
                 move |path, _window, cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            let pane_id = this
-                                .active_pane_id
-                                .clone()
-                                .unwrap_or_else(|| "pane-main".to_string());
-                            this.open_file_tab_in_pane(&pane_id, path, cx);
+                            // One routing rule for every open: beside the
+                            // chat when one is pinned, the active pane
+                            // otherwise.
+                            this.open_file_tab(path, cx);
                         });
                     }
                 },
@@ -77,19 +100,26 @@ impl ConsoleDesktopApp {
         let entity = cx.entity().downgrade();
         self.global_search_panel.update(cx, |panel, cx| {
             panel.set_on_open_match(
-                move |rel_path, _line_number, _window, cx| {
+                move |rel_path, line_number, window, cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            let pane_id = this
+                            let source_pane = this
                                 .active_pane_id
                                 .clone()
                                 .unwrap_or_else(|| "pane-main".to_string());
                             let root = this
-                                .selected_project_for_pane(&pane_id)
-                                .map(|project| project.path.clone());
+                                .selected_project_for_pane(&source_pane)
+                                .map(|project| project.path);
                             let Some(root) = root else { return };
                             let absolute = console_ui::utils::join_path_lexical(&root, rel_path);
-                            this.open_file_tab_in_pane(&pane_id, absolute, cx);
+                            let target_pane = this.target_subtab_pane_id();
+                            this.open_file_tab_at_line(
+                                &target_pane,
+                                absolute,
+                                line_number,
+                                Some(window),
+                                cx,
+                            );
                         });
                     }
                 },
@@ -104,7 +134,7 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         let client_clone = self.client.clone();
-        let target_for_bootstrap = target.clone();
+        let target_for_bootstrap = target;
 
         cx.spawn(async move |entity, cx| {
             // 1. Fetch the session list for the sidebar.
@@ -113,18 +143,25 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.sessions = Rc::new(sessions);
+                                this.set_session_list(sessions, cx);
+                                this.refresh_draft_session_ids(cx);
                                 if matches!(
                                     target_for_bootstrap,
                                     crate::window::WindowLaunchTarget::RestorePersisted
                                 ) {
                                     let mut to_load = Vec::new();
+                                    let mut empty_panes = Vec::new();
                                     for leaf in this.workspace_root.leaves() {
                                         if let Some(session_id) =
                                             this.active_session_for_pane(&leaf.id)
                                         {
                                             to_load.push((leaf.id.clone(), session_id));
+                                        } else {
+                                            empty_panes.push(leaf.id.clone());
                                         }
+                                    }
+                                    for pane_id in empty_panes {
+                                        this.restore_draft_for_pane(&pane_id, None, cx);
                                     }
                                     for (pane_id, session_id) in to_load {
                                         if this.active_pane_id.as_deref() == Some(&pane_id)
@@ -132,6 +169,11 @@ impl ConsoleDesktopApp {
                                         {
                                             this.selected_session_id = Some(session_id.clone());
                                         }
+                                        this.restore_draft_for_pane(
+                                            &pane_id,
+                                            Some(&session_id),
+                                            cx,
+                                        );
                                         this.load_session_messages_for_pane(
                                             pane_id, session_id, cx,
                                         );
@@ -176,11 +218,11 @@ impl ConsoleDesktopApp {
                                             model_id: m.id.clone(),
                                         })
                                     });
-                                    this.providers = Rc::new(providers);
+                                    this.providers = Rc::from(providers);
                                     if let Some(first) = this.providers.first() {
                                         let first_name = first.name.clone();
                                         let needs_init = match &this.active_picker_tab {
-                                            PickerTab::Favorites => true,
+                                            PickerTab::Favorites => false,
                                             PickerTab::Provider(name) => {
                                                 !this.providers.iter().any(|p| &p.name == name)
                                             }
@@ -209,10 +251,9 @@ impl ConsoleDesktopApp {
                                     }
                                     if let Some(state) =
                                         this.workspace_pane_states.get_mut("pane-main")
+                                        && state.selected_model.is_none()
                                     {
-                                        if state.selected_model.is_none() {
-                                            state.selected_model = first_model;
-                                        }
+                                        state.selected_model = first_model;
                                     }
                                     cx.notify();
                                 });
@@ -274,7 +315,7 @@ impl ConsoleDesktopApp {
                     let project_path = cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.projects = Rc::new(projects);
+                                this.projects = Rc::from(projects);
                                 if this.selected_project_id.is_none() {
                                     // The workspace key, so a restored worktree chat
                                     // lands in its worktree's workspace.
@@ -289,15 +330,13 @@ impl ConsoleDesktopApp {
                                     .clone()
                                     .unwrap_or_else(|| "pane-main".into());
                                 if let Some(state) = this.workspace_pane_states.get_mut(&active_id)
+                                    && state.selected_project_id.is_none()
                                 {
-                                    if state.selected_project_id.is_none() {
-                                        state.selected_project_id =
-                                            this.selected_project_id.clone();
-                                    }
+                                    state.selected_project_id = this.selected_project_id.clone();
                                 }
                                 let path = this
                                     .selected_project_for_pane(&active_id)
-                                    .map(|project| project.path.clone());
+                                    .map(|project| project.path);
                                 cx.notify();
                                 path.map(|p| (active_id, p))
                             })
@@ -309,11 +348,11 @@ impl ConsoleDesktopApp {
                         let client = client_clone.clone();
                         let entity = entity.clone();
                         cx.spawn(async move |cx| {
-                            match client.git.list_branches(Some(&path)).await {
-                                Ok(branches) => cx.update(|cx| {
+                            if let Ok(branches) = client.git.list_branches(Some(&path)).await {
+                                cx.update(|cx| {
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
-                                            this.branches = Rc::new(branches.branches.clone());
+                                            this.branches = Rc::from(branches.branches.clone());
                                             this.branch_loaded = true;
                                             this.branch_is_git_repository =
                                                 branches.is_git_repository;
@@ -321,7 +360,7 @@ impl ConsoleDesktopApp {
                                                 this.workspace_pane_states.get_mut(&active_id)
                                                 && state.branch_cwd.is_none()
                                             {
-                                                state.branches = Rc::new(branches.branches);
+                                                state.branches = Rc::from(branches.branches);
                                                 state.branch_loaded = true;
                                                 state.branch_is_git_repository =
                                                     branches.is_git_repository;
@@ -329,8 +368,7 @@ impl ConsoleDesktopApp {
                                             cx.notify();
                                         });
                                     }
-                                }),
-                                Err(_) => {}
+                                });
                             }
                         })
                         .detach();
@@ -359,7 +397,8 @@ impl ConsoleDesktopApp {
                     let _ = cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.sessions = Rc::new(sessions);
+                                this.set_session_list(sessions, cx);
+                                this.refresh_draft_session_ids(cx);
                                 cx.notify();
                             });
                         }

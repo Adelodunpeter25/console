@@ -28,9 +28,32 @@ private fun defaultScheme(address: String): String {
     return if (isIp || !hostNoBrackets.contains('.')) "http" else "https"
 }
 
+/** The scheme of an address reached over iroh; its host is a 64-hex node ID. */
+const val IROH_SCHEME = "console-iroh://"
+
+private val NODE_ID = Regex("[0-9a-f]{64}")
+
+/** The node ID of a `console-iroh://<node-id>[/...]` address, or null. */
+fun irohNodeId(url: String): String? =
+    url.trim().takeIf { it.startsWith(IROH_SCHEME) }
+        ?.removePrefix(IROH_SCHEME)?.substringBefore('/')?.substringBefore('#')
+        ?.takeIf { NODE_ID.matches(it) }
+
+/**
+ * The URL requests to [serverUrl] are sent to: an iroh address becomes the
+ * loopback port of its tunnel, anything else is returned unchanged. When the
+ * tunnel cannot be made the address is returned as is, so the request fails
+ * with a connection error instead of reaching the wrong server.
+ */
+fun reachableUrl(serverUrl: String): String {
+    val nodeId = irohNodeId(serverUrl) ?: return serverUrl
+    return com.console.mobile.SharedNative.irohTunnel(nodeId) ?: serverUrl
+}
+
 fun normalizeBackendUrl(input: String): String? {
     var url = input.trim().trimEnd('/')
     if (url.isEmpty()) return null
+    if (url.startsWith(IROH_SCHEME)) return url.takeIf { irohNodeId(it) != null }
     if (!url.startsWith("http://") && !url.startsWith("https://")) url = "${defaultScheme(url)}://$url"
     return url
 }

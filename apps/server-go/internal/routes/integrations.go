@@ -1,11 +1,12 @@
-// Binary integration status (/api/integrations). Read-only by design: the
-// page tells the user what to install and where, and the install itself
-// happens on the box, outside this API.
+// Binary integration status (/api/integrations). The list is read-only; the
+// per-integration install routes run the official setup for the server's
+// platform when the user taps Install.
 package routes
 
 import (
-	"encoding/json"
 	"errors"
+	"github.com/MoeForge/moego/json"
+
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
 
 	"github.com/gofiber/fiber/v2"
@@ -32,19 +33,50 @@ func RegisterIntegrationRoutes(app *fiber.App) {
 	// github.com, checksum mismatch) or 400 for an unsupported platform —
 	// never silent, since a quiet button is worse than none.
 	app.Post("/api/integrations/gh/install", func(c *fiber.Ctx) error {
-		if _, err := integrations.InstallGhCLI(c.Context()); err != nil {
-			status := fiber.StatusBadGateway
-			if errors.Is(err, integrations.ErrGhPlatformUnsupported) {
-				status = fiber.StatusBadRequest
-			}
-			return c.Status(status).JSON(fiber.Map{"success": false, "error": err.Error()})
-		}
-		raw, err := marshalIntegrations()
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
-		}
-		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
+		return installIntegration(c, "gh")
 	})
+
+	// Install the Linux desktop stack (Xvfb + XFCE) the Computer tab
+	// streams. Same response shape and error mapping as the gh route.
+	app.Post("/api/integrations/desktop/install", func(c *fiber.Ctx) error {
+		return installIntegration(c, "desktop")
+	})
+
+	// Install Firefox so the desktop's Web Browser menu opens a graphical
+	// browser instead of the terminal fallback.
+	app.Post("/api/integrations/browser/install", func(c *fiber.Ctx) error {
+		return installIntegration(c, "browser")
+	})
+}
+
+// installIntegration dispatches one install request and answers the full row
+// list, so clients replace state instead of patching a single row.
+func installIntegration(c *fiber.Ctx, id string) error {
+	var err error
+	switch id {
+	case "gh":
+		_, err = integrations.InstallGhCLI(c.Context())
+	case "desktop":
+		_, err = integrations.InstallDesktop(c.Context())
+	case "browser":
+		_, err = integrations.InstallBrowser(c.Context())
+	default:
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "unknown integration"})
+	}
+	if err != nil {
+		status := fiber.StatusBadGateway
+		if errors.Is(err, integrations.ErrGhPlatformUnsupported) ||
+			errors.Is(err, integrations.ErrDesktopPlatformUnsupported) ||
+			errors.Is(err, integrations.ErrBrowserPlatformUnsupported) {
+			status = fiber.StatusBadRequest
+		}
+		return c.Status(status).JSON(fiber.Map{"success": false, "error": err.Error()})
+	}
+	raw, err := marshalIntegrations()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+	}
+	return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 }
 
 func marshalIntegrations() (json.RawMessage, error) {

@@ -21,7 +21,7 @@ object ConsoleColors {
         val Comment = Color(0xFF71717A)
         // Diff row tints. Alpha tints rather than solid fills so the syntax
         // colours underneath stay readable.
-        val DiffAddedBg = Color(0x1A34D399)
-        val DiffRemovedBg = Color(0x1AF87171)
+        val DiffAddedBg = Color(0x3834D399)
+        val DiffRemovedBg = Color(0x38F87171)
     }
 }

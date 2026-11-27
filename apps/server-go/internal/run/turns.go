@@ -5,12 +5,15 @@ package run
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"log/slog"
+	"slices"
 	"strings"
+	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/codemode"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/roles"
@@ -32,6 +35,17 @@ func (s *Service) setStatus(sessionID, status string) {
 	}
 	if err := s.sessions.UpdateStatus(sessionID, status); err != nil {
 		slog.Warn("run: session status update failed", "session", sessionID, "status", status, "error", err)
+	}
+}
+
+// finishRun settles the status and marks the chat unread in one write.
+// Best-effort like setStatus: it must never fail a run.
+func (s *Service) finishRun(sessionID, status string) {
+	if s.sessions == nil {
+		return
+	}
+	if err := s.sessions.FinishRun(sessionID, status); err != nil {
+		slog.Warn("run: finish run failed", "session", sessionID, "status", status, "error", err)
 	}
 }
 
@@ -62,7 +76,8 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 	// Mark working once per run, not per turn: a drained staged prompt keeps
 	// the same run (and therefore the same status) across its turns.
 	s.setStatus(sessionID, "working")
-	hub.Broadcast(loop.Event{Kind: loop.EventSessionStart})
+	runStartedAt := time.Now()
+	hub.Broadcast(loop.Event{Kind: loop.EventSessionStart, StartedAt: runStartedAt})
 	var runErr error
 	for {
 		turnErr := s.runOneTurn(currentCtx, sessionID, runID, current, hub, &currentProvider, &currentProviderID, pins)
@@ -89,9 +104,9 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 				// never needs_attention.
 				s.setStatus(sessionID, "done")
 			} else if runErr == nil {
-				s.setStatus(sessionID, "done")
+				s.finishRun(sessionID, "done")
 			} else {
-				s.setStatus(sessionID, "needs_attention")
+				s.finishRun(sessionID, "needs_attention")
 			}
 			// Release the session before the hub closes: a run that has
 			// observably finished must leave the session free, or a client
@@ -111,20 +126,32 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 			hub.Broadcast(loop.Event{Kind: loop.EventSessionEnd})
 			if aborted {
 				hub.Close(OutcomeAborted)
+				// Stop ends this run, not the queue: each staged prompt starts
+				// as its own run, oldest first. Draining them here as turns of
+				// this run would hold the active slot and reject the next send.
+				if _, err := s.startStagedIfIdle(sessionID); err != nil {
+					slog.Warn("start prompt queued during settle", "session", sessionID, "error", err)
+				}
 			} else {
 				hub.Close(OutcomeDone)
 				if runErr == nil {
 					s.notifyDone(sessionID)
+					s.startSuggestions(sessionID, currentProviderID, suggestionModelID(s, sessionID, current), pins)
+					// A prompt queued after nextTurn looked but before the slot was
+					// released would never be drained: nothing is running to drain it.
+					if _, err := s.startStagedIfIdle(sessionID); err != nil {
+						slog.Warn("start prompt queued during settle", "session", sessionID, "error", err)
+					}
 				}
 			}
 			return
 		}
-		nextCtx, nextCancel := context.WithCancel(context.Background())
+		nextCtx, nextCancel := context.WithCancelCause(context.Background())
 		s.mu.Lock()
 		if ar, ok := s.active[sessionID]; ok && ar.hub == hub {
 			ar.cancel = nextCancel
 		} else {
-			nextCancel()
+			nextCancel(errRunAborted)
 		}
 		s.mu.Unlock()
 		current, currentCtx = next, nextCtx
@@ -132,11 +159,16 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 }
 
 // nextTurn decides whether a staged prompt drains as the next turn. A clean
-// settle always drains; a canceled settle drains only when staged (steer:
-// halt now, staged prompt runs next). Other errors hold the staged prompt
-// so the user can steer, edit, or delete it.
+// settle always drains; a steer cancel drains the staged prompt (halt now,
+// it runs next on the same run). An abort-cancel settle must NOT drain:
+// the queue survives Stop and each prompt starts as its own run via
+// startStagedIfIdle, so draining here would keep this run's slot held and
+// reject the user's next send with ErrActive.
 func (s *Service) nextTurn(ctx context.Context, turnErr error, sessionID string, hub *Hub) (Prompt, bool) {
 	if turnErr != nil && !errors.Is(turnErr, context.Canceled) {
+		return Prompt{}, false
+	}
+	if ctx.Err() != nil && context.Cause(ctx) != errRunSteered {
 		return Prompt{}, false
 	}
 	staged, ok := s.takeStaged(sessionID)
@@ -150,7 +182,7 @@ func (s *Service) nextTurn(ctx context.Context, turnErr error, sessionID string,
 		}
 		return Prompt{}, false
 	}
-	hub.Broadcast(loop.Event{Kind: loop.EventQueueUpdated})
+	s.broadcastQueue(sessionID, true)
 	return staged, true
 }
 
@@ -173,8 +205,8 @@ func countUserMessages(history []any) int {
 // Unparseable or empty argument payloads yield no paths, which simply means
 // the later recording step falls back to argument-only information.
 func writePaths(call tools.ToolCall) []string {
-	switch call.Name {
-	case "write_file", "batchWrite", "editFile":
+	switch tools.CanonicalName(call.Name) {
+	case "writeFile", "batchWrite", "editFile":
 	default:
 		return nil
 	}
@@ -245,17 +277,16 @@ func withoutTool(list []tools.Tool, name string) []tools.Tool {
 // hub, returning the terminal error (nil on success). The provider instance
 // is reused unless the prompt switches provider id.
 func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto Prompt, hub *Hub, current *loop.Provider, currentID *string, pins *accountPins) error {
-	loaded, err := s.sessions.Load(sessionID, 0, 0)
+	header, err := s.sessions.Header(sessionID)
 	if err != nil {
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
 		return err
 	}
-	if loaded == nil {
+	if header == nil {
 		err := ErrNoSession
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
 		return err
 	}
-	header := loaded.Header
 
 	// A synthetic turn is the server waking an idle session for finished
 	// background work. The claimed results become the (hidden) user message;
@@ -268,7 +299,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		dto.Text, dto.woken = text, items
 	}
 
-	// A typed /command (/computer-use, /visualize, /console) switches its
+	// A typed /command (/computer-use) switches its
 	// capability on for the session. The message itself is never rewritten:
 	// what the user typed is what gets persisted and displayed, and the
 	// reference travels in setup (sent every turn, never saved).
@@ -282,15 +313,17 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	if modelID == "" {
 		modelID = header.ModelID
 	}
+	headerMode := permissions.Normalize(header.ApprovalMode)
 	approval := dto.ApprovalMode
 	if approval == "" {
 		approval = header.ApprovalMode
 	}
-	mode := permissions.Mode(approval)
-	switch mode {
-	case permissions.AlwaysAsk, permissions.AcceptEdits, permissions.PlanMode, permissions.FullAccess:
-	default:
-		mode = permissions.AlwaysAsk
+	mode := permissions.Normalize(approval)
+	// Stale-mode guard: if the session has already been upgraded to full-access,
+	// do not let a prompt payload carrying a stale plan-mode demote it.
+	// Intentional mode changes update the session header directly via PATCH /sessions/:id.
+	if headerMode == permissions.FullAccess && mode == permissions.PlanMode {
+		mode = permissions.FullAccess
 	}
 
 	if providerID != *currentID {
@@ -308,15 +341,23 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// thinking validation and the vision fallback below.
 	model := s.resolveModel(ctx, providerID, modelID)
 	effectiveThinking := dto.Thinking
-	// OpenCode models are cataloged without thinking levels unless their family
-	// has a known effort vocabulary. A session can carry a stale level after
-	// switching providers, so discard it instead of failing the run or sending
-	// reasoning controls to a model that does not declare support. Models that
-	// do declare levels fall through to normal validation below.
-	if model.Provider == "opencode" && len(model.ThinkingLevels) == 0 {
+	// A session can carry a stale level after switching providers, so
+	// providers without a thinking-level vocabulary discard it instead of
+	// failing the run. OpenCode models are cataloged without levels unless
+	// their family has a known effort vocabulary; Devin models are the same
+	// — only collapsed effort families declare levels. Models that do
+	// declare levels fall through to normal validation.
+	if (model.Provider == "opencode" || model.Provider == "devin") && len(model.ThinkingLevels) == 0 {
 		effectiveThinking = ""
 	} else if effectiveThinking == "" {
 		effectiveThinking = model.DefaultThinking
+		if effectiveThinking != "" && (header.ThinkingLevel == nil || *header.ThinkingLevel != effectiveThinking) {
+			_ = s.sessions.UpdateThinkingLevel(sessionID, effectiveThinking)
+		}
+	}
+	var wakeLabel string
+	if dto.Synthetic {
+		wakeLabel = wakeMessage(dto.woken)
 	}
 	user := loop.UserMessage{
 		Role:         loop.RoleUser,
@@ -324,9 +365,39 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		ContextFiles: dto.ContextFiles,
 		Annotations:  dto.Annotations,
 		Synthetic:    dto.Synthetic,
+		Source:       dto.Source,
+		ApprovalMode: string(mode),
+		WakeLabel:    wakeLabel,
 	}
 	for _, a := range dto.Attachments {
 		user.Attachments = append(user.Attachments, loop.ImageAttachment{Data: a.Data, MimeType: a.MimeType})
+	}
+
+	// Image attachments on a model without image support fall back to the
+	// configured vision role model — the whole turn runs on it. The swap is
+	// all-or-nothing: when the vision provider has no usable credential the
+	// run stays on the original model and loop.Agent.StripImages omits the
+	// image parts from provider-bound history (persisted history keeps them).
+	visionSwapped := false
+	if len(dto.Attachments) > 0 && !model.SupportsImages {
+		if vision, ok := s.resolveVision(model); ok {
+			if switched, err := s.Lookup(vision.Provider); err == nil {
+				model = vision
+				modelID, providerID = vision.ID, vision.Provider
+				provider = switched
+				*current, *currentID = switched, providerID
+				visionSwapped = true
+			}
+		}
+	}
+	stripImages := !model.SupportsImages
+
+	// Thinking levels are model-specific: after a vision takeover the
+	// session's level may not exist on the vision model, so clamp to its
+	// vocabulary (model default when unset) before validating. Without a
+	// swap an unsupported level is still a hard error.
+	if visionSwapped && effectiveThinking != "" && !slices.Contains(model.ThinkingLevels, effectiveThinking) {
+		effectiveThinking = model.DefaultThinking
 	}
 	if err := roles.ValidateLevel(model, effectiveThinking); err != nil {
 		// Persist the user message even though validation fails, so the
@@ -336,20 +407,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		return err
 	}
 
-	// Image attachments on a model without image support fall back to the
-	// configured vision role model.
-	if len(dto.Attachments) > 0 && !model.SupportsImages {
-		if vision, ok := s.resolveVision(model); ok {
-			model = vision
-			modelID, providerID = vision.ID, vision.Provider
-			if switched, err := s.Lookup(providerID); err == nil {
-				provider = switched
-				*current, *currentID = switched, providerID
-			}
-		}
+	history, err := s.LoadHistory(sessionID)
+	if err != nil {
+		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
+		return err
 	}
-
-	history := DecodeHistory(loaded.Messages)
 	// A turn is one user message: its index is how many user messages the
 	// session already holds (compaction never rewrites stored history).
 	turn := turnRef{Index: countUserMessages(history), UserMessageID: "msg_" + randomHex(16)}
@@ -361,9 +423,8 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// captures its "before" side, so repeated edits record the net change.
 	s.snapshots.drop(sessionID)
 	prompt := s.prompts.get(sessionID, systemprompt.BuildOptions{
-		Cwd:          header.Cwd,
-		Model:        modelID,
-		ApprovalMode: systemprompt.ApprovalMode(mode),
+		Cwd:   header.Cwd,
+		Model: modelID,
 	})
 
 	// The session cwd is the only root a run may write to. NewGuard returns
@@ -375,6 +436,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	onTodoUpdate := func(items []types.TodoItem, action string) {
 		hub.Broadcast(loop.Event{Kind: loop.EventTodoUpdate, Items: items, Action: action})
 	}
+	// Bound before the tool list: requestFullAccess closes over both.
+	var registry *tools.Registry
+	var executor *loop.Executor
 	toolList := make([]tools.Tool, 0, len(tools.DefaultTools())+1)
 	for _, t := range tools.DefaultTools() {
 		switch t.Name() {
@@ -388,14 +452,14 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			if mode == permissions.PlanMode {
 				// Plan mode keeps bash, but sandboxed read-only (writePlan is
 				// the only file write). bashJob stays denied by its tier.
-				toolList = append(toolList, tools.NewPlanModeBashTool(s.bashJobManager(), sessionID, runID))
+				toolList = append(toolList, tools.NewPlanModeBashToolWithCwd(s.bashJobManager(), header.Cwd, sessionID, runID))
 			} else {
-				toolList = append(toolList, tools.NewBashTool(s.bashJobManager(), sessionID, runID))
+				toolList = append(toolList, tools.NewBashToolWithCwd(s.bashJobManager(), header.Cwd, sessionID, runID))
 			}
 		case "bashJob":
 			toolList = append(toolList, tools.NewBashJobTool(s.bashJobManager(), sessionID))
-		case "read_file":
-			toolList = append(toolList, tools.NewReadFileTool(s.ReadFileToolOptions(model, providerID, modelID, pins)))
+		case "readFile", "read_file":
+			toolList = append(toolList, tools.NewReadFileTool(s.ReadFileToolOptions(model, providerID, modelID, header.Cwd, pins)))
 		default:
 			toolList = append(toolList, t)
 		}
@@ -408,30 +472,53 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	toolList = append(toolList, tools.NewReadChatTool(sessionID, s.sessions))
 	// writePlan is offered in plan mode only: it is the sole file write a
 	// read-only run may make, and in every other mode write_file does the job.
+	// requestFullAccess is registered in every mode so a stray call outside
+	// plan mode gets a clear "nothing to upgrade" answer instead of an
+	// unknown-tool error.
 	if mode == permissions.PlanMode {
 		toolList = append(toolList, tools.NewWritePlanTool(header.Cwd))
 	}
-	usage := &loop.UsageTracker{}
-	setup := prompt.Setup
-	mcpManager := s.mcpManager()
-	if mcpManager != nil && len(mcp.EnabledServers(mcpManager)) > 0 {
-		setup = strings.TrimSpace(setup + "\n\n" + mcpSetupHint)
-	}
-	// Capability references ride setup rather than the user message: setup is
-	// sent every turn but never persisted, so the chat history keeps exactly
-	// what the user typed.
-	for _, ref := range s.capabilitySetup(sessionID) {
-		setup = strings.TrimSpace(setup + "\n\n" + ref)
-	}
-	// $referenced chats resolve the same way: a named target in setup,
-	// never transcript content, and never for synthetic wake turns whose
-	// text the user did not write.
-	if !dto.Synthetic {
-		if refSetup := s.chatRefSetup(sessionID, dto.Text); refSetup != "" {
-			setup = strings.TrimSpace(setup + "\n\n" + refSetup)
+	toolList = append(toolList, tools.NewRequestFullAccessTool(askHandler, func() error {
+		if err := s.sessions.UpdateApprovalMode(sessionID, string(permissions.FullAccess)); err != nil {
+			return err
 		}
+		// Bash is sandboxed read-only in plan mode; swap in the real one.
+		registry.Replace(tools.NewBashTool(s.bashJobManager(), sessionID, runID))
+		executor.SetMode(permissions.FullAccess)
+		hub.Broadcast(loop.Event{
+			Kind:         loop.EventSessionApprovalModeUpdated,
+			ApprovalMode: string(permissions.FullAccess),
+		})
+		return nil
+	}, func() bool {
+		return executor != nil && executor.IsPlanMode()
+	}))
+	usage := &loop.UsageTracker{}
+	mcpManager := s.mcpManager()
+	// The setup text is frozen per session so the provider's cached prefix
+	// never changes between runs. It holds everything stable (rules, skills,
+	// workstation, built-in skills list, references of the capabilities that
+	// are on). What varies (mode, $chat refs, capabilities enabled
+	// mid-run, finished background work) rides in the request tail.
+	enabled := s.enabledCapabilities(sessionID)
+	frozenCaps := capabilityNames(enabled)
+	setup := s.prompts.frozenSetup(sessionID, frozenCaps, func() string {
+		text := strings.TrimSpace(prompt.Setup + "\n\n" + codemode.SetupHint)
+		if list := builtinSkillsSetup(string(permissions.FullAccess)); list != "" {
+			text = strings.TrimSpace(text + "\n\n" + list)
+		}
+		for _, c := range enabled {
+			text = strings.TrimSpace(text + "\n\n" + c.Text())
+		}
+		return text
+	})
+	// $referenced chats resolve to a named target for this run only, never
+	// transcript content, and never for synthetic wake turns whose text the
+	// user did not write.
+	var chatRefs string
+	if !dto.Synthetic {
+		chatRefs = s.chatRefSetup(sessionID, dto.Text)
 	}
-	var registry *tools.Registry
 	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
 		Provider: provider,
 		Model:    modelID,
@@ -440,13 +527,23 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		// parent already loaded carry over, and get their own loadTools.
 		// Visualize is excluded: a subagent transcript is folded into a
 		// summary, so a visual made there would have no card to render into.
-		ToolSource: func() []tools.Tool { return withoutTool(registry.Tools(), "visualize") },
+		ToolSource: func() []tools.Tool { return withoutTool(withoutTool(registry.Tools(), "render"), "preview") },
 		NestedTools: func(nested *tools.Registry) {
 			if mcpManager != nil {
 				if lt := mcp.NewLoadToolsTool(mcpManager, nested); lt != nil {
 					nested.Add(lt)
 				}
 			}
+		},
+		ToolDefs: func() []tools.Definition {
+			var defs []tools.Definition
+			for _, def := range registry.Definitions() {
+				switch def.Name {
+				case "code", "codeReset", "code_reset":
+					defs = append(defs, def)
+				}
+			}
+			return defs
 		},
 		SystemPrompt:   prompt.StableSystem,
 		Setup:          setup,
@@ -459,26 +556,19 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		// A subagent inherits the parent run's mode: it holds the same tools,
 		// so it must hold the same authority over them.
 		ApprovalMode: mode,
+		CurrentMode:  func() permissions.Mode { return executor.Mode() },
 		Guard:        guard,
-		Approver:     s.decisions.ApproverFor(sessionID, hub),
 		OnEvent:      hub.Broadcast,
 		Usage:        usage,
 	}))
 	registry = tools.NewRegistry(toolList...)
-	// MCP servers load lazily: only a small loadTools entry is in the list
-	// until the model asks for a group, which then appends that server's
-	// tools (visible from the next turn via agent.ToolDefs). Groups loaded
-	// earlier in this session are restored up front, in load order.
+	// MCP servers load on demand through loadTools (kept for subagents and
+	// compatibility); the REPL's native mcp.* namespace is preferred.
 	if mcpManager != nil {
-		if lt := mcp.NewLoadToolsTool(mcpManager, registry, mcp.LoadToolsOptions{
+		if mcpLoadTool := mcp.NewLoadToolsTool(mcpManager, registry, mcp.LoadToolsOptions{
 			OnLoad: func(group string) { s.groups.add(sessionID, group) },
-		}); lt != nil {
-			registry.Add(lt)
-			for _, group := range s.groups.list(sessionID) {
-				if _, _, err := mcp.LoadGroup(ctx, mcpManager, registry, group); err != nil {
-					slog.Warn("restore tool group failed", "session", sessionID, "group", group, "error", err)
-				}
-			}
+		}); mcpLoadTool != nil {
+			registry.Add(mcpLoadTool)
 		}
 	}
 	// Capabilities that are on restore here, appended after everything else so
@@ -491,7 +581,17 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// readSkill is rebuilt per run so it can see which capabilities are on
 	// and, for the ones the agent may switch on, load their tools mid-turn.
 	registry.Replace(tools.NewReadSkillTool(s.readSkillCapabilities(loadCtx, registry)))
-	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))
+	// Groups loaded earlier in this session are restored last, in load order —
+	// the same position an in-run loadTools call appends them, so the tool
+	// order matches the previous run's turns.
+	if mcpManager != nil {
+		for _, group := range s.groups.list(sessionID) {
+			if _, _, err := mcp.LoadGroup(ctx, mcpManager, registry, group); err != nil {
+				slog.Warn("restore tool group failed", "session", sessionID, "group", group, "error", err)
+			}
+		}
+	}
+	executor = loop.NewExecutor(registry, mode)
 	executor.Guard = guard
 	// Capture the pre-write content of every file a whole-file overwrite
 	// tool is about to touch, so the change diff recorded from the result
@@ -499,16 +599,62 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	executor.OnBeforeExecute = func(call tools.ToolCall, _ tools.Tool) {
 		s.snapshots.SnapshotWritePaths(sessionID, writePaths(call))
 	}
+	executor.OnAfterExecute = func(call tools.ToolCall, result tools.ToolResult) {
+		var args map[string]any
+		if len(result.Args) > 0 {
+			_ = json.Unmarshal(result.Args, &args)
+		}
+		if err := s.generateAndRecordFileChange(s.snapshots, sessionID, call.Name, args, result.IsError, turn); err != nil {
+			slog.Warn("record file change failed", "session", sessionID, "tool", call.Name, "error", err)
+		}
+	}
+	cmManager := s.CodemodeManager()
+	if cmManager == nil {
+		cmManager = codemode.NewManager(mcpManager, executor.Mode)
+	}
+	rt, err := cmManager.Get(sessionID, executor)
+	if err == nil {
+		registry.Add(codemode.NewCodeTool(rt), codemode.NewCodeResetTool(rt))
+	} else {
+		slog.Error("failed to initialize codemode runtime", "session", sessionID, "error", err)
+	}
 	agent := loop.New(provider, executor, s.sessions)
 	agent.Usage = usage
 	agent.UserMessageID = turn.UserMessageID
-	agent.ToolDefs = registry.Definitions
+	agent.TodoReminders = mode != permissions.PlanMode
+	agent.ToolDefs = func() []tools.Definition {
+		var defs []tools.Definition
+		for _, def := range registry.Definitions() {
+			switch def.Name {
+			case "code", "codeReset", "code_reset":
+				defs = append(defs, def)
+			}
+		}
+		return defs
+	}
 	agent.SystemPrompt = prompt.StableSystem
 	agent.Setup = setup
-	agent.TurnContext = func() string { return s.backgroundContext(sessionID) }
+	agent.ModeNotice = func(m string) string {
+		return systemprompt.ModeNotice(systemprompt.ApprovalMode(m))
+	}
+	agent.TurnContext = func() string {
+		var parts []string
+		for _, c := range s.enabledCapabilities(sessionID) {
+			if !slices.Contains(frozenCaps, c.Name) {
+				parts = append(parts, c.Text())
+			}
+		}
+		if chatRefs != "" {
+			parts = append(parts, chatRefs)
+		}
+		if work := s.backgroundContext(sessionID); work != "" {
+			parts = append(parts, "<background-work>\n"+work+"\n</background-work>")
+		}
+		return strings.Join(nonEmpty(parts), "\n\n")
+	}
 	agent.SystemSections = systemSections(prompt.Sections)
 	agent.Model = modelID
-	agent.CacheRetention = loop.CacheShort
+	agent.CacheRetention = loop.CacheLong
 	// Stable per conversation, scoped by provider+model so cached prefixes
 	// stay valid.
 	agent.ConversationID = fmt.Sprintf("%s:%s:%s", sessionID, providerID, modelID)
@@ -516,14 +662,22 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// The run's pinned account: every provider turn (this turn, explicit
 	// compaction summaries, title generation) authenticates as it.
 	agent.AccountID = pins.forProvider(providerID)
-	agent.Compaction = s.compactionHooks(sessionID, model, prompt.SystemPrompt, registry.Definitions(), pins)
+	agent.Compaction = s.compactionHooks(sessionID, model, prompt.SystemPrompt, agent.ToolDefs(), pins)
+	agent.StripImages = stripImages
 
 	if dto.Synthetic {
 		hub.Broadcast(loop.Event{Kind: loop.EventBackgroundContinue, Text: wakeMessage(dto.woken), Message: dto.woken})
 		hub.Broadcast(loop.Event{Kind: loop.EventTurnStart})
 		s.notifyResumed(sessionID, wakeMessage(dto.woken))
 	} else {
-		hub.Broadcast(loop.Event{Kind: loop.EventTurnStart, Text: dto.Text})
+		hub.Broadcast(loop.Event{Kind: loop.EventTurnStart, Text: dto.Text, Source: dto.Source})
+		if dto.Source != "" && turn.Index == 0 {
+			label := "Scheduled automation running"
+			if dto.Source == "webhook" {
+				label = "Webhook event received"
+			}
+			s.notifyResumed(sessionID, label)
+		}
 	}
 
 	// First user turn on a placeholder title: generate one in the
@@ -532,7 +686,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		go s.generateTitle(sessionID, dto.Text, providerID, modelID, hub, pins)
 	}
 
-	events, err := agent.RunWithHistory(ctx, sessionID, history, user, registry.Definitions())
+	events, err := agent.RunWithHistory(ctx, sessionID, history, user, agent.ToolDefs())
 	if err != nil {
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
 		return err
@@ -546,7 +700,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		total := usage.Snapshot().Total()
 		slog.Info("run usage", "session", sessionID, "provider", providerID, "model", modelID,
 			"turns", total.Turns, "input", total.Input, "cacheRead", total.CacheRead,
-			"cacheWrite", total.CacheWrite, "output", total.Output, "coldMisses", total.ColdMisses)
+			"cacheWrite", total.CacheWrite, "output", total.Output, "coldMisses", total.ColdMisses,
+			"missTurns", total.MissTurns, "unreported", total.UnreportedTurns,
+			"hitRate", hitRate(total))
 	}()
 	for {
 		event, err, ok := events.Next()
@@ -566,15 +722,6 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			}
 			s.broadcastContextUsage(ctx, sessionID, hub)
 			return nil
-		}
-
-		// Track file changes on tool execution results
-		if event.Kind == loop.EventToolResult && event.Result != nil {
-			var args map[string]any
-			if len(event.Result.Args) > 0 {
-				_ = json.Unmarshal(event.Result.Args, &args)
-			}
-			_ = s.generateAndRecordFileChange(s.snapshots, sessionID, event.Result.ToolName, args, event.Result.IsError, turn)
 		}
 
 		turner.translate(event)
@@ -655,7 +802,7 @@ func (t *turnTranslator) translate(event loop.Event) {
 		if event.Call == nil {
 			return
 		}
-		label := tools.ToolLabel(event.Call.Name)
+		label := tools.ToolCallLabel(event.Call.Name, event.Call.Arguments)
 		flags := tools.ToolKindFlags(event.Call.Name)
 		icon := tools.ToolIconKey(event.Call.Name)
 		t.hub.Broadcast(loop.Event{
@@ -696,10 +843,41 @@ func (t *turnTranslator) translate(event loop.Event) {
 }
 
 // systemSections labels the built prompt's blocks for request breakdowns.
+// hitRate is the share of input tokens served from cache, as a percentage.
+func hitRate(u loop.RunUsage) string {
+	all := u.Input + u.CacheRead + u.CacheWrite
+	if all == 0 {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.1f%%", float64(u.CacheRead)/float64(all)*100)
+}
+
+func nonEmpty(in []string) []string {
+	out := in[:0:0]
+	for _, s := range in {
+		if strings.TrimSpace(s) != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func systemSections(sections []systemprompt.Section) []loop.NamedText {
 	out := make([]loop.NamedText, len(sections))
 	for i, section := range sections {
 		out[i] = loop.NamedText{Name: section.Name, Content: section.Content}
 	}
 	return out
+}
+
+// suggestionModelID is the model the last turn ran on: the prompt's own
+// choice, else the session's.
+func suggestionModelID(s *Service, sessionID string, last Prompt) string {
+	if last.ModelID != "" {
+		return last.ModelID
+	}
+	if header, err := s.sessions.Header(sessionID); err == nil && header != nil {
+		return header.ModelID
+	}
+	return ""
 }

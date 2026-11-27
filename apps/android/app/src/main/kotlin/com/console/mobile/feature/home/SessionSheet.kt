@@ -27,6 +27,8 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.filled.Pin
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.Edit
+import io.github.lyxnx.compose.ui.tablericons.outline.Mail
+import io.github.lyxnx.compose.ui.tablericons.outline.MailOpened
 import io.github.lyxnx.compose.ui.tablericons.outline.Pin
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
@@ -34,7 +36,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** The long-press actions sheet: rename, pin/unpin, settle/unsettle, delete. */
+/** The read-state entry a chat's sheet offers. */
+internal enum class ReadAction { MarkRead, MarkUnread }
+
+/**
+ * Which read-state entry the sheet offers. An unread chat offers "Mark as read".
+ * A read chat offers "Mark as unread", except while it is running or once settled:
+ * the server refuses both, so the entry is hidden rather than offered and failed.
+ */
+internal fun readAction(session: SessionHeader): ReadAction? = when {
+    session.unread -> ReadAction.MarkRead
+    (session.settled_at ?: 0L) <= 0 && session.status != "working" -> ReadAction.MarkUnread
+    else -> null
+}
+
+/** The long-press actions sheet: mark read/unread, rename, pin/unpin, settle/unsettle, delete. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SessionActionsSheet(
@@ -46,6 +62,33 @@ internal fun SessionActionsSheet(
     val isSettled = (session.settled_at ?: 0L) > 0
     BaseSheet(onDismiss = onDismiss) {
         SectionCard {
+            when (readAction(session)) {
+                ReadAction.MarkRead -> {
+                    ActionRow(icon = TablerIcons.Outline.MailOpened, title = "Mark as read") {
+                        val target = session
+                        onDismiss()
+                        AppContainer.actionScope.launch {
+                            AppContainer.sessionRepository.markSessionRead(target.id)
+                        }
+                    }
+                    SectionDivider()
+                }
+                ReadAction.MarkUnread -> {
+                    ActionRow(icon = TablerIcons.Outline.Mail, title = "Mark as unread") {
+                        val target = session
+                        onDismiss()
+                        AppContainer.actionScope.launch {
+                            try {
+                                AppContainer.sessionRepository.markSessionUnread(target.id)
+                            } catch (e: Exception) {
+                                confirmAlert("Failed", e.message ?: "Unable to mark as unread.")
+                            }
+                        }
+                    }
+                    SectionDivider()
+                }
+                null -> Unit
+            }
             ActionRow(
                 icon = if (isPinned) TablerIcons.Filled.Pin else TablerIcons.Outline.Pin,
                 title = if (isPinned) "Unpin" else "Pin",
@@ -55,7 +98,7 @@ internal fun SessionActionsSheet(
                 AppContainer.actionScope.launch {
                     try {
                         withContext(Dispatchers.IO) {
-                            AppContainer.projectRepository.updateSession(
+                            AppContainer.sessionRepository.updateSession(
                                 target.id,
                                 UpdateSessionDto(pinned = !isPinned),
                             )
@@ -78,7 +121,7 @@ internal fun SessionActionsSheet(
                 AppContainer.actionScope.launch {
                     try {
                         withContext(Dispatchers.IO) {
-                            AppContainer.projectRepository.settleSession(target.id, targetSettled)
+                            AppContainer.sessionRepository.settleSession(target.id, targetSettled)
                         }
                     } catch (e: Exception) {
                         confirmAlert("Failed", e.message ?: "Unable to settle chat.")
@@ -96,7 +139,7 @@ internal fun SessionActionsSheet(
                         ConfirmButton("Delete", destructive = true, onPress = {
                             AppContainer.actionScope.launch {
                                 try {
-                                    withContext(Dispatchers.IO) { AppContainer.projectRepository.deleteSession(session.id) }
+                                    withContext(Dispatchers.IO) { AppContainer.sessionRepository.deleteSession(session.id) }
                                 } catch (e: Exception) {
                                     confirmAlert("Failed", e.message ?: "Unable to delete chat.")
                                 }
@@ -121,7 +164,7 @@ internal fun SessionActionsSheet(
                     AppContainer.actionScope.launch {
                         try {
                             withContext(Dispatchers.IO) {
-                                AppContainer.projectRepository.updateSession(session.id, UpdateSessionDto(title = renameValue.trim().ifBlank { session.title }))
+                                AppContainer.sessionRepository.updateSession(session.id, UpdateSessionDto(title = renameValue.trim().ifBlank { session.title }))
                             }
                         } catch (e: Exception) {
                             confirmAlert("Failed", e.message ?: "Unable to rename chat.")

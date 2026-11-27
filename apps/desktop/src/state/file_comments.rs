@@ -9,15 +9,14 @@
 //! composer's input.
 
 use console_ui::input::ComposerEvent;
-use console_ui::{
-    ComposerComment, FileCommentCard, FileCommentCardState, FileCommentOverlay,
-};
-use gpui::{App, AppContext as _, Context, Window};
+use console_ui::{ComposerComment, FileCommentCard, FileCommentCardState, FileCommentOverlay};
+use gpui::{App, AppContext as _, Context, IntoElement as _, Window};
 use std::rc::Rc;
 
 use super::app::ConsoleDesktopApp;
 use super::types::FileCommentRequest;
 use crate::types::workspace::{FileComment, FileCommentState};
+use console_proto::{CreateFileCommentRequest, FileCommentSide};
 
 impl ConsoleDesktopApp {
     /// Start draining gutter picks. Each request opens a draft card in the
@@ -37,7 +36,7 @@ impl ConsoleDesktopApp {
                     let _ = handle.update(cx, |_, window, cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.open_file_comment(request, window, cx)
+                                this.open_file_comment_in_pane(request, window, cx)
                             });
                         }
                     });
@@ -47,21 +46,29 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// Session key (`session_id` or `"new_chat"`) that a comment staged in
+    /// `pane_id` belongs to: the pane's own active chat, or the workspace's
+    /// focused chat when `pane_id` is a file/diff split.
+    pub(crate) fn comment_target_session_key(&self, pane_id: &str) -> String {
+        self.active_session_for_pane(pane_id)
+            .or_else(|| self.focused_chat().map(|(_, sid)| sid.to_string()))
+            .unwrap_or_else(|| "new_chat".to_string())
+    }
+
     /// Resolve which pane currently shows `path`, preferring the focused pane.
     fn pane_hosting_file(&self, path: &str) -> String {
         let leaves = self.workspace_root.leaves();
         let shows_path = |leaf: &&console_core::LeafPaneNode| {
             leaf.tabs.iter().any(
-                |tab| matches!(tab, console_core::WorkspaceTabConfig::File { path: tab_path, .. } if tab_path == path),
+                |tab| matches!(tab, console_core::WorkspaceTabConfig::File { path: tab_path, .. } | console_core::WorkspaceTabConfig::Diff { path: tab_path, .. } if tab_path == path) || matches!(tab, console_core::WorkspaceTabConfig::ChangesReview { .. }),
             )
         };
-        if let Some(active) = &self.active_pane_id {
-            if leaves
+        if let Some(active) = &self.active_pane_id
+            && leaves
                 .iter()
-                .any(|leaf| &leaf.id == active && shows_path(&leaf))
-            {
-                return active.clone();
-            }
+                .any(|leaf| &leaf.id == active && shows_path(leaf))
+        {
+            return active.clone();
         }
         leaves
             .iter()
@@ -83,16 +90,17 @@ impl ConsoleDesktopApp {
                     .iter()
                     .find(|tab| tab.id() == active_id)
                     .and_then(|tab| match tab {
-                        console_core::WorkspaceTabConfig::File { path, .. } => Some(path.clone()),
+                        console_core::WorkspaceTabConfig::File { path, .. }
+                        | console_core::WorkspaceTabConfig::Diff { path, .. } => Some(path.clone()),
                         _ => None,
                     })
             })
     }
 
     /// Project-relative path shown in prompts, as the agent expects.
-    fn comment_display_path(&self, pane_id: &str, path: &str) -> String {
+    pub(crate) fn comment_display_path(&self, pane_id: &str, path: &str) -> String {
         self.selected_project_for_pane(pane_id)
-            .map(|project| project.path.clone())
+            .map(|project| project.path)
             .and_then(|root| {
                 std::path::Path::new(path)
                     .strip_prefix(root)
@@ -110,10 +118,6 @@ impl ConsoleDesktopApp {
         }
     }
 
-    fn new_comment_sync_id(id: u64) -> String {
-        format!("c{}-{id}", chrono::Utc::now().timestamp_micros())
-    }
-
     /// The comment card's input plus the subscription that turns Enter into a
     /// commit. The subscription is owned by the comment it belongs to.
     pub(super) fn new_comment_input(
@@ -124,32 +128,33 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) -> (gpui::Entity<console_ui::ComposerInput>, gpui::Subscription) {
         let input = cx.new(|cx| {
-            console_ui::ComposerInput::new(window, cx)
-                .placeholder("Add a comment for the AI...")
+            console_ui::ComposerInput::new(window, cx).placeholder("Add a comment for the AI...")
         });
         let submit_pane = pane_id.to_string();
-        let subscription = cx.subscribe(
-            &input,
-            move |this, _input, event: &ComposerEvent, cx| match event {
-                // `submit()` clears the field right after emitting, and the event
-                // is delivered after that, so the text must come from the event.
-                ComposerEvent::Submit(text, _) => {
-                    this.commit_file_comment_text(&submit_pane, id, text.clone(), cx)
-                }
-                ComposerEvent::Edited | ComposerEvent::Focus => cx.notify(),
-                _ => {}
-            },
-        );
+        let subscription =
+            cx.subscribe(
+                &input,
+                move |this, _input, event: &ComposerEvent, cx| match event {
+                    // `submit()` clears the field right after emitting, and the event
+                    // is delivered after that, so the text must come from the event.
+                    ComposerEvent::Submit(text, _) => {
+                        this.commit_file_comment_text(&submit_pane, id, text.clone(), cx)
+                    }
+                    ComposerEvent::Edited | ComposerEvent::Focus => cx.notify(),
+                    _ => {}
+                },
+            );
         (input, subscription)
     }
 
-    fn open_file_comment(
+    pub(crate) fn open_file_comment_in_pane(
         &mut self,
         request: FileCommentRequest,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let pane_id = self.pane_hosting_file(&request.path);
+        self.ensure_workspace_pane_state(&pane_id, window, cx);
         let Some(pane) = self.workspace_pane_states.get(&pane_id) else {
             return;
         };
@@ -164,6 +169,7 @@ impl ConsoleDesktopApp {
         let staged_exists = pane.file_comments.iter().any(|comment| {
             comment.state != FileCommentState::Draft
                 && comment.path == request.path
+                && comment.old_side == request.old_side
                 && comment.start_line == request.start_line
                 && comment.end_line == request.end_line
         });
@@ -183,7 +189,9 @@ impl ConsoleDesktopApp {
         pane.next_file_comment_id = id + 1;
         pane.file_comments.push(FileComment {
             id,
-            sync_id: Self::new_comment_sync_id(id),
+            server_id: None,
+            old_side: request.old_side,
+            staged_session_id: None,
             path: request.path.clone(),
             start_line: request.start_line,
             end_line: request.end_line,
@@ -195,10 +203,10 @@ impl ConsoleDesktopApp {
         });
 
         self.sync_comment_selections(&pane_id, &request.path, cx);
-        if let Some((_, old_path)) = stale_draft {
-            if old_path != request.path {
-                self.sync_comment_selections(&pane_id, &old_path, cx);
-            }
+        if let Some((_, old_path)) = stale_draft
+            && old_path != request.path
+        {
+            self.sync_comment_selections(&pane_id, &old_path, cx);
         }
         cx.notify();
     }
@@ -226,27 +234,288 @@ impl ConsoleDesktopApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
-            return;
-        };
-        let Some(comment) = pane
-            .file_comments
-            .iter_mut()
-            .find(|comment| comment.id == comment_id)
-        else {
-            return;
-        };
         let text = text.trim().to_owned();
         if text.is_empty() {
             return;
         }
+        let target_session = self.comment_target_session_key(pane_id);
+        let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
+            return;
+        };
+        let Some(comment) = pane.file_comments.iter_mut().find(|c| c.id == comment_id) else {
+            return;
+        };
         let path = comment.path.clone();
-        comment.text = text;
+        let was_draft = comment.state == FileCommentState::Draft;
+        comment.text = text.clone();
+        if was_draft {
+            comment.staged_session_id = Some(target_session);
+        }
         comment.state = FileCommentState::Added;
         comment.focus_pending = false;
+        let server_id = comment.server_id.clone();
+        let (old_side, start_line, end_line) =
+            (comment.old_side, comment.start_line, comment.end_line);
         comment.input.update(cx, |input, cx| input.clear(cx));
         self.sync_comment_selections(pane_id, &path, cx);
-        self.schedule_draft_push_for_pane(pane_id, cx);
+        if was_draft {
+            let snippet = self.comment_snippet(&path, old_side, start_line, end_line);
+            self.save_new_comment(pane_id, comment_id, path, text, snippet, cx);
+        } else if let Some(server_id) = server_id {
+            let client = self.client.clone();
+            cx.background_spawn(async move {
+                let _ = client.file_comments.update_text(&server_id, &text).await;
+            })
+            .detach();
+        }
+        cx.notify();
+    }
+
+    /// The commented lines as written now, kept so a reader can tell the
+    /// comment was written against different text.
+    fn comment_snippet(&self, path: &str, old_side: bool, start: u32, end: u32) -> String {
+        let take = (end.saturating_sub(start) + 1).min(3) as usize;
+        let snippet = if old_side || !self.open_file_contents.contains_key(path) {
+            let Some((diff, _)) = self.open_diff_contents.get(path) else {
+                return String::new();
+            };
+            diff.lines
+                .iter()
+                .filter(|line| {
+                    let number = if old_side { line.old_no } else { line.new_no };
+                    number.is_some_and(|n| n as u32 >= start && n as u32 <= end)
+                })
+                .take(take)
+                .map(|line| line.text.clone())
+                .collect::<Vec<_>>()
+                .join("\n")
+        } else {
+            self.open_file_contents[path]
+                .lines()
+                .skip(start.saturating_sub(1) as usize)
+                .take(take)
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        snippet.chars().take(240).collect()
+    }
+
+    fn save_new_comment(
+        &mut self,
+        pane_id: &str,
+        comment_id: u64,
+        path: String,
+        text: String,
+        snippet: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(project_id) = self.pane_real_project_id(pane_id) else {
+            return;
+        };
+        let Some(pane) = self.workspace_pane_states.get(pane_id) else {
+            return;
+        };
+        let Some(comment) = pane.file_comments.iter().find(|c| c.id == comment_id) else {
+            return;
+        };
+        let request = CreateFileCommentRequest {
+            path: self.comment_display_path(pane_id, &path),
+            side: if comment.old_side {
+                FileCommentSide::Old
+            } else {
+                FileCommentSide::New
+            } as i32,
+            start_line: comment.start_line,
+            end_line: comment.end_line,
+            text: text.clone(),
+            snippet,
+        };
+        let client = self.client.clone();
+        let pane_id = pane_id.to_string();
+        cx.spawn(async move |entity, cx| {
+            let Ok(saved) = client.file_comments.create(&project_id, &request).await else {
+                return;
+            };
+            // The card may have been deleted or edited while the save was in flight.
+            let followup = cx.update(|cx| {
+                let app = entity.upgrade()?;
+                app.update(cx, |this, _| {
+                    let comment = this
+                        .workspace_pane_states
+                        .get_mut(&pane_id)?
+                        .file_comments
+                        .iter_mut()
+                        .find(|c| c.id == comment_id)?;
+                    comment.server_id = Some(saved.id.clone());
+                    (comment.text != text).then(|| (comment.text.clone(), saved.id.clone()))
+                })
+            });
+            let orphaned = cx.update(|cx| {
+                entity.upgrade().is_some_and(|app| {
+                    app.read(cx)
+                        .workspace_pane_states
+                        .get(&pane_id)
+                        .is_none_or(|pane| !pane.file_comments.iter().any(|c| c.id == comment_id))
+                })
+            });
+            if orphaned {
+                let _ = client.file_comments.delete(&saved.id).await;
+            } else if let Some((text, id)) = followup {
+                let _ = client.file_comments.update_text(&id, &text).await;
+            }
+        })
+        .detach();
+    }
+
+    /// Fetch the project's saved comments the first time a pane shows a file
+    /// or diff, and again when its project changes.
+    pub(crate) fn ensure_file_comments_loaded(&mut self, pane_id: &str, cx: &mut Context<Self>) {
+        let Some(project_id) = self.pane_real_project_id(pane_id) else {
+            return;
+        };
+        let Some(root) = self.selected_project_for_pane(pane_id).map(|p| p.path) else {
+            return;
+        };
+        let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
+            return;
+        };
+        if pane.comments_project.as_deref() == Some(project_id.as_str()) {
+            return;
+        }
+        pane.comments_project = Some(project_id.clone());
+        let client = self.client.clone();
+        let pane_id = pane_id.to_string();
+        cx.spawn(async move |entity, cx| {
+            let items = client.file_comments.list(&project_id).await.ok();
+            let mut adopted = false;
+            if let Some(items) = items {
+                adopted = cx.update(|cx| {
+                    let Some(handle) = cx.active_window() else {
+                        return false;
+                    };
+                    handle
+                        .update(cx, |_, window, cx| {
+                            let Some(app) = entity.upgrade() else {
+                                return false;
+                            };
+                            app.update(cx, |this, cx| {
+                                this.adopt_loaded_comments(
+                                    &pane_id,
+                                    &project_id,
+                                    &root,
+                                    items,
+                                    window,
+                                    cx,
+                                )
+                            });
+                            true
+                        })
+                        .unwrap_or(false)
+                });
+            }
+            if adopted {
+                return;
+            }
+            // A restored workspace asks before the server is reachable or the
+            // window is active. The pane is already marked loaded, so without
+            // this it would never ask again and the comments stay missing until
+            // the tab is closed and reopened.
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(3))
+                .await;
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        if let Some(pane) = this.workspace_pane_states.get_mut(&pane_id)
+                            && pane.comments_project.as_deref() == Some(project_id.as_str())
+                        {
+                            pane.comments_project = None;
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn adopt_loaded_comments(
+        &mut self,
+        pane_id: &str,
+        project_id: &str,
+        root: &str,
+        items: Vec<console_proto::FileComment>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // A saved comment can be loaded into several panes; it counts as staged
+        // if any copy is, so a reopened file does not offer it a second time.
+        let mut staged: std::collections::HashMap<String, String> = self
+            .workspace_pane_states
+            .values()
+            .flat_map(|pane| pane.file_comments.iter())
+            .filter_map(|c| Some((c.server_id.clone()?, c.staged_session_id.clone()?)))
+            .collect();
+        let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
+            return;
+        };
+        if pane.comments_project.as_deref() != Some(project_id) {
+            return;
+        }
+        for (server_id, session_id) in pane.pending_staged_comments.drain(..) {
+            staged.insert(server_id, session_id);
+        }
+        let mut touched: Vec<String> = Vec::new();
+        pane.file_comments.retain(|comment| {
+            let keep = comment.state != FileCommentState::Added || comment.server_id.is_none();
+            if !keep {
+                touched.push(comment.path.clone());
+            }
+            keep
+        });
+        for item in items {
+            let Some(pane) = self.workspace_pane_states.get(pane_id) else {
+                return;
+            };
+            if pane
+                .file_comments
+                .iter()
+                .any(|c| c.server_id.as_deref() == Some(item.id.as_str()))
+            {
+                continue;
+            }
+            let id = pane.next_file_comment_id;
+            let (input, subscription) = self.new_comment_input(pane_id, id, window, cx);
+            let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
+                return;
+            };
+            pane.next_file_comment_id = id + 1;
+            let path = std::path::Path::new(root)
+                .join(&item.path)
+                .to_string_lossy()
+                .into_owned();
+            touched.push(path.clone());
+            let staged_session_id = staged.get(&item.id).cloned();
+            pane.file_comments.push(FileComment {
+                id,
+                staged_session_id,
+                server_id: Some(item.id),
+                old_side: item.side == FileCommentSide::Old as i32,
+                path,
+                start_line: item.start_line,
+                end_line: item.end_line,
+                text: item.text,
+                input,
+                state: FileCommentState::Added,
+                focus_pending: false,
+                _subscription: subscription,
+            });
+        }
+        touched.sort();
+        touched.dedup();
+        for path in touched {
+            self.sync_comment_selections(pane_id, &path, cx);
+        }
         cx.notify();
     }
 
@@ -290,21 +559,31 @@ impl ConsoleDesktopApp {
         comment_id: u64,
         cx: &mut Context<Self>,
     ) {
-        let Some(path) = self
-            .workspace_pane_states
-            .get(pane_id)
-            .and_then(|pane| {
-                pane.file_comments
-                    .iter()
-                    .find(|comment| comment.id == comment_id)
-                    .map(|comment| comment.path.clone())
-            })
-        else {
+        let Some(path) = self.workspace_pane_states.get(pane_id).and_then(|pane| {
+            pane.file_comments
+                .iter()
+                .find(|comment| comment.id == comment_id)
+                .map(|comment| comment.path.clone())
+        }) else {
             return;
         };
         // A chip in the chat composer has no inline card to focus; bring the
-        // file forward first so Edit lands somewhere visible.
-        if self.pane_active_file_path(pane_id).as_deref() != Some(path.as_str()) {
+        // file forward first so Edit lands somewhere visible (unless the pane
+        // is already showing the review tab, which renders the card inline).
+        let showing_review = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.id == pane_id)
+            .and_then(|leaf| {
+                let active_id = leaf.active_tab_id.as_deref()?;
+                leaf.tabs.iter().find(|tab| tab.id() == active_id)
+            })
+            .is_some_and(|tab| {
+                matches!(tab, console_core::WorkspaceTabConfig::ChangesReview { .. })
+            });
+        if !showing_review && self.pane_active_file_path(pane_id).as_deref() != Some(path.as_str())
+        {
             self.open_file_tab_in_pane(pane_id, path, cx);
         }
         let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
@@ -329,7 +608,7 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// Remove a comment from the message (and clear its line highlight).
+    /// Delete a comment for good (server row and line highlight).
     pub(crate) fn remove_file_comment(
         &mut self,
         pane_id: &str,
@@ -346,30 +625,44 @@ impl ConsoleDesktopApp {
         else {
             return;
         };
-        let path = pane.file_comments.remove(index).path;
-        self.sync_comment_selections(pane_id, &path, cx);
-        self.schedule_draft_push_for_pane(pane_id, cx);
+        let removed = pane.file_comments.remove(index);
+        if let Some(server_id) = removed.server_id {
+            let client = self.client.clone();
+            cx.background_spawn(async move {
+                let _ = client.file_comments.delete(&server_id).await;
+            })
+            .detach();
+        }
+        self.sync_comment_selections(pane_id, &removed.path, cx);
         cx.notify();
+    }
+
+    fn comment_ranges(&self, pane_id: &str, path: &str) -> Vec<editor_ui::CommentTarget> {
+        self.workspace_pane_states
+            .get(pane_id)
+            .map(|pane| {
+                pane.file_comments
+                    .iter()
+                    .filter(|comment| comment.path == path && !comment.old_side)
+                    .map(|comment| editor_ui::CommentTarget {
+                        start_line: comment.start_line,
+                        end_line: comment.end_line,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Mirror the pane's comment ranges into the editor's persistent
     /// highlight. The editor also records the range on mouse-up; this keeps
     /// cancel/remove and reopened tabs in sync.
-    pub(super) fn sync_comment_selections(&mut self, pane_id: &str, path: &str, cx: &mut Context<Self>) {
-        let ranges = self
-            .workspace_pane_states
-            .get(pane_id)
-            .map(|pane| {
-                pane.file_comments
-                    .iter()
-                    .filter(|comment| comment.path == path)
-                    .map(|comment| editor_ui::CommentTarget {
-                        start_line: comment.start_line,
-                        end_line: comment.end_line,
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+    pub(super) fn sync_comment_selections(
+        &mut self,
+        pane_id: &str,
+        path: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let ranges = self.comment_ranges(pane_id, path);
         if let Some((_, _, state, _)) = self.viewer_editor_views.get(path) {
             state.update(cx, |editor, cx| {
                 editor.set_comment_selections(ranges);
@@ -381,23 +674,50 @@ impl ConsoleDesktopApp {
     /// The committed comments as prompt blocks. A comment-only send is valid
     /// and carries only these blocks.
     pub(crate) fn staged_comment_prompt(&self, pane_id: &str) -> String {
-        let Some(pane) = self.workspace_pane_states.get(pane_id) else {
-            return String::new();
+        let session_key = self.comment_target_session_key(pane_id);
+        let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
+        let leaves = if is_chat {
+            self.workspace_root.leaves()
+        } else {
+            Vec::new()
         };
+        let pids: Vec<&str> = if is_chat {
+            leaves.iter().map(|l| l.id.as_str()).collect()
+        } else {
+            vec![pane_id]
+        };
+
         let mut blocks = Vec::new();
-        for comment in &pane.file_comments {
-            if comment.state == FileCommentState::Draft {
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for pid in pids {
+            let Some(pane) = self.workspace_pane_states.get(pid) else {
                 continue;
+            };
+            for comment in &pane.file_comments {
+                if !comment.is_staged_for(&session_key) || comment.state == FileCommentState::Draft
+                {
+                    continue;
+                }
+                if let Some(server_id) = comment.server_id.as_deref()
+                    && !seen.insert(server_id)
+                {
+                    continue;
+                }
+                let text = comment.text.trim();
+                if text.is_empty() {
+                    continue;
+                }
+                let path = self.comment_display_path(pid, &comment.path);
+                let mut lines = Self::comment_lines(comment.start_line, comment.end_line);
+                if comment.old_side {
+                    lines.push_str(" (before the change)");
+                }
+                blocks.push(
+                    console_shared::composer::file_comments::format_file_comment(
+                        &path, &lines, text,
+                    ),
+                );
             }
-            let text = comment.text.trim();
-            if text.is_empty() {
-                continue;
-            }
-            let path = self.comment_display_path(pane_id, &comment.path);
-            let lines = Self::comment_lines(comment.start_line, comment.end_line);
-            blocks.push(console_shared::composer::file_comments::format_file_comment(
-                &path, &lines, text,
-            ));
         }
         blocks.join("\n\n")
     }
@@ -424,51 +744,165 @@ impl ConsoleDesktopApp {
         merged
     }
 
-    /// Drop every committed comment after it has been sent. Drafts stay.
+    /// Unstage every comment for this session once it has been sent. They stay saved.
     fn clear_staged_comments(&mut self, pane_id: &str, cx: &mut Context<Self>) {
-        let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
-            return;
+        let session_key = self.comment_target_session_key(pane_id);
+        let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
+        let leaves = if is_chat {
+            self.workspace_root.leaves()
+        } else {
+            Vec::new()
         };
-        let mut paths = Vec::new();
-        pane.file_comments.retain(|comment| {
-            if comment.state == FileCommentState::Draft {
-                return true;
+        let pids: Vec<&str> = if is_chat {
+            leaves.iter().map(|l| l.id.as_str()).collect()
+        } else {
+            vec![pane_id]
+        };
+
+        for pid in pids {
+            if let Some(pane) = self.workspace_pane_states.get_mut(pid) {
+                for comment in &mut pane.file_comments {
+                    if comment.is_staged_for(&session_key) {
+                        comment.staged_session_id = None;
+                    }
+                }
             }
-            if !paths.contains(&comment.path) {
-                paths.push(comment.path.clone());
-            }
-            false
-        });
-        for path in paths {
-            self.sync_comment_selections(pane_id, &path, cx);
         }
-        self.schedule_draft_push_for_pane(pane_id, cx);
         cx.notify();
     }
 
-    /// Chips above the pane composer's input. Only committed comments appear;
-    /// a draft still has its inline card and is not part of a message yet.
+    /// A closing pane takes its comment state with it, and the composer only
+    /// reads panes still in the tree. Hand its staged comments to the chat
+    /// pane, which reloads them from the server with the staged flag set.
+    pub(crate) fn carry_staged_comments(&mut self, closing_pane: &str, cx: &mut Context<Self>) {
+        let Some(closing) = self.workspace_pane_states.get(closing_pane) else {
+            return;
+        };
+        let staged: Vec<(String, String)> = closing
+            .file_comments
+            .iter()
+            .filter(|c| c.state != FileCommentState::Draft)
+            .filter_map(|c| Some((c.server_id.clone()?, c.staged_session_id.clone()?)))
+            .collect();
+        if staged.is_empty() {
+            return;
+        }
+        let Some(target) = self
+            .workspace_chat()
+            .map(|(pane, _)| pane.to_owned())
+            .filter(|pane| pane != closing_pane)
+            .or_else(|| {
+                self.workspace_root
+                    .leaves()
+                    .into_iter()
+                    .map(|leaf| leaf.id.clone())
+                    .find(|id| id != closing_pane)
+            })
+        else {
+            return;
+        };
+        let Some(pane) = self.workspace_pane_states.get_mut(&target) else {
+            return;
+        };
+        pane.pending_staged_comments.extend(staged);
+        // Force a reload so the comments land in this pane's list.
+        pane.comments_project = None;
+        self.ensure_file_comments_loaded(&target, cx);
+    }
+
+    /// Stage a saved comment for the next message, or take it back out.
+    pub(crate) fn toggle_comment_staged(
+        &mut self,
+        pane_id: &str,
+        comment_id: u64,
+        cx: &mut Context<Self>,
+    ) {
+        let target_session = self.comment_target_session_key(pane_id);
+        let Some(comment) = self
+            .workspace_pane_states
+            .get_mut(pane_id)
+            .and_then(|pane| pane.file_comments.iter_mut().find(|c| c.id == comment_id))
+        else {
+            return;
+        };
+        if comment.state == FileCommentState::Draft {
+            return;
+        }
+        let next_staged = if comment.is_staged_for(&target_session) {
+            None
+        } else {
+            Some(target_session)
+        };
+        comment.staged_session_id = next_staged.clone();
+        let server_id = comment.server_id.clone();
+        // Every pane's copy of the same saved comment follows.
+        if let Some(server_id) = server_id {
+            for pane in self.workspace_pane_states.values_mut() {
+                for copy in &mut pane.file_comments {
+                    if copy.server_id.as_deref() == Some(server_id.as_str()) {
+                        copy.staged_session_id = next_staged.clone();
+                    }
+                }
+            }
+        }
+        cx.notify();
+    }
+
+    /// Chips above the pane composer's input: the comments staged for the
+    /// next message. Dismissing a chip unstages it; the comment stays saved.
     pub(crate) fn composer_comments_for_pane(
         &self,
         pane_id: &str,
         cx: &mut Context<Self>,
-    ) -> Rc<Vec<ComposerComment>> {
-        let Some(pane) = self.workspace_pane_states.get(pane_id) else {
-            return Rc::new(Vec::new());
+    ) -> Rc<[ComposerComment]> {
+        let session_key = self.comment_target_session_key(pane_id);
+        let is_chat = self.focused_chat().is_some_and(|(pane, _)| pane == pane_id);
+        let leaves = if is_chat {
+            self.workspace_root.leaves()
+        } else {
+            Vec::new()
         };
+        let pids: Vec<&str> = if is_chat {
+            leaves.iter().map(|l| l.id.as_str()).collect()
+        } else {
+            vec![pane_id]
+        };
+
+        let has_any_staged = pids.iter().any(|pid| {
+            self.workspace_pane_states.get(*pid).is_some_and(|pane| {
+                pane.file_comments
+                    .iter()
+                    .any(|c| c.is_staged_for(&session_key) && c.state != FileCommentState::Draft)
+            })
+        });
+        if !has_any_staged {
+            return Rc::from([]);
+        }
+
         let entity = cx.entity().downgrade();
-        let comments = pane
-            .file_comments
-            .iter()
-            .filter(|comment| comment.state != FileCommentState::Draft)
-            .map(|comment| {
+        let mut all_comments = Vec::new();
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for pid in pids {
+            let Some(pane) = self.workspace_pane_states.get(pid) else {
+                continue;
+            };
+            for comment in &pane.file_comments {
+                if !comment.is_staged_for(&session_key) || comment.state == FileCommentState::Draft
+                {
+                    continue;
+                }
+                if let Some(server_id) = comment.server_id.as_deref()
+                    && !seen.insert(server_id)
+                {
+                    continue;
+                }
                 let edit_entity = entity.clone();
-                let edit_pane = pane_id.to_string();
+                let edit_pane = pid.to_string();
                 let edit_id = comment.id;
                 let remove_entity = entity.clone();
-                let remove_pane = pane_id.to_string();
+                let remove_pane = pid.to_string();
                 let remove_id = comment.id;
-                ComposerComment::new(
+                all_comments.push(ComposerComment::new(
                     comment.id,
                     comment.path.clone(),
                     comment.label(),
@@ -482,14 +916,14 @@ impl ConsoleDesktopApp {
                     move |_window, cx| {
                         if let Some(app) = remove_entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.remove_file_comment(&remove_pane, remove_id, cx);
+                                this.toggle_comment_staged(&remove_pane, remove_id, cx);
                             });
                         }
                     },
-                )
-            })
-            .collect();
-        Rc::new(comments)
+                ));
+            }
+        }
+        Rc::from(all_comments)
     }
 
     /// Cards for the active file, anchored under their ranges by `FileViewer`.
@@ -500,6 +934,16 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Vec<FileCommentOverlay> {
+        self.ensure_file_comments_loaded(pane_id, cx);
+        // A reopened tab gets a fresh editor with no highlight; reapply it
+        // whenever the editor's ranges differ from the comments'.
+        let wanted = self.comment_ranges(pane_id, path);
+        if let Some((_, _, state, _)) = self.viewer_editor_views.get(path)
+            && state.read(cx).comment_selections() != wanted.as_slice()
+        {
+            self.sync_comment_selections(pane_id, path, cx);
+        }
+        let target_session = self.comment_target_session_key(pane_id);
         let entity = cx.entity().downgrade();
         let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
             return Vec::new();
@@ -508,7 +952,7 @@ impl ConsoleDesktopApp {
         for comment in pane
             .file_comments
             .iter_mut()
-            .filter(|comment| comment.path == path)
+            .filter(|comment| comment.path == path && !comment.old_side)
         {
             if comment.focus_pending {
                 comment.focus_pending = false;
@@ -519,6 +963,7 @@ impl ConsoleDesktopApp {
             let id = comment.id;
             let start_line = comment.start_line;
             let end_line = comment.end_line;
+            let staged = comment.is_staged_for(&target_session);
             let card_state = match comment.state {
                 FileCommentState::Draft => FileCommentCardState::Draft,
                 FileCommentState::Added => FileCommentCardState::Added,
@@ -530,9 +975,7 @@ impl ConsoleDesktopApp {
                 let pane_id = pane_id.to_string();
                 move |_window: &mut Window, cx: &mut App| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.commit_file_comment(&pane_id, id, cx)
-                        });
+                        app.update(cx, |this, cx| this.commit_file_comment(&pane_id, id, cx));
                     }
                 }
             };
@@ -541,9 +984,7 @@ impl ConsoleDesktopApp {
                 let pane_id = pane_id.to_string();
                 move |_window: &mut Window, cx: &mut App| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.cancel_file_comment(&pane_id, id, cx)
-                        });
+                        app.update(cx, |this, cx| this.cancel_file_comment(&pane_id, id, cx));
                     }
                 }
             };
@@ -561,9 +1002,17 @@ impl ConsoleDesktopApp {
                 let pane_id = pane_id.to_string();
                 move |_window: &mut Window, cx: &mut App| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.remove_file_comment(&pane_id, id, cx)
-                        });
+                        app.update(cx, |this, cx| this.remove_file_comment(&pane_id, id, cx));
+                    }
+                }
+            };
+
+            let on_send = {
+                let entity = entity.clone();
+                let pane_id = pane_id.to_string();
+                move |_window: &mut Window, cx: &mut App| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.toggle_comment_staged(&pane_id, id, cx));
                     }
                 }
             };
@@ -580,9 +1029,139 @@ impl ConsoleDesktopApp {
                 on_cancel,
                 on_edit,
                 on_remove,
+                on_send,
+                staged,
             );
             overlays.push(FileCommentOverlay::new(start_line, end_line, card));
         }
         overlays
+    }
+
+    /// Mirror the pane's comments for a diff into the diff view: tinted rows
+    /// plus an inline card under the last row of each range. Returns the total
+    /// overlay row count so callers sizing the diff container can reserve room.
+    pub(crate) fn sync_diff_comments(
+        &mut self,
+        pane_id: &str,
+        path: &str,
+        view: &gpui::Entity<editor_ui::DiffView>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> u32 {
+        use std::hash::{Hash, Hasher};
+
+        self.ensure_file_comments_loaded(pane_id, cx);
+        let target_session = self.comment_target_session_key(pane_id);
+        let entity = cx.entity().downgrade();
+        let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
+            return 0;
+        };
+
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        target_session.hash(&mut hasher);
+        let mut total_rows: u32 = 0;
+        let mut selections = Vec::new();
+        let mut overlays = Vec::new();
+        for comment in pane.file_comments.iter_mut().filter(|c| c.path == path) {
+            if comment.focus_pending {
+                comment.focus_pending = false;
+                let focus = comment.input.read(cx).focus();
+                window.on_next_frame(move |window, cx| window.focus(&focus, cx));
+            }
+            let side = if comment.old_side {
+                editor_ui::DiffSide::Old
+            } else {
+                editor_ui::DiffSide::New
+            };
+            selections.push(editor_ui::DiffCommentTarget {
+                side,
+                start_line: comment.start_line,
+                end_line: comment.end_line,
+            });
+
+            let editing = comment.state != FileCommentState::Added;
+            let text_rows =
+                comment.text.lines().count().max(1) as u32 + (comment.text.len() / 50) as u32;
+            let rows = if editing { 9 } else { 5 + text_rows };
+            total_rows += rows;
+
+            let id = comment.id;
+            let state = comment.state;
+            let staged = comment.is_staged_for(&target_session);
+            let text = comment.text.clone();
+            let input = comment.input.clone();
+            let can_commit = !input.read(cx).content().trim().is_empty();
+            let card_path = comment.path.clone();
+            let (start_line, end_line) = (comment.start_line, comment.end_line);
+
+            id.hash(&mut hasher);
+            (state as u8).hash(&mut hasher);
+            staged.hash(&mut hasher);
+            text.hash(&mut hasher);
+            start_line.hash(&mut hasher);
+            end_line.hash(&mut hasher);
+            comment.old_side.hash(&mut hasher);
+            can_commit.hash(&mut hasher);
+
+            let pane_id = pane_id.to_string();
+            let entity = entity.clone();
+            overlays.push(editor_ui::DiffRowOverlay::new(
+                side,
+                end_line,
+                rows,
+                move |_window, _cx| {
+                    let act = |f: fn(
+                        &mut ConsoleDesktopApp,
+                        &str,
+                        u64,
+                        &mut Context<ConsoleDesktopApp>,
+                    )| {
+                        let entity = entity.clone();
+                        let pane_id = pane_id.clone();
+                        move |_window: &mut Window, cx: &mut App| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| f(this, &pane_id, id, cx));
+                            }
+                        }
+                    };
+                    FileCommentCard::new(
+                        id,
+                        card_path.clone(),
+                        start_line,
+                        end_line,
+                        match state {
+                            FileCommentState::Draft => FileCommentCardState::Draft,
+                            FileCommentState::Added => FileCommentCardState::Added,
+                            FileCommentState::Editing => FileCommentCardState::Editing,
+                        },
+                        text.clone(),
+                        input.clone(),
+                        act(ConsoleDesktopApp::commit_file_comment),
+                        act(ConsoleDesktopApp::cancel_file_comment),
+                        act(ConsoleDesktopApp::edit_file_comment),
+                        act(ConsoleDesktopApp::remove_file_comment),
+                        act(ConsoleDesktopApp::toggle_comment_staged),
+                        staged,
+                    )
+                    .into_any_element()
+                },
+            ));
+        }
+
+        let sig = hasher.finish();
+        let sync_key = format!("diff-comment-sync-{}", view.entity_id().as_u64());
+        let last_sig = window.use_keyed_state(
+            gpui::ElementId::Name(sync_key.into()),
+            cx,
+            |_, _| None::<u64>,
+        );
+        if *last_sig.read(cx) != Some(sig) {
+            last_sig.update(cx, |slot, _| *slot = Some(sig));
+            view.update(cx, |view, cx| {
+                view.set_comment_selections(selections, cx);
+                view.set_row_overlays(overlays, cx);
+            });
+        }
+        total_rows
     }
 }

@@ -1,25 +1,18 @@
-// Filesystem operations and preview gating rules.
+// Filesystem operations: browsing, directory walks, search, and content grep.
 package fs
 
 import (
 	"bytes"
 	"fmt"
-
 	"mime"
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
-)
-
-const (
-	maxFilePreviewBytes = 512 * 1024
-	imageMaxBytes       = 10 * 1024 * 1024
 )
 
 // manager is set once at startup; nil means fff is not wired.
@@ -36,85 +29,29 @@ func PrewarmFff(cwd string) {
 	}
 }
 
-// PreviewBlocked carries the structured code/status the /file routes emit.
-type PreviewBlocked struct {
-	Code   string // LOCKFILE_BLOCKED | BINARY_FILE | FILE_TOO_LARGE
-	Status int
-	Detail map[string]any
-	Msg    string
-}
-
-func (e *PreviewBlocked) Error() string { return e.Msg }
-
-func BuildFileETag(sizeBytes int64, mtimeMs int64) string {
-	return fmt.Sprintf("W/\"%s-%s\"",
-		strconv.FormatInt(sizeBytes, 36),
-		strconv.FormatInt(mtimeMs, 36))
-}
-
-var lockFileBasenames = map[string]bool{
-	"package-lock.json": true, "npm-shrinkwrap.json": true,
-	"pnpm-lock.yaml": true, "composer.lock": true,
-}
-
-var binaryExtensions = map[string]bool{
-	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".bmp": true,
-	".ico": true, ".icns": true, ".tiff": true,
-	".mp4": true, ".mov": true, ".avi": true, ".mkv": true, ".webm": true,
-	".mp3": true, ".wav": true, ".flac": true, ".ogg": true, ".m4a": true,
-	".zip": true, ".tar": true, ".gz": true, ".tgz": true, ".bz2": true, ".xz": true,
-	".7z": true, ".rar": true, ".jar": true, ".war": true,
-	".woff": true, ".woff2": true, ".ttf": true, ".otf": true, ".eot": true,
-	".pdf": true, ".exe": true, ".dll": true, ".so": true, ".dylib": true,
-	".lock": true, ".lockb": true,
-}
-
-var imageExtensions = map[string]bool{
-	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
-	".bmp": true, ".ico": true, ".svg": true,
-}
-
 type FsService struct{}
 
 func NewFsService() *FsService { return &FsService{} }
 
-// checkPreviewGate returns a *PreviewBlocked when the file cannot be shown.
-func checkPreviewGate(path string, size int64) *PreviewBlocked {
-	base := filepath.Base(path)
-	ext := strings.ToLower(filepath.Ext(path))
-	if lockFileBasenames[base] || ext == ".lock" || ext == ".lockb" {
-		return &PreviewBlocked{Code: "LOCKFILE_BLOCKED", Status: 403,
-			Msg: fmt.Sprintf("Machine-generated lockfile %q cannot be previewed.", base)}
+// ResolvePath expands ~ or ~/ prefix to the user's home directory.
+func ResolvePath(p string) string {
+	if p == "~" {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home
+		}
 	}
-	if binaryExtensions[ext] {
-		return &PreviewBlocked{Code: "BINARY_FILE", Status: 403,
-			Msg: fmt.Sprintf("Binary file %q cannot be previewed as text.", base)}
+	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, p[2:])
+		}
 	}
-	if size > maxFilePreviewBytes {
-		return &PreviewBlocked{Code: "FILE_TOO_LARGE", Status: 413,
-			Msg:    fmt.Sprintf("%q is %s — previews are capped at %s.", base, formatBytes(size), formatBytes(maxFilePreviewBytes)),
-			Detail: map[string]any{"sizeBytes": size, "maxBytes": maxFilePreviewBytes}}
-	}
-	return nil
-}
-
-func formatBytes(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%d B", n)
-	}
-	div, exp := int64(unit), 0
-	for m := n / unit; m >= unit; m /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
+	return p
 }
 
 // BrowseDirectory lists one directory for the file picker UI.
 func (s *FsService) BrowseDirectory(targetPath string, showHidden bool) (types.FsBrowseResult, error) {
 	home, _ := os.UserHomeDir()
-	resolved := targetPath
+	resolved := ResolvePath(targetPath)
 	if resolved == "" {
 		resolved = home
 	}
@@ -177,7 +114,7 @@ type EntriesOptions struct {
 // ListAllEntries walks a tree DFS-style: directories first, each directory
 // immediately followed by its subtree, capped at maxEntries.
 func (s *FsService) ListAllEntries(targetPath string, maxDepth int, showHidden bool, opts EntriesOptions) ([]types.FsTreeEntry, error) {
-	resolved, err := filepath.Abs(targetPath)
+	resolved, err := filepath.Abs(ResolvePath(targetPath))
 	if err != nil {
 		return nil, err
 	}
@@ -302,6 +239,7 @@ type FileContentMeta struct {
 
 // ReadFileContentWithMeta reads text content with preview gating.
 func (s *FsService) ReadFileContentWithMeta(path string, startLine, endLine int) (FileContentMeta, error) {
+	path = ResolvePath(path)
 	info, err := os.Stat(path)
 	if err != nil {
 		return FileContentMeta{}, err
@@ -350,6 +288,7 @@ type ImageMeta struct {
 
 // GetImageMeta validates and describes an image file for raw preview.
 func (s *FsService) GetImageMeta(path string) (ImageMeta, error) {
+	path = ResolvePath(path)
 	ext := strings.ToLower(filepath.Ext(path))
 	if !imageExtensions[ext] {
 		return ImageMeta{}, &PreviewBlocked{Code: "BINARY_FILE", Status: 403,
@@ -371,38 +310,112 @@ func (s *FsService) GetImageMeta(path string) (ImageMeta, error) {
 	return ImageMeta{MimeType: mimeType, SizeBytes: info.Size(), MtimeMs: info.ModTime().UnixMilli()}, nil
 }
 
-// WriteFileContent creates or overwrites a file (mkdir -p the parent).
-func (s *FsService) WriteFileContent(path, content string) (string, error) {
-	if dir := filepath.Dir(path); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return "", err
-		}
+// GetMediaMeta validates and describes a video/audio/PDF file for the
+// /api/fs/file/media endpoint. Width/Height are populated for raster images
+// when decode-config succeeds; DurationMs comes from a best-effort ffprobe
+// call and stays nil when ffprobe is unavailable.
+func (s *FsService) GetMediaMeta(path string) (MediaMeta, error) {
+	path = ResolvePath(path)
+	kind := PreviewKindForPath(path)
+	if kind != PreviewKindVideo && kind != PreviewKindAudio && kind != PreviewKindPdf {
+		return MediaMeta{}, &PreviewBlocked{Code: "BINARY_FILE", Status: 403,
+			Msg: fmt.Sprintf("%q is not a media file (video, audio, or PDF).", filepath.Base(path))}
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return "", err
+	info, err := os.Stat(path)
+	if err != nil {
+		return MediaMeta{}, err
 	}
-	return fmt.Sprintf("Wrote %s (%d bytes)", path, len(content)), nil
+	if info.IsDir() {
+		return MediaMeta{}, fmt.Errorf("%q is a directory", filepath.Base(path))
+	}
+	if info.Size() > mediaMaxBytes {
+		return MediaMeta{}, &PreviewBlocked{Code: "FILE_TOO_LARGE", Status: 413,
+			Msg:    fmt.Sprintf("%q is %s — media previews are capped at %s.", filepath.Base(path), formatBytes(info.Size()), formatBytes(mediaMaxBytes)),
+			Detail: map[string]any{"sizeBytes": info.Size(), "maxBytes": mediaMaxBytes}}
+	}
+	meta := MediaMeta{
+		Kind:      kind,
+		MimeType:  mediaMimeType(strings.ToLower(filepath.Ext(path))),
+		SizeBytes: info.Size(),
+		MtimeMs:   info.ModTime().UnixMilli(),
+	}
+	switch kind {
+	case PreviewKindVideo, PreviewKindAudio:
+		meta.DurationMs = probeDurationMs(path)
+	}
+	if w, h, ok := imageDimensions(path); ok {
+		meta.Width, meta.Height = &w, &h
+	}
+	return meta, nil
 }
 
 func (s *FsService) DeleteFile(path string) (bool, error) {
-	if err := os.Remove(path); err != nil {
+	if err := os.Remove(ResolvePath(path)); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
 func (s *FsService) CreateDirectory(path string) (bool, error) {
-	if err := os.MkdirAll(path, 0o755); err != nil {
+	if err := os.MkdirAll(ResolvePath(path), 0o755); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
 func (s *FsService) DeleteDirectory(path string) (bool, error) {
-	if err := os.RemoveAll(path); err != nil {
+	if err := os.RemoveAll(ResolvePath(path)); err != nil {
 		return false, err
 	}
 	return true, nil
+}
+
+func (s *FsService) searchDirs(resolved, query string, maxDirs int) []types.FileSearchResult {
+	cleanQuery := strings.Trim(strings.ToLower(query), "/. ")
+	var dirs []types.FileSearchResult
+	_ = filepath.WalkDir(resolved, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		if path == resolved {
+			return nil
+		}
+		name := d.Name()
+		if utils.IsPathIgnored(name) {
+			return filepath.SkipDir
+		}
+		rel, err := filepath.Rel(resolved, path)
+		if err != nil {
+			return nil
+		}
+		matches := false
+		if cleanQuery == "" {
+			// For an empty query, list direct and shallow subdirectories
+			depth := strings.Count(rel, string(filepath.Separator))
+			if depth <= 1 {
+				matches = true
+			}
+		} else {
+			relLower := strings.ToLower(rel)
+			nameLower := strings.ToLower(name)
+			matches = strings.Contains(relLower, cleanQuery) || strings.Contains(nameLower, cleanQuery)
+		}
+		if matches {
+			dirs = append(dirs, types.FileSearchResult{
+				RelativePath: rel,
+				AbsolutePath: path,
+				IsDir:        true,
+			})
+			if len(dirs) >= maxDirs {
+				return filepath.SkipAll
+			}
+		}
+		return nil
+	})
+	return dirs
 }
 
 // SearchFiles serves /api/fs/search. When the fff C library is available the
@@ -410,82 +423,99 @@ func (s *FsService) DeleteDirectory(path string) (bool, error) {
 // the index is warm — and always when fff is absent — it falls back to a
 // substring walk. Items carry relative/absolute paths plus a score.
 func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool) ([]types.FileSearchResult, error) {
-	if manager != nil && manager.Enabled() {
-		if items, ok := manager.SearchAsync(root, query, limit); ok {
-			resolved, _ := filepath.Abs(root)
-			out := make([]types.FileSearchResult, 0, len(items))
-			for _, item := range items {
-				full := filepath.Join(resolved, item.RelPath)
-				out = append(out, types.FileSearchResult{
-					RelativePath: item.RelPath, AbsolutePath: full, IsDir: item.IsDir,
-				})
-			}
-			return out, nil
-		}
-	}
-	resolved, err := filepath.Abs(root)
+	resolved, err := filepath.Abs(ResolvePath(root))
 	if err != nil {
 		return nil, err
 	}
 	if limit <= 0 {
 		limit = 20
 	}
-	q := strings.ToLower(query)
-	out := make([]types.FileSearchResult, 0)
-	addItem := func(abs string, isDir bool) bool {
-		rel, err := filepath.Rel(resolved, abs)
-		if err != nil {
-			rel = abs
+
+	var dirs []types.FileSearchResult
+	if includeDirs {
+		maxDirs := limit / 2
+		if maxDirs < 10 {
+			maxDirs = 10
 		}
-		out = append(out, types.FileSearchResult{RelativePath: rel, AbsolutePath: abs, IsDir: isDir})
-		return len(out) >= limit
+		dirs = s.searchDirs(resolved, query, maxDirs)
 	}
-	_ = filepath.WalkDir(resolved, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if path != resolved && (utils.IsPathIgnored(d.Name()) || (!includeDirs && false)) {
-				return filepath.SkipDir
-			}
-			if utils.IsHiddenName(d.Name()) && path != resolved {
-				return filepath.SkipDir
-			}
-			if includeDirs && q != "" && strings.Contains(strings.ToLower(d.Name()), q) && path != resolved {
-				if addItem(path, true) {
-					return filepath.SkipAll
+
+	var files []types.FileSearchResult
+	if manager != nil && manager.Enabled() {
+		if items, ok := manager.SearchAsync(root, query, limit); ok {
+			files = make([]types.FileSearchResult, 0, len(items))
+			for _, item := range items {
+				if item.IsDir {
+					continue
 				}
+				full := filepath.Join(resolved, item.RelPath)
+				files = append(files, types.FileSearchResult{
+					RelativePath: item.RelPath, AbsolutePath: full, IsDir: false,
+				})
 			}
-			return nil
 		}
-		if utils.IsPathIgnored(d.Name()) {
-			return nil
+	}
+
+	if files == nil {
+		q := strings.Trim(strings.ToLower(query), "/. ")
+		addItem := func(abs string) bool {
+			rel, err := filepath.Rel(resolved, abs)
+			if err != nil {
+				rel = abs
+			}
+			files = append(files, types.FileSearchResult{RelativePath: rel, AbsolutePath: abs, IsDir: false})
+			return len(files) >= limit
 		}
-		if q != "" {
-			// Separator-insensitive comparison so fallback still matches
-			// camel/underscore queries like "ptymanager" -> pty_manager.go.
-			lq, lp := strings.ToLower(q), strings.ToLower(path[len(resolved)+1:])
-			lq = strings.Map(func(r rune) rune {
-				if r == '_' || r == '-' || r == '/' || r == '.' {
-					return -1
-				}
-				return r
-			}, lq)
-			lp = strings.Map(func(r rune) rune {
-				if r == '_' || r == '-' || r == '/' || r == '.' {
-					return -1
-				}
-				return r
-			}, lp)
-			if !strings.Contains(lp, lq) {
+		_ = filepath.WalkDir(resolved, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
 				return nil
 			}
+			if d.IsDir() {
+				if path != resolved && utils.IsPathIgnored(d.Name()) {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if utils.IsPathIgnored(d.Name()) {
+				return nil
+			}
+			if q != "" {
+				// Separator-insensitive comparison so fallback still matches
+				// camel/underscore queries like "ptymanager" -> pty_manager.go.
+				lq, lp := strings.ToLower(q), strings.ToLower(path[len(resolved)+1:])
+				if !strings.Contains(lp, lq) {
+					lqClean := strings.Map(func(r rune) rune {
+						if r == '_' || r == '-' || r == '/' || r == '.' {
+							return -1
+						}
+						return r
+					}, lq)
+					lpClean := strings.Map(func(r rune) rune {
+						if r == '_' || r == '-' || r == '/' || r == '.' {
+							return -1
+						}
+						return r
+					}, lp)
+					if !strings.Contains(lpClean, lqClean) {
+						return nil
+					}
+				}
+			}
+			if addItem(path) {
+				return filepath.SkipAll
+			}
+			return nil
+		})
+	}
+
+	out := make([]types.FileSearchResult, 0, len(dirs)+len(files))
+	out = append(out, dirs...)
+	for _, f := range files {
+		if len(out) >= limit+len(dirs) {
+			break
 		}
-		if addItem(path, false) {
-			return filepath.SkipAll
-		}
-		return nil
-	})
+		out = append(out, f)
+	}
 	return out, nil
 }
 
@@ -500,6 +530,10 @@ type GrepOptions struct {
 	Cursor       uint32
 }
 
+// grepPageSize is how many matches each index page asks for when a search is
+// unlimited.
+const grepPageSize = 1000
+
 // ErrFffUnavailable is returned when the fff index isn't wired in for this
 // server (e.g. missing native library), so the caller can render an empty
 // state instead of a hard error.
@@ -513,7 +547,7 @@ func (s *FsService) Grep(root, query string, opts GrepOptions) (types.GrepResult
 	if manager == nil || !manager.Enabled() {
 		return types.GrepResult{}, ErrFffUnavailable
 	}
-	resolvedRoot, err := filepath.Abs(root)
+	resolvedRoot, err := filepath.Abs(ResolvePath(root))
 	if err != nil {
 		return types.GrepResult{}, err
 	}
@@ -523,16 +557,43 @@ func (s *FsService) Grep(root, query string, opts GrepOptions) (types.GrepResult
 	}
 	defer lease.Release()
 
-	result, err := lease.GrepWithOptions(query, fff.GrepOptions{
-		Mode:         opts.Mode,
-		Case:         opts.Case,
-		WholeWord:    opts.WholeWord,
-		ContextLines: opts.ContextLines,
-		MaxMatches:   opts.MaxMatches,
-		Cursor:       opts.Cursor,
-	})
-	if err != nil {
-		return types.GrepResult{}, err
+	fetch := func(cursor uint32, pageSize int) (fff.GrepResult, error) {
+		return lease.GrepWithOptions(query, fff.GrepOptions{
+			Mode:         opts.Mode,
+			Case:         opts.Case,
+			WholeWord:    opts.WholeWord,
+			ContextLines: opts.ContextLines,
+			MaxMatches:   pageSize,
+			Cursor:       cursor,
+		})
+	}
+
+	var result fff.GrepResult
+	if opts.MaxMatches > 0 {
+		result, err = fetch(opts.Cursor, opts.MaxMatches)
+		if err != nil {
+			return types.GrepResult{}, err
+		}
+	} else {
+		// Unlimited: keep following the cursor until the index has no more
+		// files to scan. The cursor must advance or we would loop forever.
+		cursor := opts.Cursor
+		for {
+			page, perr := fetch(cursor, grepPageSize)
+			if perr != nil {
+				return types.GrepResult{}, perr
+			}
+			result.Matches = append(result.Matches, page.Matches...)
+			result.TotalMatched += page.TotalMatched
+			result.FilteredFiles = page.FilteredFiles
+			if page.RegexError != nil {
+				result.RegexError = page.RegexError
+			}
+			if !page.HasMore || page.NextCursor == cursor {
+				break
+			}
+			cursor = page.NextCursor
+		}
 	}
 
 	matches := make([]types.GrepMatch, 0, len(result.Matches))

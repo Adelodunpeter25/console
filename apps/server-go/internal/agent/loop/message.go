@@ -3,7 +3,7 @@
 package loop
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
@@ -39,6 +39,9 @@ type TextPart struct {
 type ThinkingPart struct {
 	Type string `json:"type"` // "thinking"
 	Text string `json:"text"`
+	// Signature is the provider's reasoning-continuity token (Devin's
+	// thinking signature), echoed back verbatim on replay.
+	Signature string `json:"signature,omitempty"`
 }
 
 // CacheRetention mirrors @console/types CacheRetention: prompt-cache tier.
@@ -86,6 +89,13 @@ type UserMessage struct {
 	// Synthetic marks a server-injected turn (e.g. background work finished)
 	// that the model sees but clients never render.
 	Synthetic bool `json:"synthetic,omitempty"`
+	// Source tags server-initiated turns (e.g. "automation", "webhook") so
+	// transcripts distinguish them from user-typed prompts.
+	Source string `json:"source,omitempty"`
+	// ApprovalMode is the mode the turn ran under, kept for display only.
+	ApprovalMode string `json:"approvalMode,omitempty"`
+	// WakeLabel is the human label for a synthetic wake turn.
+	WakeLabel string `json:"wakeLabel,omitempty"`
 }
 
 // RenderedAnnotations returns the <browser_annotation> markup for a set of
@@ -129,6 +139,11 @@ func materializeUserMessage(user UserMessage) UserMessage {
 func contextFileRefs(paths []string) []string {
 	refs := make([]string, 0, len(paths))
 	for _, path := range paths {
+		// Skill, chat and image chips are already in the prompt text; the prefix
+		// only lets clients redraw them.
+		if strings.HasPrefix(path, "skill:") || strings.HasPrefix(path, "chat:") || strings.HasPrefix(path, "image:") {
+			continue
+		}
 		refs = append(refs, "   "+path+" ")
 	}
 	return refs
@@ -162,6 +177,50 @@ func MaterializeUserMessage(user UserMessage) UserMessage {
 	return materializeUserMessage(user)
 }
 
+// imageOmissionNote replaces dropped image attachments in provider-bound
+// history, matching oh-my-pi's "[image omitted: the active model does not
+// support image input]" placeholder.
+const imageOmissionNote = "[image omitted: the active model does not support image input]"
+
+// stripUserImages returns a copy of history where every user message's image
+// attachments are replaced by a single omission note in the content. Only
+// the provider-facing copy is sanitized; persisted messages keep their
+// images for display and later vision-capable turns.
+func stripUserImages(history []any) []any {
+	out := make([]any, 0, len(history))
+	for _, message := range history {
+		switch user := message.(type) {
+		case UserMessage:
+			out = append(out, stripUserMessageImages(user))
+		case *UserMessage:
+			if user == nil {
+				out = append(out, message)
+				continue
+			}
+			copy := stripUserMessageImages(*user)
+			out = append(out, &copy)
+		default:
+			out = append(out, message)
+		}
+	}
+	return out
+}
+
+func stripUserMessageImages(user UserMessage) UserMessage {
+	if len(user.Attachments) == 0 {
+		return user
+	}
+	user.Attachments = nil
+	if !strings.Contains(user.Content, imageOmissionNote) {
+		if strings.TrimSpace(user.Content) == "" {
+			user.Content = imageOmissionNote
+		} else {
+			user.Content += "\n\n" + imageOmissionNote
+		}
+	}
+	return user
+}
+
 // ImageAttachment is base64 image data sent inline with a user message.
 type ImageAttachment struct {
 	Data     string `json:"data"`
@@ -192,4 +251,44 @@ func messageJSON(v any) json.RawMessage {
 		return json.RawMessage(`{"role":"user","content":"unserializable message"}`)
 	}
 	return raw
+}
+
+// ApplyModeNotices returns history with mode instructions attached to the user
+// message where the mode starts or changes: the first message that records a
+// mode, and any later one whose mode differs from the message before it. The
+// result depends only on the history, so it is identical on every request and
+// the cached prefix never shifts. Messages without a recorded mode are left
+// alone. The stored messages are not modified.
+func ApplyModeNotices(history []any, notice func(mode string) string) []any {
+	if notice == nil {
+		return history
+	}
+	out := make([]any, len(history))
+	copy(out, history)
+	prev := ""
+	for i, message := range out {
+		var user UserMessage
+		switch u := message.(type) {
+		case UserMessage:
+			user = u
+		case *UserMessage:
+			if u == nil {
+				continue
+			}
+			user = *u
+		default:
+			continue
+		}
+		if user.ApprovalMode == "" || user.ApprovalMode == prev {
+			continue
+		}
+		prev = user.ApprovalMode
+		text := strings.TrimSpace(notice(user.ApprovalMode))
+		if text == "" {
+			continue
+		}
+		user.Content = TailText(text) + "\n\n" + user.Content
+		out[i] = user
+	}
+	return out
 }

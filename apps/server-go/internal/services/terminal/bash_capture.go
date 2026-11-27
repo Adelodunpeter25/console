@@ -9,8 +9,9 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/sysproc"
 )
 
 const bashCaptureDefaultMaxBytes = 10 * 1024 * 1024
@@ -72,7 +73,7 @@ func SpawnCapture(ctx context.Context, argv []string, opts SpawnCaptureOptions) 
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = opts.Cwd
 	cmd.Env = opts.Env
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	sysproc.OwnGroup(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

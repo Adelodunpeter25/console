@@ -32,7 +32,7 @@ impl ConsoleDesktopApp {
         path: &str,
         content: &str,
         theme: &console_ui::Theme,
-        cx: &mut App,
+        cx: &mut gpui::Context<Self>,
     ) -> Entity<editor_ui::EditorView> {
         let mut hasher = DefaultHasher::new();
         content.hash(&mut hasher);
@@ -61,6 +61,16 @@ impl ConsoleDesktopApp {
                         }
                     });
                 }
+                if let Some(line) = self.pending_file_line.remove(path) {
+                    view.update(cx, |view, cx| {
+                        view.select_line(line, cx);
+                    });
+                }
+                return view.clone();
+            }
+            // A refresh must never replace edits that have not been saved. The
+            // next render will retry once the host supplies matching content.
+            if state.read(cx).is_dirty() {
                 return view.clone();
             }
             state.update(cx, |editor, cx| {
@@ -76,6 +86,11 @@ impl ConsoleDesktopApp {
                 }
             });
             let view_clone = view.clone();
+            if let Some(line) = self.pending_file_line.remove(path) {
+                view.update(cx, |view, cx| {
+                    view.select_line(line, cx);
+                });
+            }
             self.viewer_editor_views.insert(
                 path.to_string(),
                 (len, hash, state.clone(), view_clone.clone()),
@@ -86,26 +101,103 @@ impl ConsoleDesktopApp {
         let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
         let comment_tx = self.file_comment_tx.clone();
         let comment_path = path.to_string();
+        let save_tx = self.file_save_tx.clone();
+        let save_path = path.to_string();
         let state = cx.new(|cx| {
-            let mut s = editor_ui::EditorState::readonly(content, lang);
+            // Editable mode: typing, caret motion, undo/redo, clipboard. The
+            // comment gutter still works alongside editing. No `with_path`:
+            // this client never writes workspace files on its own disk, so
+            // every save goes through the API handler below.
+            let mut s = editor_ui::EditorState::editable(content, lang);
             s.set_theme(theme_preset, cx);
             s.set_wrap_enabled(false);
             s.set_font(font_config);
-            // Review comments work in readonly mode; the gutter is opt-in so
-            // only file tabs get the "+" affordance.
             s.set_comment_gutter(true, cx);
             s.set_comment_target_handler(Some(Box::new(move |target| {
                 let _ = comment_tx.send(super::types::FileCommentRequest {
                     path: comment_path.clone(),
                     start_line: target.start_line,
                     end_line: target.end_line,
+                    old_side: false,
                 });
+            })));
+            // The handler must not block, so it only enqueues the API write and
+            // reports it as deferred; the host task owns the outcome.
+            s.set_save_handler(Some(Box::new(move |request: editor_ui::SaveRequest| {
+                let _ = save_tx.send(super::types::FileSaveRequest {
+                    path: save_path.clone(),
+                    text: request.text,
+                    revision: request.revision,
+                });
+                Ok(editor_ui::SaveStatus::Deferred)
             })));
             s
         });
-        let view = cx.new(|cx| editor_ui::EditorView::new(&state, cx));
+        let view = cx.new(|cx| editor_ui::EditorView::new(&state, cx).with_vim_mode(true));
+        if let Some(line) = self.pending_file_line.remove(path) {
+            view.update(cx, |view, cx| {
+                view.select_line(line, cx);
+            });
+        }
         self.viewer_editor_views
-            .insert(path.to_string(), (len, hash, state, view.clone()));
+            .insert(path.to_string(), (len, hash, state.clone(), view.clone()));
+        let file_path = path.to_string();
+        let subscription = cx.subscribe(
+            &state,
+            move |app, _state, event: &editor_ui::EditorEvent, cx| {
+                match event {
+                    // `mark_saved` emits this after the API write lands, so the
+                    // cache is refreshed from the editor's own text. The text is
+                    // `\n`-normalized, so apply the document's line ending to get
+                    // the bytes the file actually holds; hashing the normalized
+                    // form instead would make every CRLF file look changed on the
+                    // next render.
+                    editor_ui::EditorEvent::Saved => {
+                        let (text, line_ending) = app
+                            .viewer_editor_views
+                            .get(&file_path)
+                            .map(|(_, _, state, _)| {
+                                let state = state.read(cx);
+                                (state.text(), state.line_ending())
+                            })
+                            .unwrap_or_default();
+                        let saved = line_ending.apply(&text).into_owned();
+                        let mut hasher = DefaultHasher::new();
+                        saved.hash(&mut hasher);
+                        if let Some(entry) = app.viewer_editor_views.get_mut(&file_path) {
+                            entry.0 = saved.len();
+                            entry.1 = hasher.finish();
+                        }
+                        app.open_file_contents.insert(file_path.clone(), saved);
+                    }
+                    // Only the package's own on-disk writer emits this; API saves
+                    // report through the host task instead.
+                    editor_ui::EditorEvent::SaveFailed(message) => {
+                        log::error!("Failed to save {}: {}", file_path, message);
+                    }
+                }
+            },
+        );
+        self.viewer_editor_subscriptions
+            .entry(path.to_string())
+            .or_default()
+            .push(subscription);
+        // Every edit notifies the state, so an observer on it is enough to
+        // repaint the app — which is what keeps the tab's dirty dot current.
+        let observed = state.clone();
+        let observed_path = path.to_string();
+        let observer = cx.observe(&state, move |app, _state, cx| {
+            let dirty = observed.read(cx).is_dirty();
+            if app.dirty_file_paths_cache.get(&observed_path) != Some(&dirty) {
+                app.dirty_file_paths_cache
+                    .insert(observed_path.clone(), dirty);
+                cx.notify();
+            }
+        });
+        self.viewer_editor_subscriptions
+            .entry(path.to_string())
+            .or_default()
+            .push(observer);
         view
     }
 
@@ -216,7 +308,20 @@ impl ConsoleDesktopApp {
             s.set_font(font_config);
             s
         });
-        let view = cx.new(|_| editor_ui::DiffView::new(&state));
+        let comment_tx = self.file_comment_tx.clone();
+        let comment_path = path.to_string();
+        let view = cx.new(|_| {
+            let mut view = editor_ui::DiffView::new(&state);
+            view.on_comment_target(move |target| {
+                let _ = comment_tx.send(super::types::FileCommentRequest {
+                    path: comment_path.clone(),
+                    start_line: target.start_line,
+                    end_line: target.end_line,
+                    old_side: target.side == editor_ui::DiffSide::Old,
+                });
+            });
+            view
+        });
         self.viewer_diff_views
             .insert(path.to_string(), (len, hash, state, view.clone()));
         view
@@ -244,7 +349,7 @@ impl ConsoleDesktopApp {
     pub fn viewer_scrollbar_state(&mut self, id: &str) -> std::rc::Rc<console_ui::ScrollbarState> {
         self.viewer_scrollbar_states
             .entry(id.to_string())
-            .or_insert_with(console_ui::ScrollbarState::new)
+            .or_default()
             .clone()
     }
 
@@ -258,10 +363,11 @@ impl ConsoleDesktopApp {
         let hash = hasher.finish();
         let len = content.len();
 
-        if let Some((cached_len, cached_hash, view)) = self.viewer_cached_markdown_views.get(path) {
-            if *cached_len == len && *cached_hash == hash {
-                return view.clone();
-            }
+        if let Some((cached_len, cached_hash, view)) = self.viewer_cached_markdown_views.get(path)
+            && *cached_len == len
+            && *cached_hash == hash
+        {
+            return view.clone();
         }
 
         let mut view = console_ui::MarkdownView::new();

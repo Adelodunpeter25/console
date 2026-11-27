@@ -16,8 +16,8 @@ use crate::common::copy_button;
 use crate::markdown::render::MONO_FAMILY;
 use crate::markdown::render::TranscriptSelection;
 use crate::primitives::icons::{IconName, app_icon};
-use crate::primitives::tooltip::Tooltip;
 use crate::primitives::scrollbar::ScrollbarState;
+use crate::primitives::tooltip::Tooltip;
 use crate::theme::Theme;
 use crate::viewer::LogsViewer;
 
@@ -75,11 +75,11 @@ pub fn display_script_shortcut(shortcut: &str) -> String {
 
 /// One-line status summary for a script row. Unknown statuses render as
 /// "Unknown" rather than failing: the server owns the vocabulary.
-pub fn script_row_status_label(status: Option<String>, starting: bool) -> &'static str {
+pub fn script_row_status_label(status: Option<&str>, starting: bool) -> &'static str {
     if starting {
         return "Starting…";
     }
-    match status.as_deref() {
+    match status {
         None => "Not run yet",
         Some("running") => "Running…",
         Some("succeeded") => "Succeeded",
@@ -89,11 +89,11 @@ pub fn script_row_status_label(status: Option<String>, starting: bool) -> &'stat
     }
 }
 
-fn status_dot_color(status: Option<String>, starting: bool, theme: &Theme) -> gpui::Hsla {
+fn status_dot_color(status: Option<&str>, starting: bool, theme: &Theme) -> gpui::Hsla {
     if starting {
         return theme.success;
     }
-    match status.as_deref() {
+    match status {
         None => theme.text_ghost,
         Some("running") => theme.success,
         Some("succeeded") => theme.text_tertiary,
@@ -130,7 +130,7 @@ pub struct RunScriptRow {
 /// the selection is transcript machinery shared with chat bubbles.
 #[derive(Clone)]
 pub struct RunOutputView {
-    pub lines: Rc<Vec<String>>,
+    pub lines: Rc<[String]>,
     pub list_state: ListState,
     pub selection: TranscriptSelection,
     pub scrollbar_state: Rc<ScrollbarState>,
@@ -140,7 +140,7 @@ impl RunScriptRow {
     /// Attach a selectable output view.
     pub fn with_output_view(
         mut self,
-        lines: Rc<Vec<String>>,
+        lines: Rc<[String]>,
         list_state: ListState,
         selection: TranscriptSelection,
         scrollbar_state: Rc<ScrollbarState>,
@@ -258,9 +258,9 @@ impl RenderOnce for RunPanel {
             let expand_id = row.script_id.clone();
             let toggle_id = row.script_id.clone();
             let is_running = row.status.as_deref() == Some("running");
-            let dot = status_dot_color(row.status.clone(), row.starting, &theme);
+            let dot = status_dot_color(row.status.as_deref(), row.starting, &theme);
             let mut status_text =
-                script_row_status_label(row.status.clone(), row.starting).to_string();
+                script_row_status_label(row.status.as_deref(), row.starting).to_string();
             if row
                 .status
                 .as_ref()
@@ -408,7 +408,7 @@ impl RenderOnce for RunPanel {
                                     .text_size(px(11.0))
                                     .font_family(MONO_FAMILY)
                                     .text_color(theme.text_tertiary)
-                                    .child(row.command.clone()),
+                                    .child(row.command),
                             )
                             .child(
                                 div()
@@ -444,12 +444,12 @@ impl RenderOnce for RunPanel {
                                 .overflow_hidden()
                                 .child(
                                     LogsViewer::new(
-                                        row.script_id.clone(),
+                                        row.script_id,
                                         view.lines.clone(),
                                         view.list_state.clone(),
                                     )
                                     .selection(view.selection.clone())
-                                    .scrollbar_state(view.scrollbar_state.clone()),
+                                    .scrollbar_state(view.scrollbar_state),
                                 ),
                         )
                         .into_any_element()
@@ -458,7 +458,7 @@ impl RenderOnce for RunPanel {
                         .text_size(px(11.0))
                         .font_family(MONO_FAMILY)
                         .text_color(theme.text_secondary)
-                        .child(row.output.clone())
+                        .child(row.output)
                         .into_any_element()
                 };
                 card = card.child(
@@ -475,7 +475,7 @@ impl RenderOnce for RunPanel {
                         .overflow_y_scroll()
                         // Own the wheel while hovering output: without this
                         // the event bubbles and the script list scrolls too.
-                        .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                        .on_scroll(|_, _, cx| cx.stop_propagation())
                         .child(body),
                 );
             }

@@ -41,10 +41,10 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
+	"github.com/MoeForge/moego/regexp"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -271,11 +271,12 @@ debugged without rebuilding anything.`,
 				defer transcript.Close()
 			}
 
-			driver, err := cua.Open(cua.Options{})
+			manager := cua.NewManager()
+			defer manager.Close()
+			driver, err := manager.Driver()
 			if err != nil {
 				return err
 			}
-			defer driver.Shutdown()
 
 			scope := scriptScope{}
 			failed := 0

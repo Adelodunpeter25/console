@@ -1,5 +1,6 @@
 package com.console.mobile.feature.chat
 
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,15 +32,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.SharedNative
 import com.console.mobile.core.util.argumentPath
-import com.console.mobile.core.util.getToolIcon
 import com.console.mobile.core.util.resultText
-import com.console.mobile.core.util.toolCallSummary
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
 import com.console.mobile.feature.chat.markdown.CustomMarkdown
 import com.console.mobile.ui.code.CodeViewer
 import com.console.mobile.ui.code.languageForPath
 import com.console.mobile.ui.components.FileIcon
+import com.console.mobile.ui.components.ToolIcon
 import com.console.mobile.ui.theme.ConsoleDimens
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import com.console.mobile.ui.theme.NewTheme
@@ -58,9 +57,14 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
  * gutter, subagent as markdown, everything else as monospace).
  */
 @Composable
-fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
+fun ToolCallRow(
+    call: ToolCall,
+    result: ToolResult?,
+    cwd: String?,
+    onExpandToolCall: (messageId: String, callId: String) -> Unit = { _, _ -> },
+) {
     var open by remember(call.id) { mutableStateOf(false) }
-    val summary = toolCallSummary(call, cwd)
+    val summary = call.summary?.takeIf { it.isNotEmpty() }
     val detail = result?.let { resultText(it).take(2000) }
     // Recomputed per call, not per frame: diffing a large write on every
     // recomposition would stall the transcript while a run streams. The diff
@@ -72,13 +76,22 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
     val removed = diffs.sumOf { it.diff.removed }
     val filePath = remember(call.id, call.arguments) { argumentPath(call) ?: diffs.firstOrNull()?.path }
     Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.FieldRadius)).background(NewTheme.Card)) {
-        Row(modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable {
+                val next = !open
+                open = next
+                if (next && result != null && result.omittedSize > 0 && result.resultMessageId != null) {
+                    onExpandToolCall(result.resultMessageId, call.id)
+                }
+            }.padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             if (call.isFileTarget && filePath != null) {
                 // File rows carry the real file-type icon, like desktop.
                 FileIcon(filename = filePath, sizeDp = 16)
                 Spacer(Modifier.width(8.dp))
             } else {
-                Icon(getToolIcon(call), contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(16.dp))
+                ToolIcon(call, sizeDp = 16)
                 Spacer(Modifier.width(8.dp))
             }
             Text(call.displayLabel, color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)

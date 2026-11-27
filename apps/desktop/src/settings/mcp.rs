@@ -98,6 +98,14 @@ impl McpTabState {
             return;
         };
         let client = app_entity.read(cx).client.clone();
+        self.fetch_mcp_servers_with_client(client, cx);
+    }
+
+    pub fn fetch_mcp_servers_with_client(
+        &mut self,
+        client: console_core::ConsoleClient,
+        cx: &mut Context<SettingsWindow>,
+    ) {
         cx.spawn(async move |entity, cx| {
             if let Ok(servers) = client.mcp.list_servers().await {
                 let _ = cx.update(|cx| {
@@ -128,7 +136,7 @@ struct McpModalCallbacks {
 impl McpTabState {
     fn modal_callbacks(&self, cx: &mut Context<SettingsWindow>) -> McpModalCallbacks {
         let on_open_add: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let name_input = self.name_input.clone();
             let url_input = self.url_input.clone();
             let command_input = self.command_input.clone();
@@ -160,7 +168,7 @@ impl McpTabState {
         };
 
         let on_open_edit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let name_input = self.name_input.clone();
             let url_input = self.url_input.clone();
             let command_input = self.command_input.clone();
@@ -205,7 +213,7 @@ impl McpTabState {
         };
 
         let on_close_modal: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             Rc::new(move |_w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     this.mcp.is_modal_open = false;
@@ -216,7 +224,7 @@ impl McpTabState {
         };
 
         let on_select_transport: Rc<dyn Fn(McpTransportType, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             Rc::new(move |transport, _w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     this.mcp.selected_transport = transport;
@@ -226,7 +234,7 @@ impl McpTabState {
         };
 
         let on_select_auth: Rc<dyn Fn(McpAuthType, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             Rc::new(move |auth, _w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     this.mcp.selected_auth = auth;
@@ -236,7 +244,7 @@ impl McpTabState {
         };
 
         let on_save: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let app_handle = self.app.clone();
             let name_input = self.name_input.clone();
             let url_input = self.url_input.clone();
@@ -300,7 +308,7 @@ impl McpTabState {
                 };
 
                 let server = McpServerConfig {
-                    id: id.clone(),
+                    id,
                     name,
                     transport: transport.clone(),
                     url: if transport == McpTransportType::Http {
@@ -388,7 +396,7 @@ impl McpTabState {
         let modal = self.modal_callbacks(cx);
 
         let on_delete: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let app_handle = self.app.clone();
             Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
                 let Some(app) = app_handle.upgrade() else {
@@ -397,7 +405,7 @@ impl McpTabState {
                 let client = app.read(cx).client.clone();
                 let entity_clone = entity.clone();
                 cx.spawn(async move |cx| {
-                    if let Ok(_) = client.mcp.delete_server(&id).await {
+                    if client.mcp.delete_server(&id).await.is_ok() {
                         let updated_list = client.mcp.list_servers().await.unwrap_or_default();
                         let _ = cx.update(|cx| {
                             entity_clone.update(cx, |this, cx| {
@@ -412,7 +420,7 @@ impl McpTabState {
         };
 
         let on_connect: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let app_handle = self.app.clone();
             Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
                 let Some(app) = app_handle.upgrade() else {
@@ -583,7 +591,7 @@ impl McpTabState {
         };
 
         let on_disconnect: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let app_handle = self.app.clone();
             Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
                 let Some(app) = app_handle.upgrade() else {
@@ -592,7 +600,7 @@ impl McpTabState {
                 let client = app.read(cx).client.clone();
                 let entity_clone = entity.clone();
                 cx.spawn(async move |cx| {
-                    if let Ok(_) = client.mcp.disconnect_server(&id).await {
+                    if client.mcp.disconnect_server(&id).await.is_ok() {
                         let _ = cx.update(|cx| {
                             entity_clone.update(cx, |this, cx| {
                                 if let Some(s) = this.mcp.servers.iter_mut().find(|s| s.id == id) {
@@ -608,7 +616,7 @@ impl McpTabState {
         };
 
         let on_toggle_expand: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     if this.mcp.expanded_server_id.as_deref() == Some(&id) {
@@ -699,28 +707,24 @@ fn serve_mcp_callback_once(
         let mut err_msg = None;
         for line in request.lines() {
             if line.starts_with("GET ") {
-                if let Some(path_and_query) = line.split_whitespace().nth(1) {
-                    if let Some(query) = path_and_query.split('?').nth(1) {
-                        for part in query.split('&') {
-                            let mut kv = part.splitn(2, '=');
-                            match (kv.next(), kv.next()) {
-                                (Some("code"), Some(v)) => {
-                                    code = Some(
-                                        urlencoding::decode(v).unwrap_or_default().into_owned(),
-                                    )
-                                }
-                                (Some("state"), Some(v)) => {
-                                    state = Some(
-                                        urlencoding::decode(v).unwrap_or_default().into_owned(),
-                                    )
-                                }
-                                (Some("error"), Some(v)) => {
-                                    err_msg = Some(
-                                        urlencoding::decode(v).unwrap_or_default().into_owned(),
-                                    )
-                                }
-                                _ => {}
+                if let Some(path_and_query) = line.split_whitespace().nth(1)
+                    && let Some(query) = path_and_query.split('?').nth(1)
+                {
+                    for part in query.split('&') {
+                        let mut kv = part.splitn(2, '=');
+                        match (kv.next(), kv.next()) {
+                            (Some("code"), Some(v)) => {
+                                code = Some(urlencoding::decode(v).unwrap_or_default().into_owned())
                             }
+                            (Some("state"), Some(v)) => {
+                                state =
+                                    Some(urlencoding::decode(v).unwrap_or_default().into_owned())
+                            }
+                            (Some("error"), Some(v)) => {
+                                err_msg =
+                                    Some(urlencoding::decode(v).unwrap_or_default().into_owned())
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -740,10 +744,10 @@ fn serve_mcp_callback_once(
         );
         let _ = stream.write_all(response.as_bytes());
         let _ = stream.flush();
-        if let Some(s) = state {
-            if code.is_some() || err_msg.is_some() {
-                return Some((s, code, err_msg));
-            }
+        if let Some(s) = state
+            && (code.is_some() || err_msg.is_some())
+        {
+            return Some((s, code, err_msg));
         }
     }
     None

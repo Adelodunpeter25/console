@@ -9,12 +9,18 @@ use gpui::{
 };
 
 use crate::primitives::file_icon;
-use crate::primitives::tooltip::Tooltip;
 use crate::primitives::file_icons::file_icon_for_name;
+use crate::primitives::tooltip::Tooltip;
+use crate::primitives::{ContextMenuHandle, MenuAlign, MenuItem, dropdown_menu};
 use crate::primitives::{IconName, app_icon, provider_app_icon};
 use crate::theme::{TABBAR_HEIGHT, Theme};
 
 use super::{WorkspaceDrag, WorkspaceDragPreview};
+
+/// Supplies a pane's `+` dropdown: the handle that holds its open state and
+/// the rows to show, both keyed by pane id so panes never share a menu.
+pub type NewTabMenuProvider =
+    Rc<dyn Fn(&str) -> Option<(ContextMenuHandle, Rc<dyn Fn(&mut App) -> Vec<MenuItem>>)>>;
 
 /// Retained follow state for a pane's tab strip scroll handle.
 /// Automatically scrolls the strip the minimum distance to bring the active
@@ -109,8 +115,12 @@ pub struct WorkspaceTabBar {
     on_close: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     can_close_pane: bool,
     on_close_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_new_tab: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    new_tab_menu: Option<NewTabMenuProvider>,
     follow: Option<TabStripFollow>,
+    /// Files whose buffer has unsaved edits, so their tab shows a dot in place
+    /// of the close button. The desktop app owns the editors, so it computes
+    /// this per render rather than the strip reaching into editor state.
+    dirty_paths: std::collections::HashSet<String>,
 }
 
 impl WorkspaceTabBar {
@@ -129,21 +139,27 @@ impl WorkspaceTabBar {
             on_close: Rc::new(on_close),
             can_close_pane,
             on_close_pane: Rc::new(on_close_pane),
-            on_new_tab: None,
+            new_tab_menu: None,
             follow: None,
+            dirty_paths: std::collections::HashSet::new(),
         }
     }
 
-    pub fn with_new_tab(
-        mut self,
-        on_new_tab: impl Fn(String, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        self.on_new_tab = Some(Rc::new(on_new_tab));
+    /// The `+` button's dropdown. Called with this pane's id; `None` hides the button.
+    pub fn with_new_tab_menu(mut self, provider: Option<NewTabMenuProvider>) -> Self {
+        self.new_tab_menu = provider;
         self
     }
 
     pub fn with_scroll_follow(mut self, follow: Option<TabStripFollow>) -> Self {
         self.follow = follow;
+        self
+    }
+
+    /// Supply the file paths whose buffer is dirty. Those tabs swap their
+    /// close button for a dot, and the dot still closes the tab.
+    pub fn with_dirty_paths(mut self, dirty_paths: std::collections::HashSet<String>) -> Self {
+        self.dirty_paths = dirty_paths;
         self
     }
 }
@@ -158,8 +174,9 @@ impl RenderOnce for WorkspaceTabBar {
         let on_cls = self.on_close;
         let can_close_pane = self.can_close_pane;
         let on_close_pane = self.on_close_pane;
-        let on_new_tab = self.on_new_tab;
+        let new_tab_menu = self.new_tab_menu.and_then(|provider| (provider)(&pane_id));
         let follow = self.follow;
+        let dirty_paths = self.dirty_paths;
 
         div()
             .id("workspace-tab-bar")
@@ -187,8 +204,14 @@ impl RenderOnce for WorkspaceTabBar {
                     })
                     .children(self.pane.tabs.into_iter().map(|tab| {
                         let tab_id = tab.id();
-                        let is_active = active_id.as_deref() == Some(&tab_id.as_str());
+                        let is_active = active_id.as_deref() == Some(tab_id.as_str());
                         let title = tab.title().to_string();
+                        let is_dirty = match &tab {
+                            console_core::WorkspaceTabConfig::File { path, .. } => {
+                                dirty_paths.contains(path)
+                            }
+                            _ => false,
+                        };
                         let drag = WorkspaceDrag::new(tab.clone(), Some(pane_id.clone()));
 
                         let id_for_select = tab_id.clone();
@@ -306,6 +329,36 @@ impl RenderOnce for WorkspaceTabBar {
                                         .into_any_element()
                                     }
                                 }
+                                console_core::WorkspaceTabConfig::Device { .. } => app_icon(
+                                    IconName::Smartphone,
+                                    11.0,
+                                    if is_active {
+                                        theme.text
+                                    } else {
+                                        theme.text_tertiary
+                                    },
+                                )
+                                .into_any_element(),
+                                console_core::WorkspaceTabConfig::Computer { .. } => app_icon(
+                                    IconName::Computer,
+                                    11.0,
+                                    if is_active {
+                                        theme.text
+                                    } else {
+                                        theme.text_tertiary
+                                    },
+                                )
+                                .into_any_element(),
+                                console_core::WorkspaceTabConfig::FileTree { .. } => app_icon(
+                                    IconName::Folder,
+                                    11.0,
+                                    if is_active {
+                                        theme.text
+                                    } else {
+                                        theme.text_tertiary
+                                    },
+                                )
+                                .into_any_element(),
                                 console_core::WorkspaceTabConfig::ChangesReview { .. } => app_icon(
                                     IconName::FileDiff,
                                     11.0,
@@ -338,16 +391,38 @@ impl RenderOnce for WorkspaceTabBar {
                                     } else {
                                         FontWeight::NORMAL
                                     })
-                                    .child(title),
+                                    .child(
+                                        title
+                                            .lines()
+                                            .find(|l| !l.trim().is_empty())
+                                            .unwrap_or(&title)
+                                            .trim()
+                                            .to_string(),
+                                    ),
                             )
                             // Close Tab Button: hidden until the tab is hovered.
-                            .child(
+                            // Dirty buffer: a plain, always-visible dot that is
+                            // not clickable — closing (and so prompting) stays
+                            // on the tab itself and cmd/ctrl-w. Clean tabs keep
+                            // the hover-only close X.
+                            .child(if is_dirty {
+                                div()
+                                    .p(px(3.0))
+                                    .child(
+                                        div()
+                                            .size(px(8.0))
+                                            .rounded_full()
+                                            .bg(theme.text_secondary)
+                                            .when(!is_active, |dot| dot.opacity(0.7)),
+                                    )
+                                    .into_any_element()
+                            } else {
                                 div()
                                     .p(px(3.0))
                                     .rounded(px(4.0))
                                     .cursor_default()
                                     .invisible()
-                                    .group_hover(group_name.clone(), |el| el.visible())
+                                    .group_hover(group_name, |el| el.visible())
                                     .hover(|s| s.bg(theme.overlay))
                                     .on_mouse_down(MouseButton::Left, {
                                         let id = id_for_close;
@@ -358,12 +433,16 @@ impl RenderOnce for WorkspaceTabBar {
                                             (on_c)(pane_id.clone(), id.clone(), window, cx);
                                         }
                                     })
-                                    .child(app_icon(IconName::X, 12.0, theme.text_ghost)),
-                            )
+                                    // `text_secondary` rather than `text_ghost`:
+                                    // the ghost tone is nearly invisible on the
+                                    // tab strip's canvas in both themes.
+                                    .child(app_icon(IconName::X, 12.0, theme.text_secondary))
+                                    .into_any_element()
+                            })
                     }))
-                    .when_some(on_new_tab, |scroll, on_new| {
-                        let pane_id = pane_id.clone();
-                        scroll.child(
+                    .when_some(new_tab_menu, |scroll, (handle, items)| {
+                        let menu_id = format!("workspace-new-tab-menu-{}", pane_id);
+                        scroll.child(dropdown_menu(
                             div()
                                 .id(ElementId::Name(
                                     format!("workspace-new-tab-{}", pane_id).into(),
@@ -376,13 +455,13 @@ impl RenderOnce for WorkspaceTabBar {
                                 .items_center()
                                 .justify_center()
                                 .hover(|s| s.bg(theme.overlay))
-                                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                    cx.stop_propagation();
-                                    (on_new)(pane_id.clone(), window, cx);
-                                })
                                 .tooltip(Tooltip::text("New tab"))
                                 .child(app_icon(IconName::Plus, 12.0, theme.text_ghost)),
-                        )
+                            menu_id,
+                            &handle,
+                            MenuAlign::BelowLeft,
+                            move |cx| (items)(cx),
+                        ))
                     }),
             )
             .when(can_close_pane, |bar| {

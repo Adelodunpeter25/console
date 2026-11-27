@@ -11,7 +11,7 @@ impl ConsoleDesktopApp {
     pub fn init_port_stream(&mut self, cx: &mut Context<Self>) {
         self.port_stream = None;
         let client = self.client.clone();
-        let transport = self.transport.clone();
+        let transport = self.transport;
         let entity = cx.entity().downgrade();
         self.port_stream = Some(cx.spawn(async move |_, cx| {
             use futures_util::StreamExt;
@@ -36,13 +36,13 @@ impl ConsoleDesktopApp {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
                                         let key = "global".to_string();
-                                        let changed = this
-                                            .forwarded_ports_by_project
-                                            .get(&key)
-                                            .is_none_or(|current| current.as_ref() != &mapped);
+                                        let changed =
+                                            this.forwarded_ports_by_project.get(&key).is_none_or(
+                                                |current| current.as_ref() != mapped.as_slice(),
+                                            );
                                         if changed {
                                             this.forwarded_ports_by_project
-                                                .insert(key, Rc::new(mapped));
+                                                .insert(key, Rc::from(mapped));
                                             cx.notify();
                                         }
                                     });
@@ -58,18 +58,18 @@ impl ConsoleDesktopApp {
     }
 
     /// Retrieve the forwarded ports for the currently active workspace/project.
-    pub fn forwarded_ports_for_active_workspace(&self) -> Rc<Vec<console_core::ForwardedPort>> {
+    pub fn forwarded_ports_for_active_workspace(&self) -> Rc<[console_core::ForwardedPort]> {
         // Port forwards belong to the backend, not to an individual project.
         self.forwarded_ports_by_project
             .get("global")
             .cloned()
-            .unwrap_or_else(|| Rc::new(Vec::new()))
+            .unwrap_or_else(|| Rc::from([]))
     }
 
     pub fn active_project_id_or_global(&self) -> String {
         self.active_pane_id
             .as_deref()
-            .and_then(|pane_id| self.pane_project_id(pane_id))
+            .and_then(|pane_id| self.pane_workspace_key(pane_id))
             .or_else(|| self.selected_project_id.clone())
             .map(|key| console_core::project_id_of_workspace_key(&key).to_owned())
             .unwrap_or_else(|| "global".to_string())
@@ -80,7 +80,7 @@ impl ConsoleDesktopApp {
         let project_id = self.active_project_id_or_global();
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        let pid_clone = project_id.clone();
+        let pid_clone = project_id;
         cx.spawn(async move |_, cx| {
             let pid_opt = if pid_clone == "global" {
                 None
@@ -104,10 +104,10 @@ impl ConsoleDesktopApp {
                             let changed = this
                                 .forwarded_ports_by_project
                                 .get(&pid_clone)
-                                .is_none_or(|current| current.as_ref() != &mapped);
+                                .is_none_or(|current| current.as_ref() != mapped.as_slice());
                             if changed {
                                 this.forwarded_ports_by_project
-                                    .insert(pid_clone, Rc::new(mapped));
+                                    .insert(pid_clone, Rc::from(mapped));
                                 cx.notify();
                             }
                         });
@@ -123,7 +123,7 @@ impl ConsoleDesktopApp {
         let project_id = self.active_project_id_or_global();
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        let pid_clone = project_id.clone();
+        let pid_clone = project_id;
         cx.spawn(async move |_, cx| {
             let pid_opt = if pid_clone == "global" {
                 None
@@ -144,7 +144,7 @@ impl ConsoleDesktopApp {
                                     .filter(|p| p.port != port as i32)
                                     .cloned()
                                     .collect::<Vec<_>>();
-                                *list = Rc::new(items);
+                                *list = Rc::from(items);
                             }
                             cx.notify();
                             // Reconcile with the server immediately after the optimistic

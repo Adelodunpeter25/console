@@ -10,14 +10,11 @@ use gpui::Context;
 use super::ConsoleDesktopApp;
 
 impl ConsoleDesktopApp {
-    pub(crate) fn annotations_for_pane(
-        &self,
-        pane_id: &str,
-    ) -> Rc<Vec<BrowserElementAnnotation>> {
+    pub(crate) fn annotations_for_pane(&self, pane_id: &str) -> Rc<[BrowserElementAnnotation]> {
         self.browser_annotations
             .get(pane_id)
             .cloned()
-            .unwrap_or_else(|| Rc::new(Vec::new()))
+            .unwrap_or_else(|| Rc::from([]))
     }
 
     pub(crate) fn set_annotations_for_pane(
@@ -29,7 +26,7 @@ impl ConsoleDesktopApp {
             self.browser_annotations.remove(pane_id);
         } else {
             self.browser_annotations
-                .insert(pane_id.to_string(), Rc::new(items));
+                .insert(pane_id.to_string(), Rc::from(items));
         }
     }
 
@@ -42,28 +39,37 @@ impl ConsoleDesktopApp {
             return;
         }
         match self.browser_annotations.get_mut(pane_id) {
-            Some(existing) => Rc::make_mut(existing).append(&mut items),
+            Some(existing) => super::types::rc_slice_edit(existing, |v| v.append(&mut items)),
             None => {
                 self.browser_annotations
-                    .insert(pane_id.to_string(), Rc::new(items));
+                    .insert(pane_id.to_string(), Rc::from(items));
             }
         }
     }
 
-    pub(crate) fn remove_annotation(&mut self, pane_id: &str, index: usize, cx: &mut Context<Self>) {
-        if let Some(staged) = self.browser_annotations.get_mut(pane_id) {
-            if index < staged.len() {
-                let removed = Rc::make_mut(staged).remove(index);
-                let _ = removed;
-                if staged.is_empty() {
-                    self.browser_annotations.remove(pane_id);
-                }
-                self.schedule_drafts_save(cx);
-                cx.notify();
+    pub(crate) fn remove_annotation(
+        &mut self,
+        pane_id: &str,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(staged) = self.browser_annotations.get_mut(pane_id)
+            && index < staged.len()
+        {
+            let removed = {
+                let mut vec = staged.to_vec();
+                let r = vec.remove(index);
+                *staged = Rc::from(vec);
+                r
+            };
+            let _ = removed;
+            if staged.is_empty() {
+                self.browser_annotations.remove(pane_id);
             }
+            self.save_pane_draft(pane_id, cx);
+            cx.notify();
         }
     }
-
 
     /// Which pane currently shows `browser_id`, preferring the focused pane.
     /// Used to route an annotation from a workspace browser tab to the
@@ -72,20 +78,16 @@ impl ConsoleDesktopApp {
         let leaves = self.workspace_root.leaves();
         let hosts = |leaf: &&console_core::LeafPaneNode| {
             leaf.tabs.iter().any(|tab| match tab {
-                console_core::WorkspaceTabConfig::Browser {
-                    browser_id: id,
-                    ..
-                } => id == browser_id,
+                console_core::WorkspaceTabConfig::Browser { browser_id: id, .. } => {
+                    id == browser_id
+                }
                 _ => false,
             })
         };
-        if let Some(active) = &self.active_pane_id {
-            if leaves
-                .iter()
-                .any(|leaf| &leaf.id == active && hosts(leaf))
-            {
-                return Some(active.clone());
-            }
+        if let Some(active) = &self.active_pane_id
+            && leaves.iter().any(|leaf| &leaf.id == active && hosts(leaf))
+        {
+            return Some(active.clone());
         }
         leaves
             .iter()
@@ -94,18 +96,69 @@ impl ConsoleDesktopApp {
     }
 
     /// Stage an annotation posted by a browser view's popover (Attach).
+    /// Routes directly to the active chat composer so the chip is immediately
+    /// staged. Returns true when the chip landed on a chat composer — the
+    /// browser then leaves keyboard focus to the app instead of refocusing
+    /// the page.
     pub(crate) fn stage_browser_annotation(
         &mut self,
         browser_id: &str,
         annotation: BrowserElementAnnotation,
         cx: &mut Context<Self>,
-    ) {
-        let Some(pane_id) = self.pane_hosting_browser(browser_id) else {
-            return;
+    ) -> bool {
+        // The chat this annotation belongs to: the selected chat, or — while a
+        // browser tab is in front — the workspace's only chat, so annotation
+        // chips land in that composer just like file comments do.
+        let target = self
+            .focused_chat()
+            .map(|(p, s)| (p.to_string(), s.to_string()));
+        let Some((pane_id, session_id)) = target else {
+            // No chat to route to: the legacy fallback — the browser keeps its
+            // own keyboard focus, nothing to focus.
+            let fallback = self
+                .pane_hosting_browser(browser_id)
+                .unwrap_or_else(|| "pane-main".to_string());
+            self.append_annotations_for_pane(&fallback, vec![annotation]);
+            self.save_pane_draft(&fallback, cx);
+            cx.notify();
+            return false;
         };
         self.append_annotations_for_pane(&pane_id, vec![annotation]);
-        self.schedule_drafts_save(cx);
+        self.save_pane_draft(&pane_id, cx);
         cx.notify();
+        // Focus stays in the browser webview after Attach, so the prompt the
+        // user types next would vanish into the page. Move it to the chat
+        // composer the chip was staged on — but only when that chat is the
+        // pane's visible tab; otherwise the composer is not on screen.
+        let chat_tab_id = format!("chat:{session_id}");
+        let chat_visible = self
+            .workspace_root
+            .find_leaf(&pane_id)
+            .and_then(|leaf| leaf.active_tab_id.as_deref())
+            .is_some_and(|active| active == chat_tab_id);
+        if !chat_visible {
+            return false;
+        }
+        let target_pane_id = pane_id.clone();
+        let entity = cx.entity().downgrade();
+        cx.defer(move |cx| {
+            let Some(window) = cx.active_window() else {
+                return;
+            };
+            let _ = window.update(cx, |_, window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        // Both the GPUI focus chain and the input's own
+                        // cursor/blink state need to know.
+                        let composer = this.composer_for_pane(&target_pane_id);
+                        let focus = composer.read(cx).focus();
+                        window.focus(&focus, cx);
+                        composer.update(cx, |input, _cx| input.focus());
+                    });
+                }
+            });
+        });
+        true
     }
 
     pub(crate) fn restore_recalled_annotations(
@@ -119,8 +172,8 @@ impl ConsoleDesktopApp {
             let parked = self
                 .history_draft_annotations
                 .remove(pane_id)
-                .unwrap_or_else(|| Rc::new(Vec::new()));
-            self.set_annotations_for_pane(pane_id, (*parked).clone());
+                .unwrap_or_else(|| Rc::from([]));
+            self.set_annotations_for_pane(pane_id, parked.to_vec());
             cx.notify();
             return;
         }
@@ -147,9 +200,9 @@ impl ConsoleDesktopApp {
         &self,
         pane_id: &str,
         cx: &mut Context<Self>,
-    ) -> Rc<Vec<console_ui::ComposerAnnotation>> {
+    ) -> Rc<[console_ui::ComposerAnnotation]> {
         let entity = cx.entity().downgrade();
-        let chips = self
+        let chips: Vec<_> = self
             .annotations_for_pane(pane_id)
             .iter()
             .enumerate()
@@ -160,12 +213,18 @@ impl ConsoleDesktopApp {
                     (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
                     (Some(c), None) => format!("<{c} />"),
                     (None, Some(s)) => s.clone(),
+                    (None, None) => console_shared::format::format_selector_label(&ann.selector),
+                };
+                let full_target = match (&ann.component_name, &ann.source_location) {
+                    (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
+                    (Some(c), None) => format!("<{c} />"),
+                    (None, Some(s)) => s.clone(),
                     (None, None) => ann.selector.clone(),
                 };
                 let tooltip = if ann.user_comment.trim().is_empty() {
-                    label.clone()
+                    full_target
                 } else {
-                    format!("{label}\n{}", ann.user_comment.trim())
+                    format!("{full_target}\n{}", ann.user_comment.trim())
                 };
                 console_ui::ComposerAnnotation::new(
                     ann.id.clone(),
@@ -181,6 +240,6 @@ impl ConsoleDesktopApp {
                 )
             })
             .collect();
-        Rc::new(chips)
+        Rc::from(chips)
     }
 }

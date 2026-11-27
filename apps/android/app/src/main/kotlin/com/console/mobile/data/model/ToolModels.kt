@@ -3,17 +3,13 @@ package com.console.mobile.data.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class ToolTier { read, write, exec }
-
-@Serializable
 enum class ApprovalMode(val value: String) {
-    @kotlinx.serialization.SerialName("always-ask") AlwaysAsk("always-ask"),
-    @kotlinx.serialization.SerialName("accept-edits") AcceptEdits("accept-edits"),
     @kotlinx.serialization.SerialName("plan-mode") PlanMode("plan-mode"),
     @kotlinx.serialization.SerialName("full-access") FullAccess("full-access");
 
     companion object {
-        fun fromValue(v: String?): ApprovalMode = entries.firstOrNull { it.value == v } ?: AlwaysAsk
+        /** Unknown or legacy wire values (always-ask, accept-edits) fall back to Plan, as the server does. */
+        fun fromValue(v: String?): ApprovalMode = entries.firstOrNull { it.value == v } ?: PlanMode
     }
 }
 
@@ -22,20 +18,6 @@ data class ApprovalModeOption(
     val value: ApprovalMode,
     val label: String,
     val description: String,
-)
-
-@Serializable
-enum class ApprovalPolicy { allow, deny, prompt }
-
-@Serializable
-data class PermissionRequest(
-    val requestId: String,
-    val toolCallId: String,
-    val toolName: String,
-    val args: kotlinx.serialization.json.JsonElement? = null,
-    val tier: ToolTier? = null,
-    val reason: String? = null,
-    val requiresUpgrade: Boolean = false,
 )
 
 @Serializable
@@ -51,6 +33,7 @@ data class ToolCall(
     val label: String? = null,
     val kindFlags: Int? = null,
     val icon: String? = null,
+    val summary: String? = null,
 ) {
     private fun flag(bit: Int) = kindFlags?.let { it and bit != 0 } ?: false
 
@@ -77,6 +60,12 @@ data class ToolResult(
     val isError: Boolean = false,
     /** Client-rendered artifact (see feature/chat/visual). Never sent to a provider. */
     val visual: VisualArtifact? = null,
+    /** Client-rendered HTML page artifact (see feature/chat/html). Never sent to a provider. */
+    val html: HtmlArtifact? = null,
+    /** Length of a body the server left out of a history page; 0 when inline. */
+    val omittedSize: Int = 0,
+    /** Message holding the full body, used to fetch it on expand. */
+    val resultMessageId: String? = null,
 )
 
 /** A versioned visual spec riding on a tool result; the spec stays raw JSON until rendered. */
@@ -84,6 +73,15 @@ data class ToolResult(
 data class VisualArtifact(
     val version: Int,
     val spec: kotlinx.serialization.json.JsonElement,
+)
+
+/** An HTML page artifact attached to a render tool result. */
+@Serializable
+data class HtmlArtifact(
+    val path: String,
+    val title: String = "",
+    val height: Int = 0,
+    val snapshotBase64: String? = null,
 )
 
 class ToolError(message: String) : Exception(message)

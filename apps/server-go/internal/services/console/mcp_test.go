@@ -26,7 +26,7 @@ func newMCPRuntime(t *testing.T, ceiling string) *Runtime {
 const addHTTP = `console.mcp.add({id: "notes", transport: "http", url: "https://example.com/mcp", label: "Notes"})`
 
 func TestMcpAddIsGatedToFullAccess(t *testing.T) {
-	for _, ceiling := range []string{"", "plan-mode", "always-ask", "accept-edits"} {
+	for _, ceiling := range []string{"", "plan-mode"} {
 		runtime := newMCPRuntime(t, ceiling)
 		if _, err := runtime.Eval(context.Background(), addHTTP, time.Second); err == nil {
 			t.Errorf("ceiling %q: expected mcp.add to be refused", ceiling)

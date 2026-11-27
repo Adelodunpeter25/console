@@ -142,66 +142,6 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// List the devices paired with the active server.
-    pub fn refresh_server_devices(&mut self, cx: &mut Context<Self>) {
-        let client = self.client.clone();
-        cx.spawn(async move |entity, cx| {
-            let result = client.server_auth.devices().await;
-            let _ = cx.update(|cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        match result {
-                            Ok(devices) => {
-                                this.server_devices = devices;
-                                this.server_auth_error = None;
-                            }
-                            Err(error) => {
-                                this.server_auth_error = Some(error.to_string());
-                            }
-                        }
-                        cx.notify();
-                    });
-                }
-            });
-        })
-        .detach();
-    }
-
-    /// Revoke a paired device. Revoking the current device also drops the
-    /// local credential, so the app stops authenticating as it.
-    pub fn revoke_server_device(&mut self, device_id: String, cx: &mut Context<Self>) {
-        let client = self.client.clone();
-        let current = self.server_device.as_ref().map(|device| device.id.clone());
-        cx.spawn(async move |entity, cx| {
-            let result = client.server_auth.revoke_device(&device_id).await;
-            let _ = cx.update(|cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        match result {
-                            Ok(()) => {
-                                this.server_auth_error = None;
-                                if current.as_deref() == Some(device_id.as_str()) {
-                                    this.server_device = None;
-                                    let url = this.active_environment_url();
-                                    let _ = crate::persistence::clear_server_auth(&url);
-                                    this.clear_paired_device(cx);
-                                }
-                                // The list is now out of date: the revoked
-                                // device is still on it.
-                                this.refresh_server_devices(cx);
-                            }
-                            Err(error) => {
-                                this.server_auth_error = Some(error.to_string());
-                            }
-                        }
-                        cx.notify();
-                    });
-                }
-            });
-        })
-        .detach();
-    }
-
     /// Install a freshly issued device token: persist it for that server and
     /// put it on the shared transport.
     fn apply_paired_device(
@@ -266,7 +206,6 @@ impl ConsoleDesktopApp {
         let url = self.active_environment_url();
         let _ = crate::persistence::clear_server_auth(&url);
         self.server_device = None;
-        self.server_devices.clear();
         self.server_pairing_grant = None;
         self.clear_paired_device(cx);
         cx.notify();

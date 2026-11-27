@@ -46,7 +46,7 @@ Reference: `/Users/adelodunpeter/Developer/Projects/t3code` has a much larger PR
 
 New `internal/providers/github/pulls.go` (client) and `internal/services/pull_requests.go` (service). The service owns:
 - **Repo resolution.** A project's PR repo is its `origin` remote, parsed to `owner/repo` (decided: `origin` only, no `base_repo` argument). Only `github.com` remotes resolve; anything else returns a clear "not a GitHub repository" error. A worktree shares its repo's remote, so it resolves the same way. To verify before building: how `GitService` exposes remotes.
-- **Token loading at call time.** Read from the credential file per call; never cached in a package var, never returned to a client, never logged. The same rules apply to the `GH_TOKEN` injection already built (see [`console-kernel.md`](console-kernel.md), "GitHub").
+- **Token loading at call time.** Read from the credential file per call; never cached in a package var, never returned to a client, never logged. The same rules apply to the `GH_TOKEN` injection already built (`providers/github/ghenv.go`).
 - **One HTTP client** with a timeout, `User-Agent`, and `Accept: application/vnd.github+json` / `X-GitHub-Api-Version` pinned.
 - **Error mapping.** 401 → "token rejected, reconnect in Settings". 403 with `x-ratelimit-remaining: 0` → "rate limited until <time>". 403 otherwise → missing scope, naming the scope. 404 → not found *or* no access (GitHub deliberately returns 404 for private repos you cannot see; the message must say both). 422 → surface GitHub's own validation text.
 
@@ -177,7 +177,7 @@ Same capability as desktop, native to the platform; this is not a stripped-down 
 
 - **Token scopes.** A classic PAT needs `repo` for private repos (`public_repo` for public only); a fine-grained token needs Pull requests read/write and Contents read, Metadata read. Fine-grained tokens return no `X-OAuth-Scopes`, so scope checks are advisory (existing note in `pat.go`). The service maps a 403/404 to a message naming what to grant instead of a generic failure.
 - **Token handling.** Loaded per call, never cached, never returned, never logged, redacted from tool output.
-- **Approval gating.** Every agent write is `TierWrite` through `permissions.Resolve`. The approval ceiling applies (see [`console-kernel.md`](console-kernel.md), "The permission ceiling"): a restricted run cannot merge by creating a more permissive session.
+- **Approval gating.** Every agent write is `TierWrite` through `permissions.Resolve`. The permission ceiling applies (`internal/services/console/ceiling.go`): a Plan-mode run cannot merge by creating a Full Access session.
 - **No merge by accident.** Merge always carries the reviewed head SHA, a confirmation in both UIs, and is never a side effect.
 - **Untrusted text.** PR titles, bodies and comments are attacker-controlled (anyone can open a PR on a public repo). They reach the model only as data inside tool results, never into the system prompt, and the UIs render them through the existing markdown renderers (no raw HTML).
 

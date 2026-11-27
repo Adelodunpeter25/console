@@ -3,6 +3,29 @@
 //! the app state stays a plain owner; UI callbacks call these and notify.
 
 use console_core::{LeafPaneNode, SplitDirection, WorkspaceNode, WorkspaceTabConfig, split_node};
+use std::collections::HashMap;
+
+/// The desks the app knows about, keyed by workspace key.
+pub type DeskMap = HashMap<Option<String>, WorkspaceNode>;
+
+/// Move from one desk to another.
+///
+/// The desk being left is parked under its key, whole — its split, its tabs,
+/// everything — and the desk being entered comes back exactly as it was left.
+/// A desk that has never been visited starts empty, with a pane of its own so
+/// its state never shares with another desk's.
+pub fn switch_desk(
+    desks: &mut DeskMap,
+    current_tree: &WorkspaceNode,
+    current_key: &Option<String>,
+    next_key: &Option<String>,
+) -> WorkspaceNode {
+    desks.insert(current_key.clone(), current_tree.clone());
+    if let Some(saved) = desks.get(next_key) {
+        return saved.clone();
+    }
+    WorkspaceNode::leaf(console_core::desk_leaf_id(next_key))
+}
 
 /// The pane a tab lands in: the active pane, or the first leaf when there are
 /// no panes yet.
@@ -26,12 +49,30 @@ pub fn active_leaf<'a>(
     }
 }
 
+/// Whether a changes review for [session_id] is the active tab of some pane,
+/// so it is on screen right now. A review tab left open behind another tab in
+/// its pane does not count.
+pub fn changes_review_visible(root: &WorkspaceNode, session_id: &str) -> bool {
+    root.leaves().into_iter().any(|leaf| {
+        leaf.tabs.iter().any(|tab| {
+            matches!(
+                tab,
+                WorkspaceTabConfig::ChangesReview { session_id: sid, .. } if sid == session_id
+            ) && leaf.active_tab_id.as_deref() == Some(tab.id().as_str())
+        })
+    })
+}
+
 /// Open a tab in the given pane (creating the pane when needed). If the tab
 /// is already open there, it is only activated.
 pub fn open_tab(root: &mut WorkspaceNode, pane_id: &str, tab: console_core::WorkspaceTabConfig) {
     let leaf = active_leaf(root, Some(pane_id));
     let tab_id = tab.id();
-    if !leaf.tabs.iter().any(|t| t.id() == tab_id) {
+    if let Some(existing) = leaf.tabs.iter_mut().find(|t| t.id() == tab_id) {
+        if let Some(ts) = tab.last_active_at_ms() {
+            existing.set_last_active_at_ms(Some(ts));
+        }
+    } else {
         leaf.tabs.push(tab);
     }
     leaf.active_tab_id = Some(tab_id);
@@ -68,19 +109,22 @@ pub fn replace_or_open_tab(
     let leaf = active_leaf(root, Some(pane_id));
     let new_tab_id = new_tab.id();
 
-    if let Some(target_id) = replace_tab_id {
-        if let Some(pos) = leaf.tabs.iter().position(|t| t.id() == target_id) {
-            let same_kind =
-                std::mem::discriminant(&leaf.tabs[pos]) == std::mem::discriminant(&new_tab);
-            if same_kind {
-                leaf.tabs[pos] = new_tab;
-                leaf.active_tab_id = Some(new_tab_id.clone());
-                return new_tab_id;
-            }
+    if let Some(target_id) = replace_tab_id
+        && let Some(pos) = leaf.tabs.iter().position(|t| t.id() == target_id)
+    {
+        let same_kind = std::mem::discriminant(&leaf.tabs[pos]) == std::mem::discriminant(&new_tab);
+        if same_kind {
+            leaf.tabs[pos] = new_tab;
+            leaf.active_tab_id = Some(new_tab_id.clone());
+            return new_tab_id;
         }
     }
 
-    if !leaf.tabs.iter().any(|t| t.id() == new_tab_id) {
+    if let Some(existing) = leaf.tabs.iter_mut().find(|t| t.id() == new_tab_id) {
+        if let Some(ts) = new_tab.last_active_at_ms() {
+            existing.set_last_active_at_ms(Some(ts));
+        }
+    } else {
         leaf.tabs.push(new_tab);
     }
     leaf.active_tab_id = Some(new_tab_id.clone());
@@ -95,35 +139,48 @@ pub fn move_tab_to_pane(
     target_pane_id: &str,
     tab: WorkspaceTabConfig,
 ) -> Option<String> {
-    if root.leaf_mut(target_pane_id).is_none() {
-        return None;
-    }
+    root.leaf_mut(target_pane_id)?;
 
     let tab_id = tab.id();
-    if source_pane_id != Some(target_pane_id) {
-        if let Some(source_pane_id) = source_pane_id {
-            let _ = close_tab(root, source_pane_id, &tab_id);
-        }
+    if source_pane_id != Some(target_pane_id)
+        && let Some(source_pane_id) = source_pane_id
+    {
+        let _ = close_tab(root, source_pane_id, &tab_id);
     }
     open_tab(root, target_pane_id, tab);
     Some(target_pane_id.to_string())
 }
 
-/// Close a tab in a pane, activating the neighbor (left-first, like the
-/// desktop app). Returns the id of the tab that became active, if any.
+/// Close a tab in a pane, activating the most recently active remaining tab,
+/// or falling back to the left neighbor. Returns the id of the tab that became active, if any.
 pub fn close_tab(root: &mut WorkspaceNode, pane_id: &str, tab_id: &str) -> Option<String> {
     let leaf = root.leaf_mut(pane_id)?;
     let closed_index = leaf.tabs.iter().position(|t| t.id() == tab_id)?;
     leaf.tabs.remove(closed_index);
 
     if leaf.active_tab_id.as_deref() == Some(tab_id) {
-        let fallback = leaf
+        let fallback_by_position = leaf
             .tabs
             .get(closed_index.saturating_sub(1))
-            .or_else(|| leaf.tabs.first());
-        leaf.active_tab_id = fallback.map(|tab| tab.id());
+            .or_else(|| leaf.tabs.first())
+            .map(|tab| tab.id());
+
+        let mru = leaf
+            .tabs
+            .iter()
+            .filter_map(|tab| tab.last_active_at_ms().map(|ts| (ts, tab.id())))
+            .max_by_key(|(ts, _)| *ts)
+            .map(|(_, id)| id);
+
+        leaf.active_tab_id = mru.or(fallback_by_position);
     }
     leaf.active_tab_id.clone()
+}
+
+/// True when no pane in the workspace holds a tab: the empty state, however
+/// many (empty) panes the layout is split into.
+pub fn is_workspace_empty(root: &WorkspaceNode) -> bool {
+    root.leaves().iter().all(|leaf| leaf.tabs.is_empty())
 }
 
 /// Remove a pane and collapse its parent split into the remaining sibling.
@@ -170,10 +227,10 @@ pub fn close_pane(root: &mut WorkspaceNode, pane_id: &str) -> bool {
 
 /// Activate a tab in a pane.
 pub fn select_tab(root: &mut WorkspaceNode, pane_id: &str, tab_id: &str) {
-    if let Some(leaf) = root.leaf_mut(pane_id) {
-        if leaf.tabs.iter().any(|t| t.id() == tab_id) {
-            leaf.active_tab_id = Some(tab_id.to_string());
-        }
+    if let Some(leaf) = root.leaf_mut(pane_id)
+        && leaf.tabs.iter().any(|t| t.id() == tab_id)
+    {
+        leaf.active_tab_id = Some(tab_id.to_string());
     }
 }
 
@@ -291,6 +348,9 @@ pub fn open_file_paths(root: &WorkspaceNode) -> Vec<String> {
                 | WorkspaceTabConfig::Terminal { .. }
                 | WorkspaceTabConfig::Browser { .. }
                 | WorkspaceTabConfig::ChangesReview { .. }
+                | WorkspaceTabConfig::FileTree { .. }
+                | WorkspaceTabConfig::Device { .. }
+                | WorkspaceTabConfig::Computer { .. }
                 | WorkspaceTabConfig::Settings { .. } => {}
             }
         }
@@ -323,10 +383,10 @@ pub fn sync_chat_provider(
 ) {
     for leaf in root.leaves_mut() {
         for tab in &mut leaf.tabs {
-            if predicate(tab) {
-                if let console_core::WorkspaceTabConfig::Chat { provider: p, .. } = tab {
-                    *p = Some(provider.clone());
-                }
+            if predicate(tab)
+                && let console_core::WorkspaceTabConfig::Chat { provider: p, .. } = tab
+            {
+                *p = Some(provider.clone());
             }
         }
     }
@@ -416,9 +476,7 @@ pub fn move_tab_to_split(
     direction: SplitDirection,
     insert_first: bool,
 ) -> Option<String> {
-    if root.leaf_mut(target_pane_id).is_none() {
-        return None;
-    }
+    root.leaf_mut(target_pane_id)?;
 
     let tab_id = tab.id();
     if let Some(source_pane_id) = source_pane_id {

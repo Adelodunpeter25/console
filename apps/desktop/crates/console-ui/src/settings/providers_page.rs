@@ -1,5 +1,5 @@
 use crate::input::ComposerInput;
-use crate::settings::GitHubSection;
+use crate::settings::{GitHubSection, SttSection};
 use crate::theme::Theme;
 use console_core::types::{
     AuthStatusResponse, ProviderAccount, ProviderCatalogEntry, auth_status_for,
@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 #[derive(IntoElement)]
 pub struct ProvidersPage {
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub auth_status: Option<AuthStatusResponse>,
     pub logging_in: HashSet<String>,
     pub on_login: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -46,6 +46,9 @@ pub struct ProvidersPage {
     /// sibling section — GitHub is not a chat provider and authenticates by
     /// token, not OAuth.
     pub github: Option<GitHubSection>,
+    /// Speech-to-text credential state. Rendered below GitHub as a sibling
+    /// section — it is a server-side Whisper credential, not a chat provider.
+    pub stt: Option<SttSection>,
     /// Providers that authenticate by a pasted API key, in catalog order.
     /// Each carries its own form state and callbacks, keyed by provider id.
     pub api_keys: Vec<crate::settings::ApiKeyProviderSection>,
@@ -59,12 +62,11 @@ fn account_display(account: &ProviderAccount) -> String {
     if let Some(label) = label {
         return label;
     }
-    if let Some(email) = account.email.clone().filter(|e| !e.is_empty()) {
-        if let Some(local) = email.split('@').next() {
-            if !local.is_empty() {
-                return local.to_string();
-            }
-        }
+    if let Some(email) = account.email.clone().filter(|e| !e.is_empty())
+        && let Some(local) = email.split('@').next()
+        && !local.is_empty()
+    {
+        return local.to_string();
     }
     account.id.clone()
 }
@@ -163,7 +165,7 @@ fn account_row(
                     // Rename works on the active account too: labels are
                     // display-only, so they never interfere with pinning.
                     let rename_id = account_id.clone();
-                    let rename_display = display.clone();
+                    let rename_display = display;
                     let on_rename = on_rename.clone();
                     let provider = provider.to_string();
                     div()
@@ -186,7 +188,7 @@ fn account_row(
                         .child("Rename")
                 })
                 .child({
-                    let remove_id = account_id.clone();
+                    let remove_id = account_id;
                     let on_remove = on_remove.clone();
                     let provider = provider.to_string();
                     div()
@@ -252,7 +254,7 @@ impl RenderOnce for ProvidersPage {
                                 .and_then(|st| auth_status_for(st, &provider_id))
                                 .cloned();
 
-                            let is_logged_in = prov_status.as_ref().map_or(false, |s| s.logged_in);
+                            let is_logged_in = prov_status.as_ref().is_some_and(|s| s.logged_in);
                             // "Connected as …" shows the account's display
                             // name (label or email local part), never the raw
                             // email.
@@ -575,6 +577,12 @@ impl RenderOnce for ProvidersPage {
             // among the catalog entries above.
             .child(match self.github {
                 Some(github) => div().mt(px(8.0)).child(github).into_any_element(),
+                None => div().into_any_element(),
+            })
+            // Speech-to-text sits below GitHub as a sibling section for the
+            // same reason.
+            .child(match self.stt {
+                Some(stt) => div().mt(px(8.0)).child(stt).into_any_element(),
                 None => div().into_any_element(),
             })
             .into_any_element()

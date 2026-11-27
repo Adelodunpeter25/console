@@ -2,18 +2,20 @@ use std::rc::Rc;
 
 use console_core::{ApprovalMode, ImageAttachment, SelectedModel, ThinkingLevel};
 use gpui::{
-    App, ElementId, Entity, ExternalPaths, InteractiveElement, IntoElement, ParentElement,
+    App, Div, ElementId, Entity, ExternalPaths, InteractiveElement, IntoElement, ParentElement,
     RenderOnce, StatefulInteractiveElement, Styled, Window, div, img, prelude::FluentBuilder, px,
 };
 
 use crate::common::{
-    ApprovalModeDropdown, ApprovalModeIconExt, AutocompleteConfirm, AutocompleteDismiss,
-    AutocompleteNext, AutocompletePrevious, AutocompleteView, ModelDropdownMenu, ThinkingStepper,
-    attachment_image, file_mention_chip, format_model_name, provider_svg_path,
+    AutocompleteConfirm, AutocompleteDismiss, AutocompleteNext, AutocompletePrevious,
+    AutocompleteView, ModelDropdownMenu, attachment_image, file_mention_chip, format_model_name,
+    provider_svg_path,
 };
 use crate::input::ComposerInput;
 use crate::primitives::tooltip::Tooltip;
-use crate::primitives::{ContextMenuHandle, IconName, MenuAlign, MenuChip, app_icon, popover};
+use crate::primitives::{
+    ContextMenuHandle, IconName, MenuAlign, MenuChip, MenuItem, app_icon, dropdown_menu, popover,
+};
 use crate::theme::Theme;
 
 /// A staged file comment shown as a chip above the composer's text field.
@@ -100,6 +102,15 @@ impl ComposerRunState {
 /// are the same data concepts used by `console-core`; the component never
 /// invents a parallel transport model. The parent remains responsible for
 /// turning a submitted draft into `RunPromptDto` and for calling `RunService`.
+/// Plan mode reads as faint accent stripes laid over a composer card. It sits
+/// first among the card's children, so everything else paints above it.
+pub(crate) fn plan_mode_stripes(theme: Theme) -> Div {
+    div()
+        .absolute()
+        .inset_0()
+        .bg(gpui::pattern_slash(theme.accent.opacity(0.24), 1.5, 7.0))
+}
+
 #[derive(IntoElement)]
 pub struct ComposerView {
     pub composer_input: Entity<ComposerInput>,
@@ -108,23 +119,35 @@ pub struct ComposerView {
     pub approval_mode: ApprovalMode,
     pub thinking_level: Option<ThinkingLevel>,
     pub supported_thinking_levels: Vec<ThinkingLevel>,
-    pub attachments: Rc<Vec<ImageAttachment>>,
+    pub attachments: Rc<[ImageAttachment]>,
     /// File line comments staged for this pane. Rendered as chips above the
     /// input; they are part of the outgoing prompt without occupying the text
     /// field.
-    pub comments: Rc<Vec<ComposerComment>>,
-    pub annotations: Rc<Vec<ComposerAnnotation>>,
+    pub comments: Rc<[ComposerComment]>,
+    pub annotations: Rc<[ComposerAnnotation]>,
     /// A floating overlay (file/diff tabs) rather than the docked chat footer.
     floating: bool,
     pub has_queued_prompt: bool,
+    /// Speech-to-text dictation button. `mic_enabled` is false until the
+    /// server has a credential, so the button renders disabled rather than
+    /// failing on tap; `mic_recording` swaps it for the stop control with
+    /// the live elapsed label, and `mic_transcribing` for the spinner.
+    pub mic_enabled: bool,
+    pub mic_recording: bool,
+    pub mic_transcribing: bool,
+    pub mic_elapsed_secs: u32,
+    /// Failure text for the dictation flow (mic denied, transcribe failed),
+    /// shown next to the button.
+    pub mic_error: Option<String>,
     model_menu: Option<(ModelDropdownMenu, ContextMenuHandle)>,
-    approval_menu: Option<(ApprovalModeDropdown, ContextMenuHandle)>,
+    thinking_menu: Option<ContextMenuHandle>,
     autocomplete: Option<AutocompleteView>,
     on_send: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_queue: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_abort: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_pick_image: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    on_cycle_thinking: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    on_choose_thinking: Option<Rc<dyn Fn(ThinkingLevel, &mut Window, &mut App) + 'static>>,
+    on_mic_click: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     on_remove_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_preview_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_remove_annotation: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
@@ -147,22 +170,28 @@ impl ComposerView {
             composer_input,
             run_state: ComposerRunState::Ready,
             selected_model: None,
-            approval_mode: ApprovalMode::AlwaysAsk,
+            approval_mode: ApprovalMode::default(),
             thinking_level: None,
             supported_thinking_levels: Vec::new(),
-            attachments: Rc::new(Vec::new()),
-            comments: Rc::new(Vec::new()),
-            annotations: Rc::new(Vec::new()),
+            attachments: Rc::from([]),
+            comments: Rc::from([]),
+            annotations: Rc::from([]),
             floating: false,
             has_queued_prompt: false,
+            mic_enabled: false,
+            mic_recording: false,
+            mic_transcribing: false,
+            mic_elapsed_secs: 0,
+            mic_error: None,
             model_menu: None,
-            approval_menu: None,
+            thinking_menu: None,
             autocomplete: None,
             on_queue: on_send.clone(),
             on_send,
             on_abort: Rc::new(on_abort),
             on_pick_image: Rc::new(on_pick_image),
-            on_cycle_thinking: None,
+            on_choose_thinking: None,
+            on_mic_click: None,
             on_remove_attachment: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
             on_preview_attachment: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
             on_remove_annotation: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
@@ -218,8 +247,46 @@ impl ComposerView {
         self
     }
 
-    pub fn on_cycle_thinking(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
-        self.on_cycle_thinking = Some(Rc::new(handler));
+    pub fn thinking_menu(mut self, handle: ContextMenuHandle) -> Self {
+        self.thinking_menu = Some(handle);
+        self
+    }
+
+    pub fn on_choose_thinking(
+        mut self,
+        handler: impl Fn(ThinkingLevel, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_choose_thinking = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn mic_enabled(mut self, enabled: bool) -> Self {
+        self.mic_enabled = enabled;
+        self
+    }
+
+    pub fn mic_recording(mut self, recording: bool) -> Self {
+        self.mic_recording = recording;
+        self
+    }
+
+    pub fn mic_transcribing(mut self, transcribing: bool) -> Self {
+        self.mic_transcribing = transcribing;
+        self
+    }
+
+    pub fn mic_elapsed_secs(mut self, secs: u32) -> Self {
+        self.mic_elapsed_secs = secs;
+        self
+    }
+
+    pub fn mic_error(mut self, error: Option<String>) -> Self {
+        self.mic_error = error;
+        self
+    }
+
+    pub fn on_mic_click(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_mic_click = Some(Rc::new(handler));
         self
     }
 
@@ -232,26 +299,17 @@ impl ComposerView {
         self
     }
 
-    pub fn approval_dropdown(
-        mut self,
-        dropdown: ApprovalModeDropdown,
-        handle: ContextMenuHandle,
-    ) -> Self {
-        self.approval_menu = Some((dropdown, handle));
-        self
-    }
-
-    pub fn attachments(mut self, attachments: Rc<Vec<ImageAttachment>>) -> Self {
+    pub fn attachments(mut self, attachments: Rc<[ImageAttachment]>) -> Self {
         self.attachments = attachments;
         self
     }
 
-    pub fn comments(mut self, comments: Rc<Vec<ComposerComment>>) -> Self {
+    pub fn comments(mut self, comments: Rc<[ComposerComment]>) -> Self {
         self.comments = comments;
         self
     }
 
-    pub fn annotations(mut self, annotations: Rc<Vec<ComposerAnnotation>>) -> Self {
+    pub fn annotations(mut self, annotations: Rc<[ComposerAnnotation]>) -> Self {
         self.annotations = annotations;
         self
     }
@@ -349,14 +407,17 @@ impl ComposerView {
 /// The staged-image chip row. Public so the floating composer renders the same
 /// chips the docked one does instead of keeping a second copy.
 pub fn composer_attachment_row(
-    attachments: Rc<Vec<ImageAttachment>>,
+    attachments: Rc<[ImageAttachment]>,
     on_remove: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_preview: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     theme: Theme,
 ) -> impl IntoElement {
     div()
+        .w_full()
         .flex()
+        .flex_row()
         .flex_wrap()
+        .items_center()
         .gap(px(8.0))
         .px(px(12.0))
         .pb(px(8.0))
@@ -418,23 +479,17 @@ pub fn composer_attachment_row(
 }
 
 impl ComposerView {
-    fn render_attachments(
-        attachments: Rc<Vec<ImageAttachment>>,
-        on_remove: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
-        on_preview: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
-        theme: Theme,
-    ) -> impl IntoElement {
-        composer_attachment_row(attachments, on_remove, on_preview, theme)
-    }
-
-    fn render_comments(comments: Rc<Vec<ComposerComment>>, theme: Theme) -> impl IntoElement {
+    fn render_comments(comments: Rc<[ComposerComment]>, theme: Theme) -> impl IntoElement {
         div()
+            .w_full()
             .flex()
+            .flex_row()
             .flex_wrap()
+            .items_center()
             .gap(px(6.0))
             .px(px(12.0))
             .pb(px(7.0))
-            .children(comments.iter().cloned().map(move |comment| {
+            .children(comments.iter().map(move |comment| {
                 let edit = comment.on_edit.clone();
                 let remove = comment.on_remove.clone();
                 let chip_path = comment.path.clone();
@@ -443,6 +498,7 @@ impl ComposerView {
                     .id(ElementId::Name(
                         format!("composer-comment-{}", comment.id).into(),
                     ))
+                    .flex_none()
                     .flex()
                     .items_center()
                     .gap(px(1.0))
@@ -477,13 +533,16 @@ impl ComposerView {
     }
 
     fn render_annotations(
-        annotations: Rc<Vec<ComposerAnnotation>>,
+        annotations: Rc<[ComposerAnnotation]>,
         on_remove: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
         theme: Theme,
     ) -> impl IntoElement {
         div()
+            .w_full()
             .flex()
+            .flex_row()
             .flex_wrap()
+            .items_center()
             .gap(px(6.0))
             .px(px(12.0))
             .pb(px(7.0))
@@ -500,6 +559,8 @@ impl ComposerView {
                             .id(ElementId::Name(
                                 format!("composer-annotation-{}", ann.id).into(),
                             ))
+                            .flex_none()
+                            .max_w(px(260.0))
                             .flex()
                             .items_center()
                             .gap(px(4.0))
@@ -512,6 +573,9 @@ impl ComposerView {
                             .tooltip(Tooltip::text(tooltip))
                             .child(
                                 div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
                                     .text_size(px(11.5))
                                     .text_color(theme.text_secondary)
                                     .child(label),
@@ -573,46 +637,51 @@ impl RenderOnce for ComposerView {
             model_trigger.into_any_element()
         };
 
-        let approval_is_open = self
-            .approval_menu
-            .as_ref()
-            .map(|(_, handle)| handle.is_open())
-            .unwrap_or(false);
-        let approval_trigger = MenuChip::new("approval-mode-chip")
-            .height(px(26.0))
-            .outlined()
-            .background(theme.composer)
-            .selected(approval_is_open)
-            .icon(
-                self.approval_mode.icon().path(),
-                if self.approval_mode == ApprovalMode::FullAccess {
-                    theme.warning
-                } else {
-                    theme.text_tertiary
-                },
-            )
-            .label(self.approval_mode.label());
-        let approval_control = if let Some((dropdown, handle)) = self.approval_menu.clone() {
-            popover(
-                approval_trigger,
-                &handle,
-                MenuAlign::AboveLeft,
-                move |_handle, _window, _cx| dropdown.clone().into_any_element(),
-            )
-        } else {
-            approval_trigger.into_any_element()
-        };
+        let plan_mode = self.approval_mode == ApprovalMode::PlanMode;
 
         let thinking_control = if !self.supported_thinking_levels.is_empty() {
-            let on_cycle = self
-                .on_cycle_thinking
-                .clone()
-                .unwrap_or_else(|| Rc::new(|_, _| {}));
-            Some(ThinkingStepper::new(
-                self.thinking_level,
-                self.supported_thinking_levels.clone(),
-                move |window, cx| (on_cycle)(window, cx),
-            ))
+            let level = self
+                .thinking_level
+                .unwrap_or(self.supported_thinking_levels[0]);
+            let thinking_is_open = self
+                .thinking_menu
+                .as_ref()
+                .map(|h| h.is_open())
+                .unwrap_or(false);
+            let trigger = MenuChip::new("thinking-level-chip")
+                .height(px(24.0))
+                .outlined()
+                .background(theme.composer)
+                .selected(thinking_is_open)
+                .label(level.label());
+            let on_choose_thinking = self.on_choose_thinking.clone();
+            let levels = self.supported_thinking_levels.clone();
+            let control = if let Some(handle) = self.thinking_menu.clone() {
+                dropdown_menu(
+                    trigger,
+                    "thinking-level-menu",
+                    &handle,
+                    MenuAlign::AboveLeft,
+                    move |_| {
+                        levels
+                            .iter()
+                            .map(|candidate| {
+                                let on_choose_thinking = on_choose_thinking.clone();
+                                let value = *candidate;
+                                MenuItem::new(value.label(), move |window, cx| {
+                                    if let Some(ref cb) = on_choose_thinking {
+                                        cb(value, window, cx);
+                                    }
+                                })
+                                .selected(value == level)
+                            })
+                            .collect()
+                    },
+                )
+            } else {
+                trigger.into_any_element()
+            };
+            Some(control)
         } else {
             None
         };
@@ -621,17 +690,6 @@ impl RenderOnce for ComposerView {
             || !self.attachments.is_empty()
             || !self.comments.is_empty()
             || !self.annotations.is_empty();
-        let attachment_data = self.attachments.clone();
-        let attachment_on_remove = self.on_remove_attachment.clone();
-        let attachment_on_preview = self.on_preview_attachment.clone();
-        let attachments = (!attachment_data.is_empty()).then(|| {
-            Self::render_attachments(
-                attachment_data,
-                attachment_on_remove,
-                attachment_on_preview,
-                theme,
-            )
-        });
         let comments = (!self.comments.is_empty())
             .then(|| Self::render_comments(self.comments.clone(), theme));
         let annotations = (!self.annotations.is_empty()).then(|| {
@@ -654,13 +712,9 @@ impl RenderOnce for ComposerView {
 
         // Over a file/diff the composer rests as a one-line bar and grows to
         // the full card once it is focused or has something staged.
-        // An open model/approval dropdown means the user is still working in
+        // An open model dropdown means the user is still working in
         // the composer, even though the menu holds keyboard focus.
-        let menu_open = self.model_menu.as_ref().is_some_and(|(_, h)| h.is_open())
-            || self
-                .approval_menu
-                .as_ref()
-                .is_some_and(|(_, h)| h.is_open());
+        let menu_open = self.model_menu.as_ref().is_some_and(|(_, h)| h.is_open());
         if floating
             && !focused
             && !menu_open
@@ -729,7 +783,6 @@ impl RenderOnce for ComposerView {
             .px(if floating { px(24.0) } else { px(20.0) })
             .pt(px(if floating { 12.0 } else { 4.0 }))
             .pb(px(if floating { 18.0 } else { 9.0 }))
-            .when(!floating, |el| el.bg(theme.composer))
             .flex()
             .flex_col()
             .items_center()
@@ -786,6 +839,7 @@ impl RenderOnce for ComposerView {
                             .py(px(10.0))
                             .flex()
                             .flex_col()
+                            .when(plan_mode, |el| el.child(plan_mode_stripes(theme)))
                             // Dropping image files onto the composer stages
                             // them as attachment chips; the card highlights
                             // while a drag hovers over it.
@@ -800,9 +854,6 @@ impl RenderOnce for ComposerView {
                             .when_some(comments, |element, comments| element.child(comments))
                             .when_some(annotations, |element, annotations| {
                                 element.child(annotations)
-                            })
-                            .when_some(attachments, |element, attachments| {
-                                element.child(attachments)
                             })
                             .child(
                                 div()
@@ -840,9 +891,32 @@ impl RenderOnce for ComposerView {
                                             )),
                                     )
                                     .child(model_control)
-                                    .child(approval_control)
                                     .when_some(thinking_control, |el, thinking| el.child(thinking))
                                     .child(div().flex_1())
+                                    .child({
+                                        // Speech-to-text dictation, the shared
+                                        // three-state mic control (idle /
+                                        // recording / transcribing).
+                                        super::mic_button::mic_button(
+                                            "btn",
+                                            super::mic_button::MicState {
+                                                enabled: self.mic_enabled,
+                                                recording: self.mic_recording,
+                                                elapsed_secs: self.mic_elapsed_secs,
+                                                transcribing: self.mic_transcribing,
+                                            },
+                                            self.on_mic_click.clone(),
+                                            &theme,
+                                        )
+                                    })
+                                    .when_some(self.mic_error.clone(), |el, error| {
+                                        el.child(
+                                            div()
+                                                .text_size(px(11.5))
+                                                .text_color(theme.danger)
+                                                .child(error),
+                                        )
+                                    })
                                     .child(match run_state {
                                         ComposerRunState::Preparing => div()
                                             .id("btn-composer-preparing")
@@ -852,11 +926,11 @@ impl RenderOnce for ComposerView {
                                             .items_center()
                                             .justify_center()
                                             .bg(theme.overlay_strong)
-                                            .child(crate::primitives::motion::spin(app_icon(
+                                            .child(crate::primitives::motion::spin(
                                                 IconName::LoaderCircle,
                                                 14.0,
                                                 theme.text_secondary,
-                                            ))),
+                                            )),
                                         ComposerRunState::Running => {
                                             let on_abort = self.on_abort.clone();
                                             let on_queue = self.on_queue.clone();

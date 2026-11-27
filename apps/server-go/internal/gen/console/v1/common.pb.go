@@ -76,9 +76,8 @@ func (x *Error) GetMessage() string {
 	return ""
 }
 
-// API version gate (see docs/plan/shared-protobuf-schema.md §6).
-// GET /api/version returns GetApiVersionResponse. Clients compare
-// api_version against the version they generated against and show an
+// API version gate. GET /api/version returns GetApiVersionResponse. Clients
+// compare api_version against the version they generated against and show an
 // "update server" notice on mismatch instead of mis-parsing.
 type GetApiVersionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`

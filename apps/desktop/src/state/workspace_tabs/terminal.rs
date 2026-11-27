@@ -11,15 +11,23 @@ impl ConsoleDesktopApp {
     /// selection there is no safe cwd to send to the server (process cwd or
     /// "." may not exist there, especially after switching servers).
     pub fn open_terminal_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".into());
+        let pane_id = self.target_subtab_pane_id();
+        self.open_terminal_tab_for_pane_project(&pane_id, window, cx);
+    }
+
+    /// Open a Terminal tab in `pane_id`, at that pane's selected project.
+    pub fn open_terminal_tab_for_pane_project(
+        &mut self,
+        pane_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let pane_id = pane_id.to_string();
         let Some(cwd) = self
             .selected_project_for_pane(&pane_id)
-            .map(|project| project.path.clone())
+            .map(|project| project.path)
         else {
-            self.set_error("Select a project before opening a terminal.", cx);
+            self.set_project_required_error("Select a project before opening a terminal.", cx);
             return;
         };
         self.open_terminal_tab_in_pane(&pane_id, cwd, window, cx);
@@ -42,7 +50,7 @@ impl ConsoleDesktopApp {
         let tab = WorkspaceTabConfig::Terminal {
             terminal_id: terminal_id.clone(),
             title: "Terminal".into(),
-            project_id: self.pane_project_id(pane_id),
+            project_id: self.pane_workspace_key(pane_id),
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
@@ -68,9 +76,8 @@ impl ConsoleDesktopApp {
             return view.clone();
         }
 
-        let view = cx.new(|cx| {
-            TerminalView::with_cwd(cwd, self.client.clone(), self.transport.clone(), window, cx)
-        });
+        let view = cx
+            .new(|cx| TerminalView::with_cwd(cwd, self.client.clone(), self.transport, window, cx));
 
         let tid = terminal_id.to_string();
         let sub = cx.observe(&view, move |this, view, cx| {
@@ -92,13 +99,11 @@ impl ConsoleDesktopApp {
                         title,
                         ..
                     } = tab
+                        && id == &tid
+                        && *title != new_title
                     {
-                        if id == &tid {
-                            if *title != new_title {
-                                *title = new_title.clone();
-                                changed = true;
-                            }
-                        }
+                        *title = new_title.clone();
+                        changed = true;
                     }
                 }
             }
@@ -110,13 +115,11 @@ impl ConsoleDesktopApp {
                             title,
                             ..
                         } = tab
+                            && id == &tid
+                            && *title != new_title
                         {
-                            if id == &tid {
-                                if *title != new_title {
-                                    *title = new_title.clone();
-                                    changed = true;
-                                }
-                            }
+                            *title = new_title.clone();
+                            changed = true;
                         }
                     }
                 }

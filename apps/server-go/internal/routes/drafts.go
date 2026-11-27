@@ -4,7 +4,7 @@
 package routes
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -14,6 +14,18 @@ import (
 )
 
 func RegisterDraftRoutes(app *fiber.App, drafts *services.DraftService) {
+	app.Get("/api/drafts", func(c *fiber.Ctx) error {
+		ids, err := drafts.ListSessionIDs()
+		if err != nil {
+			return fail400(c, err)
+		}
+		raw, err := protoMarshal.Marshal(&consolev1.ListDraftsResponse{SessionIds: ids})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
+	})
+
 	// GET returns {draft: null} when the chat has none.
 	app.Get("/api/drafts/:sessionId", func(c *fiber.Ctx) error {
 		draft, err := drafts.Get(c.Params("sessionId"))

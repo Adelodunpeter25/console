@@ -1,7 +1,12 @@
 package com.console.mobile.data.model
 
+import com.console.mobile.data.api.ConsoleJson
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class AskQuestionRequest(
@@ -35,6 +40,22 @@ data class BackgroundWork(
     val summary: String? = null,
     val error: String? = null,
     val metadata: Map<String, String> = emptyMap(),
+)
+
+/** Binary bootstrap rows are protobuf now; the JSON path decodes the same shape. */
+fun console.v1.BackgroundWork.toUi(): BackgroundWork = BackgroundWork(
+    id = id,
+    sessionId = session_id,
+    parentRunId = parent_run_id,
+    parentCallId = parent_call_id,
+    kind = kind,
+    status = status,
+    createdAt = created_at,
+    startedAt = started_at,
+    finishedAt = finished_at,
+    summary = summary,
+    error = error,
+    metadata = metadata,
 )
 
 /** One read of a detached shell's buffered output (see the background-work output route). */
@@ -83,6 +104,11 @@ fun BackgroundWorkOutput?.applyFrame(frame: BackgroundWorkOutputFrame): Backgrou
 data class AgentSessionEvent(
     val type: String,
     val prompt: String? = null,
+    val source: String? = null,
+    // sessionStart carries the server's run clock so the badge does not
+    // depend on this device's clock or on when it attached to the stream.
+    val startedAt: String? = null,
+    val elapsedMs: Long? = null,
     val turnId: String? = null,
     // Per-token delta: raw until consumed below; the payload is
     // console.v1.ModelStreamPart, decoded with Moshi in ChatEvents
@@ -96,6 +122,7 @@ data class AgentSessionEvent(
     // decoded with Moshi in ChatEvents like todo items.
     val calls: List<JsonElement>? = null,
     val request: JsonElement? = null,
+    val requestId: String? = null,
     // contextUpdate payload: raw until consumed; console.v1.ContextSnapshot,
     // decoded with Moshi in ChatEvents.
     val context: JsonElement? = null,
@@ -105,6 +132,8 @@ data class AgentSessionEvent(
     // event frames); decoded with Moshi in ChatEvents.
     val items: List<JsonElement>? = null,
     val action: String? = null,
+    // backgroundWorkContinue label ("Bash tool completed, continuing agent").
+    val message: String? = null,
     val summary: String? = null,
     val originalMessageCount: Int? = null,
     val compactedMessageCount: Int? = null,
@@ -112,27 +141,56 @@ data class AgentSessionEvent(
     val tokensAfter: Int? = null,
     val compactedMessages: List<AgentMessage>? = null,
     val title: String? = null,
+    val approvalMode: String? = null,
     val error: EventError? = null,
     // Staged next-turn prompt: raw until the event stream migrates (Phase 4
     // schemas the frames); the payload is console.v1.QueuedPrompt, decoded
     // with Moshi where the queue screen needs it (see SessionQueueFixtureTest).
     val queuedPrompt: JsonElement? = null,
+    // The whole queue, next to run first; the first entry is what the chat shows.
+    val queuedPrompts: List<JsonElement>? = null,
     val reason: String? = null,
-    // Background work lifecycle events use a stable nested work record.
-    val work: BackgroundWork? = null,
+    // Background work lifecycle events: a single record on start/progress/completed/cancelled,
+    // or a list on backgroundWorkContinue.
+    @SerialName("work")
+    val workElement: JsonElement? = null,
     // subagent fields (flattened)
     val subagentId: String? = null,
     val parentToolCallId: String? = null,
     val name: String? = null,
     val role: String? = null,
-    val maxTurns: Int? = null,
+    val model: String? = null,
     val turnIndex: Int? = null,
     val toolCallId: String? = null,
     val toolName: String? = null,
     val args: JsonElement? = null,
     val status: String? = null,
     val totalTurns: Int? = null,
-)
+) {
+    val work: BackgroundWork?
+        get() = when (val el = workElement) {
+            is JsonObject -> try {
+                ConsoleJson.decodeFromJsonElement(BackgroundWork.serializer(), el)
+            } catch (_: Exception) {
+                null
+            }
+            else -> null
+        }
+
+    val works: List<BackgroundWork>
+        get() = when (val el = workElement) {
+            is JsonArray -> try {
+                ConsoleJson.decodeFromJsonElement(
+                    ListSerializer(BackgroundWork.serializer()),
+                    el,
+                )
+            } catch (_: Exception) {
+                emptyList()
+            }
+            is JsonObject -> listOfNotNull(work)
+            else -> emptyList()
+        }
+}
 
 @Serializable
 data class EventError(val message: String, val data: JsonElement? = null)

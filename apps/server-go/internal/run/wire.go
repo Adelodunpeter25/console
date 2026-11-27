@@ -10,10 +10,10 @@
 package run
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	backgroundsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
@@ -46,10 +46,10 @@ type modelStreamPartFrame struct {
 	Part json.RawMessage `json:"part"`
 }
 
-// queuedPromptToProto converts a staged prompt row to the canonical wire
+// QueuedPromptToProto converts a staged prompt row to the canonical wire
 // type. Attachments/annotations reuse the message schema; created_at stays
 // the RFC3339 string the server stores; empty optionals stay absent.
-func queuedPromptToProto(qp *types.QueuedPrompt) *consolev1.QueuedPrompt {
+func QueuedPromptToProto(qp *types.QueuedPrompt) *consolev1.QueuedPrompt {
 	if qp == nil {
 		return nil
 	}
@@ -83,7 +83,7 @@ func QueuedPromptData(qp *types.QueuedPrompt) (any, error) {
 	if qp == nil {
 		return nil, nil
 	}
-	raw, err := wireProtoMarshal.Marshal(queuedPromptToProto(qp))
+	raw, err := wireProtoMarshal.Marshal(QueuedPromptToProto(qp))
 	if err != nil {
 		return nil, err
 	}
@@ -101,10 +101,11 @@ func toolCallToProto(c tools.ToolCall) *consolev1.ToolCall {
 	if c.ThoughtSignature != "" {
 		out.ThoughtSignature = &c.ThoughtSignature
 	}
-	label := tools.ToolLabel(c.Name)
+	label := tools.ToolCallLabel(c.Name, c.Arguments)
 	flags := tools.ToolKindFlags(c.Name)
 	icon := tools.ToolIconKey(c.Name)
-	out.Label, out.KindFlags, out.Icon = &label, &flags, &icon
+	summary := tools.ToolCallSummary(c.Name, c.Arguments)
+	out.Label, out.KindFlags, out.Icon, out.Summary = &label, &flags, &icon, &summary
 	return out
 }
 
@@ -132,6 +133,14 @@ func toolResultToProto(r tools.ToolResult) *consolev1.ToolResult {
 			Spec:    append([]byte(nil), r.Visual.Spec...),
 		}
 	}
+	if r.Html != nil {
+		out.Html = &consolev1.HtmlPart{
+			Path:     r.Html.Path,
+			Title:    r.Html.Title,
+			Height:   r.Html.Height,
+			Snapshot: append([]byte(nil), r.Html.Snapshot...),
+		}
+	}
 	return out
 }
 
@@ -145,29 +154,11 @@ func SnapshotToProto(snap loop.ContextSnapshot) *consolev1.ContextSnapshot {
 	}
 }
 
-// permissionToProto converts a pending tool approval to the canonical wire
-// type. Args cross as raw JSON bytes; null args stay absent (decodes as
-// null client-side, as before).
-func permissionToProto(r permissions.Request) *consolev1.PermissionRequest {
-	out := &consolev1.PermissionRequest{
-		RequestId: r.RequestID, ToolCallId: r.ToolCallID,
-		ToolName: r.ToolName, Tier: string(r.Tier),
-	}
-	if r.Args != nil {
-		if raw, err := json.Marshal(r.Args); err == nil && string(raw) != "null" {
-			out.Args = raw
-		}
-	}
-	if r.Reason != "" {
-		out.Reason = &r.Reason
-	}
-	return out
-}
-
 // askToProto converts a pending agent question. skippable is always set:
 // the old shape had no omitempty and clients tell explicit false apart
 // from absent.
-func askToProto(q tools.AskQuestionRequest) *consolev1.AskQuestionRequest {
+// AskToProto converts a pending agent question to its protobuf representation.
+func AskToProto(q tools.AskQuestionRequest) *consolev1.AskQuestionRequest {
 	skippable := q.Skippable
 	out := &consolev1.AskQuestionRequest{
 		RequestId: q.RequestID, Question: q.Question, Skippable: &skippable,
@@ -226,7 +217,10 @@ func browserToProto(b tools.BrowserActionRequest) *consolev1.BrowserActionReques
 func subagentStartToProto(v loop.SubagentStartInfo) *consolev1.SubagentStartEvent {
 	out := &consolev1.SubagentStartEvent{
 		SubagentId: v.SubagentID, Name: v.Name, Role: v.Role,
-		Prompt: v.Prompt, MaxTurns: int32(v.MaxTurns),
+		Prompt: v.Prompt,
+	}
+	if v.Model != "" {
+		out.Model = &v.Model
 	}
 	if v.ParentToolCall != "" {
 		out.ParentToolCallId = &v.ParentToolCall
@@ -275,9 +269,18 @@ func subagentEndToProto(v loop.SubagentEndInfo) *consolev1.SubagentEndEvent {
 func WireFrame(e loop.Event) (string, any, bool) {
 	switch e.Kind {
 	case loop.EventSessionStart:
-		return "sessionStart", map[string]any{"type": "sessionStart"}, false
+		frame := map[string]any{"type": "sessionStart"}
+		if !e.StartedAt.IsZero() {
+			frame["startedAt"] = e.StartedAt.UTC().Format(time.RFC3339Nano)
+			frame["elapsedMs"] = time.Since(e.StartedAt).Milliseconds()
+		}
+		return "sessionStart", frame, false
 	case loop.EventTurnStart:
-		return "turnStart", map[string]any{"type": "turnStart", "prompt": e.Text}, false
+		frame := map[string]any{"type": "turnStart", "prompt": e.Text}
+		if e.Source != "" {
+			frame["source"] = e.Source
+		}
+		return "turnStart", frame, false
 	case loop.EventModelStreamStart:
 		return "modelStreamStart", map[string]any{"type": "modelStreamStart", "turnId": e.Text}, false
 	case loop.EventModelStreamPart:
@@ -344,21 +347,36 @@ func WireFrame(e loop.Event) (string, any, bool) {
 		return "sessionEnd", map[string]any{"type": "sessionEnd"}, false
 	case loop.EventSessionTitleUpdated:
 		return "sessionTitleUpdated", map[string]any{"type": "sessionTitleUpdated", "title": e.Title}, false
+	case loop.EventSessionApprovalModeUpdated:
+		return "sessionApprovalModeUpdated", map[string]any{
+			"type":         "sessionApprovalModeUpdated",
+			"approvalMode": e.ApprovalMode,
+		}, false
 	case loop.EventQueueUpdated:
 		data, err := QueuedPromptData(e.Queued)
 		if err != nil {
 			return "", nil, true
 		}
-		return "queueUpdated", map[string]any{"type": "queueUpdated", "queuedPrompt": data}, false
+		all := make([]any, 0, len(e.QueuedAll))
+		for i := range e.QueuedAll {
+			item, err := QueuedPromptData(&e.QueuedAll[i])
+			if err != nil {
+				return "", nil, true
+			}
+			all = append(all, item)
+		}
+		return "queueUpdated", map[string]any{"type": "queueUpdated", "queuedPrompt": data, "queuedPrompts": all, "drained": e.Drained}, false
 	case loop.EventAskQuestion:
 		if e.Ask == nil {
 			return "", nil, true
 		}
-		raw, err := wireProtoMarshal.Marshal(askToProto(*e.Ask))
+		raw, err := wireProtoMarshal.Marshal(AskToProto(*e.Ask))
 		if err != nil {
 			return "", nil, true
 		}
 		return "askQuestion", map[string]any{"type": "askQuestion", "request": json.RawMessage(raw)}, false
+	case loop.EventQuestionResolved:
+		return "questionResolved", map[string]any{"type": "questionResolved", "requestId": e.Text}, false
 	case loop.EventBrowserAction:
 		if e.Browser == nil {
 			return "", nil, true
@@ -368,15 +386,6 @@ func WireFrame(e loop.Event) (string, any, bool) {
 			return "", nil, true
 		}
 		return "browserAction", map[string]any{"type": "browserAction", "request": json.RawMessage(raw)}, false
-	case loop.EventPermissionRequest:
-		if e.Permission == nil {
-			return "", nil, true
-		}
-		raw, err := wireProtoMarshal.Marshal(permissionToProto(*e.Permission))
-		if err != nil {
-			return "", nil, true
-		}
-		return "permissionRequest", map[string]any{"type": "permissionRequest", "request": json.RawMessage(raw)}, false
 	case loop.EventTodoUpdate:
 		items := make([]*consolev1.TodoItem, 0, len(e.Items))
 		for _, item := range e.Items {

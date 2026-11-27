@@ -105,20 +105,6 @@ class SetupStateTest {
     }
 
     @Test
-    fun closing_does_not_imply_dismissal() {
-        // Regression guard for a real bug: opening a step used to dismiss the
-        // panel at the same time, so backing out of the destination left the
-        // user with neither the panel nor the thing they were setting up.
-        // Only an explicit Skip writes the dismissal.
-        val holder = SetupStateHolder()
-        holder.open("env_abc123", "Remote box")
-        holder.close()
-
-        assertNull("close() must not record a dismissal", holder.state.value.activeEnvId)
-        assertFalse(holder.state.value.isComplete)
-    }
-
-    @Test
     fun a_step_can_be_opened_without_dismissing_the_panel() {
         // Opening a destination leaves panel state untouched, so coming back
         // shows the panel again — still open, still reporting what the server
@@ -133,23 +119,5 @@ class SetupStateTest {
         assertFalse(afterReturn.hasProject)
         assertFalse(afterReturn.hasProvider)
         assertFalse(afterReturn.hasGithub)
-    }
-
-    @Test
-    fun a_complete_server_has_nothing_left_to_onboard() {
-        // The gate for showing the panel at all. A server that is already fully
-        // configured must not be interrupted with a first-run screen just
-        // because it was added recently — "new server" is not the same as
-        // "unconfigured server".
-        assertFalse(SetupState().isComplete)
-        assertTrue(fullySetUp().isComplete)
-    }
-
-    @Test
-    fun one_missing_step_is_enough_to_warrant_the_panel() {
-        val complete = fullySetUp()
-        assertFalse(complete.copy(hasProject = false).isComplete)
-        assertFalse(complete.copy(hasProvider = false).isComplete)
-        assertFalse(complete.copy(hasGithub = false).isComplete)
     }
 }

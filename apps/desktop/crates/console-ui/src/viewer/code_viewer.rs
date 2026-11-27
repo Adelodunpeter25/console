@@ -6,9 +6,9 @@ use std::rc::Rc;
 
 use gpui::{
     App, ClipboardItem, DispatchPhase, ElementId, Entity, FocusHandle, Font, FontWeight, Hsla,
-    InteractiveElement, IntoElement, KeyBinding, ListState, MouseButton, MouseMoveEvent,
-    MouseUpEvent, ParentElement, RenderOnce, StatefulInteractiveElement, Styled, StyledText,
-    TextRun, Window, actions, canvas, div, list, prelude::*, px,
+    InteractiveElement, IntoElement, ListState, MouseButton, MouseMoveEvent, MouseUpEvent,
+    ParentElement, RenderOnce, StatefulInteractiveElement, Styled, StyledText, TextRun, Window,
+    actions, canvas, div, list, prelude::*, px,
 };
 
 use crate::markdown::highlight::{self, TokenClass};
@@ -39,8 +39,18 @@ pub const CODE_VIEWER_CONTEXT: &str = "CodeViewer";
 /// composer's global fallback.
 pub fn init_code_viewer_keybindings(cx: &mut App) {
     cx.bind_keys([
-        KeyBinding::new("secondary-c", CopySelection, Some(CODE_VIEWER_CONTEXT)),
-        KeyBinding::new("secondary-a", SelectAll, Some(CODE_VIEWER_CONTEXT)),
+        crate::common::input::actions::key_binding(
+            "secondary-c",
+            CopySelection,
+            Some(CODE_VIEWER_CONTEXT),
+            cx,
+        ),
+        crate::common::input::actions::key_binding(
+            "secondary-a",
+            SelectAll,
+            Some(CODE_VIEWER_CONTEXT),
+            cx,
+        ),
     ]);
 }
 
@@ -123,7 +133,7 @@ pub struct CodeViewerLine {
 #[derive(IntoElement)]
 pub struct CodeViewer {
     id: String,
-    lines: Rc<Vec<CodeViewerLine>>,
+    lines: Rc<[CodeViewerLine]>,
     list_state: ListState,
     selection_state: Option<Entity<SelectionState>>,
     scrollbar_state: Option<Rc<ScrollbarState>>,
@@ -135,7 +145,7 @@ impl CodeViewer {
     pub fn new(id: impl Into<String>, list_state: ListState) -> Self {
         Self {
             id: id.into(),
-            lines: Rc::new(Vec::new()),
+            lines: Rc::from([]),
             list_state,
             selection_state: None,
             scrollbar_state: None,
@@ -145,11 +155,11 @@ impl CodeViewer {
     }
 
     pub fn lines(mut self, lines: Vec<CodeViewerLine>) -> Self {
-        self.lines = Rc::new(lines);
+        self.lines = Rc::from(lines);
         self
     }
 
-    pub fn rc_lines(mut self, lines: Rc<Vec<CodeViewerLine>>) -> Self {
+    pub fn rc_lines(mut self, lines: Rc<[CodeViewerLine]>) -> Self {
         self.lines = lines;
         self
     }
@@ -320,8 +330,9 @@ fn copy_selection_to_clipboard(lines: &[CodeViewerLine], selection: CodeSelectio
     let end = selection.end();
 
     let mut result = String::new();
-    for line_idx in start.line..=min(end.line, lines.len().saturating_sub(1)) {
-        let line_text = &lines[line_idx].text;
+    let end_line = min(end.line, lines.len().saturating_sub(1));
+    for (line_idx, line) in lines.iter().enumerate().take(end_line + 1).skip(start.line) {
+        let line_text = &line.text;
         let line_len = line_text.len();
 
         let s_col = if line_idx == start.line {

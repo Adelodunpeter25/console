@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
 use tokio_tungstenite::tungstenite::Error as WsError;
+use tokio_tungstenite::tungstenite::error::ProtocolError;
 
 /// Binary wire-frame tags for `proto=binary` connections (mirrors the server's
 /// `TERMINAL_OUTPUT_FRAME_TAG` / `TERMINAL_INPUT_FRAME_TAG`; see
@@ -15,13 +16,12 @@ use tokio_tungstenite::tungstenite::Error as WsError;
 pub const TERMINAL_OUTPUT_FRAME_TAG: u8 = 0x01;
 pub const TERMINAL_INPUT_FRAME_TAG: u8 = 0x01;
 
-/// How many times a dropped terminal WS is silently redialed before the pane
-/// surfaces an error. Benign drops (server restart, relay/proxy blip,
-/// sleep/VPN, idle LB close) are the common case — the gold `WS read failed`
-/// banner for a bare `close_notify` EOF is noise, and the agent run is
-/// unaffected (it streams over SSE, not this socket).
-const MAX_RECONNECTS: u32 = 3;
-const RECONNECT_DELAYS_MS: [u64; 3] = [500, 1000, 2000];
+/// How many times a dropped terminal WS is redialed before the pane surfaces
+/// an error. Benign drops (relay/proxy blip, sleep/VPN, idle LB close) are the
+/// common case, and the redial reattaches to the same server shell (see
+/// `session=` in `spawn`), which the server keeps for a 60s grace period.
+const MAX_RECONNECTS: u32 = 5;
+const RECONNECT_DELAYS_MS: [u64; 5] = [500, 1000, 2000, 4000, 8000];
 
 /// True for transport-level drops with no server verdict: bare TLS `close_notify`
 /// EOF, unclean TCP close, or a clean WS close handshake with no terminal
@@ -30,7 +30,18 @@ const RECONNECT_DELAYS_MS: [u64; 3] = [500, 1000, 2000];
 fn is_benign_ws_disconnect(e: &WsError) -> bool {
     match e {
         WsError::ConnectionClosed | WsError::AlreadyClosed => true,
-        WsError::Io(io) if io.kind() == std::io::ErrorKind::UnexpectedEof => true,
+        WsError::Protocol(ProtocolError::ResetWithoutClosingHandshake) => true,
+        WsError::Io(io)
+            if matches!(
+                io.kind(),
+                std::io::ErrorKind::UnexpectedEof
+                    | std::io::ErrorKind::ConnectionReset
+                    | std::io::ErrorKind::ConnectionAborted
+                    | std::io::ErrorKind::BrokenPipe
+            ) =>
+        {
+            true
+        }
         _ => {
             let m = e.to_string().to_lowercase();
             m.contains("unexpected eof")
@@ -88,7 +99,7 @@ impl TerminalService {
         } else if base.starts_with("http://") {
             base.replacen("http://", "ws://", 1)
         } else {
-            base.clone()
+            base
         };
         let mut url = format!(
             "{}/api/terminals?cwd={}&cols={}&rows={}",
@@ -126,10 +137,10 @@ impl TerminalService {
         if candidates.is_empty() {
             return None;
         }
-        if let Some(c) = cwd {
-            if let Some(exact) = candidates.iter().find(|r| r.cwd.as_deref() == Some(c)) {
-                return Some(exact);
-            }
+        if let Some(c) = cwd
+            && let Some(exact) = candidates.iter().find(|r| r.cwd.as_deref() == Some(c))
+        {
+            return Some(exact);
         }
         candidates.into_iter().next()
     }
@@ -228,7 +239,7 @@ impl TerminalHandle {
             let mut b = backend.lock().await;
             if b.is_alt_screen() {
                 let key = if delta > 0 { "\x1b[A" } else { "\x1b[B" };
-                let count = (delta.abs() as usize).min(10);
+                let count = (delta.unsigned_abs() as usize).min(10);
                 let input = key.repeat(count);
                 drop(b);
                 let _ = sender.send(crate::types::client_input(input));
@@ -300,6 +311,17 @@ impl TerminalHandle {
 
     pub async fn status(&self) -> TerminalStatus {
         *self.status.read().await
+    }
+
+    pub async fn error(&self) -> Option<String> {
+        self.error.read().await.clone()
+    }
+
+    /// Read terminal status and error together.
+    pub async fn status_and_error(&self) -> (TerminalStatus, Option<String>) {
+        let status = *self.status.read().await;
+        let error = self.error.read().await.clone();
+        (status, error)
     }
 }
 
@@ -381,7 +403,12 @@ impl TerminalService {
                     notify_clone.notify_one();
                 }
 
-                let request = match transport.ws_request(&url).await {
+                // After the first `spawned` frame, redials reattach to that shell.
+                let dial_url = match id_clone.read().await.as_deref() {
+                    Some(sid) => format!("{url}&session={}", urlencoding::encode(sid)),
+                    None => url.clone(),
+                };
+                let request = match transport.ws_request(&dial_url).await {
                     Ok(r) => r,
                     Err(e) => {
                         *status_clone.write().await = TerminalStatus::Error;

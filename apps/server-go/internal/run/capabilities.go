@@ -5,13 +5,18 @@
 package run
 
 import (
+	"context"
+	"fmt"
+	"github.com/MoeForge/moego/json"
 	"strings"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/browseruse"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/visualize"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/htmlrender"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 // Capability is one built-in capability.
@@ -21,16 +26,26 @@ type Capability struct {
 	Description string
 	// Text is the reference added to setup while the capability is on.
 	Text func() string
-	// Split recognises the typed command in a message.
+	// SlashCommand exposes this capability in the composer's / popup.
+	SlashCommand bool
+	// Split recognises the typed command in a message (nil when not a /command).
 	Split func(text string) (rest string, ok bool)
 	// Load adds the capability's tools to a run's registry.
 	Load func(s *Service, c *loadContext, registry *tools.Registry) error
-	// AgentMayEnable lets the agent switch it on via readSkill. False when it
-	// needs the user's consent or OS permissions (computer use).
+	// AgentMayEnable lets the agent switch it on via readSkill. False when only
+	// the user may, by typing the command.
 	AgentMayEnable bool
 	// AlwaysLoaded capabilities have their tools present every turn; only the
 	// reference is opt-in.
 	AlwaysLoaded bool
+	// Tier is the strongest tier of the tools it loads. Modes that deny that
+	// tier (plan mode denies exec) neither list nor read the capability.
+	Tier tools.ToolTier
+	// GatedTools are its always-present tools. Until the reference is on, a
+	// call to one is refused and answered with the reference instead.
+	GatedTools []string
+	// Methods optionally describes the sub-methods exposed by the capability's tools.
+	Methods func() []string
 }
 
 // loadContext is what a Load needs to know about the run.
@@ -45,10 +60,13 @@ type loadContext struct {
 // Capabilities lists every built-in capability, in popup order.
 var Capabilities = []Capability{
 	{
-		Name:        "computer-use",
-		Description: "Drive the computer: read app windows and operate them with keyboard and mouse",
-		Text:        cua.SkillText,
-		Split:       cua.SplitInvocation,
+		Name:           "computer-use",
+		Description:    "Drive the computer: read app windows and operate them with keyboard and mouse",
+		Text:           cua.SkillText,
+		SlashCommand:   true,
+		Split:          cua.SplitInvocation,
+		Tier:           tools.TierExec,
+		AgentMayEnable: true,
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := cua.NewLoader(s.cuaManager, c.sessionID).Load(registry)
 			return err
@@ -58,22 +76,31 @@ var Capabilities = []Capability{
 		Name:           "browser-use",
 		Description:    "Drive the built-in browser: navigate, observe, extract, and clean up through one JavaScript kernel",
 		Text:           browseruse.SkillText,
-		Split:          browseruse.SplitInvocation,
 		AgentMayEnable: true,
 		AlwaysLoaded:   true,
+		Tier:           tools.TierRead,
+		GatedTools:     []string{"browser"},
+		Methods:        browseruse.MethodSignatures,
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := browseruse.NewLoader(s.browseruseManager, c.sessionID, c.browserHandler).Load(registry)
 			return err
 		},
 	},
 	{
-		Name:           "visualize",
-		Description:    "Render a chart, table, or metric card in the chat",
-		Text:           visualize.SkillText,
-		Split:          visualize.SplitInvocation,
+		Name:           "render",
+		Description:    "Render an interactive HTML page (chart, dashboard, mockup) inline in the chat",
+		Text:           htmlrender.SkillText,
 		AgentMayEnable: true,
-		Load: func(_ *Service, c *loadContext, registry *tools.Registry) error {
-			_, err := visualize.NewLoader(c.sessionID).Load(registry)
+		AlwaysLoaded:   true,
+		Tier:           tools.TierRead,
+		GatedTools:     []string{"render", "preview"},
+		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
+			storageDir := ""
+			if s != nil && s.sessions != nil {
+				storageDir = s.sessions.StorageDir()
+			}
+			scratchDir := utils.SessionRendersDir(storageDir, c.projectID, c.sessionID)
+			_, err := htmlrender.NewLoader(htmlrender.Options{Cwd: c.cwd, ScratchDir: scratchDir}, c.browserHandler).Load(registry)
 			return err
 		},
 	},
@@ -81,9 +108,11 @@ var Capabilities = []Capability{
 		Name:           "console",
 		Description:    "Operate the app: run scripts, manage ports and sessions through the console API",
 		Text:           console.SkillText,
-		Split:          console.SplitInvocation,
 		AgentMayEnable: true,
 		AlwaysLoaded:   true,
+		Tier:           tools.TierRead,
+		GatedTools:     []string{"console"},
+		Methods:        console.MethodSignatures,
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := console.NewLoader(s.consoleManager, c.sessionID, c.projectID, c.cwd, c.mode).Load(registry)
 			return err
@@ -101,11 +130,14 @@ func CapabilityByName(name string) (Capability, bool) {
 	return Capability{}, false
 }
 
-// CapabilityDescriptions is the popup's view of the table.
+// CapabilityDescriptions is the popup's view of the table (only capabilities
+// exposed as /commands).
 func CapabilityDescriptions() [][2]string {
 	out := make([][2]string, 0, len(Capabilities))
 	for _, c := range Capabilities {
-		out = append(out, [2]string{c.Name, c.Description})
+		if c.SlashCommand {
+			out = append(out, [2]string{c.Name, c.Description})
+		}
 	}
 	return out
 }
@@ -120,10 +152,34 @@ func (s *Service) capabilityOn(sessionID string, c Capability) bool {
 // activateInvoked switches on every capability the user typed in text.
 func (s *Service) activateInvoked(sessionID, text string) {
 	for _, c := range Capabilities {
+		if c.Split == nil {
+			continue
+		}
 		if _, ok := c.Split(text); ok {
 			_ = s.sessions.AddCapability(sessionID, c.Name)
 		}
 	}
+}
+
+// enabledCapabilities lists the capabilities switched on for a session, in
+// table order so the result is deterministic.
+func (s *Service) enabledCapabilities(sessionID string) []Capability {
+	on, _ := s.sessions.Capabilities(sessionID)
+	var out []Capability
+	for _, c := range Capabilities {
+		if contains(on, c.Name) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func capabilityNames(list []Capability) []string {
+	names := make([]string, len(list))
+	for i, c := range list {
+		names[i] = c.Name
+	}
+	return names
 }
 
 // capabilitySetup is the references to append to setup for a session. An
@@ -149,9 +205,80 @@ func (s *Service) loadCapabilities(lc *loadContext, registry *tools.Registry) []
 		}
 		if err := c.Load(s, lc, registry); err != nil {
 			failures = append(failures, c.Name+" is unavailable: "+err.Error())
+			continue
+		}
+		for _, name := range c.GatedTools {
+			if t, err := registry.Get(name); err == nil {
+				registry.Replace(&referenceGate{Tool: t, svc: s, sessionID: lc.sessionID, capability: c})
+			}
 		}
 	}
 	return failures
+}
+
+// referenceGate refuses a capability's tool until its reference is on, then
+// switches it on and returns the reference as the answer. A blind call could
+// click or run something, so it never executes; the retry does.
+type referenceGate struct {
+	tools.Tool
+	svc        *Service
+	sessionID  string
+	capability Capability
+}
+
+func (g *referenceGate) Execute(ctx context.Context, arguments json.RawMessage) (any, error) {
+	if g.svc.capabilityOn(g.sessionID, g.capability) {
+		return g.Tool.Execute(ctx, arguments)
+	}
+	if err := g.svc.sessions.AddCapability(g.sessionID, g.capability.Name); err != nil {
+		return nil, tools.NewToolError("Could not load the %s skill: %v", g.capability.Name, err)
+	}
+	return nil, tools.NewToolError("Not run: you called %s before reading the %s skill. It is loaded now; read it and call %s again.\n\n%s",
+		g.Name(), g.capability.Name, g.Name(), g.capability.Text())
+}
+
+func (g *referenceGate) PlanSafe() bool {
+	safe, ok := g.Tool.(tools.PlanSafe)
+	return ok && safe.PlanSafe()
+}
+
+func (g *referenceGate) Methods() []string {
+	if g.capability.Methods != nil {
+		return g.capability.Methods()
+	}
+	if md, ok := g.Tool.(tools.MethodDescriptor); ok {
+		return md.Methods()
+	}
+	return nil
+}
+
+// allowedIn reports whether the mode permits the capability's tools.
+func (c Capability) allowedIn(mode string) bool {
+	return permissions.Resolve(permissions.Mode(mode), c.Tier) != permissions.Deny
+}
+
+// builtinSkillsSetup lists the built-in skills usable in a mode, so the model
+// knows they exist and that its tools need the skill read first. It is names
+// and one line each; the references load on demand.
+func builtinSkillsSetup(mode string) string {
+	var lines []string
+	for _, c := range Capabilities {
+		if !c.allowedIn(mode) {
+			continue
+		}
+		line := fmt.Sprintf("- %s: %s", c.Name, c.Description)
+		if len(c.GatedTools) > 0 {
+			line += fmt.Sprintf(" (tool: %s)", strings.Join(c.GatedTools, ", "))
+		} else if !c.AgentMayEnable {
+			line += " (only the user can switch it on: ask them to type /" + c.Name + ")"
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "# Built-in skills\nCall readSkill with the name before first using a built-in skill or its tool; the tool refuses to run until you have.\n<builtin-skills>\n" +
+		strings.Join(lines, "\n") + "\n</builtin-skills>"
 }
 
 // readSkillCapabilities is what the agent's readSkill sees for one run.
@@ -160,6 +287,9 @@ func (s *Service) readSkillCapabilities(lc *loadContext, registry *tools.Registr
 		out := make([]tools.Capability, 0, len(Capabilities))
 		for _, c := range Capabilities {
 			c := c
+			if !c.allowedIn(lc.mode) {
+				continue
+			}
 			tc := tools.Capability{Name: c.Name, Description: c.Description, Text: c.Text(), Active: s.capabilityOn(lc.sessionID, c)}
 			if c.AgentMayEnable {
 				tc.Activate = func() error {

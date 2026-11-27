@@ -470,11 +470,12 @@
     if (!el || isInspectorNode(el)) return;
     hoveredEl = el;
     hoveredOffset = offset;
-    updateOverlay(el, offset);
+    paused = true;
+    hideOverlay();
 
     const rect = el.getBoundingClientRect();
     const { componentName, sourceLocation } = extractComponentMetadata(el);
-    post({
+    const payload = {
       type: 'element_inspected',
       componentName: componentName || null,
       sourceLocation: sourceLocation || null,
@@ -486,6 +487,15 @@
       url: window.location.href,
       title: document.title,
       bounds: { x: rect.x + offset.x, y: rect.y + offset.y, width: rect.width, height: rect.height },
+    };
+
+    // Wait two frames so the webview commits a paint without the overlay
+    // before the native snapshot captures the element.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!active) return;
+        post(payload);
+      });
     });
   }
 
@@ -534,6 +544,8 @@
     if (paused && frame) {
       cancelAnimationFrame(frame);
       frame = 0;
+    } else if (!paused && active) {
+      scheduleRefresh();
     }
   }
 

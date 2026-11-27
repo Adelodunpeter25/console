@@ -29,15 +29,18 @@ import (
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/cfrelay"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/opentunnel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
-// startDeletedChatSweep purges soft-deleted chats past retention once
-// immediately, then daily. It returns a stop func for shutdown.
+// startDeletedChatSweep soft-deletes chats settled past retention and purges
+// soft-deleted chats past retention, once immediately, then daily. It returns
+// a stop func for shutdown.
 func startDeletedChatSweep(runs *run.Service) func() {
 	sweep := func() {
+		if deleted := runs.DeleteExpiredSettledSessions(); len(deleted) > 0 {
+			slog.Info("deleted chats settled for more than 7 days", "count", len(deleted))
+		}
 		purged := runs.PurgeExpiredDeletedSessions()
 		if len(purged) > 0 {
 			slog.Info("purged deleted chats older than 7 days", "count", len(purged))
@@ -89,8 +92,25 @@ func startGrantPurge(database *db.DB) func() {
 // Run starts the server and blocks until SIGINT/SIGTERM. It returns nil on
 // clean shutdown and a non-nil error when startup fails.
 func Run() error {
+	// A server started from a terminal (make dev-server) writes its logs to
+	// that terminal. When the terminal goes away while the server is still
+	// running, the next write hits EPIPE, which Go's runtime turns into a
+	// fatal SIGPIPE. Keep the process alive instead: losing the log pipe is
+	// not a reason to take the daemon down.
+	signal.Ignore(syscall.SIGPIPE)
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
+
+	// The per-machine env file holds provider keys and harness flags.
+	// `console start` merges it into the daemon environment, but a server
+	// started any other way (go run ./cmd/server, make dev-server) would
+	// miss it. Load it here so the file means the same thing on every start
+	// path. A variable already set in the environment wins — the file fills
+	// gaps, it never overrides an explicit setting. Before the first
+	// terminal spawn, because PtyManager caches os.Environ() in a
+	// sync.Once and would miss anything set later.
+	utils.ApplyEnvFile()
 
 	// Teach git about the GitHub credential helper before anything can spawn:
 	// PtyManager caches os.Environ() in a sync.Once on first use, so a
@@ -147,8 +167,9 @@ func Run() error {
 		TokenIssuer: tokenIssuer, Identity: identity,
 	})
 
-	// Deleted chats stay restorable for 7 days, then the backend purges
-	// them permanently. The sweep runs once at startup plus once a day.
+	// Chats settled for 7 days are soft-deleted; deleted chats stay
+	// restorable for 7 days, then the backend purges them permanently. The
+	// sweep runs once at startup plus once a day.
 	stopSweep := startDeletedChatSweep(runs)
 	defer stopSweep()
 
@@ -229,9 +250,11 @@ func remoteAccessDisabled() bool {
 	return false
 }
 
-// startRemoteAccess opens the relay tunnel (or OpenTunnel, with CONSOLE_RELAY=0) to this server and returns a
-// function that closes it. CONSOLE_REMOTE=off skips it; CONSOLE_TUNNEL_API
-// points it at another relay.
+// startRemoteAccess opens the remote-access backend for this server and
+// returns a function that closes it. iroh is the default; CONSOLE_RELAY=0
+// (or opentunnel, off, false, no, disabled) asks for OpenTunnel, and a failed
+// iroh start falls back to it. CONSOLE_REMOTE=off skips remote access;
+// CONSOLE_TUNNEL_API points OpenTunnel elsewhere.
 func startRemoteAccess(listenAddr string) func() {
 	if remoteAccessDisabled() {
 		slog.Info("remote access is off (CONSOLE_REMOTE)")
@@ -245,48 +268,67 @@ func startRemoteAccess(listenAddr string) func() {
 	}
 	target := net.JoinHostPort("127.0.0.1", port)
 	dir := filepath.Join(utils.ConsoleStorageDir(), "tunnel")
-	if tunnel.RelayEnabled() {
-		return startRelay(dir, target)
+	if tunnel.IrohSelected() {
+		stopIroh, err := tunnel.StartIroh(dir, target, func(id string) {
+			// Record the backend before announcing readiness, so a pairing
+			// process reads iroh rather than a fallback's stale address.
+			_ = tunnel.SetBackend(dir, tunnel.BackendIroh)
+			slog.Info("remote access ready", "iroh_node_id", id)
+		})
+		if err == nil {
+			stopWebhookTunnel := func() {}
+			if webhookTunnelEnabled() {
+				stopWebhookTunnel = startOpenTunnel(dir, target, false)
+			}
+			return func() {
+				stopWebhookTunnel()
+				stopIroh()
+			}
+		}
+		slog.Warn("iroh unavailable, falling back to OpenTunnel", "error", err)
 	}
+	return startOpenTunnel(dir, target, true)
+}
+
+func webhookTunnelEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CONSOLE_WEBHOOK_TUNNEL"))) {
+	case "0", "off", "false", "no", "disabled":
+		return false
+	}
+	return true
+}
+
+// startOpenTunnel opens the OpenTunnel backend. When primary is true it records
+// OpenTunnel as the active pairing backend; when false it runs alongside iroh
+// solely to provide a public HTTPS URL for webhooks.
+func startOpenTunnel(dir, target string, primary bool) func() {
 	manager := &opentunnel.Manager{
 		API:    os.Getenv("CONSOLE_TUNNEL_API"),
 		Dir:    dir,
 		Target: target,
 		Logger: slog.Default(),
 		OnReady: func(url string) {
-			slog.Info("remote access ready", "url", url)
+			if primary {
+				slog.Info("remote access ready", "url", url)
+			} else {
+				slog.Info("webhook tunnel ready", "url", url)
+			}
 		},
 	}
 	if err := manager.Start(context.Background()); err != nil {
-		slog.Warn("remote access is unavailable", "error", err)
+		if primary {
+			slog.Warn("remote access is unavailable", "error", err)
+		} else {
+			slog.Warn("webhook tunnel is unavailable", "error", err)
+		}
 		return func() {}
 	}
-	slog.Info("remote access starting", "url", manager.URL())
-	return manager.Close
-}
-
-// startRelay opens the relay Worker tunnel, the default backend. CONSOLE_RELAY_API
-// points it at another relay, and CONSOLE_RELAY_NAME asks for a name on the
-// first run, such as "peter-dev".
-func startRelay(dir, target string) func() {
-	manager := &cfrelay.Manager{
-		API:    os.Getenv("CONSOLE_RELAY_API"),
-		Name:   os.Getenv("CONSOLE_RELAY_NAME"),
-		Dir:    dir,
-		Target: target,
-		Logger: slog.Default(),
-		OnReady: func(url string) {
-			slog.Info("remote access ready", "url", url)
-		},
-		OnFailure: func(err error) {
-			slog.Warn("remote access stopped", "error", err)
-		},
+	if primary {
+		_ = tunnel.SetBackend(dir, tunnel.BackendOpenTunnel)
+		slog.Info("remote access starting", "url", manager.URL())
+	} else {
+		slog.Info("webhook tunnel starting", "url", manager.URL())
 	}
-	if err := manager.Start(context.Background()); err != nil {
-		slog.Warn("remote access is unavailable", "error", err)
-		return func() {}
-	}
-	slog.Info("remote access starting", "url", manager.URL())
 	return manager.Close
 }
 

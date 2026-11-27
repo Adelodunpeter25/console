@@ -2,8 +2,9 @@ package com.console.mobile.data.api
 
 import com.console.mobile.data.model.AnswerQuestionDto
 import com.console.mobile.data.model.ApprovalModeOption
-import com.console.mobile.data.model.ApproveToolPermissionDto
+import com.console.mobile.data.model.Automation
 import com.console.mobile.data.model.BackgroundWork
+import com.console.mobile.data.model.WebhookSubscription
 import com.console.mobile.data.model.BackgroundWorkOutput
 import console.v1.ConsoleSettings
 import com.console.mobile.data.model.CreateSessionDto
@@ -45,20 +46,38 @@ fun getRunStreamPath(sessionId: String, since: Long? = null): String {
 
 interface ConsoleApi {
     // sessions
-    suspend fun getSessions(cwd: String? = null, projectId: String? = null, onlyDeleted: Boolean = false): List<SessionHeader>
+    suspend fun getSessions(cwd: String? = null, projectId: String? = null, onlyDeleted: Boolean = false, query: String? = null): List<SessionHeader>
     suspend fun getSession(id: String, limit: Int? = null, before: Long? = null): SessionDetailResponse
+    suspend fun getToolResult(sessionId: String, messageId: String, callId: String): com.console.mobile.data.model.ToolResult
+    /** Header, first message page and every side panel in one request. */
+    suspend fun getSessionBootstrap(id: String): com.console.mobile.data.model.SessionBootstrapResponse
+    suspend fun getSessionPrompts(id: String): List<com.console.mobile.data.model.SessionPrompt>
     suspend fun createSession(payload: CreateSessionDto): SessionHeader
+    /**
+     * POST /api/sessions/with-worktree — instant launch: the session header
+     * returns immediately, the worktree provisions and the prompt runs in the
+     * background (header launchState tracks it).
+     */
+    suspend fun launchWorktreeSession(payload: com.console.mobile.data.model.LaunchWorktreeDto): SessionHeader
+    /** POST /api/sessions/:id/with-worktree/retry — re-run a failed launch. */
+    suspend fun retryWorktreeLaunch(id: String)
     suspend fun updateSession(id: String, payload: com.console.mobile.data.model.UpdateSessionDto): SessionHeader
     suspend fun deleteSession(id: String)
     suspend fun restoreSession(id: String)
     /** POST /api/sessions/:id/settle — refused while a run is active or a prompt is queued. */
     suspend fun settleSession(id: String): SessionSettleResponse
+    /** POST /api/sessions/:id/read — this chat was shown. Idempotent; clears a seen needs-attention. */
+    suspend fun markSessionRead(id: String)
+    /** POST /api/sessions/:id/unread — make a read chat unread; refused while running or settled. */
+    suspend fun markSessionUnread(id: String)
     /** POST /api/sessions/:id/unsettle — bring a settled chat back to active. */
     suspend fun unsettleSession(id: String): SessionSettleResponse
     suspend fun permanentlyDeleteSession(id: String)
     /** POST /api/sessions/:id/fork — duplicate history through messageId into a new idle session. */
     suspend fun forkSession(id: String, messageId: String): SessionHeader
     suspend fun getTodos(id: String): List<TodoItem>
+    /** GET /api/sessions/:id/suggestions — follow-up prompts kept until the next run starts. */
+    suspend fun getSuggestions(id: String): List<String>
     suspend fun getSubagents(id: String): List<SubagentInfo>
     suspend fun getBackgroundWork(id: String): List<BackgroundWork>
     suspend fun cancelBackgroundWork(id: String, workId: String): BackgroundWork
@@ -71,11 +90,11 @@ interface ConsoleApi {
     suspend fun queuePrompt(id: String, payload: RunPromptDto): QueuedPrompt
     suspend fun editQueuedPrompt(id: String, payload: RunPromptDto): QueuedPrompt
     suspend fun clearQueuedPrompt(id: String): Boolean
+    suspend fun deleteQueuedPrompt(id: String, queueId: String): Boolean
     suspend fun steerRun(id: String, payload: RunPromptDto)
     // run
     suspend fun abortRun(sessionId: String)
     suspend fun answerQuestion(sessionId: String, payload: AnswerQuestionDto)
-    suspend fun approvePermission(sessionId: String, payload: ApproveToolPermissionDto): Boolean
     // fs
     suspend fun getProjects(): List<ProjectInfo>
     suspend fun addProject(path: String): ProjectInfo
@@ -85,7 +104,10 @@ interface ConsoleApi {
     suspend fun getFsEntries(path: String, depth: Int = 1): List<FsTreeEntry>
     suspend fun searchFiles(root: String, query: String, limit: Int = 20, includeDirs: Boolean = true): List<FileSearchResult>
     suspend fun readFile(path: String): FsFileContent
-    suspend fun writeFile(path: String, content: String)
+    suspend fun readFileRaw(path: String): ByteArray
+    /** Authenticated `/api/fs/file/media` URL for video/audio playback (token in query). */
+    fun fsMediaUrl(path: String): String
+    fun fsHtmlUrl(path: String, theme: String = "dark"): String
     suspend fun deleteFile(path: String)
     suspend fun createDir(path: String)
     suspend fun deleteDir(path: String)
@@ -122,16 +144,28 @@ interface ConsoleApi {
     suspend fun connectGitHub(payload: com.console.mobile.data.model.GitHubTokenDto): console.v1.GitHubAuthStatus
     suspend fun getGitHubStatus(): console.v1.GitHubAuthStatus
     suspend fun disconnectGitHub()
+    // repos of the connected GitHub account, for the pickers' GitHub section
+    suspend fun getGithubRepos(): List<com.console.mobile.data.model.GithubRepo>
+    /** POST /api/projects/clone — clone a remote repo and register it; empty parentDir means the server's projects root. */
+    suspend fun cloneProject(url: String, parentDir: String = "", name: String? = null): ProjectInfo
     // provider API keys (generic, /api/providers/:id/credential). The key is
     // stored on the server — it is the only party that talks to the provider —
     // and is never read back, so status is the only thing a client can learn.
     suspend fun getProviderCredentials(): Map<String, console.v1.ProviderCredentialStatus>
     suspend fun setProviderCredential(provider: String, apiKey: String): console.v1.SetProviderCredentialResponse
     suspend fun clearProviderCredential(provider: String): console.v1.SetProviderCredentialResponse
-    // binary integrations (gh CLI, ...): what the server box has installed
+    // speech-to-text (server-side Whisper credential, /api/stt). One account
+    // per machine lives on the server; the token is sent once and never
+    // read back, so status is the only observable.
+    suspend fun getSttStatus(): console.v1.SttStatus
+    suspend fun setSttConfig(accountId: String, apiToken: String): console.v1.SetSttConfigResponse
+    suspend fun clearSttConfig(): console.v1.SetSttConfigResponse
+    /** POST /api/stt/transcribe — one recorded audio clip, multipart `audio`. */
+    suspend fun transcribeStt(audio: ByteArray, fileName: String, contentType: String): console.v1.SttTranscript
+    // binary integrations (gh CLI, Linux desktop, ...): what the server box has installed
     suspend fun getIntegrations(): console.v1.IntegrationsResponse
-    // install gh the official way for the server's platform; answers the full list
-    suspend fun installGh(): console.v1.IntegrationsResponse
+    // install one integration the official way for the server's platform; answers the full list
+    suspend fun installIntegration(id: String): console.v1.IntegrationsResponse
     suspend fun saveProjectId(provider: String, projectId: String?)
     // assist
     suspend fun listSlashCommands(sessionId: String?): List<console.v1.SlashCommandInfo>
@@ -175,5 +209,12 @@ interface ConsoleApi {
     suspend fun listScriptRuns(projectId: String, cwd: String? = null): List<ScriptRun>
     suspend fun getScriptRun(projectId: String, runId: String, cwd: String? = null): ScriptRun
     suspend fun stopScriptRun(projectId: String, runId: String, cwd: String? = null): Boolean
+    // automations & webhooks
+    suspend fun getAutomations(sessionId: String? = null): List<Automation>
+    suspend fun pauseAutomation(id: String): Automation
+    suspend fun resumeAutomation(id: String): Automation
+    suspend fun deleteAutomation(id: String)
+    suspend fun getWebhooks(sessionId: String? = null): List<WebhookSubscription>
+    suspend fun deleteWebhook(id: String)
 }
 

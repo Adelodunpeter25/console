@@ -5,8 +5,8 @@ package claude
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"net/url"
@@ -338,7 +338,7 @@ func RefreshIfNeeded(client *http.Client, cred ParsedCredential) (ParsedCredenti
 	if cred.RefreshToken == "" || time.Now().UnixMilli()+RefreshSkewMs < cred.ExpiresAtMs {
 		return cred, nil
 	}
-	return refreshCredential("claude/"+cred.RefreshToken, client, cred, saveActiveCredential)
+	return refreshCredential("claude/"+cred.RefreshToken, client, cred, LoadCredential, saveActiveCredential)
 }
 
 // RefreshFor refreshes a PINNED account's credential, writing the rotated
@@ -349,7 +349,12 @@ func RefreshFor(accountID string, client *http.Client, cred ParsedCredential) (P
 	if accountID == "" {
 		return RefreshIfNeeded(client, cred)
 	}
-	return refreshCredential("claude/"+cred.RefreshToken, client, cred, func(c OAuthCredential) error {
+	if cred.RefreshToken == "" || time.Now().UnixMilli()+RefreshSkewMs < cred.ExpiresAtMs {
+		return cred, nil
+	}
+	return refreshCredential("claude/"+cred.RefreshToken, client, cred, func() (ParsedCredential, error) {
+		return LoadCredentialFor(accountID)
+	}, func(c OAuthCredential) error {
 		return SaveCredentialFor(accountID, c)
 	})
 }
@@ -357,8 +362,13 @@ func RefreshFor(accountID string, client *http.Client, cred ParsedCredential) (P
 // refreshCredential runs one deduped refresh whose result is written by
 // save. Anthropic rotates the refresh token on every refresh, so
 // concurrent refreshes of the same credential must collapse to one.
-func refreshCredential(key string, client *http.Client, cred ParsedCredential, save func(OAuthCredential) error) (ParsedCredential, error) {
+func refreshCredential(key string, client *http.Client, cred ParsedCredential, reload func() (ParsedCredential, error), save func(OAuthCredential) error) (ParsedCredential, error) {
 	return shared.SingleFlight(key, func() (ParsedCredential, error) {
+		// Re-read from disk in case another caller finished rotating this
+		// refresh token after we loaded it but before we entered SingleFlight.
+		if fresh, err := reload(); err == nil && (fresh.RefreshToken != cred.RefreshToken || time.Now().UnixMilli()+RefreshSkewMs < fresh.ExpiresAtMs) {
+			return fresh, nil
+		}
 		updated, err := refreshToken(client, cred)
 		if err != nil {
 			return ParsedCredential{}, err

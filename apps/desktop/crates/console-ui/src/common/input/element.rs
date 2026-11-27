@@ -7,8 +7,15 @@ use gpui::{
 
 use super::text_runs::{SearchPaint, input_text_runs};
 use super::{ComposerInput, FieldMode};
-use crate::common::file_mention_chip::{FILE_MENTION_RADIUS, file_mention_colors};
+use crate::common::file_mention_chip::{
+    FILE_MENTION_ICON_Y_NUDGE, FILE_MENTION_RADIUS, file_mention_colors,
+};
 use crate::theme::Theme;
+
+pub(crate) const MENTION_ICON_CELL: Pixels = px(22.0);
+
+/// Sized to the composer's 13.5px text; the shared 11px chip icon reads too small here.
+const COMPOSER_MENTION_ICON_SIZE: f32 = 14.0;
 
 pub(crate) fn visual_row_count(layout: &TextLayout) -> usize {
     layout
@@ -237,14 +244,6 @@ pub(crate) struct PrepaintState {
     pub(crate) cursor: Option<PaintQuad>,
 }
 
-impl IntoElement for InputElement {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
-        self
-    }
-}
-
 impl Element for InputElement {
     type RequestLayoutState = InputLayoutState;
     type PrepaintState = PrepaintState;
@@ -369,14 +368,25 @@ impl Element for InputElement {
         let mut mention_icons = Vec::new();
         let mut child_layout_ids = vec![text_layout_id];
         let theme = Theme::current(cx);
-
-        for mention in mentions_to_layout {
+        let hovered_mention = self.input.read(cx).hovered_mention;
+        for (mention_index, mention) in mentions_to_layout.into_iter().enumerate() {
+            let hovered = hovered_mention == Some(mention_index);
             let mut icon = gpui::div()
                 .absolute()
-                .child(crate::common::file_mention_chip::mention_icon(
-                    &mention.path,
-                    theme,
-                ))
+                .child(if hovered {
+                    crate::primitives::app_icon(
+                        crate::primitives::IconName::Close,
+                        COMPOSER_MENTION_ICON_SIZE,
+                        theme.text,
+                    )
+                    .into_any_element()
+                } else {
+                    crate::common::file_mention_chip::mention_icon(
+                        &mention.path,
+                        COMPOSER_MENTION_ICON_SIZE,
+                        theme,
+                    )
+                })
                 .into_any_element();
             let icon_layout_id = icon.request_layout(window, cx);
             child_layout_ids.push(icon_layout_id);
@@ -490,16 +500,18 @@ impl Element for InputElement {
             self.input
                 .update(cx, |input, _| input.caret_reconciled = Some(follow_state));
         }
-        let icon_size = px(11.0);
-        let extra_left = px(14.0);
+        let icon_size = px(COMPOSER_MENTION_ICON_SIZE);
+        let extra_left = MENTION_ICON_CELL;
 
         for mention_icon in &mut layout_state.mention_icons {
             let layout = layout_state.text.layout();
             let rects = crate::markdown::render::range_rects(layout, &mention_icon.range, 3.0, 1.0);
             if let Some(first_rect) = rects.first() {
                 let icon_origin = point(
-                    first_rect.origin.x - extra_left + px(2.0),
-                    first_rect.origin.y + (first_rect.size.height - icon_size) / 2.0,
+                    first_rect.origin.x - extra_left + (extra_left - icon_size) / 2.0,
+                    first_rect.origin.y
+                        + (first_rect.size.height - icon_size) / 2.0
+                        + px(FILE_MENTION_ICON_Y_NUDGE),
                 );
                 let child_origin = window.layout_bounds(mention_icon._layout_id).origin;
                 let offset = icon_origin - child_origin;
@@ -541,12 +553,35 @@ impl Element for InputElement {
         window.on_mouse_event({
             let input = self.input.clone();
             move |event: &MouseMoveEvent, phase, window, cx| {
-                if phase == DispatchPhase::Bubble && input.read(cx).is_selecting {
+                if phase != DispatchPhase::Bubble {
+                    return;
+                }
+                if input.read(cx).is_selecting {
                     input.update(cx, |input, cx| input.on_mouse_move(event, window, cx));
+                    return;
+                }
+                let hovered = input
+                    .read(cx)
+                    .mention_chip_at(event.position)
+                    .map(|(index, _)| index);
+                if input.read(cx).hovered_mention != hovered {
+                    input.update(cx, |input, cx| {
+                        input.hovered_mention = hovered;
+                        cx.notify();
+                        let image = hovered
+                            .and_then(|index| input.mentions.get(index))
+                            .and_then(|m| m.image_number());
+                        input.image_hover.update(cx, |hover, cx| hover.hover(image, cx));
+                    });
                 }
             }
         });
+        crate::common::image_hover::dismiss_on_scroll(window, input.image_hover.clone());
         let theme = Theme::current(cx);
+        // The cursor style may only be set while painting, not from the move handler.
+        if let Some((_, true)) = input.mention_chip_at(window.mouse_position()) {
+            window.set_window_cursor_style(gpui::CursorStyle::PointingHand);
+        }
         let layout = layout_state.text.layout();
         if !input.selected_range.is_empty() {
             let selection_rects =
@@ -563,9 +598,9 @@ impl Element for InputElement {
             }
         }
         if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
-            let extra_left = px(14.0);
+            let extra_left = MENTION_ICON_CELL;
 
-            for mention in &input.mentions {
+            for (mention_idx, mention) in input.mentions.iter().enumerate() {
                 if mention.range.end <= input.content.len() {
                     let rects =
                         crate::markdown::render::range_rects(layout, &mention.range, 3.0, 1.0);
@@ -575,6 +610,20 @@ impl Element for InputElement {
                         if idx == 0 {
                             quad_rect.origin.x -= extra_left;
                             quad_rect.size.width += extra_left;
+                            if input.hovered_mention == Some(mention_idx) {
+                                let cell = Bounds::new(
+                                    quad_rect.origin,
+                                    size(MENTION_ICON_CELL, quad_rect.size.height),
+                                );
+                                window.paint_quad(quad(
+                                    cell,
+                                    px(FILE_MENTION_RADIUS),
+                                    theme.overlay,
+                                    px(1.0),
+                                    mention_border,
+                                    BorderStyle::default(),
+                                ));
+                            }
                         }
                         window.paint_quad(quad(
                             quad_rect,

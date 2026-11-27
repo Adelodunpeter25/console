@@ -1,379 +1,223 @@
 use gpui::{
     App, ElementId, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, ParentElement,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
+    SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use std::rc::Rc;
 
 use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
-use crate::utils::{SessionDateGroup, SidebarSortMode};
 
-/// Toggle between date and project sectioning for the sidebar session list.
-/// Shows the current mode label; clicking switches to the other axis.
-pub fn sort_mode_toggle(
-    theme: Theme,
-    sort_mode: SidebarSortMode,
-    on_toggle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-) -> impl IntoElement {
-    let (label, tooltip) = match sort_mode {
-        SidebarSortMode::Date => ("Date", "Sort by project"),
-        SidebarSortMode::Project => ("Project", "Sort by date"),
-    };
+type ToggleFn = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
+
+/// The card every collapsible sidebar header shares: a soft rounded
+/// background that shows on hover, a leading chevron that is always visible (rotated when the
+/// section is collapsed), and the label.
+fn header_card(theme: Theme, id: SharedString) -> gpui::Stateful<gpui::Div> {
     div()
-        .id("btn-toggle-sort")
-        .h(px(20.0))
-        .px(px(6.0))
-        .rounded(px(6.0))
+        .id(ElementId::Name(id))
+        .w_full()
+        .h(px(32.0))
+        .mt(px(4.0))
+        .px(px(8.0))
+        .rounded(px(8.0))
         .flex()
         .items_center()
-        .gap(px(4.0))
+        .justify_between()
+        .hover(|s| s.bg(theme.sidebar_item_background))
+}
+
+fn header_chevron(theme: Theme, collapsed: bool) -> impl IntoElement {
+    app_icon(IconName::ChevronDown, 12.0, theme.text_ghost).when(collapsed, |icon| {
+        icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
+    })
+}
+
+fn header_label(theme: Theme, label: impl Into<SharedString>) -> gpui::Div {
+    div()
+        .truncate()
+        .text_size(px(14.5))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(theme.text_secondary)
+        .child(label.into())
+}
+
+/// Pinned, Drafts and Settled share this layout: a clickable,
+/// keyboard-toggleable card.
+fn section_header(
+    theme: Theme,
+    group_name: impl Into<SharedString>,
+    toggle_id: ElementId,
+    label: impl Into<SharedString>,
+    collapsed: bool,
+    on_toggle: ToggleFn,
+) -> impl IntoElement {
+    let toggle_on_click = on_toggle.clone();
+    let toggle_on_key = on_toggle;
+
+    header_card(theme, group_name.into()).child(
+        div()
+            .id(toggle_id)
+            .tab_index(0)
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .flex()
+            .items_center()
+            .gap(px(10.0))
+            .cursor_default()
+            .child(header_chevron(theme, collapsed))
+            .child(header_label(theme, label))
+            .on_click(move |_, window, cx| (toggle_on_click)(window, cx))
+            .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                    (toggle_on_key)(window, cx);
+                    cx.stop_propagation();
+                }
+            }),
+    )
+}
+
+/// "My workspaces" label above Pinned and the project cards. The whole row
+/// toggles the section; its chevron shows on hover.
+pub fn workspaces_label(theme: Theme, collapsed: bool, on_toggle: ToggleFn) -> impl IntoElement {
+    let toggle_on_key = on_toggle.clone();
+    div()
+        .id("sidebar-workspaces-toggle")
+        .group("sidebar-workspaces-header")
+        .tab_index(0)
+        .w_full()
+        .h(px(28.0))
+        .mt(px(6.0))
+        .px(px(8.0))
+        .flex()
+        .items_center()
+        .justify_between()
         .cursor_default()
-        .hover(|s| s.bg(theme.overlay))
-        .active(|s| s.bg(theme.overlay_strong))
-        .tooltip(Tooltip::text(tooltip))
         .on_click(move |_, window, cx| (on_toggle)(window, cx))
-        .child(app_icon(IconName::SortVertical, 12.0, theme.text_ghost))
+        .on_key_down(move |event: &KeyDownEvent, window, cx| {
+            if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                (toggle_on_key)(window, cx);
+                cx.stop_propagation();
+            }
+        })
         .child(
             div()
-                .text_size(px(11.0))
+                .text_size(px(12.5))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme.text_tertiary)
-                .child(label),
+                .child("My workspaces"),
+        )
+        .child(
+            app_icon(IconName::ChevronDown, 13.0, theme.text_tertiary)
+                .when(collapsed, |icon| {
+                    icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
+                })
+                .invisible()
+                .group_hover("sidebar-workspaces-header", |icon| icon.visible()),
         )
 }
 
-/// A project section header for the project-sorted session list. Mirrors
-/// [`group_header`] but keyed by project id (or "none") instead of a calendar
-/// bucket.
+/// A project card: chevron, the project name, and a plain `+` on the right
+/// that starts a new chat in that project. Clicking the card collapses or
+/// expands it.
 pub fn project_header(
     theme: Theme,
     name: String,
     key: String,
     collapsed: bool,
-    with_add_button: bool,
-    on_add: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_new_chat: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_toggle: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 ) -> impl IntoElement {
-    let group_name = format!("sidebar-project-header-{key}");
-    let chevron = app_icon(IconName::ChevronDown, 11.0, theme.text_ghost)
-        .when(collapsed, |icon| {
-            icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
-        })
-        .invisible()
-        .group_hover(group_name.clone(), |icon| icon.visible());
+    let group_name: SharedString = format!("sidebar-project-header-{key}").into();
     let toggle_key = key.clone();
-    let toggle_on_click = on_toggle.clone();
+    let new_chat_key = key.clone();
 
-    div()
-        .h(px(28.0))
-        .flex()
-        .items_center()
-        .justify_between()
-        .group(group_name)
+    header_card(theme, group_name)
         .child(
             div()
                 .id(ElementId::Name(
                     format!("sidebar-project-toggle-{key}").into(),
                 ))
                 .tab_index(0)
-                .h(px(22.0))
+                .flex_1()
+                .min_w_0()
+                .h_full()
                 .flex()
                 .items_center()
-                .gap(px(4.0))
+                .gap(px(10.0))
                 .cursor_default()
-                .hover(|s| s.bg(theme.overlay))
-                .text_size(px(14.5))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme.text)
-                .child(name)
-                .child(chevron)
-                .on_click(move |_, window, cx| (toggle_on_click)(toggle_key.clone(), window, cx))
-                .on_key_down(move |event: &KeyDownEvent, window, cx| {
-                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                        (on_toggle)(key.clone(), window, cx);
-                        cx.stop_propagation();
-                    }
-                }),
+                .on_click(move |_, window, cx| (on_toggle)(toggle_key.clone(), window, cx))
+                .child(header_chevron(theme, collapsed))
+                .child(header_label(theme, name)),
         )
-        .when(with_add_button, |header| {
-            header.child(
-                div()
-                    .id("btn-add-project")
-                    .w(px(20.0))
-                    .h(px(20.0))
-                    .rounded(px(6.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_default()
-                    .hover(|s| s.bg(theme.overlay))
-                    .active(|s| s.bg(theme.overlay_strong))
-                    .on_click(move |_, window, cx| {
-                        (on_add)(window, cx);
-                    })
-                    .child(app_icon(IconName::FolderNew, 15.0, theme.text_ghost)),
-            )
-        })
-}
-
-/// A calendar-period section header for the grouped session list. Clicking the
-/// label collapses or expands the group (a chevron reveals on hover). The
-/// first group's header also hosts the add-project button on its right edge,
-/// so the label and the folder+ icon sit on the same line.
-#[allow(clippy::too_many_arguments)]
-pub fn group_header(
-    theme: Theme,
-    label: &'static str,
-    collapsed: bool,
-    with_add_button: bool,
-    on_add: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    on_toggle: Rc<dyn Fn(SessionDateGroup, &mut Window, &mut App) + 'static>,
-    group: SessionDateGroup,
-) -> impl IntoElement {
-    let group_name = format!("sidebar-group-header-{}", group.index());
-    let chevron = app_icon(IconName::ChevronDown, 11.0, theme.text_ghost)
-        .when(collapsed, |icon| {
-            icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
-        })
-        .invisible()
-        .group_hover(group_name.clone(), |icon| icon.visible());
-    let toggle_on_click = on_toggle.clone();
-    let toggle_on_key = on_toggle;
-
-    div()
-        .h(px(28.0))
-        .flex()
-        .items_center()
-        .justify_between()
-        .group(group_name)
         .child(
             div()
-                .id(ElementId::Name(
-                    format!("sidebar-group-toggle-{}", group.index()).into(),
-                ))
-                .tab_index(0)
-                .h(px(22.0))
+                .id(ElementId::Name(format!("btn-new-chat-{key}").into()))
+                .size(px(20.0))
+                .flex_none()
+                .rounded(px(6.0))
                 .flex()
                 .items_center()
-                .gap(px(4.0))
+                .justify_center()
                 .cursor_default()
                 .hover(|s| s.bg(theme.overlay))
-                .text_size(px(14.5))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme.text)
-                .child(label)
-                .child(chevron)
-                .on_click(move |_, window, cx| (toggle_on_click)(group, window, cx))
-                .on_key_down(move |event: &KeyDownEvent, window, cx| {
-                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                        (toggle_on_key)(group, window, cx);
-                        cx.stop_propagation();
-                    }
-                }),
+                .active(|s| s.bg(theme.overlay_strong))
+                .tooltip(Tooltip::text("New chat"))
+                .on_click(move |_, window, cx| (on_new_chat)(new_chat_key.clone(), window, cx))
+                .child(app_icon(IconName::Plus, 14.0, theme.text_secondary)),
         )
-        .when(with_add_button, |header| {
-            header.child(
-                div()
-                    .id("btn-add-project")
-                    .w(px(20.0))
-                    .h(px(20.0))
-                    .rounded(px(6.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_default()
-                    .hover(|s| s.bg(theme.overlay))
-                    .active(|s| s.bg(theme.overlay_strong))
-                    .on_click(move |_, window, cx| {
-                        (on_add)(window, cx);
-                    })
-                    .child(app_icon(IconName::FolderNew, 15.0, theme.text_ghost)),
-            )
-        })
 }
 
-/// Collapsible section header for the Pinned sessions group. Same shape as
-/// [`drafts_group_header`] but with the Pinned label.
-pub fn pinned_group_header(
-    theme: Theme,
-    collapsed: bool,
-    with_add_button: bool,
-    on_add: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    on_toggle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-) -> impl IntoElement {
-    let group_name = "sidebar-group-header-pinned";
-    let chevron = app_icon(IconName::ChevronDown, 11.0, theme.text_ghost)
-        .when(collapsed, |icon| {
-            icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
-        })
-        .invisible()
-        .group_hover(group_name, |icon| icon.visible());
-    let toggle_on_click = on_toggle.clone();
-    let toggle_on_key = on_toggle;
-
-    div()
-        .h(px(28.0))
-        .flex()
-        .items_center()
-        .justify_between()
-        .group(group_name)
-        .child(
-            div()
-                .id("sidebar-group-toggle-pinned")
-                .tab_index(0)
-                .h(px(22.0))
-                .flex()
-                .items_center()
-                .gap(px(4.0))
-                .cursor_default()
-                .hover(|s| s.bg(theme.overlay))
-                .text_size(px(14.5))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme.text)
-                .child("Pinned")
-                .child(chevron)
-                .on_click(move |_, window, cx| (toggle_on_click)(window, cx))
-                .on_key_down(move |event: &KeyDownEvent, window, cx| {
-                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                        (toggle_on_key)(window, cx);
-                        cx.stop_propagation();
-                    }
-                }),
-        )
-        .when(with_add_button, |header| {
-            header.child(
-                div()
-                    .id("btn-add-project")
-                    .w(px(20.0))
-                    .h(px(20.0))
-                    .rounded(px(6.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_default()
-                    .hover(|s| s.bg(theme.overlay))
-                    .active(|s| s.bg(theme.overlay_strong))
-                    .on_click(move |_, window, cx| {
-                        (on_add)(window, cx);
-                    })
-                    .child(app_icon(IconName::FolderNew, 15.0, theme.text_ghost)),
-            )
-        })
+/// Collapsible header card for the Pinned sessions group.
+pub fn pinned_group_header(theme: Theme, collapsed: bool, on_toggle: ToggleFn) -> impl IntoElement {
+    section_header(
+        theme,
+        "sidebar-group-header-pinned",
+        ElementId::Name("sidebar-group-toggle-pinned".into()),
+        "Pinned",
+        collapsed,
+        on_toggle,
+    )
 }
 
-/// Collapsible section header for the Settled chats group. Same shape as
-/// [`pinned_group_header`] but with the Settled label; the section always
-/// sits at the bottom of the list, so it never hosts the add button.
+/// Collapsible header card for the Settled chats group, which always sits at
+/// the bottom of the list.
 pub fn settled_group_header(
     theme: Theme,
     collapsed: bool,
-    on_toggle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_toggle: ToggleFn,
 ) -> impl IntoElement {
-    let group_name = "sidebar-group-header-settled";
-    let chevron = app_icon(IconName::ChevronDown, 11.0, theme.text_ghost)
-        .when(collapsed, |icon| {
-            icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
-        })
-        .invisible()
-        .group_hover(group_name, |icon| icon.visible());
-    let toggle_on_click = on_toggle.clone();
-    let toggle_on_key = on_toggle;
-
-    div()
-        .h(px(28.0))
-        .flex()
-        .items_center()
-        .justify_between()
-        .group(group_name)
-        .child(
-            div()
-                .id("sidebar-group-toggle-settled")
-                .tab_index(0)
-                .h(px(22.0))
-                .flex()
-                .items_center()
-                .gap(px(4.0))
-                .cursor_default()
-                .hover(|s| s.bg(theme.overlay))
-                .text_size(px(14.5))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme.text_tertiary)
-                .child("Settled")
-                .child(chevron)
-                .on_click(move |_, window, cx| (toggle_on_click)(window, cx))
-                .on_key_down(move |event: &KeyDownEvent, window, cx| {
-                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                        (toggle_on_key)(window, cx);
-                        cx.stop_propagation();
-                    }
-                }),
-        )
+    section_header(
+        theme,
+        "sidebar-group-header-settled",
+        ElementId::Name("sidebar-group-toggle-settled".into()),
+        "Settled",
+        collapsed,
+        on_toggle,
+    )
 }
 
-pub fn drafts_group_header(
+/// Section header for the search results list, using the same height and
+/// typography as the other sidebar section headers.
+pub fn search_results_group_header(
     theme: Theme,
-    collapsed: bool,
-    with_add_button: bool,
-    on_add: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    on_toggle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    label: impl Into<SharedString>,
 ) -> impl IntoElement {
-    let group_name = "sidebar-group-header-drafts";
-    let chevron = app_icon(IconName::ChevronDown, 11.0, theme.text_ghost)
-        .when(collapsed, |icon| {
-            icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
-        })
-        .invisible()
-        .group_hover(group_name, |icon| icon.visible());
-    let toggle_on_click = on_toggle.clone();
-    let toggle_on_key = on_toggle;
-
     div()
         .h(px(28.0))
         .flex()
         .items_center()
         .justify_between()
-        .group(group_name)
         .child(
             div()
-                .id("sidebar-group-toggle-drafts")
-                .tab_index(0)
                 .h(px(22.0))
                 .flex()
                 .items_center()
                 .gap(px(4.0))
-                .cursor_default()
-                .hover(|s| s.bg(theme.overlay))
                 .text_size(px(14.5))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme.text)
-                .child("Drafts")
-                .child(chevron)
-                .on_click(move |_, window, cx| (toggle_on_click)(window, cx))
-                .on_key_down(move |event: &KeyDownEvent, window, cx| {
-                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                        (toggle_on_key)(window, cx);
-                        cx.stop_propagation();
-                    }
-                }),
+                .child(label.into()),
         )
-        .when(with_add_button, |header| {
-            header.child(
-                div()
-                    .id("btn-add-project")
-                    .w(px(20.0))
-                    .h(px(20.0))
-                    .rounded(px(6.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_default()
-                    .hover(|s| s.bg(theme.overlay))
-                    .active(|s| s.bg(theme.overlay_strong))
-                    .on_click(move |_, window, cx| {
-                        (on_add)(window, cx);
-                    })
-                    .child(app_icon(IconName::FolderNew, 15.0, theme.text_ghost)),
-            )
-        })
 }

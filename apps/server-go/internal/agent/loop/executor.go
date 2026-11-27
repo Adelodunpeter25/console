@@ -7,26 +7,25 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
+	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
 
-// Approver answers permission prompts (CLI/stdin, API approval route...).
-type Approver interface {
-	// Approve blocks until the user answers. ctx cancellation aborts.
-	Approve(ctx context.Context, req permissions.Request) (bool, error)
-}
-
 type Executor struct {
 	registry *tools.Registry
+	modeMu   sync.RWMutex
 	mode     permissions.Mode
-	approver Approver
 	// OnBeforeExecute, when set, runs after permission is granted and
 	// immediately before the tool executes — the last point where the
 	// tool's input files are still untouched. Used by the run service to
 	// capture pre-write content for the session file-change diff. Optional.
 	OnBeforeExecute func(call tools.ToolCall, tool tools.Tool)
+	// OnAfterExecute, when set, runs after every tool execution with its
+	// result. Unlike provider events it also sees inner calls dispatched
+	// from the codemode REPL (write/edit inside the code tool).
+	OnAfterExecute func(call tools.ToolCall, result tools.ToolResult)
 	// Guard, when set, confines write-capable tool calls to the session's
 	// project root and fills in glob/grep roots that would otherwise resolve
 	// against the server's launch directory. It rewrites the arguments it
@@ -34,58 +33,59 @@ type Executor struct {
 	Guard *permissions.Guard
 }
 
-func NewExecutor(registry *tools.Registry, mode permissions.Mode, approver Approver) *Executor {
-	return &Executor{registry: registry, mode: mode, approver: approver}
+func NewExecutor(registry *tools.Registry, mode permissions.Mode) *Executor {
+	return &Executor{registry: registry, mode: mode}
+}
+
+// Mode is the executor's current permission mode.
+func (e *Executor) Mode() permissions.Mode {
+	e.modeMu.RLock()
+	defer e.modeMu.RUnlock()
+	return e.mode
+}
+
+// SetMode changes the mode mid-run; calls resolved afterwards use it.
+func (e *Executor) SetMode(mode permissions.Mode) {
+	e.modeMu.Lock()
+	defer e.modeMu.Unlock()
+	e.mode = mode
+}
+
+// IsPlanMode reports whether the executor is currently in plan mode; tools
+// that are only meaningful there (requestFullAccess) use it to answer
+// sensibly when called in another mode.
+func (e *Executor) IsPlanMode() bool {
+	return e.Mode() == permissions.PlanMode
+}
+
+// Registry exposes the executor's tool registry.
+func (e *Executor) Registry() *tools.Registry {
+	return e.registry
 }
 
 // Execute resolves permissions, runs the tool, and always returns a
-// ToolResult (tool failures become isError results; only approval/abort
-// failures surface as errors).
+// ToolResult (tool failures become isError results; only abort failures
+// surface as errors).
 func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.ToolResult, error) {
 	tool, err := e.registry.Get(call.Name)
 	if err != nil {
 		return e.errResult(call, err.Error()), nil
 	}
 
-	decision := permissions.Resolve(e.mode, tool.Tier())
+	mode := e.Mode()
+	decision := permissions.Resolve(mode, tool.Tier())
 	// A plan-safe tool (writePlan) is the one write plan mode permits: it is
 	// confined to the plan folder, so it needs no approval and is not denied.
-	if e.mode == permissions.PlanMode {
+	if mode == permissions.PlanMode {
 		if safe, ok := tool.(tools.PlanSafe); ok && safe.PlanSafe() {
 			decision = permissions.Allow
 		}
 	}
-	if decision == permissions.Prompt {
-		if e.approver == nil {
-			return e.errResult(call, tools.NewToolError("Tool '%s' requires approval but no approver is connected (mode %s).", call.Name, e.mode).Error()), nil
-		}
-		req := permissions.Request{
-			RequestID:  newRequestID(),
-			ToolCallID: call.ID,
-			ToolName:   call.Name,
-			Args:       jsonAny(call.Arguments),
-			Tier:       tool.Tier(),
-		}
-		ok, err := e.approver.Approve(ctx, req)
-		if err != nil {
-			// Timeout/abort/steer while waiting fails this call only; the
-			// loop sees ctx and stops on its own when aborted.
-			return e.errResult(call, e.failureMessage(ctx, err)), nil
-		}
-		if !ok {
-			return tools.ToolResult{
-				ToolCallID: call.ID,
-				ToolName:   call.Name,
-				Content:    tools.NewToolError("User denied permission for tool '%s'.", call.Name).Error(),
-				IsError:    true,
-				Args:       call.Arguments,
-			}, nil
-		}
-	} else if decision == permissions.Deny {
+	if decision == permissions.Deny {
 		return tools.ToolResult{
 			ToolCallID: call.ID,
 			ToolName:   call.Name,
-			Content:    deniedMessage(call.Name, e.mode),
+			Content:    deniedMessage(call.Name, mode),
 			IsError:    true,
 			Args:       call.Arguments,
 		}, nil
@@ -116,17 +116,23 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 	slog.Debug("tool executed", "tool", call.Name, "call", call.ID)
 	content, isError := any(out), false
 	var visual *tools.VisualArtifact
+	var html *tools.HtmlArtifact
 	if envelope, ok := out.(tools.Envelope); ok {
-		content, isError, visual = envelope.Content, envelope.IsError, envelope.Visual
+		content, isError, visual, html = envelope.Content, envelope.IsError, envelope.Visual, envelope.Html
 	}
-	return tools.ToolResult{
+	result := tools.ToolResult{
 		ToolCallID: call.ID,
 		ToolName:   call.Name,
 		Content:    content,
 		IsError:    isError,
 		Args:       call.Arguments,
 		Visual:     visual,
-	}, nil
+		Html:       html,
+	}
+	if e.OnAfterExecute != nil {
+		e.OnAfterExecute(call, result)
+	}
+	return result, nil
 }
 
 // executeToolCall prefers CallAwareTool.ExecuteCall (full call incl. id)
@@ -174,7 +180,7 @@ func newRequestID() string {
 // that worked a turn ago now fails.
 func deniedMessage(tool string, mode permissions.Mode) string {
 	if mode == permissions.PlanMode {
-		return tools.NewToolError("Tool '%s' is denied: plan mode is read-only. Describe the change in your plan; to save the plan as a file use writePlan. To make changes, ask the user to switch out of plan mode.", tool).Error()
+		return tools.NewToolError("Tool '%s' is denied: plan mode is read-only. Call await requestFullAccess('short reason') in code to request write access; plan with writePlan meanwhile.", tool).Error()
 	}
 	return tools.NewToolError("Tool '%s' is denied in %s mode.", tool, mode).Error()
 }

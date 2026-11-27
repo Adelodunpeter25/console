@@ -5,6 +5,11 @@ package cua
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -30,6 +35,8 @@ type Manager struct {
 	// runtime only loses that session's variables, which the model rebuilds
 	// by re-observing.
 	js *jskernel.Cache[*JSRuntime]
+	// xvfb is the private headless display, when this manager had to start one.
+	xvfb *xvfb
 }
 
 // maxJSRuntimes caps live session kernels. Computer use is rare next to
@@ -65,7 +72,19 @@ func (m *Manager) Driver() (*Driver, error) {
 	ready := m.ready
 	m.mu.Unlock()
 
-	driver, err := Open(Options{})
+	var driver *Driver
+	err := m.ensureDisplay()
+	if err == nil {
+		driver, err = Open(Options{
+			Authorization: &RuntimeAuthorizationOptions{
+				AllowedModes:             []string{"unrestricted"},
+				CompatibilityMode:        "unrestricted",
+				UnrestrictedAcknowledged: true,
+				MaxSessionTTLSeconds:     28800,
+				MaxIdleTTLSeconds:        1800,
+			},
+		})
+	}
 	if driver != nil {
 		if names, listErr := driverTools(driver); listErr == nil {
 			m.mu.Lock()
@@ -76,7 +95,13 @@ func (m *Manager) Driver() (*Driver, error) {
 
 	m.mu.Lock()
 	m.loading = false
-	m.driver, m.initErr = driver, err
+	m.driver = driver
+	// A missing display can appear later (a session starts, Xvfb comes up), so
+	// it is retried instead of cached like a missing library.
+	if !errors.Is(err, ErrNoDisplay) {
+		m.initErr = err
+	}
+	m.ready = make(chan struct{})
 	close(ready)
 	m.mu.Unlock()
 	return driver, err
@@ -145,6 +170,11 @@ type Status struct {
 	ABIMinor       int    `json:"abiMinor,omitempty"`
 	ABIPatch       int    `json:"abiPatch,omitempty"`
 	LibraryPath    string `json:"libraryPath,omitempty"`
+	// Display and DisplaySource say where it would run on Linux. DisplayError
+	// is why it could not run there, and makes Available false.
+	Display       string `json:"display,omitempty"`
+	DisplaySource string `json:"displaySource,omitempty"`
+	DisplayError  string `json:"displayError,omitempty"`
 }
 
 // Status probes the library and reports without failing the caller.
@@ -165,7 +195,14 @@ func (m *Manager) Status() Status {
 	m.mu.Unlock()
 	if driver == nil {
 		// Not opened yet: the ABI probe above is the useful signal, and a
-		// library that loads cleanly means computer use is installable.
+		// library that loads cleanly means computer use is installable, as
+		// long as there is somewhere for it to draw.
+		plan, planErr := PlanDisplay()
+		out.Display, out.DisplaySource = plan.Display, plan.Source
+		if planErr != nil {
+			out.DisplayError = planErr.Error()
+			return out
+		}
 		out.Available = true
 		return out
 	}
@@ -206,11 +243,38 @@ func (m *Manager) Close() error {
 	m.mu.Lock()
 	driver := m.driver
 	m.driver = nil
+	display := m.xvfb
+	m.xvfb = nil
 	m.mu.Unlock()
-	if driver == nil {
-		return nil
+	var err error
+	if driver != nil {
+		err = driver.Shutdown()
 	}
-	return driver.Shutdown()
+	if display != nil {
+		display.Stop()
+	}
+	return err
+}
+
+// ensureDisplay finds a reachable display and, on a machine with none, starts
+// a private Xvfb that this manager owns until Close.
+func (m *Manager) ensureDisplay() error {
+	err := EnsureDisplay()
+	if !errors.Is(err, ErrNoDisplay) || runtime.GOOS != "linux" {
+		return err
+	}
+	bin, lookErr := exec.LookPath("Xvfb")
+	if lookErr != nil {
+		return ErrXvfbMissing
+	}
+	x, startErr := startXvfb(bin, xvfbStartTimeout)
+	if startErr != nil {
+		return fmt.Errorf("%w: %v", ErrNoDisplay, startErr)
+	}
+	m.mu.Lock()
+	m.xvfb = x
+	m.mu.Unlock()
+	return os.Setenv("DISPLAY", x.Display())
 }
 
 // EvalOnce runs code in a throwaway runtime: nothing persists afterwards.

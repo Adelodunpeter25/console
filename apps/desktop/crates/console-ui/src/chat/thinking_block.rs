@@ -31,6 +31,7 @@ pub struct ThinkingBlock {
     is_streaming: bool,
     on_toggle: Option<Rc<dyn Fn(bool, &mut Window, &mut App) + 'static>>,
     link_handler: Option<LinkHandler>,
+    cwd: Option<String>,
 }
 
 impl ThinkingBlock {
@@ -44,6 +45,7 @@ impl ThinkingBlock {
             is_streaming: false,
             on_toggle: None,
             link_handler: None,
+            cwd: None,
         }
     }
 
@@ -71,6 +73,11 @@ impl ThinkingBlock {
         self.link_handler = handler;
         self
     }
+
+    pub fn cwd(mut self, cwd: Option<String>) -> Self {
+        self.cwd = cwd.filter(|c| !c.is_empty());
+        self
+    }
 }
 
 impl RenderOnce for ThinkingBlock {
@@ -80,8 +87,13 @@ impl RenderOnce for ThinkingBlock {
         // assistant's answer text.
         let mut palette = Palette::from_theme(&theme);
         palette.text = theme.text_secondary;
-        let markdown_ctx =
-            assistant_ctx(self.id.clone(), &palette, self.selection, self.link_handler);
+        let markdown_ctx = assistant_ctx(
+            self.id.clone(),
+            &palette,
+            self.selection,
+            self.link_handler,
+            self.cwd,
+        );
         let collapsed = self.collapsed;
         let on_toggle = self.on_toggle;
         let id = self.id;

@@ -14,6 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         proto_root.join("console/v1/auth.proto"),
         proto_root.join("console/v1/device.proto"),
         proto_root.join("console/v1/draft.proto"),
+        proto_root.join("console/v1/file_comment.proto"),
         proto_root.join("console/v1/favorites.proto"),
         proto_root.join("console/v1/fs.proto"),
         proto_root.join("console/v1/git.proto"),
@@ -28,6 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         proto_root.join("console/v1/catalog.proto"),
         proto_root.join("console/v1/mcp.proto"),
         proto_root.join("console/v1/settings.proto"),
+        proto_root.join("console/v1/stt.proto"),
         proto_root.join("console/v1/terminal.proto"),
         proto_root.join("console/v1/usage.proto"),
     ];

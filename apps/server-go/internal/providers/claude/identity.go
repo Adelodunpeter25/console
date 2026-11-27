@@ -8,7 +8,7 @@ package claude
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )

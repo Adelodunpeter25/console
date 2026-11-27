@@ -173,6 +173,13 @@ type SessionHeader struct {
 	Worktree      *SessionWorktree       `protobuf:"bytes,14,opt,name=worktree,proto3" json:"worktree,omitempty"`
 	PinnedAt      *int64                 `protobuf:"varint,15,opt,name=pinned_at,json=pinnedAt,proto3,oneof" json:"pinned_at,omitempty"`
 	SettledAt     *int64                 `protobuf:"varint,16,opt,name=settled_at,json=settledAt,proto3,oneof" json:"settled_at,omitempty"` // unset = active
+	// A run finished or needs the user after any client last showed this chat.
+	// Computed on the server from two timestamps, so no client re-derives it.
+	Unread bool `protobuf:"varint,17,opt,name=unread,proto3" json:"unread,omitempty"`
+	// Worktree launch in progress or failed (with-worktree endpoint).
+	// "provisioning" | "failed"; absent once ready.
+	LaunchState   *string `protobuf:"bytes,18,opt,name=launch_state,json=launchState,proto3,oneof" json:"launch_state,omitempty"`
+	LaunchError   *string `protobuf:"bytes,19,opt,name=launch_error,json=launchError,proto3,oneof" json:"launch_error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -317,6 +324,27 @@ func (x *SessionHeader) GetSettledAt() int64 {
 		return *x.SettledAt
 	}
 	return 0
+}
+
+func (x *SessionHeader) GetUnread() bool {
+	if x != nil {
+		return x.Unread
+	}
+	return false
+}
+
+func (x *SessionHeader) GetLaunchState() string {
+	if x != nil && x.LaunchState != nil {
+		return *x.LaunchState
+	}
+	return ""
+}
+
+func (x *SessionHeader) GetLaunchError() string {
+	if x != nil && x.LaunchError != nil {
+		return *x.LaunchError
+	}
+	return ""
 }
 
 type SessionDeleteResponse struct {
@@ -791,7 +819,6 @@ type SubagentInfo struct {
 	Name             string                  `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	Role             string                  `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
 	Prompt           string                  `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	MaxTurns         int32                   `protobuf:"varint,6,opt,name=max_turns,json=maxTurns,proto3" json:"max_turns,omitempty"`
 	CurrentTurn      int32                   `protobuf:"varint,7,opt,name=current_turn,json=currentTurn,proto3" json:"current_turn,omitempty"`
 	Status           string                  `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
 	Summary          *string                 `protobuf:"bytes,9,opt,name=summary,proto3,oneof" json:"summary,omitempty"`
@@ -866,13 +893,6 @@ func (x *SubagentInfo) GetPrompt() string {
 		return x.Prompt
 	}
 	return ""
-}
-
-func (x *SubagentInfo) GetMaxTurns() int32 {
-	if x != nil {
-		return x.MaxTurns
-	}
-	return 0
 }
 
 func (x *SubagentInfo) GetCurrentTurn() int32 {
@@ -1075,7 +1095,7 @@ type SubagentStartEvent struct {
 	Name             string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	Role             string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
 	Prompt           string                 `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	MaxTurns         int32                  `protobuf:"varint,6,opt,name=max_turns,json=maxTurns,proto3" json:"max_turns,omitempty"`
+	Model            *string                `protobuf:"bytes,7,opt,name=model,proto3,oneof" json:"model,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1145,11 +1165,11 @@ func (x *SubagentStartEvent) GetPrompt() string {
 	return ""
 }
 
-func (x *SubagentStartEvent) GetMaxTurns() int32 {
-	if x != nil {
-		return x.MaxTurns
+func (x *SubagentStartEvent) GetModel() string {
+	if x != nil && x.Model != nil {
+		return *x.Model
 	}
-	return 0
+	return ""
 }
 
 type SubagentActivityEvent struct {
@@ -1320,12 +1340,348 @@ func (x *SubagentEndEvent) GetTotalTurns() int32 {
 	return 0
 }
 
+// Binary counterpart of GET /api/sessions/:id — one page of history plus the
+// refreshed header. Served by default; `Accept: application/json` keeps the
+// old mixed envelope. Turns are real proto messages, so tool arguments and
+// results cross as raw bytes instead of base64.
+type SessionMessagesPage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Header        *SessionHeader         `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
+	HasMore       bool                   `protobuf:"varint,3,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
+	NextCursor    *int64                 `protobuf:"varint,4,opt,name=next_cursor,json=nextCursor,proto3,oneof" json:"next_cursor,omitempty"`
+	Turns         []*TranscriptTurn      `protobuf:"bytes,6,rep,name=turns,proto3" json:"turns,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionMessagesPage) Reset() {
+	*x = SessionMessagesPage{}
+	mi := &file_console_v1_session_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionMessagesPage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionMessagesPage) ProtoMessage() {}
+
+func (x *SessionMessagesPage) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionMessagesPage.ProtoReflect.Descriptor instead.
+func (*SessionMessagesPage) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *SessionMessagesPage) GetHeader() *SessionHeader {
+	if x != nil {
+		return x.Header
+	}
+	return nil
+}
+
+func (x *SessionMessagesPage) GetHasMore() bool {
+	if x != nil {
+		return x.HasMore
+	}
+	return false
+}
+
+func (x *SessionMessagesPage) GetNextCursor() int64 {
+	if x != nil && x.NextCursor != nil {
+		return *x.NextCursor
+	}
+	return 0
+}
+
+func (x *SessionMessagesPage) GetTurns() []*TranscriptTurn {
+	if x != nil {
+		return x.Turns
+	}
+	return nil
+}
+
+// Detached work listed on a reopened chat. Same rows the JSON bootstrap
+// returns, but proto-encoded so a binary session open carries no JSON.
+type BackgroundWork struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ParentRunId   *string                `protobuf:"bytes,3,opt,name=parent_run_id,json=parentRunId,proto3,oneof" json:"parent_run_id,omitempty"`
+	ParentCallId  *string                `protobuf:"bytes,4,opt,name=parent_call_id,json=parentCallId,proto3,oneof" json:"parent_call_id,omitempty"`
+	Kind          string                 `protobuf:"bytes,5,opt,name=kind,proto3" json:"kind,omitempty"`
+	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	StartedAt     *string                `protobuf:"bytes,8,opt,name=started_at,json=startedAt,proto3,oneof" json:"started_at,omitempty"`
+	FinishedAt    *string                `protobuf:"bytes,9,opt,name=finished_at,json=finishedAt,proto3,oneof" json:"finished_at,omitempty"`
+	Summary       *string                `protobuf:"bytes,10,opt,name=summary,proto3,oneof" json:"summary,omitempty"`
+	Error         *string                `protobuf:"bytes,11,opt,name=error,proto3,oneof" json:"error,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,12,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BackgroundWork) Reset() {
+	*x = BackgroundWork{}
+	mi := &file_console_v1_session_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BackgroundWork) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BackgroundWork) ProtoMessage() {}
+
+func (x *BackgroundWork) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BackgroundWork.ProtoReflect.Descriptor instead.
+func (*BackgroundWork) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *BackgroundWork) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *BackgroundWork) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *BackgroundWork) GetParentRunId() string {
+	if x != nil && x.ParentRunId != nil {
+		return *x.ParentRunId
+	}
+	return ""
+}
+
+func (x *BackgroundWork) GetParentCallId() string {
+	if x != nil && x.ParentCallId != nil {
+		return *x.ParentCallId
+	}
+	return ""
+}
+
+func (x *BackgroundWork) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *BackgroundWork) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *BackgroundWork) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *BackgroundWork) GetStartedAt() string {
+	if x != nil && x.StartedAt != nil {
+		return *x.StartedAt
+	}
+	return ""
+}
+
+func (x *BackgroundWork) GetFinishedAt() string {
+	if x != nil && x.FinishedAt != nil {
+		return *x.FinishedAt
+	}
+	return ""
+}
+
+func (x *BackgroundWork) GetSummary() string {
+	if x != nil && x.Summary != nil {
+		return *x.Summary
+	}
+	return ""
+}
+
+func (x *BackgroundWork) GetError() string {
+	if x != nil && x.Error != nil {
+		return *x.Error
+	}
+	return ""
+}
+
+func (x *BackgroundWork) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+// Binary counterpart of GET /api/sessions/:id/bootstrap. The JSON shape is a
+// mixed envelope (raw message rows, raw background-work rows, a null draft);
+// this message is the same state as generated protobuf so the heavy fields —
+// messages, tool arguments and results — cross without base64 or field names.
+// Served when the client sends `Accept: application/x-protobuf`; the JSON
+// envelope remains the default for clients that do not opt in.
+type SessionBootstrapResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Header           *SessionHeader         `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
+	HasMore          bool                   `protobuf:"varint,3,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
+	NextCursor       *int64                 `protobuf:"varint,4,opt,name=next_cursor,json=nextCursor,proto3,oneof" json:"next_cursor,omitempty"`
+	Changes          []*SessionFileChange   `protobuf:"bytes,5,rep,name=changes,proto3" json:"changes,omitempty"`
+	Todos            []*TodoItem            `protobuf:"bytes,6,rep,name=todos,proto3" json:"todos,omitempty"`
+	Suggestions      []string               `protobuf:"bytes,7,rep,name=suggestions,proto3" json:"suggestions,omitempty"`
+	QueuedPrompts    []*QueuedPrompt        `protobuf:"bytes,8,rep,name=queued_prompts,json=queuedPrompts,proto3" json:"queued_prompts,omitempty"`
+	BackgroundWork   []*BackgroundWork      `protobuf:"bytes,9,rep,name=background_work,json=backgroundWork,proto3" json:"background_work,omitempty"`
+	Draft            *ChatDraft             `protobuf:"bytes,10,opt,name=draft,proto3,oneof" json:"draft,omitempty"`
+	PendingQuestions []*AskQuestionRequest  `protobuf:"bytes,12,rep,name=pending_questions,json=pendingQuestions,proto3" json:"pending_questions,omitempty"`
+	Turns            []*TranscriptTurn      `protobuf:"bytes,13,rep,name=turns,proto3" json:"turns,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SessionBootstrapResponse) Reset() {
+	*x = SessionBootstrapResponse{}
+	mi := &file_console_v1_session_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionBootstrapResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionBootstrapResponse) ProtoMessage() {}
+
+func (x *SessionBootstrapResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionBootstrapResponse.ProtoReflect.Descriptor instead.
+func (*SessionBootstrapResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *SessionBootstrapResponse) GetHeader() *SessionHeader {
+	if x != nil {
+		return x.Header
+	}
+	return nil
+}
+
+func (x *SessionBootstrapResponse) GetHasMore() bool {
+	if x != nil {
+		return x.HasMore
+	}
+	return false
+}
+
+func (x *SessionBootstrapResponse) GetNextCursor() int64 {
+	if x != nil && x.NextCursor != nil {
+		return *x.NextCursor
+	}
+	return 0
+}
+
+func (x *SessionBootstrapResponse) GetChanges() []*SessionFileChange {
+	if x != nil {
+		return x.Changes
+	}
+	return nil
+}
+
+func (x *SessionBootstrapResponse) GetTodos() []*TodoItem {
+	if x != nil {
+		return x.Todos
+	}
+	return nil
+}
+
+func (x *SessionBootstrapResponse) GetSuggestions() []string {
+	if x != nil {
+		return x.Suggestions
+	}
+	return nil
+}
+
+func (x *SessionBootstrapResponse) GetQueuedPrompts() []*QueuedPrompt {
+	if x != nil {
+		return x.QueuedPrompts
+	}
+	return nil
+}
+
+func (x *SessionBootstrapResponse) GetBackgroundWork() []*BackgroundWork {
+	if x != nil {
+		return x.BackgroundWork
+	}
+	return nil
+}
+
+func (x *SessionBootstrapResponse) GetDraft() *ChatDraft {
+	if x != nil {
+		return x.Draft
+	}
+	return nil
+}
+
+func (x *SessionBootstrapResponse) GetPendingQuestions() []*AskQuestionRequest {
+	if x != nil {
+		return x.PendingQuestions
+	}
+	return nil
+}
+
+func (x *SessionBootstrapResponse) GetTurns() []*TranscriptTurn {
+	if x != nil {
+		return x.Turns
+	}
+	return nil
+}
+
 var File_console_v1_session_proto protoreflect.FileDescriptor
 
 const file_console_v1_session_proto_rawDesc = "" +
 	"\n" +
 	"\x18console/v1/session.proto\x12\n" +
-	"console.v1\x1a\x18console/v1/message.proto\"L\n" +
+	"console.v1\x1a\x16console/v1/draft.proto\x1a\x16console/v1/event.proto\x1a\x18console/v1/message.proto\"L\n" +
 	"\bTodoItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\tR\acontent\x12\x16\n" +
@@ -1333,7 +1689,7 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\x0fSessionWorktree\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04repo\x18\x03 \x01(\tR\x04repo\"\xf6\x04\n" +
+	"\x04repo\x18\x03 \x01(\tR\x04repo\"\x80\x06\n" +
 	"\rSessionHeader\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x10\n" +
@@ -1356,14 +1712,19 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\bworktree\x18\x0e \x01(\v2\x1b.console.v1.SessionWorktreeR\bworktree\x12 \n" +
 	"\tpinned_at\x18\x0f \x01(\x03H\x04R\bpinnedAt\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"settled_at\x18\x10 \x01(\x03H\x05R\tsettledAt\x88\x01\x01B\r\n" +
+	"settled_at\x18\x10 \x01(\x03H\x05R\tsettledAt\x88\x01\x01\x12\x16\n" +
+	"\x06unread\x18\x11 \x01(\bR\x06unread\x12&\n" +
+	"\flaunch_state\x18\x12 \x01(\tH\x06R\vlaunchState\x88\x01\x01\x12&\n" +
+	"\flaunch_error\x18\x13 \x01(\tH\aR\vlaunchError\x88\x01\x01B\r\n" +
 	"\v_project_idB\x11\n" +
 	"\x0f_thinking_levelB\x10\n" +
 	"\x0e_message_countB\r\n" +
 	"\v_deleted_atB\f\n" +
 	"\n" +
 	"_pinned_atB\r\n" +
-	"\v_settled_at\"A\n" +
+	"\v_settled_atB\x0f\n" +
+	"\r_launch_stateB\x0f\n" +
+	"\r_launch_error\"A\n" +
 	"\x15SessionDeleteResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\adeleted\x18\x02 \x01(\bR\adeleted\"D\n" +
@@ -1404,15 +1765,14 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\x05error\x18\a \x01(\tH\x01R\x05error\x88\x01\x01B\n" +
 	"\n" +
 	"\b_summaryB\b\n" +
-	"\x06_error\"\xc6\x03\n" +
+	"\x06_error\"\xba\x03\n" +
 	"\fSubagentInfo\x12\x1f\n" +
 	"\vsubagent_id\x18\x01 \x01(\tR\n" +
 	"subagentId\x12-\n" +
 	"\x13parent_tool_call_id\x18\x02 \x01(\tR\x10parentToolCallId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
 	"\x04role\x18\x04 \x01(\tR\x04role\x12\x16\n" +
-	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x12\x1b\n" +
-	"\tmax_turns\x18\x06 \x01(\x05R\bmaxTurns\x12!\n" +
+	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x12!\n" +
 	"\fcurrent_turn\x18\a \x01(\x05R\vcurrentTurn\x12\x16\n" +
 	"\x06status\x18\b \x01(\tR\x06status\x12\x1d\n" +
 	"\asummary\x18\t \x01(\tH\x00R\asummary\x88\x01\x01\x12\x19\n" +
@@ -1427,7 +1787,7 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"updated_at\x18\r \x01(\x03R\tupdatedAtB\n" +
 	"\n" +
 	"\b_summaryB\b\n" +
-	"\x06_error\"\xef\x03\n" +
+	"\x06_errorJ\x04\b\x06\x10\aR\tmax_turns\"\xef\x03\n" +
 	"\fQueuedPrompt\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -1446,16 +1806,17 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\t_model_idB\v\n" +
 	"\t_providerB\x10\n" +
 	"\x0e_approval_modeB\x11\n" +
-	"\x0f_thinking_level\"\xde\x01\n" +
+	"\x0f_thinking_level\"\xf7\x01\n" +
 	"\x12SubagentStartEvent\x12\x1f\n" +
 	"\vsubagent_id\x18\x01 \x01(\tR\n" +
 	"subagentId\x122\n" +
 	"\x13parent_tool_call_id\x18\x02 \x01(\tH\x00R\x10parentToolCallId\x88\x01\x01\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
 	"\x04role\x18\x04 \x01(\tR\x04role\x12\x16\n" +
-	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x12\x1b\n" +
-	"\tmax_turns\x18\x06 \x01(\x05R\bmaxTurnsB\x16\n" +
-	"\x14_parent_tool_call_id\"\x90\x02\n" +
+	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x12\x19\n" +
+	"\x05model\x18\a \x01(\tH\x01R\x05model\x88\x01\x01B\x16\n" +
+	"\x14_parent_tool_call_idB\b\n" +
+	"\x06_modelJ\x04\b\x06\x10\aR\tmax_turns\"\x90\x02\n" +
 	"\x15SubagentActivityEvent\x12\x1f\n" +
 	"\vsubagent_id\x18\x01 \x01(\tR\n" +
 	"subagentId\x12\x1d\n" +
@@ -1481,7 +1842,58 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"totalTurnsB\n" +
 	"\n" +
 	"\b_summaryB\b\n" +
-	"\x06_errorBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
+	"\x06_error\"\xef\x01\n" +
+	"\x13SessionMessagesPage\x121\n" +
+	"\x06header\x18\x01 \x01(\v2\x19.console.v1.SessionHeaderR\x06header\x12\x19\n" +
+	"\bhas_more\x18\x03 \x01(\bR\ahasMore\x12$\n" +
+	"\vnext_cursor\x18\x04 \x01(\x03H\x00R\n" +
+	"nextCursor\x88\x01\x01\x120\n" +
+	"\x05turns\x18\x06 \x03(\v2\x1a.console.v1.TranscriptTurnR\x05turnsB\x0e\n" +
+	"\f_next_cursorJ\x04\b\x02\x10\x03J\x04\b\x05\x10\x06R\bmessagesR\fwake_records\"\xbf\x04\n" +
+	"\x0eBackgroundWork\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12'\n" +
+	"\rparent_run_id\x18\x03 \x01(\tH\x00R\vparentRunId\x88\x01\x01\x12)\n" +
+	"\x0eparent_call_id\x18\x04 \x01(\tH\x01R\fparentCallId\x88\x01\x01\x12\x12\n" +
+	"\x04kind\x18\x05 \x01(\tR\x04kind\x12\x16\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\a \x01(\tR\tcreatedAt\x12\"\n" +
+	"\n" +
+	"started_at\x18\b \x01(\tH\x02R\tstartedAt\x88\x01\x01\x12$\n" +
+	"\vfinished_at\x18\t \x01(\tH\x03R\n" +
+	"finishedAt\x88\x01\x01\x12\x1d\n" +
+	"\asummary\x18\n" +
+	" \x01(\tH\x04R\asummary\x88\x01\x01\x12\x19\n" +
+	"\x05error\x18\v \x01(\tH\x05R\x05error\x88\x01\x01\x12D\n" +
+	"\bmetadata\x18\f \x03(\v2(.console.v1.BackgroundWork.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x10\n" +
+	"\x0e_parent_run_idB\x11\n" +
+	"\x0f_parent_call_idB\r\n" +
+	"\v_started_atB\x0e\n" +
+	"\f_finished_atB\n" +
+	"\n" +
+	"\b_summaryB\b\n" +
+	"\x06_error\"\x8a\x05\n" +
+	"\x18SessionBootstrapResponse\x121\n" +
+	"\x06header\x18\x01 \x01(\v2\x19.console.v1.SessionHeaderR\x06header\x12\x19\n" +
+	"\bhas_more\x18\x03 \x01(\bR\ahasMore\x12$\n" +
+	"\vnext_cursor\x18\x04 \x01(\x03H\x00R\n" +
+	"nextCursor\x88\x01\x01\x127\n" +
+	"\achanges\x18\x05 \x03(\v2\x1d.console.v1.SessionFileChangeR\achanges\x12*\n" +
+	"\x05todos\x18\x06 \x03(\v2\x14.console.v1.TodoItemR\x05todos\x12 \n" +
+	"\vsuggestions\x18\a \x03(\tR\vsuggestions\x12?\n" +
+	"\x0equeued_prompts\x18\b \x03(\v2\x18.console.v1.QueuedPromptR\rqueuedPrompts\x12C\n" +
+	"\x0fbackground_work\x18\t \x03(\v2\x1a.console.v1.BackgroundWorkR\x0ebackgroundWork\x120\n" +
+	"\x05draft\x18\n" +
+	" \x01(\v2\x15.console.v1.ChatDraftH\x01R\x05draft\x88\x01\x01\x12K\n" +
+	"\x11pending_questions\x18\f \x03(\v2\x1e.console.v1.AskQuestionRequestR\x10pendingQuestions\x120\n" +
+	"\x05turns\x18\r \x03(\v2\x1a.console.v1.TranscriptTurnR\x05turnsB\x0e\n" +
+	"\f_next_cursorB\b\n" +
+	"\x06_draftJ\x04\b\x02\x10\x03J\x04\b\v\x10\fR\bmessagesR\fwake_recordsBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
 
 var (
 	file_console_v1_session_proto_rawDescOnce sync.Once
@@ -1495,7 +1907,7 @@ func file_console_v1_session_proto_rawDescGZIP() []byte {
 	return file_console_v1_session_proto_rawDescData
 }
 
-var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_console_v1_session_proto_goTypes = []any{
 	(*TodoItem)(nil),                       // 0: console.v1.TodoItem
 	(*SessionWorktree)(nil),                // 1: console.v1.SessionWorktree
@@ -1512,19 +1924,37 @@ var file_console_v1_session_proto_goTypes = []any{
 	(*SubagentStartEvent)(nil),             // 12: console.v1.SubagentStartEvent
 	(*SubagentActivityEvent)(nil),          // 13: console.v1.SubagentActivityEvent
 	(*SubagentEndEvent)(nil),               // 14: console.v1.SubagentEndEvent
-	(*ImageAttachment)(nil),                // 15: console.v1.ImageAttachment
-	(*BrowserAnnotation)(nil),              // 16: console.v1.BrowserAnnotation
+	(*SessionMessagesPage)(nil),            // 15: console.v1.SessionMessagesPage
+	(*BackgroundWork)(nil),                 // 16: console.v1.BackgroundWork
+	(*SessionBootstrapResponse)(nil),       // 17: console.v1.SessionBootstrapResponse
+	nil,                                    // 18: console.v1.BackgroundWork.MetadataEntry
+	(*ImageAttachment)(nil),                // 19: console.v1.ImageAttachment
+	(*BrowserAnnotation)(nil),              // 20: console.v1.BrowserAnnotation
+	(*TranscriptTurn)(nil),                 // 21: console.v1.TranscriptTurn
+	(*ChatDraft)(nil),                      // 22: console.v1.ChatDraft
+	(*AskQuestionRequest)(nil),             // 23: console.v1.AskQuestionRequest
 }
 var file_console_v1_session_proto_depIdxs = []int32{
 	1,  // 0: console.v1.SessionHeader.worktree:type_name -> console.v1.SessionWorktree
 	9,  // 1: console.v1.SubagentInfo.activities:type_name -> console.v1.SubagentActivityItem
-	15, // 2: console.v1.QueuedPrompt.attachments:type_name -> console.v1.ImageAttachment
-	16, // 3: console.v1.QueuedPrompt.annotations:type_name -> console.v1.BrowserAnnotation
-	4,  // [4:4] is the sub-list for method output_type
-	4,  // [4:4] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	19, // 2: console.v1.QueuedPrompt.attachments:type_name -> console.v1.ImageAttachment
+	20, // 3: console.v1.QueuedPrompt.annotations:type_name -> console.v1.BrowserAnnotation
+	2,  // 4: console.v1.SessionMessagesPage.header:type_name -> console.v1.SessionHeader
+	21, // 5: console.v1.SessionMessagesPage.turns:type_name -> console.v1.TranscriptTurn
+	18, // 6: console.v1.BackgroundWork.metadata:type_name -> console.v1.BackgroundWork.MetadataEntry
+	2,  // 7: console.v1.SessionBootstrapResponse.header:type_name -> console.v1.SessionHeader
+	7,  // 8: console.v1.SessionBootstrapResponse.changes:type_name -> console.v1.SessionFileChange
+	0,  // 9: console.v1.SessionBootstrapResponse.todos:type_name -> console.v1.TodoItem
+	11, // 10: console.v1.SessionBootstrapResponse.queued_prompts:type_name -> console.v1.QueuedPrompt
+	16, // 11: console.v1.SessionBootstrapResponse.background_work:type_name -> console.v1.BackgroundWork
+	22, // 12: console.v1.SessionBootstrapResponse.draft:type_name -> console.v1.ChatDraft
+	23, // 13: console.v1.SessionBootstrapResponse.pending_questions:type_name -> console.v1.AskQuestionRequest
+	21, // 14: console.v1.SessionBootstrapResponse.turns:type_name -> console.v1.TranscriptTurn
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_session_proto_init() }
@@ -1532,6 +1962,8 @@ func file_console_v1_session_proto_init() {
 	if File_console_v1_session_proto != nil {
 		return
 	}
+	file_console_v1_draft_proto_init()
+	file_console_v1_event_proto_init()
 	file_console_v1_message_proto_init()
 	file_console_v1_session_proto_msgTypes[2].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[7].OneofWrappers = []any{}
@@ -1541,13 +1973,16 @@ func file_console_v1_session_proto_init() {
 	file_console_v1_session_proto_msgTypes[12].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[13].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[14].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[15].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[16].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[17].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_session_proto_rawDesc), len(file_console_v1_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

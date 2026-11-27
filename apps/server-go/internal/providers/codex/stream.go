@@ -9,8 +9,8 @@ package codex
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"net/http"
 	"strings"
 
@@ -42,7 +42,7 @@ func (p *Provider) httpClient() *http.Client {
 	if p.HTTPClient != nil {
 		return p.HTTPClient
 	}
-	return &http.Client{Timeout: 0}
+	return &http.Client{Transport: shared.Transport, Timeout: 0}
 }
 
 func (p *Provider) loadCredential(accountID string) (ParsedCredential, error) {
@@ -375,7 +375,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		sessionID = uuid.NewString()
 	}
 	promptCacheKey := sessionID
-	body := BuildRequestBody(req.Model, req.SystemPrompt, req.Messages, req.Tools, req.CacheRetention, promptCacheKey, req.ThinkingLevel)
+	body := BuildRequestBody(req.Model, req.SystemPrompt, loop.WithTail(req.Tail, req.Messages), req.Tools, req.CacheRetention, promptCacheKey, req.ThinkingLevel)
 	rawBody, err := json.Marshal(body)
 	if err != nil {
 		return err

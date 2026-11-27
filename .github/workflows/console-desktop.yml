@@ -1,20 +1,36 @@
-# Packages the GPUI desktop app for Intel + Apple Silicon macOS, and the
-# Windows x64 preview build, on each push to main. macOS assets go to the
-# rolling GitHub Release tagged `console-desktop` (latest always wins),
-# mirroring console-server.yml.
+# Packages the GPUI desktop app for Intel + Apple Silicon macOS on each push
+# to main, plus the Windows x64 preview build on manual runs only
+# (workflow_dispatch). macOS assets go to the rolling GitHub Release tagged
+# `console-desktop` (latest always wins), mirroring console-server.yml.
 #
 # Assets: Console-macos-x64.zip + Console-macos-arm64.zip (ditto-packed .app
 # bundles, ad-hoc signed — see apps/desktop/scripts/build.sh), plus
-# Console-windows-x64.zip (NSIS installer, see apps/desktop/scripts/build.ps1).
+# Console-windows-x64.zip (NSIS installer, see apps/desktop/scripts/build.ps1),
+# plus latest.json ({"build": N}) for the in-app updater.
 name: Build console-desktop
 
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - "proto/**"
+      - "rust-toolchain.toml"
+      - ".github/workflows/console-desktop.yml"
   workflow_dispatch:
+
+# A newer push supersedes an in-flight build, freeing scarce macOS runners.
+concurrency:
+  group: console-desktop-build-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
+
+# Baked into every build (apps/desktop/src/build.rs) and published as
+# latest.json; the in-app updater installs when the published number is higher.
+env:
+  CONSOLE_BUILD_NUMBER: ${{ github.run_number }}
 
 jobs:
   build:
@@ -34,7 +50,7 @@ jobs:
         with:
           # Must match rust-toolchain.toml (source of truth); explicit here
           # so the runner doesn't fetch latest stable first.
-          toolchain: 1.97.1
+          toolchain: 1.98.1
           targets: ${{ matrix.rust-target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -74,7 +90,11 @@ jobs:
   # Windows preview. Kept separate from the macOS matrix because packaging is
   # an NSIS installer zip, not an .app bundle. It feeds `publish` alongside the
   # macOS builds, so the Windows zip lands on the same rolling release.
+  #
+  # Manual runs only: pushes build and publish the macOS builds alone. Pick
+  # "Run workflow" to include the Windows installer.
   build-windows:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +102,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.97.1
+          toolchain: 1.98.1
           targets: x86_64-pc-windows-msvc
 
       - uses: Swatinem/rust-cache@v2
@@ -117,11 +137,20 @@ jobs:
   # rolling release in parallel, racing inside action-gh-release. Builds
   # stay parallel; only this job mutates the release.
   #
-  # It waits on `build-windows` too: download-artifact can only fetch what
-  # already exists, so publishing when only the macOS matrix is done would
-  # race the Windows upload and ship a release without it.
+  # On manual runs it waits on `build-windows` too: download-artifact can
+  # only fetch what already exists, so publishing when only the macOS matrix
+  # is done would race the Windows upload and ship a release without it. On
+  # pushes build-windows is skipped and the release ships macOS-only (the
+  # unmatched Windows file pattern is a no-op for action-gh-release).
   publish:
     needs: [build, build-windows]
+    # Run when macOS succeeded and Windows either ran or was skipped (push).
+    # A failed Windows build on a manual run blocks publishing — never ship
+    # a partial release when one was explicitly requested.
+    if: >-
+      always() &&
+      needs.build.result == 'success' &&
+      (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped')
     runs-on: ubuntu-latest
 
     # Prevent overlapping pushes from modifying the rolling release together.
@@ -135,6 +164,9 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+
+      - name: Write latest.json
+        run: echo '{"build":${{ github.run_number }}}' > dist/latest.json
 
       # Retried: the upload itself usually succeeds but the action's final
       # release API call occasionally times out (Headers Timeout Error).
@@ -155,3 +187,4 @@ jobs:
               dist/Console-macos-x64.zip
               dist/Console-macos-arm64.zip
               dist/Console-windows-x64.zip
+              dist/latest.json

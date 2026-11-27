@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -12,12 +14,44 @@ import (
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 )
 
+// maxDraftClockSkew bounds how far ahead of the server a client's updatedAt
+// may be. A device with a fast clock would otherwise stamp a draft no other
+// device could overwrite until their clocks caught up.
+const maxDraftClockSkew = time.Minute
+
 type DraftService struct {
 	manager *db.DB
 }
 
 func NewDraftService(manager *db.DB) *DraftService {
 	return &DraftService{manager: manager}
+}
+
+// ListSessionIDs returns session IDs that currently have a non-empty draft
+// (excluding the reserved __floating__ key).
+func (s *DraftService) ListSessionIDs() ([]string, error) {
+	rows, err := s.manager.Global().Query(
+		`SELECT session_id, body FROM chat_drafts WHERE session_id != '__floating__' ORDER BY updated_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var sessionID, body string
+		if err := rows.Scan(&sessionID, &body); err != nil {
+			return nil, err
+		}
+		draft := &consolev1.ChatDraft{}
+		if err := protojson.Unmarshal([]byte(body), draft); err != nil {
+			continue
+		}
+		if strings.TrimSpace(draft.Text) != "" || len(draft.Comments) > 0 {
+			ids = append(ids, sessionID)
+		}
+	}
+	return ids, rows.Err()
 }
 
 // Get returns the stored draft, or nil when the chat has none.
@@ -46,6 +80,9 @@ func (s *DraftService) Get(sessionID string) (*consolev1.ChatDraft, error) {
 func (s *DraftService) Put(draft *consolev1.ChatDraft) (bool, *consolev1.ChatDraft, error) {
 	if draft.SessionId == "" {
 		return false, nil, fmt.Errorf("sessionId is required.")
+	}
+	if latest := time.Now().Add(maxDraftClockSkew).UnixMilli(); draft.UpdatedAt > latest {
+		draft.UpdatedAt = time.Now().UnixMilli()
 	}
 	tx, err := s.manager.Global().Begin()
 	if err != nil {

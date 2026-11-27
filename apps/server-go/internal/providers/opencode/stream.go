@@ -5,8 +5,8 @@ package opencode
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"net/http"
 	"strings"
 	"time"
@@ -36,7 +36,7 @@ func (p *Provider) httpClient() *http.Client {
 	if p.HTTPClient != nil {
 		return p.HTTPClient
 	}
-	return &http.Client{Timeout: 0}
+	return &http.Client{Transport: shared.Transport, Timeout: 0}
 }
 
 // RunTurn implements loop.Provider. Discovery is a deliberate preflight for
@@ -71,7 +71,7 @@ func (p *Provider) ensureModel(ctx context.Context, modelID string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("OpenCode model %q is not available in the free model list", modelID)
+	return fmt.Errorf("OpenCode model %q is not available in the model list", modelID)
 }
 
 func (p *Provider) postJSON(ctx context.Context, path, conversationID string, body map[string]any) (*http.Response, error) {
@@ -104,7 +104,7 @@ func (p *Provider) postJSON(ctx context.Context, path, conversationID string, bo
 }
 
 func (p *Provider) runChat(ctx context.Context, req loop.TurnRequest, events *stream.Stream[loop.Event]) error {
-	messages := ConvertChatMessages(req.Messages)
+	messages := ConvertChatMessages(loop.WithTail(req.Tail, req.Messages))
 	if strings.TrimSpace(req.SystemPrompt) != "" {
 		messages = append([]map[string]any{{"role": "system", "content": req.SystemPrompt}}, messages...)
 	}
@@ -116,7 +116,7 @@ func (p *Provider) runChat(ctx context.Context, req loop.TurnRequest, events *st
 			"include_usage": true,
 		},
 	}
-	toolDefinitions := MergeToolDefinitions(req.Tools)
+	toolDefinitions := req.Tools
 	if len(toolDefinitions) > 0 {
 		body["tools"] = ConvertChatTools(toolDefinitions)
 	}
@@ -188,14 +188,14 @@ func (p *Provider) runChat(ctx context.Context, req loop.TurnRequest, events *st
 func (p *Provider) runResponses(ctx context.Context, req loop.TurnRequest, events *stream.Stream[loop.Event]) error {
 	body := map[string]any{
 		"model":  req.Model,
-		"input":  ConvertResponsesMessages(req.Messages),
+		"input":  ConvertResponsesMessages(loop.WithTail(req.Tail, req.Messages)),
 		"stream": true,
 		"store":  false,
 	}
 	if strings.TrimSpace(req.SystemPrompt) != "" {
 		body["instructions"] = req.SystemPrompt
 	}
-	toolDefinitions := MergeToolDefinitions(req.Tools)
+	toolDefinitions := req.Tools
 	if len(toolDefinitions) > 0 {
 		body["tools"] = ConvertResponsesTools(toolDefinitions)
 	}

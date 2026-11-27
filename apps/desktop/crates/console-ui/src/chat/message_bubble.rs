@@ -5,12 +5,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use super::change_chips::{
-    OpenChangeHandler, ToggleChangesHandler, TurnChanges, turn_change_chips,
+    LoadDiffHandler, OpenChangeHandler, ToggleChangesHandler, TurnChanges, turn_change_chips,
 };
 use super::markdown_helpers::assistant_ctx;
 pub(crate) use super::markdown_helpers::render_selectable_markdown;
 use crate::common::{InlineFileMention, InlineFileMentionText, attachment_image, copy_button};
 use crate::markdown::render::{LinkHandler, MarkdownView, Palette, TranscriptSelection};
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 use crate::utils::{format_message_time, format_tokens_per_second};
@@ -19,8 +20,8 @@ use super::ThinkingBlock;
 use base64::Engine as _;
 use console_core::{AssistantContentPart, ImageAttachment};
 use gpui::{
-    App, ElementId, IntoElement, ParentElement, RenderOnce, Styled, Window, div, img, prelude::*,
-    px,
+    App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window, div, img,
+    prelude::*, px,
 };
 
 /// Find the next `pasted <N> lines` label (the friendly text a large-paste
@@ -62,9 +63,10 @@ pub(crate) fn find_paste_label(remaining: &str) -> Option<(usize, usize)> {
 /// A pasted upload's context file lives under the server's pastes dir
 /// (`.../pastes/<session>/pasted-<ts>-<rand>.log|.txt`).
 fn is_paste_path(path: &str) -> bool {
-    path.contains("/pastes/") || Path::new(path).file_name().is_some_and(|n| {
-        n.to_str().is_some_and(|name| name.starts_with("pasted-"))
-    })
+    path.contains("/pastes/")
+        || Path::new(path)
+            .file_name()
+            .is_some_and(|n| n.to_str().is_some_and(|name| name.starts_with("pasted-")))
 }
 
 /// Keep the message as one flat string and return the ranges that should be
@@ -83,11 +85,7 @@ pub(crate) fn message_text_with_mentions(
         if is_paste_path(path) {
             paste_paths.push(path.clone());
         } else {
-            let label = Path::new(path)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(path)
-                .to_string();
+            let label = console_shared::composer::mentions::mention_label(path);
             pills.push((label, path.clone()));
         }
     }
@@ -215,7 +213,30 @@ pub(crate) fn message_text_with_mentions(
         }
     }
 
+    add_chat_ref_mentions(&text, &mut mentions);
     (text, mentions)
+}
+
+/// Chat refs sent before they were recorded as context paths have no metadata,
+/// so find them in the text with the shared `$ref` rules.
+fn add_chat_ref_mentions(text: &str, mentions: &mut Vec<InlineFileMention>) {
+    let found: Vec<_> = console_shared::composer::mentions::parse_chat_refs(text)
+        .into_iter()
+        .filter(|found| {
+            mentions
+                .iter()
+                .all(|m| m.range.end <= found.range.start || m.range.start >= found.range.end)
+        })
+        .map(|found| InlineFileMention {
+            range: found.range,
+            path: format!(
+                "{}{}",
+                console_shared::composer::mentions::CHAT_PATH_PREFIX,
+                found.slug
+            ),
+        })
+        .collect();
+    mentions.extend(found);
 }
 
 /// File paths come from structured context metadata and are never guessed
@@ -247,8 +268,7 @@ const USER_FOLD_CHARS_PER_LINE: usize = 64;
 pub fn estimated_text_lines(text: &str) -> usize {
     text.split('\n')
         .map(|line| {
-            let wrapped =
-                (line.chars().count() + USER_FOLD_CHARS_PER_LINE - 1) / USER_FOLD_CHARS_PER_LINE;
+            let wrapped = line.chars().count().div_ceil(USER_FOLD_CHARS_PER_LINE);
             wrapped.max(1)
         })
         .sum()
@@ -261,6 +281,8 @@ pub struct UserMessageBubble {
     pub annotations: Vec<console_core::BrowserElementAnnotation>,
     pub context_files: Vec<String>,
     pub created_at: Option<i64>,
+    plan_mode: bool,
+    source: Option<String>,
     selection: Option<TranscriptSelection>,
     selection_row: String,
     on_preview_image: Option<PreviewImageHandler>,
@@ -276,6 +298,8 @@ impl UserMessageBubble {
             annotations: Vec::new(),
             context_files: Vec::new(),
             created_at: None,
+            plan_mode: false,
+            source: None,
             selection: None,
             selection_row: "user-message".to_owned(),
             on_preview_image: None,
@@ -315,6 +339,18 @@ impl UserMessageBubble {
         self
     }
 
+    /// The prompt was sent in plan mode: the card carries the composer's stripes.
+    pub fn plan_mode(mut self, plan_mode: bool) -> Self {
+        self.plan_mode = plan_mode;
+        self
+    }
+
+    /// Server-initiated turn source ("automation", "webhook").
+    pub fn source(mut self, source: Option<String>) -> Self {
+        self.source = source;
+        self
+    }
+
     pub fn expanded(mut self, expanded: bool) -> Self {
         self.expanded = expanded;
         self
@@ -334,14 +370,20 @@ impl RenderOnce for UserMessageBubble {
         let timestamp = format_message_time(self.created_at);
 
         let preview_handler = self.on_preview_image.clone();
+        let source_badge = self.source.as_deref().and_then(|src| match src {
+            "automation" => Some((IconName::Calendar, "Scheduled run")),
+            "webhook" => Some((IconName::Zap, "Webhook event")),
+            "" => None,
+            other => Some((IconName::Bell, other)),
+        });
 
         // Staged file comments ride the prompt as tagged blocks; show them as
         // chips like mentions instead of dumping the raw markup in the bubble.
         let (body_text, file_comments) =
             console_shared::composer::file_comments::split_file_comments(&self.content);
-        let (message_text, mentions) =
-            message_text_with_mentions(&body_text, &self.context_files);
-        let has_content = !message_text.is_empty();
+        let (message_text, mentions) = message_text_with_mentions(&body_text, &self.context_files);
+        let has_text = !message_text.is_empty();
+        let has_content = has_text || !file_comments.is_empty();
         let comment_chips = (!file_comments.is_empty()).then(|| {
             div()
                 .max_w(px(540.0))
@@ -365,6 +407,18 @@ impl RenderOnce for UserMessageBubble {
         });
         // The bubble's text joins the transcript's selection registry, so
         // prompts are highlightable (and citable) like assistant replies.
+        let on_image_click: Option<Rc<dyn Fn(usize, &mut Window, &mut App)>> =
+            preview_handler.clone().map(|on_preview| {
+                let attachments = self.attachments.clone();
+                Rc::new(move |number: usize, window: &mut Window, cx: &mut App| {
+                    if let Some(image) = attachments
+                        .get(number.wrapping_sub(1))
+                        .and_then(attachment_image)
+                    {
+                        (on_preview)(image, window, cx);
+                    }
+                }) as Rc<dyn Fn(usize, &mut Window, &mut App)>
+            });
         let message_text_element = match &self.selection {
             Some(selection) => InlineFileMentionText::new(message_text.clone(), mentions)
                 .with_selection(
@@ -376,9 +430,23 @@ impl RenderOnce for UserMessageBubble {
                 ),
             None => InlineFileMentionText::new(message_text.clone(), mentions),
         };
+        let message_text_element = match on_image_click {
+            Some(handler) => message_text_element.on_image_click(handler),
+            None => message_text_element,
+        };
+        let message_text_element = if self.attachments.is_empty() {
+            message_text_element
+        } else {
+            let hover = _window.use_keyed_state(
+                ElementId::Name(format!("user-image-hover-{}", self.selection_row).into()),
+                cx,
+                |_, _| crate::common::image_hover::ImageChipHover::default(),
+            );
+            message_text_element.image_hover(hover, self.attachments.clone())
+        };
         // Long prompts fold to 8 lines with a Show more/less toggle inside the card,
         // mirroring mobile's 4-line fold.
-        let foldable = has_content && estimated_text_lines(&message_text) > USER_FOLDED_LINES;
+        let foldable = has_text && estimated_text_lines(&message_text) > USER_FOLDED_LINES;
         let folded = foldable && !self.expanded;
         let expanded = self.expanded;
         let expand_toggle = if foldable {
@@ -402,97 +470,123 @@ impl RenderOnce for UserMessageBubble {
                     .flex_col()
                     .items_end()
                     .gap(px(8.0))
-                    .when(!self.attachments.is_empty(), |element| {
-                        element.child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .flex_wrap()
-                                .justify_end()
-                                .gap(px(8.0))
-                                .children(self.attachments.iter().cloned().enumerate().filter_map(
-                                    |(index, attachment)| {
-                                        let image = attachment_image(&attachment)?;
-                                        let on_preview = preview_handler.clone();
-                                        Some(
-                                            div()
-                                                .id(ElementId::Name(
-                                                    format!("user-attachment-{index}").into(),
-                                                ))
-                                                .size(px(80.0))
-                                                .rounded(px(9.0))
-                                                .overflow_hidden()
-                                                .border_1()
-                                                .border_color(theme.user_bubble_border)
-                                                .bg(gpui::rgb(0x000000))
-                                                .cursor_default()
-                                                .when_some(on_preview, |tile, on_preview| {
-                                                    let image = image.clone();
-                                                    tile.on_click(move |_, window, cx| {
-                                                        (on_preview)(image.clone(), window, cx);
-                                                        cx.stop_propagation();
-                                                    })
-                                                })
-                                                .child(img(image).size_full()),
-                                        )
-                                    },
-                                )),
-                        )
-                    })
                     .when(!self.annotations.is_empty(), |element| {
                         element.child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .flex_wrap()
-                                .justify_end()
-                                .gap(px(8.0))
-                                .children(self.annotations.iter().cloned().enumerate().map(
-                                    |(index, ann)| {
-                                        let label = match (&ann.component_name, &ann.source_location) {
-                                            (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
-                                            (Some(c), None) => format!("<{c} />"),
-                                            (None, Some(s)) => s.clone(),
-                                            (None, None) => ann.selector.clone(),
+                            div().flex().flex_col().items_end().gap(px(6.0)).children(
+                                self.annotations
+                                    .iter()
+                                    .cloned()
+                                    .enumerate()
+                                    .map(|(index, ann)| {
+                                        let label =
+                                            match (&ann.component_name, &ann.source_location) {
+                                                (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
+                                                (Some(c), None) => format!("<{c} />"),
+                                                (None, Some(s)) => s.clone(),
+                                                (None, None) => {
+                                                    console_shared::format::format_selector_label(
+                                                        &ann.selector,
+                                                    )
+                                                }
+                                            };
+                                        let comment = ann.user_comment.trim().to_string();
+                                        let chip_text = if comment.is_empty() {
+                                            label.clone()
+                                        } else {
+                                            format!("{label}  \"{comment}\"")
                                         };
-                                        let thumb = ann.screenshot_base64.as_ref().and_then(|b64| {
-                                            let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
-                                            if bytes.is_empty() { return None; }
-                                            Some(Arc::new(gpui::Image::from_bytes(gpui::ImageFormat::Png, bytes)))
-                                        });
+                                        let tooltip = if comment.is_empty() {
+                                            label.clone()
+                                        } else {
+                                            format!("{label}\n{comment}")
+                                        };
+                                        let thumb =
+                                            ann.screenshot_base64.as_ref().and_then(|b64| {
+                                                let bytes =
+                                                    base64::engine::general_purpose::STANDARD
+                                                        .decode(b64)
+                                                        .ok()?;
+                                                if bytes.is_empty() {
+                                                    return None;
+                                                }
+                                                Some(Arc::new(gpui::Image::from_bytes(
+                                                    gpui::ImageFormat::Png,
+                                                    bytes,
+                                                )))
+                                            });
                                         let on_preview = preview_handler.clone();
+                                        let (chip_bg, chip_border, chip_text_color) =
+                                            crate::common::file_mention_colors(theme);
                                         div()
-                                            .id(ElementId::Name(
-                                                format!("user-annotation-{index}").into(),
-                                            ))
-                                            .size(px(80.0))
-                                            .rounded(px(9.0))
-                                            .overflow_hidden()
-                                            .border_1()
-                                            .border_color(theme.user_bubble_border)
-                                            .bg(theme.overlay)
-                                            .cursor_default()
                                             .flex()
                                             .flex_col()
-                                            .when_some(thumb.clone(), |tile, image| {
-                                                tile.child(img(image).size_full())
-                                            })
-                                            .when(thumb.is_none(), |tile| {
-                                                tile.child(
-                                                    div().p(px(6.0)).text_size(px(10.5)).text_color(theme.text_secondary).child(label.clone()),
+                                            .items_end()
+                                            .gap(px(4.0))
+                                            .when_some(thumb, |column, image| {
+                                                column.child(
+                                                    div()
+                                                        .id(ElementId::Name(
+                                                            format!("user-annotation-{index}")
+                                                                .into(),
+                                                        ))
+                                                        .size(px(80.0))
+                                                        .rounded(px(9.0))
+                                                        .overflow_hidden()
+                                                        .border_1()
+                                                        .border_color(theme.user_bubble_border)
+                                                        .bg(theme.overlay)
+                                                        .cursor_default()
+                                                        .child(img(image.clone()).size_full())
+                                                        .when_some(
+                                                            on_preview,
+                                                            |tile, on_preview| {
+                                                                tile.on_click(
+                                                                    move |_, window, cx| {
+                                                                        (on_preview)(
+                                                                            image.clone(),
+                                                                            window,
+                                                                            cx,
+                                                                        );
+                                                                        cx.stop_propagation();
+                                                                    },
+                                                                )
+                                                            },
+                                                        ),
                                                 )
                                             })
-                                            .when_some(on_preview, |tile, on_preview| {
-                                                let image = thumb.clone();
-                                                tile.on_click(move |_, window, cx| {
-                                                    if let Some(image) = image.clone() {
-                                                        (on_preview)(image, window, cx);
-                                                    }
-                                                    cx.stop_propagation();
-                                                })
-                                            })
-                                    },
-                                )),
+                                            .child(
+                                                div()
+                                                    .id(ElementId::Name(
+                                                        format!("user-annotation-chip-{index}")
+                                                            .into(),
+                                                    ))
+                                                    .max_w(px(540.0))
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap(px(4.0))
+                                                    .px(px(6.0))
+                                                    .py(px(1.0))
+                                                    .rounded(px(crate::common::FILE_MENTION_RADIUS))
+                                                    .border_1()
+                                                    .border_color(chip_border)
+                                                    .bg(chip_bg)
+                                                    .tooltip(Tooltip::text(tooltip))
+                                                    .child(app_icon(
+                                                        IconName::Inspector,
+                                                        crate::common::FILE_MENTION_ICON_SIZE,
+                                                        chip_text_color,
+                                                    ))
+                                                    .child(
+                                                        div()
+                                                            .min_w_0()
+                                                            .truncate()
+                                                            .text_size(px(12.5))
+                                                            .text_color(chip_text_color)
+                                                            .child(chip_text),
+                                                    ),
+                                            )
+                                    }),
+                            ),
                         )
                     })
                     .when(has_content, |element| {
@@ -507,6 +601,28 @@ impl RenderOnce for UserMessageBubble {
                                 .border_color(theme.user_bubble_border)
                                 .flex()
                                 .flex_col()
+                                .when(self.plan_mode, |el| {
+                                    el.child(
+                                        crate::common::plan_mode_stripes(theme).rounded(px(11.0)),
+                                    )
+                                })
+                                .when_some(source_badge, |el, (icon, label)| {
+                                    el.child(
+                                        div()
+                                            .pb(px(4.0))
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(5.0))
+                                            .child(app_icon(icon, 11.5, theme.accent))
+                                            .child(
+                                                div()
+                                                    .text_size(px(11.0))
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(theme.accent)
+                                                    .child(label.to_string()),
+                                            ),
+                                    )
+                                })
                                 .text_size(px(14.0))
                                 .line_height(px(20.0))
                                 .text_color(theme.text)
@@ -519,7 +635,7 @@ impl RenderOnce for UserMessageBubble {
                                                 .overflow_hidden()
                                         })
                                         .when_some(comment_chips, |el, chips| el.child(chips))
-                                        .child(message_text_element),
+                                        .when(has_text, |el| el.child(message_text_element)),
                                 )
                                 .when_some(expand_toggle, |card, on_toggle| {
                                     card.child(
@@ -581,7 +697,7 @@ pub type ForkHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 
 #[derive(IntoElement)]
 pub struct AssistantMessageBubble {
-    pub content_parts: Rc<Vec<AssistantContentPart>>,
+    pub content_parts: Rc<[AssistantContentPart]>,
     pub is_streaming: bool,
     pub created_at: Option<i64>,
     /// Server-computed output throughput for this turn, already gated there.
@@ -596,14 +712,18 @@ pub struct AssistantMessageBubble {
     thinking_expanded: Option<Rc<RefCell<HashSet<String>>>>,
     on_thinking_toggle: Option<Rc<dyn Fn(String, bool, &mut Window, &mut App) + 'static>>,
     link_handler: Option<LinkHandler>,
+    /// Session working directory, for resolving workspace-relative image
+    /// paths in markdown and `image` visual blocks.
+    cwd: Option<String>,
     file_changes: Option<Rc<TurnChanges>>,
     on_open_change: Option<OpenChangeHandler>,
+    load_diff: Option<LoadDiffHandler>,
     changes_expanded: bool,
     on_toggle_changes: Option<ToggleChangesHandler>,
 }
 
 impl AssistantMessageBubble {
-    pub fn new(content_parts: Rc<Vec<AssistantContentPart>>) -> Self {
+    pub fn new(content_parts: Rc<[AssistantContentPart]>) -> Self {
         Self {
             content_parts,
             is_streaming: false,
@@ -619,8 +739,10 @@ impl AssistantMessageBubble {
             thinking_expanded: None,
             on_thinking_toggle: None,
             link_handler: None,
+            cwd: None,
             file_changes: None,
             on_open_change: None,
+            load_diff: None,
             changes_expanded: false,
             on_toggle_changes: None,
         }
@@ -643,6 +765,11 @@ impl AssistantMessageBubble {
 
     pub fn on_open_change(mut self, handler: Option<OpenChangeHandler>) -> Self {
         self.on_open_change = handler;
+        self
+    }
+
+    pub fn load_diff(mut self, handler: Option<LoadDiffHandler>) -> Self {
+        self.load_diff = handler;
         self
     }
 
@@ -713,6 +840,11 @@ impl AssistantMessageBubble {
         self.link_handler = handler;
         self
     }
+
+    pub fn cwd(mut self, cwd: Option<String>) -> Self {
+        self.cwd = cwd.filter(|c| !c.is_empty());
+        self
+    }
 }
 
 impl RenderOnce for AssistantMessageBubble {
@@ -744,12 +876,15 @@ impl RenderOnce for AssistantMessageBubble {
         let thinking_expanded = self.thinking_expanded.clone();
         let on_thinking_toggle = self.on_thinking_toggle.clone();
         let link_handler = self.link_handler.clone();
+        let cwd = self.cwd.clone();
         let file_changes = self.file_changes;
         let on_open_change = self.on_open_change;
-        let fork_action = self
-            .fork_message_id
-            .zip(self.on_fork)
-            .filter(|_| !is_streaming);
+        let load_diff = self.load_diff;
+        // The in-flight message hides its own fork button: it has no
+        // server-assigned id yet (`fork_message_id` is None until finalize),
+        // so no extra streaming gate — a finalized message stays forkable
+        // for the rest of the run.
+        let fork_action = self.fork_message_id.zip(self.on_fork);
         let chips = file_changes.as_ref().and_then(|turn| {
             turn_change_chips(
                 &self.selection_row,
@@ -757,11 +892,59 @@ impl RenderOnce for AssistantMessageBubble {
                 self.changes_expanded,
                 on_open_change,
                 self.on_toggle_changes.clone(),
+                load_diff,
                 &theme,
                 window,
                 cx,
             )
         });
+
+        // Coalesce content parts for display so reasoning precedes text and any
+        // fragmented text parts (from mid-stream reasoning or legacy sessions)
+        // merge into an unbroken markdown span.
+        let mut coalesced_parts: Vec<AssistantContentPart> = Vec::new();
+        for part in content_parts.iter() {
+            match part {
+                AssistantContentPart::Thinking { text } => {
+                    if let Some(existing) = coalesced_parts.iter_mut().find_map(|p| match p {
+                        AssistantContentPart::Thinking { text: t } => Some(t),
+                        _ => None,
+                    }) {
+                        if !existing.is_empty() && !text.is_empty() && !existing.ends_with('\n') {
+                            existing.push('\n');
+                        }
+                        existing.push_str(text);
+                    } else {
+                        let text_pos = coalesced_parts
+                            .iter()
+                            .position(|p| matches!(p, AssistantContentPart::Text { .. }));
+                        let p = AssistantContentPart::Thinking { text: text.clone() };
+                        if let Some(pos) = text_pos {
+                            coalesced_parts.insert(pos, p);
+                        } else {
+                            coalesced_parts.push(p);
+                        }
+                    }
+                }
+                AssistantContentPart::Text {
+                    text,
+                    thought_signature,
+                } => {
+                    if let Some(existing) = coalesced_parts.iter_mut().find_map(|p| match p {
+                        AssistantContentPart::Text { text: t, .. } => Some(t),
+                        _ => None,
+                    }) {
+                        existing.push_str(text);
+                    } else {
+                        coalesced_parts.push(AssistantContentPart::Text {
+                            text: text.clone(),
+                            thought_signature: thought_signature.clone(),
+                        });
+                    }
+                }
+                other => coalesced_parts.push(other.clone()),
+            }
+        }
 
         div()
             .w_full()
@@ -770,7 +953,7 @@ impl RenderOnce for AssistantMessageBubble {
             .gap(px(6.0))
             .group(group_name.clone())
             .children(
-                content_parts
+                coalesced_parts
                     .iter()
                     .enumerate()
                     .map(|(index, part)| match part {
@@ -791,6 +974,7 @@ impl RenderOnce for AssistantMessageBubble {
                                 .selection(selection.clone())
                                 .streaming(is_streaming)
                                 .link_handler(link_handler.clone())
+                                .cwd(cwd.clone())
                                 .on_toggle(move |expanded, window, cx| {
                                     if let Some(on_toggle) = &on_toggle {
                                         on_toggle(action_id.clone(), expanded, window, cx);
@@ -804,6 +988,7 @@ impl RenderOnce for AssistantMessageBubble {
                                 &palette,
                                 selection.clone(),
                                 link_handler.clone(),
+                                cwd.clone(),
                             );
                             render_selectable_markdown(
                                 text,
@@ -821,9 +1006,9 @@ impl RenderOnce for AssistantMessageBubble {
                             // Decode the payload; skip the part when the format is not
                             // supported by gpui rather than rendering a blank tile.
                             let image =
-                                gpui::ImageFormat::from_mime_type(&mime_type).and_then(|format| {
+                                gpui::ImageFormat::from_mime_type(mime_type).and_then(|format| {
                                     base64::engine::general_purpose::STANDARD
-                                        .decode(&data)
+                                        .decode(data)
                                         .ok()
                                         .map(|bytes| {
                                             Arc::new(gpui::Image::from_bytes(format, bytes))
@@ -886,12 +1071,12 @@ impl RenderOnce for AssistantMessageBubble {
                             )
                         })
                         .when_some(fork_action, |element, (message_id, on_fork)| {
-                            element.child(fork_button(message_id, on_fork, theme.clone(), cx))
+                            element.child(fork_button(message_id, on_fork, theme, cx))
                         })
                         .child(copy_button(
                             format!("copy-assistant-message-{}", self.selection_row),
                             content_for_copy,
-                            theme.clone(),
+                            theme,
                             cx,
                         )),
                 ),
@@ -918,6 +1103,7 @@ fn fork_button(
         .justify_center()
         .cursor_default()
         .hover(|element| element.bg(theme.overlay_strong))
+        .tooltip(Tooltip::text("Fork from this message"))
         .on_click(move |_, window, cx| {
             (on_fork)(message_id.clone(), window, cx);
             cx.stop_propagation();

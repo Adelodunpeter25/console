@@ -135,6 +135,16 @@ impl FsService {
     }
 
     pub async fn read_file(&self, path: &str) -> Result<FsFileContent> {
+        self.read_file_with_etag(path)
+            .await
+            .map(|file| file.content)
+    }
+
+    /// Read a file together with the ETag it was loaded at.
+    ///
+    /// The editor records that ETag as its `base_etag`; `POST /api/fs/save`
+    /// then refuses a save whose buffer no longer matches the file on disk.
+    pub async fn read_file_with_etag(&self, path: &str) -> Result<FsFileWithEtag> {
         let url = format!(
             "{}/api/fs/file?path={}",
             self.transport.url("").await,
@@ -149,48 +159,78 @@ impl FsService {
             .await
             .context("Failed to read file")?;
 
+        let etag = resp
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+
         let body: ApiResponse<FsFileContent> = self
             .transport
             .decode_json(resp)
             .await
             .context("Failed to parse file response")?;
-        if body.success {
+        let content = if body.success {
             body.data
-                .ok_or_else(|| anyhow!("File content data is missing"))
+                .ok_or_else(|| anyhow!("File content data is missing"))?
         } else {
-            Err(anyhow!(
+            return Err(anyhow!(
                 body.error.unwrap_or_else(|| "Failed to read file".into())
-            ))
-        }
+            ));
+        };
+        Ok(FsFileWithEtag { content, etag })
     }
 
-    pub async fn write_file(&self, path: &str, content: &str) -> Result<()> {
-        let url = self.transport.url("/api/fs/file").await;
-        let payload = WriteFileRequest {
+    /// Write `content` to `path` through `POST /api/fs/save`.
+    ///
+    /// The desktop client never writes workspace files on its own disk.
+    /// `base_etag` is the ETag the buffer was loaded at; when it no longer
+    /// matches the file the server writes nothing and this returns
+    /// [`FsSaveError::FileChanged`] carrying the current ETag, so the caller
+    /// can offer a reload rather than clobbering a concurrent edit.
+    pub async fn save_file(
+        &self,
+        path: &str,
+        content: &str,
+        base_etag: Option<&str>,
+    ) -> std::result::Result<FsSaveOutcome, FsSaveError> {
+        let url = self.transport.url("/api/fs/save").await;
+        let payload = SaveFileRequest {
             path: path.to_string(),
             content: content.to_string(),
+            base_etag: base_etag.map(str::to_owned),
         };
 
         let resp = self
             .transport
             .client()
-            .put(&url)
+            .post(&url)
             .headers(self.transport.build_headers().await)
             .json(&payload)
             .send()
             .await
-            .context("Failed to write file")?;
+            .map_err(|err| FsSaveError::Other(format!("Failed to save file: {err}")))?;
 
-        let body: ApiResponse<serde_json::Value> = self
-            .transport
-            .decode_json(resp)
-            .await
-            .context("Failed to parse write response")?;
+        if resp.status() == reqwest::StatusCode::CONFLICT {
+            let conflict: SaveConflictEnvelope =
+                self.transport.decode_json(resp).await.map_err(|err| {
+                    FsSaveError::Other(format!("Failed to parse conflict: {err}"))
+                })?;
+            return Err(FsSaveError::FileChanged {
+                current_etag: conflict.etag,
+            });
+        }
+
+        let body: ApiResponse<FsSaveOutcome> =
+            self.transport.decode_json(resp).await.map_err(|err| {
+                FsSaveError::Other(format!("Failed to parse save response: {err}"))
+            })?;
         if body.success {
-            Ok(())
+            body.data
+                .ok_or_else(|| FsSaveError::Other("Save response data is missing".into()))
         } else {
-            Err(anyhow!(
-                body.error.unwrap_or_else(|| "Failed to write file".into())
+            Err(FsSaveError::Other(
+                body.error.unwrap_or_else(|| "Failed to save file".into()),
             ))
         }
     }
@@ -275,6 +315,146 @@ impl FsService {
                 ))
             }
         }
+    }
+
+    /// URL for `GET /api/fs/file/media?path=...`, used by embedded players and
+    /// webviews that cannot attach the bearer header (WKWebView, HTML media
+    /// tags). The token travels in the query string — the server accepts it
+    /// for this GET only — so it is URL-encoded here.
+    pub async fn media_url(&self, path: &str, auth_token: Option<&str>) -> String {
+        let mut url = format!(
+            "{}/api/fs/file/media?path={}",
+            self.transport.url("").await,
+            urlencoding::encode(path)
+        );
+        if let Some(token) = auth_token.filter(|t| !t.is_empty()) {
+            url.push_str("&token=");
+            url.push_str(&urlencoding::encode(token));
+        }
+        url
+    }
+
+    /// URL for `GET /api/fs/file/html?path=...&theme=...`, used by sandboxed
+    /// webviews and browser tabs.
+    pub async fn html_url(&self, path: &str, theme: &str, auth_token: Option<&str>) -> String {
+        let mut url = format!(
+            "{}/api/fs/file/html?path={}&theme={}",
+            self.transport.url("").await,
+            urlencoding::encode(path),
+            urlencoding::encode(theme),
+        );
+        if let Some(token) = auth_token.filter(|t| !t.is_empty()) {
+            url.push_str("&token=");
+            url.push_str(&urlencoding::encode(token));
+        }
+        url
+    }
+
+    /// Probe media file metadata via `GET /api/fs/file/media` with a
+    /// `Range: bytes=0-0` request, so headers (size via `Content-Range`,
+    /// content type) come back without downloading the body. `None` means the
+    /// file is missing, not a media file, or otherwise not servable.
+    pub async fn media_file_meta(&self, path: &str) -> Result<Option<MediaFileMeta>> {
+        let url = format!(
+            "{}/api/fs/file/media?path={}",
+            self.transport.url("").await,
+            urlencoding::encode(path)
+        );
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .header(reqwest::header::RANGE, "bytes=0-0")
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to probe media file")?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            if status == reqwest::StatusCode::NOT_FOUND
+                || status == reqwest::StatusCode::BAD_REQUEST
+            {
+                return Ok(None);
+            }
+            return Err(anyhow!("Failed to probe media file (status {})", status));
+        }
+
+        let content_type = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("application/octet-stream")
+            .to_string();
+
+        let headers = resp.headers().clone();
+        // A ranged 206 carries the total in `Content-Range: bytes 0-0/<size>`;
+        // an unranged 200 only knows the payload length.
+        let size_bytes = headers
+            .get(reqwest::header::CONTENT_RANGE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.rsplit('/').next())
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .or_else(|| {
+                headers
+                    .get(reqwest::header::CONTENT_LENGTH)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.parse::<u64>().ok())
+            });
+
+        Ok(Some(MediaFileMeta {
+            size_bytes,
+            content_type,
+        }))
+    }
+
+    /// Size of a single file, looked up in its parent directory's entry list
+    /// (`GET /api/fs/entries?depth=1`). Used for the details card on file
+    /// kinds the media endpoint does not serve. `None` when the listing does
+    /// not contain the file — the card then omits the size row.
+    pub async fn file_size(&self, path: &str) -> Result<Option<u64>> {
+        let Some(parent) = std::path::Path::new(path).parent() else {
+            return Ok(None);
+        };
+        let parent = parent.to_string_lossy().to_string();
+        if parent.is_empty() {
+            return Ok(None);
+        }
+        let file_name = std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(path)
+            .to_string();
+        let mut url = self.transport.url("/api/fs/entries").await;
+        url.push_str(&format!(
+            "?path={}&depth=1&maxEntries=5000",
+            urlencoding::encode(&parent)
+        ));
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to list directory for file size")?;
+        let body: ApiResponse<Vec<FsTreeEntry>> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse fs entries response")?;
+        let entries = if body.success {
+            body.data.unwrap_or_default()
+        } else {
+            return Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to list directory".into())
+            ));
+        };
+        Ok(entries
+            .iter()
+            .find(|e| e.name == file_name || e.path == path)
+            .and_then(|e| e.size))
     }
     /// Content search across a workspace root for the global search panel
     /// (⌘⇧F). Requires the server's fff index; returns an error (surfaced as

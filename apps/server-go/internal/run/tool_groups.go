@@ -35,7 +35,3 @@ func (g *toolGroups) add(sessionID, group string) {
 	}
 	g.entries[sessionID] = append(g.entries[sessionID], group)
 }
-
-// mcpSetupHint is appended to the per-session setup message when MCP
-// servers are enabled, so the model knows external tools exist.
-const mcpSetupHint = "# External tools\nExternal tool groups (MCP servers) are available through the `loadTools` tool. Its description lists each group and its tools."

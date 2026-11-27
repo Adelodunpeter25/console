@@ -184,6 +184,107 @@ func (x *DraftFileComment) GetSnippet() string {
 	return ""
 }
 
+type FloatingDraftChoices struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	// "project", "new_worktree", or "from_branch"
+	BranchMode    string `protobuf:"bytes,2,opt,name=branch_mode,json=branchMode,proto3" json:"branch_mode,omitempty"`
+	BranchName    string `protobuf:"bytes,3,opt,name=branch_name,json=branchName,proto3" json:"branch_name,omitempty"`
+	WorktreeBase  string `protobuf:"bytes,4,opt,name=worktree_base,json=worktreeBase,proto3" json:"worktree_base,omitempty"`
+	Provider      string `protobuf:"bytes,5,opt,name=provider,proto3" json:"provider,omitempty"`
+	ModelId       string `protobuf:"bytes,6,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
+	ThinkingLevel string `protobuf:"bytes,7,opt,name=thinking_level,json=thinkingLevel,proto3" json:"thinking_level,omitempty"`
+	ApprovalMode  string `protobuf:"bytes,8,opt,name=approval_mode,json=approvalMode,proto3" json:"approval_mode,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FloatingDraftChoices) Reset() {
+	*x = FloatingDraftChoices{}
+	mi := &file_console_v1_draft_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FloatingDraftChoices) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FloatingDraftChoices) ProtoMessage() {}
+
+func (x *FloatingDraftChoices) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_draft_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FloatingDraftChoices.ProtoReflect.Descriptor instead.
+func (*FloatingDraftChoices) Descriptor() ([]byte, []int) {
+	return file_console_v1_draft_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *FloatingDraftChoices) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *FloatingDraftChoices) GetBranchMode() string {
+	if x != nil {
+		return x.BranchMode
+	}
+	return ""
+}
+
+func (x *FloatingDraftChoices) GetBranchName() string {
+	if x != nil {
+		return x.BranchName
+	}
+	return ""
+}
+
+func (x *FloatingDraftChoices) GetWorktreeBase() string {
+	if x != nil {
+		return x.WorktreeBase
+	}
+	return ""
+}
+
+func (x *FloatingDraftChoices) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *FloatingDraftChoices) GetModelId() string {
+	if x != nil {
+		return x.ModelId
+	}
+	return ""
+}
+
+func (x *FloatingDraftChoices) GetThinkingLevel() string {
+	if x != nil {
+		return x.ThinkingLevel
+	}
+	return ""
+}
+
+func (x *FloatingDraftChoices) GetApprovalMode() string {
+	if x != nil {
+		return x.ApprovalMode
+	}
+	return ""
+}
+
 type ChatDraft struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
@@ -191,13 +292,14 @@ type ChatDraft struct {
 	Mentions      []*DraftMention        `protobuf:"bytes,3,rep,name=mentions,proto3" json:"mentions,omitempty"`
 	Comments      []*DraftFileComment    `protobuf:"bytes,4,rep,name=comments,proto3" json:"comments,omitempty"`
 	UpdatedAt     int64                  `protobuf:"varint,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Floating      *FloatingDraftChoices  `protobuf:"bytes,6,opt,name=floating,proto3" json:"floating,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ChatDraft) Reset() {
 	*x = ChatDraft{}
-	mi := &file_console_v1_draft_proto_msgTypes[2]
+	mi := &file_console_v1_draft_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -209,7 +311,7 @@ func (x *ChatDraft) String() string {
 func (*ChatDraft) ProtoMessage() {}
 
 func (x *ChatDraft) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_draft_proto_msgTypes[2]
+	mi := &file_console_v1_draft_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -222,7 +324,7 @@ func (x *ChatDraft) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatDraft.ProtoReflect.Descriptor instead.
 func (*ChatDraft) Descriptor() ([]byte, []int) {
-	return file_console_v1_draft_proto_rawDescGZIP(), []int{2}
+	return file_console_v1_draft_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ChatDraft) GetSessionId() string {
@@ -260,6 +362,57 @@ func (x *ChatDraft) GetUpdatedAt() int64 {
 	return 0
 }
 
+func (x *ChatDraft) GetFloating() *FloatingDraftChoices {
+	if x != nil {
+		return x.Floating
+	}
+	return nil
+}
+
+type ListDraftsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionIds    []string               `protobuf:"bytes,1,rep,name=session_ids,json=sessionIds,proto3" json:"session_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDraftsResponse) Reset() {
+	*x = ListDraftsResponse{}
+	mi := &file_console_v1_draft_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDraftsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDraftsResponse) ProtoMessage() {}
+
+func (x *ListDraftsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_draft_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDraftsResponse.ProtoReflect.Descriptor instead.
+func (*ListDraftsResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_draft_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListDraftsResponse) GetSessionIds() []string {
+	if x != nil {
+		return x.SessionIds
+	}
+	return nil
+}
+
 // applied=false means the stored draft was newer; draft is what to adopt.
 type PutDraftResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -271,7 +424,7 @@ type PutDraftResponse struct {
 
 func (x *PutDraftResponse) Reset() {
 	*x = PutDraftResponse{}
-	mi := &file_console_v1_draft_proto_msgTypes[3]
+	mi := &file_console_v1_draft_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -283,7 +436,7 @@ func (x *PutDraftResponse) String() string {
 func (*PutDraftResponse) ProtoMessage() {}
 
 func (x *PutDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_draft_proto_msgTypes[3]
+	mi := &file_console_v1_draft_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -296,7 +449,7 @@ func (x *PutDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutDraftResponse.ProtoReflect.Descriptor instead.
 func (*PutDraftResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_draft_proto_rawDescGZIP(), []int{3}
+	return file_console_v1_draft_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PutDraftResponse) GetApplied() bool {
@@ -331,7 +484,19 @@ const file_console_v1_draft_proto_rawDesc = "" +
 	"start_line\x18\x03 \x01(\rR\tstartLine\x12\x19\n" +
 	"\bend_line\x18\x04 \x01(\rR\aendLine\x12\x12\n" +
 	"\x04text\x18\x05 \x01(\tR\x04text\x12\x18\n" +
-	"\asnippet\x18\x06 \x01(\tR\asnippet\"\xcd\x01\n" +
+	"\asnippet\x18\x06 \x01(\tR\asnippet\"\x9f\x02\n" +
+	"\x14FloatingDraftChoices\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1f\n" +
+	"\vbranch_mode\x18\x02 \x01(\tR\n" +
+	"branchMode\x12\x1f\n" +
+	"\vbranch_name\x18\x03 \x01(\tR\n" +
+	"branchName\x12#\n" +
+	"\rworktree_base\x18\x04 \x01(\tR\fworktreeBase\x12\x1a\n" +
+	"\bprovider\x18\x05 \x01(\tR\bprovider\x12\x19\n" +
+	"\bmodel_id\x18\x06 \x01(\tR\amodelId\x12%\n" +
+	"\x0ethinking_level\x18\a \x01(\tR\rthinkingLevel\x12#\n" +
+	"\rapproval_mode\x18\b \x01(\tR\fapprovalMode\"\x8b\x02\n" +
 	"\tChatDraft\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
@@ -339,7 +504,11 @@ const file_console_v1_draft_proto_rawDesc = "" +
 	"\bmentions\x18\x03 \x03(\v2\x18.console.v1.DraftMentionR\bmentions\x128\n" +
 	"\bcomments\x18\x04 \x03(\v2\x1c.console.v1.DraftFileCommentR\bcomments\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\x05 \x01(\x03R\tupdatedAt\"Y\n" +
+	"updated_at\x18\x05 \x01(\x03R\tupdatedAt\x12<\n" +
+	"\bfloating\x18\x06 \x01(\v2 .console.v1.FloatingDraftChoicesR\bfloating\"5\n" +
+	"\x12ListDraftsResponse\x12\x1f\n" +
+	"\vsession_ids\x18\x01 \x03(\tR\n" +
+	"sessionIds\"Y\n" +
 	"\x10PutDraftResponse\x12\x18\n" +
 	"\aapplied\x18\x01 \x01(\bR\aapplied\x12+\n" +
 	"\x05draft\x18\x02 \x01(\v2\x15.console.v1.ChatDraftR\x05draftBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
@@ -356,22 +525,25 @@ func file_console_v1_draft_proto_rawDescGZIP() []byte {
 	return file_console_v1_draft_proto_rawDescData
 }
 
-var file_console_v1_draft_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_console_v1_draft_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_console_v1_draft_proto_goTypes = []any{
-	(*DraftMention)(nil),     // 0: console.v1.DraftMention
-	(*DraftFileComment)(nil), // 1: console.v1.DraftFileComment
-	(*ChatDraft)(nil),        // 2: console.v1.ChatDraft
-	(*PutDraftResponse)(nil), // 3: console.v1.PutDraftResponse
+	(*DraftMention)(nil),         // 0: console.v1.DraftMention
+	(*DraftFileComment)(nil),     // 1: console.v1.DraftFileComment
+	(*FloatingDraftChoices)(nil), // 2: console.v1.FloatingDraftChoices
+	(*ChatDraft)(nil),            // 3: console.v1.ChatDraft
+	(*ListDraftsResponse)(nil),   // 4: console.v1.ListDraftsResponse
+	(*PutDraftResponse)(nil),     // 5: console.v1.PutDraftResponse
 }
 var file_console_v1_draft_proto_depIdxs = []int32{
 	0, // 0: console.v1.ChatDraft.mentions:type_name -> console.v1.DraftMention
 	1, // 1: console.v1.ChatDraft.comments:type_name -> console.v1.DraftFileComment
-	2, // 2: console.v1.PutDraftResponse.draft:type_name -> console.v1.ChatDraft
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	2, // 2: console.v1.ChatDraft.floating:type_name -> console.v1.FloatingDraftChoices
+	3, // 3: console.v1.PutDraftResponse.draft:type_name -> console.v1.ChatDraft
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_draft_proto_init() }
@@ -385,7 +557,7 @@ func file_console_v1_draft_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_draft_proto_rawDesc), len(file_console_v1_draft_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

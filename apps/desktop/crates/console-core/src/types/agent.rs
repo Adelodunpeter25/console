@@ -15,8 +15,8 @@ pub use console_proto::{
     AskQuestionRequest as ProtoAskQuestionRequest, AssistantContentPart as ProtoContentPart,
     BrowserActionRequest as ProtoBrowserActionRequest, BrowserAnnotation as ProtoBrowserAnnotation,
     BrowserAnnotationRect as ProtoBrowserAnnotationRect, ErrorPayload as ProtoErrorPayload,
-    ImageAttachment as ProtoImageAttachment, PermissionRequest as ProtoPermissionRequest,
-    ToolCall as ProtoToolCall, ToolResult as ProtoToolResult,
+    ImageAttachment as ProtoImageAttachment, ToolCall as ProtoToolCall,
+    ToolResult as ProtoToolResult,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -155,7 +155,11 @@ impl AgentMessage {
                                 }),
                                 role: a.role.clone(),
                                 accessible_name: a.accessible_name.clone(),
-                                computed_styles: a.computed_styles.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                                computed_styles: a
+                                    .computed_styles
+                                    .iter()
+                                    .map(|(k, v)| (k.clone(), v.clone()))
+                                    .collect(),
                                 user_comment: a.user_comment.clone(),
                                 screenshot_base64: a.screenshot_base64.clone(),
                             })
@@ -163,6 +167,8 @@ impl AgentMessage {
                     )
                 },
                 created_at: msg.created_at,
+                approval_mode: u.approval_mode,
+                source: u.source,
             }),
             ProtoMessageEvent::Assistant(a) => Some(AgentMessage::Assistant {
                 id: opt_string(a.id.clone()),
@@ -222,6 +228,16 @@ pub enum AgentMessage {
         annotations: Option<Vec<BrowserElementAnnotation>>,
         #[serde(default, rename = "createdAt")]
         created_at: Option<i64>,
+        /// Mode the turn ran under; `None` for messages stored before the
+        /// server recorded it, which must not read as any particular mode.
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            rename = "approvalMode"
+        )]
+        approval_mode: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
     },
     #[serde(rename = "assistant")]
     Assistant {
@@ -244,6 +260,38 @@ pub enum AgentMessage {
         #[serde(default, rename = "createdAt")]
         created_at: Option<i64>,
     },
+    /// Client-side marker where a server-initiated wake turn (finished
+    /// background work) begins. Never produced by `from_proto` or received
+    /// from the server; inserted into the transcript to split run-block
+    /// grouping so wake-turn tool calls don't merge into the previous
+    /// user message's activity.
+    #[serde(rename = "runBoundary")]
+    RunBoundary {
+        /// Divider label — the `backgroundWorkContinue` message verbatim.
+        #[serde(default, skip_serializing)]
+        label: String,
+        /// Wake time in unix seconds; seeds the segment's elapsed timer.
+        #[serde(default, skip_serializing)]
+        at: Option<i64>,
+    },
+}
+
+/// One recorded wake turn for a session: when a `backgroundWorkContinue`
+/// frame arrived and what it said. Kept per session so run boundaries can be
+/// rebuilt after history reloads (the frame itself is live-only).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WakeRecord {
+    pub message: String,
+    /// Wake time, unix seconds.
+    pub at: i64,
+}
+
+impl WakeRecord {
+    pub fn new(message: String, at: i64) -> Self {
+        let at = if at > 10_000_000_000 { at / 1000 } else { at };
+        Self { message, at }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -285,6 +333,8 @@ pub struct ToolCall {
     pub kind_flags: Option<u32>,
     #[serde(default)]
     pub icon: Option<String>,
+    #[serde(default)]
+    pub summary: Option<String>,
 }
 
 // Kind flag bits matching the server's tools.ToolKindFlags
@@ -307,11 +357,12 @@ impl ToolCall {
             label: msg.label.clone(),
             kind_flags: msg.kind_flags,
             icon: msg.icon.clone(),
+            summary: msg.summary.clone(),
         }
     }
 
     fn kind_flag(&self, flag: u32) -> bool {
-        self.kind_flags.map_or(false, |f| f & flag != 0)
+        self.kind_flags.is_some_and(|f| f & flag != 0)
     }
 
     pub fn is_edit(&self) -> bool {
@@ -356,10 +407,20 @@ pub struct ToolResult {
     pub content: serde_json::Value,
     #[serde(default)]
     pub is_error: Option<bool>,
-    /// Client-rendered artifact (chart/table/metric card). Never sent to a
-    /// model provider; a malformed spec decodes to `None`.
+    /// Client-rendered artifact (workspace image). Never sent to a model
+    /// provider; a malformed spec decodes to `None`.
     #[serde(default)]
     pub visual: Option<VisualArtifact>,
+    /// Client-rendered HTML page artifact. Never sent to a model provider.
+    #[serde(default)]
+    pub html: Option<HtmlArtifact>,
+    /// Length of a body the server left out of a history page; 0 when the
+    /// content is inline.
+    #[serde(default)]
+    pub omitted_size: u32,
+    /// Message holding the full body, used to fetch it on expand.
+    #[serde(default)]
+    pub result_message_id: Option<String>,
 }
 
 /// A versioned visual spec riding on a tool result; the spec stays raw JSON
@@ -371,12 +432,38 @@ pub struct VisualArtifact {
     pub spec: serde_json::Value,
 }
 
+/// An HTML page artifact attached to a `render` tool result.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HtmlArtifact {
+    pub path: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub height: u32,
+    #[serde(default)]
+    pub snapshot: Option<Vec<u8>>,
+}
+
 fn visual_from_proto(msg: &ProtoToolResult) -> Option<VisualArtifact> {
     let v = msg.visual.as_ref()?;
     let spec: serde_json::Value = serde_json::from_slice(&v.spec).ok()?;
     Some(VisualArtifact {
         version: v.version,
         spec,
+    })
+}
+
+fn html_from_proto(msg: &ProtoToolResult) -> Option<HtmlArtifact> {
+    let h = msg.html.as_ref()?;
+    if h.path.is_empty() {
+        return None;
+    }
+    Some(HtmlArtifact {
+        path: h.path.clone(),
+        title: h.title.clone(),
+        height: h.height,
+        snapshot: h.snapshot.as_ref().filter(|b| !b.is_empty()).cloned(),
     })
 }
 
@@ -390,35 +477,9 @@ impl ToolResult {
             content: decode_json_bytes(&msg.content),
             is_error: msg.is_error,
             visual: visual_from_proto(msg),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionRequest {
-    pub request_id: String,
-    pub tool_call_id: String,
-    pub tool_name: String,
-    pub args: serde_json::Value,
-    pub tier: String,
-    pub reason: Option<String>,
-    /// Client-only UI state nothing populates; kept for the card shape,
-    /// always None from the wire.
-    pub requires_upgrade: Option<bool>,
-}
-
-impl PermissionRequest {
-    /// Decode from the canonical wire shape (args arrive as raw JSON bytes).
-    pub fn from_proto(msg: &ProtoPermissionRequest) -> Self {
-        PermissionRequest {
-            request_id: msg.request_id.clone(),
-            tool_call_id: msg.tool_call_id.clone(),
-            tool_name: msg.tool_name.clone(),
-            args: decode_json_bytes(&msg.args),
-            tier: msg.tier.clone(),
-            reason: msg.reason.clone(),
-            requires_upgrade: None,
+            html: html_from_proto(msg),
+            omitted_size: 0,
+            result_message_id: None,
         }
     }
 }
@@ -617,7 +678,11 @@ pub fn queued_annotations_to_proto(
             }),
             role: a.role,
             accessible_name: a.accessible_name,
-            computed_styles: a.computed_styles.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+            computed_styles: a
+                .computed_styles
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
             user_comment: a.user_comment,
             screenshot_base64: a.screenshot_base64,
         })
@@ -650,7 +715,11 @@ pub fn queued_annotations_from_proto(
                     }),
                     role: a.role.clone(),
                     accessible_name: a.accessible_name.clone(),
-                    computed_styles: a.computed_styles.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                    computed_styles: a
+                        .computed_styles
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect(),
                     user_comment: a.user_comment.clone(),
                     screenshot_base64: a.screenshot_base64.clone(),
                 })

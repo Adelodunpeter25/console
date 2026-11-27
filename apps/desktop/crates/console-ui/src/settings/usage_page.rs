@@ -15,7 +15,7 @@ use std::rc::Rc;
 #[derive(IntoElement)]
 pub struct UsagePage {
     pub reports: Option<Rc<HashMap<String, Option<UsageReport>>>>,
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub auth_status: Option<AuthStatusResponse>,
     /// Pasted provider API keys, keyed by provider id. Only "is there a key"
     /// is read here — the key itself never reaches a client.
@@ -126,7 +126,7 @@ impl RenderOnce for UsagePage {
                         let is_logged_in = if uses_api_key {
                             key_configured
                         } else {
-                            prov_status.map_or(false, |s| s.logged_in)
+                            prov_status.is_some_and(|s| s.logged_in)
                         };
                         let user_email = prov_status.and_then(|s| s.email.clone());
 
@@ -325,7 +325,7 @@ impl RenderOnce for UsagePage {
                                                                             .text_size(px(12.5))
                                                                             .font_weight(gpui::FontWeight::MEDIUM)
                                                                             .text_color(theme.text)
-                                                                            .child(limit.label.clone()),
+                                                                            .child(limit.label),
                                                                     )
                                                                     .when_some(tier_label, |row, tier| {
                                                                         row.child(

@@ -13,6 +13,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ListCheck
 import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Search
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal
+import io.github.lyxnx.compose.ui.tablericons.outline.Code
 import io.github.lyxnx.compose.ui.tablericons.outline.Tool
 import com.console.mobile.SharedNative
 import com.console.mobile.data.model.ToolCall
@@ -29,6 +30,7 @@ import kotlinx.serialization.json.jsonPrimitive
 private val SERVER_KEY_ICONS: Map<String, ImageVector> = mapOf(
     "sparkle" to TablerIcons.Outline.Sparkles,
     "terminal" to TablerIcons.Outline.Terminal,
+    "code" to TablerIcons.Outline.Code,
     "pencil" to TablerIcons.Outline.FilePencil,
     "file" to TablerIcons.Outline.FileText,
     "folder" to TablerIcons.Outline.FolderOpen,
@@ -67,57 +69,6 @@ fun toRelativePath(filePath: String?, cwd: String?): String {
         return if (p == c) "." else p.substring(c.length + 1)
     }
     return p
-}
-
-/** One-line argument summary for a tool row, mirroring the desktop's
- * `argument_summary` in apps/desktop/crates/console-ui/src/chat/toolcalls.rs:
- * target path first, then bashJob / memory specifics, then the first of
- * command/pattern/query/url/directory, then arg-array counts. */
-fun toolCallSummary(call: ToolCall, cwd: String? = null): String? {
-    SharedNative.toolSummary(call.name, call.arguments?.toString() ?: "{}", cwd)?.let { return it }
-    val args = call.arguments as? JsonObject ?: return null
-    fun s(key: String): String? = (args[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
-
-    for (k in listOf("path", "filePath", "targetFile", "absolutePath")) {
-        val v = s(k)
-        if (v != null) return truncate(toRelativePath(v, cwd ?: s("cwd")), 72)
-    }
-    if (call.name == "bashJob" || call.name == "bash_job") {
-        val action = s("action") ?: "status"
-        val job = s("jobId")
-        return truncate(if (job != null) "$action $job" else action, 72)
-    }
-    if (call.name == "memory") {
-        val op = s("op") ?: "memory"
-        s("query")?.let { return truncate("$op \"$it\"", 72) }
-        s("content")?.let { return truncate("$op \"${singleLine(it)}\"", 72) }
-        (args["tags"] as? JsonArray)
-            ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { return truncate("$op [${it.joinToString(", ")}]", 72) }
-        s("id")?.let { return truncate("$op $it", 72) }
-        return truncate(op, 72)
-    }
-    // The loader takes `{group: "mcp:<server-id>"}` — surface it verbatim so
-    // the row says which group was loaded.
-    if (call.name == "loadTools") {
-        return s("group")?.let { truncate(it, 72) }
-    }
-    // Multi-line values (heredoc scripts, multi-line queries) must collapse to
-    // one line: a literal newline renders as a hard line break that no
-    // truncation can suppress. `directory` renders relative to the cwd.
-    for (k in listOf("command", "pattern", "query", "url", "directory", "question")) {
-        val v = s(k) ?: continue
-        val value = if (k == "directory") toRelativePath(v, cwd ?: s("cwd")) else v
-        return truncate(singleLine(value), 72)
-    }
-    for (k in listOf("paths", "files", "operations")) {
-        val arr = args[k] as? JsonArray
-        if (arr != null && arr.isNotEmpty()) {
-            return "${arr.size} ${if (k == "operations") "operations" else "files"}"
-        }
-    }
-    return null
 }
 
 /** Collapse every whitespace run (newlines, tabs, spaces) to single spaces so
@@ -163,3 +114,4 @@ fun argumentPath(call: ToolCall): String? {
     }
     return null
 }
+

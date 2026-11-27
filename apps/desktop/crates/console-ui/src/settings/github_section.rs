@@ -81,9 +81,7 @@ impl RenderOnce for GitHubSection {
             "Add a personal access token so git can clone private repositories.".to_string()
         };
 
-        let status_color = if busy {
-            theme.accent
-        } else if connected {
+        let status_color = if busy || connected {
             theme.accent
         } else {
             theme.text_ghost
@@ -247,7 +245,7 @@ fn build_form_area(
     }
 
     let mut body = div().flex().flex_col().gap(px(8.0));
-    if let Some(input) = input.clone() {
+    if let Some(input) = input {
         body = body.child(
             div()
                 .border_1()

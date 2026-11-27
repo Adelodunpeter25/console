@@ -30,7 +30,7 @@ import java.nio.ByteOrder
  */
 object SharedNative {
     /** Must match `ABI_VERSION` in `shared-native/src/shared.rs`. */
-    const val EXPECTED_ABI = 2
+    const val EXPECTED_ABI = 5
 
     /** Framed payloads start with `"CSHR"` and this version. */
     private const val MAGIC = 0x4353_4852
@@ -52,14 +52,27 @@ object SharedNative {
     private external fun formatContextWindow(tokens: Int): String?
     private external fun formatModelName(id: String): String?
     private external fun formatTokensPerSecond(rate: Double): String?
+    private external fun formatSelectorLabel(selector: String): String?
     private external fun parsePairingUrl(raw: String): ByteArray?
     private external fun splitPairingLine(raw: String): ByteArray?
     private external fun hostPort(address: String): String?
+    private external fun nativeIrohTunnel(nodeId: String): String?
     private external fun diffLines(old: String, new: String, context: Int): ByteArray?
     private external fun parseUnifiedDiff(raw: String): ByteArray?
     private external fun fileCallDiffs(name: String, argumentsJson: String): ByteArray?
     private external fun nativeToolSummary(name: String, argumentsJson: String, cwd: String): String?
     private external fun nativeParseReadFileOutput(raw: String): ByteArray?
+    private external fun nativeGitBadgeTable(): ByteArray?
+    private external fun nativeGitBadges(paths: Array<String>, statuses: Array<String>): ByteArray?
+
+    // ── iroh ──────────────────────────────────────────────────────────────
+
+    /**
+     * The loopback `http://127.0.0.1:<port>` that reaches the server with this
+     * iroh node ID, or null when the library is unavailable or the ID is
+     * invalid. Idempotent per node ID; makes no network call itself.
+     */
+    fun irohTunnel(nodeId: String): String? = if (available) nativeIrohTunnel(nodeId) else null
 
     // ── Text ──────────────────────────────────────────────────────────────
 
@@ -88,6 +101,63 @@ object SharedNative {
         return reader.str() to reader.str()
     }
 
+    // ── Git badges ───────────────────────────────────────────────────────
+
+    /**
+     * How loudly a git badge reports itself. The rules live in
+     * `console-shared`; each client maps a role to its own palette, so the
+     * two cannot disagree about what a badge *means*.
+     */
+    enum class GitRole { SUCCESS, WARNING, DANGER, MUTED }
+
+    /** A git badge as the shared rules describe it: the letter, and the role. */
+    data class GitBadgeInfo(val label: String, val role: GitRole)
+
+    /** Every status code the shared rules know, by code. */
+    private val gitBadgeTable: Map<String, GitBadgeInfo> by lazy {
+        if (!available) emptyMap() else decodeGitBadgeTable(nativeGitBadgeTable())
+    }
+
+    /**
+     * The badge for a git status code (`M`, `A`, `D`, `R`, `?`), or null when
+     * the code has no badge — or when the shared library is missing, since the
+     * rules live there.
+     */
+    fun gitBadge(code: String): GitBadgeInfo? = gitBadgeTable[code]
+
+    /**
+     * The badge for every path a changed file sits under: the file itself and
+     * each folder above it, a folder carrying the strongest badge beneath it.
+     *
+     * [paths] and [statuses] are parallel arrays, one entry per changed file.
+     */
+    fun gitBadges(paths: List<String>, statuses: List<String>): Map<String, GitBadgeInfo> {
+        if (!available || paths.size != statuses.size) return emptyMap()
+        return decodeGitBadges(nativeGitBadges(paths.toTypedArray(), statuses.toTypedArray()))
+    }
+
+    private fun decodeGitBadgeTable(bytes: ByteArray?): Map<String, GitBadgeInfo> {
+        val reader = bytes?.let(::Reader)?.takeIf { it.valid } ?: return emptyMap()
+        val count = reader.u32()
+        val table = HashMap<String, GitBadgeInfo>(count)
+        repeat(count) {
+            val code = reader.str()
+            table[code] = reader.badge()
+        }
+        return table
+    }
+
+    private fun decodeGitBadges(bytes: ByteArray?): Map<String, GitBadgeInfo> {
+        val reader = bytes?.let(::Reader)?.takeIf { it.valid } ?: return emptyMap()
+        val count = reader.u32()
+        val badges = HashMap<String, GitBadgeInfo>(count)
+        repeat(count) {
+            val path = reader.str()
+            badges[path] = reader.badge()
+        }
+        return badges
+    }
+
     // ── Icons ─────────────────────────────────────────────────────────────
 
     /** Icon key (`rust`, `typescript`, ...) for a path or file name; `file` when unknown. */
@@ -106,6 +176,9 @@ object SharedNative {
     /** "42.1 tok/s", or null when the rate is missing, non-finite or not positive. */
     fun tokensPerSecond(rate: Double?): String? =
         if (available) formatTokensPerSecond(rate ?: Double.NaN) else null
+
+    fun selectorLabel(selector: String): String? =
+        if (available) formatSelectorLabel(selector) else null
 
     // ── Pairing ───────────────────────────────────────────────────────────
 
@@ -203,6 +276,17 @@ object SharedNative {
                 DiffLine(kind, str(), old.takeIf { it >= 0 }, new.takeIf { it >= 0 })
             }
             return Diff(lines, added, removed)
+        }
+
+        fun badge(): GitBadgeInfo {
+            val label = str()
+            val role = when (u8()) {
+                0 -> GitRole.SUCCESS
+                1 -> GitRole.WARNING
+                2 -> GitRole.DANGER
+                else -> GitRole.MUTED
+            }
+            return GitBadgeInfo(label, role)
         }
     }
 }

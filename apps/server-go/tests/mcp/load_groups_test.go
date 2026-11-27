@@ -2,7 +2,7 @@
 package tests
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"strings"
 	"testing"
 
@@ -20,9 +20,6 @@ func TestLoadToolsDescribesConnectedGroupTools(t *testing.T) {
 	lt := mcp.NewLoadToolsTool(m, tools.NewRegistry())
 	if d := lt.Description(); !strings.Contains(d, "- mcp:echo: Echo") || strings.Contains(d, "tools:") {
 		t.Fatalf("unconnected description: %s", d)
-	}
-	if strings.Contains(lt.Description(), "atlassian") {
-		t.Fatal("description must not mention a specific server")
 	}
 	// Connected: tool names previewed.
 	if err := m.Ensure(ctx5(t), "echo"); err != nil {

@@ -114,11 +114,10 @@ pub fn common_prefix_len(a: &str, b: &str) -> usize {
 /// Bytes shared at the end of both strings, clamped to where prefix matching
 /// stopped and backed off to a character boundary.
 pub fn common_suffix_len(a: &str, b: &str, prefix_len: usize) -> usize {
-    let mut len = a[prefix_len..]
-        .as_bytes()
+    let mut len = a.as_bytes()[prefix_len..]
         .iter()
         .rev()
-        .zip(b[prefix_len..].as_bytes().iter().rev())
+        .zip(b.as_bytes()[prefix_len..].iter().rev())
         .take_while(|(x, y)| x == y)
         .count();
     while !a.is_char_boundary(a.len() - len) || !b.is_char_boundary(b.len() - len) {

@@ -33,7 +33,7 @@ func formatJobSnapshot(s terminal.BashJobSnapshot) string {
 		lines = append(lines, fmt.Sprintf("Exit code: %d", *s.ExitCode))
 	}
 	if s.TimedOut {
-		lines = append(lines, fmt.Sprintf("Timed out: true (max %dms)", terminal.BashJobMaxTimeoutMs))
+		lines = append(lines, "Timed out: true (hit the timeoutMs cap set at start)")
 	}
 	if s.Aborted {
 		lines = append(lines, "Killed: true")
@@ -49,8 +49,24 @@ func renderJobOutputBody(jobs *terminal.BashJobManager, jobID, ownerSessionID st
 	sections := []string{
 		fmt.Sprintf("cursor: %d -> nextCursor: %d", cursor, r.NextCursor),
 		fmt.Sprintf("truncated: %v", r.Truncated),
-		"", "stdout:",
 	}
+	// The ring buffers hold a bounded window (256 KB per stream); whatever
+	// they dropped is saved to a spill file the model can read or grep.
+	if r.StdoutDropped > 0 {
+		if r.StdoutSpill != "" {
+			sections = append(sections, fmt.Sprintf("stdout: %d chars dropped from the buffer so far; everything dropped is saved to %s (read it with read_file or grep)", r.StdoutDropped, r.StdoutSpill))
+		} else {
+			sections = append(sections, fmt.Sprintf("stdout: %d chars dropped from the buffer so far", r.StdoutDropped))
+		}
+	}
+	if r.StderrDropped > 0 {
+		if r.StderrSpill != "" {
+			sections = append(sections, fmt.Sprintf("stderr: %d chars dropped from the buffer so far; everything dropped is saved to %s", r.StderrDropped, r.StderrSpill))
+		} else {
+			sections = append(sections, fmt.Sprintf("stderr: %d chars dropped from the buffer so far", r.StderrDropped))
+		}
+	}
+	sections = append(sections, "", "stdout:")
 	if r.Stdout != "" {
 		sections = append(sections, r.Stdout)
 	} else {
@@ -69,7 +85,7 @@ func renderJobOutputBody(jobs *terminal.BashJobManager, jobID, ownerSessionID st
 // ownerSessionID (must match the session that started the job via bash's
 // background=true).
 func NewBashJobTool(jobs *terminal.BashJobManager, ownerSessionID string) Tool {
-	return NewTool("bashJob", "Inspect or stop background bash jobs. action: output|kill|list. You do NOT need this to learn that a job finished: its exit status and output are delivered to you automatically, even if you end your turn. Use it only to read the output of a job that is still running (e.g. a dev server) or to kill one. Never poll in a loop.", TierExec,
+	return NewTool("bashJob", "Inspect or stop background bash jobs (action: output|kill|list). Job completion and output are delivered automatically when a job finishes. Use `output` only to peek at a still-running job, `kill` only to stop one.", TierExec,
 		func(ctx context.Context, in bashJobInput) (any, error) {
 			if jobs == nil {
 				return nil, NewToolError("Background jobs are not available in this context.")

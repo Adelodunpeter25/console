@@ -38,7 +38,7 @@ impl ThinkingLevel {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_ascii_lowercase().as_str() {
             "none" | "off" => Some(Self::None),
             "minimal" => Some(Self::Minimal),
@@ -49,6 +49,19 @@ impl ThinkingLevel {
             "max" => Some(Self::Max),
             _ => None,
         }
+    }
+
+    #[allow(clippy::should_implement_trait)]
+    pub fn from_str(s: &str) -> Option<Self> {
+        Self::parse(s)
+    }
+}
+
+impl std::str::FromStr for ThinkingLevel {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s).ok_or(())
     }
 }
 

@@ -1,11 +1,15 @@
 // Settled chats: the kept-but-out-of-the-way state between done and deleted
-// (docs/plan/settled-chats.md). Covers the service surface and the one
-// invariant the whole design rests on: no purge ever eats a settled chat.
+// (docs/plan/settled-chats.md). Covers the service surface, the pin/settle
+// exclusivity, and retention: the permanent purge never eats a settled chat
+// directly; the settled sweep soft-deletes it first, after 7 days.
 package tests
 
 import (
 	"errors"
 	"testing"
+	"time"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -127,5 +131,115 @@ func TestPurgeNeverTouchesSettledChats(t *testing.T) {
 		if id == header.ID {
 			t.Fatal("the purge swept a settled, non-deleted chat")
 		}
+	}
+}
+
+func TestPinAndSettleAreMutuallyExclusive(t *testing.T) {
+	_, sessions, _, _ := newTestManager(t)
+	header, err := sessions.Create(types.CreateSessionOptions{Title: "either", Cwd: "/tmp"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := header.ID
+
+	if err := sessions.SetPinned(id, true); err != nil {
+		t.Fatalf("pin: %v", err)
+	}
+	if settled, err := sessions.Settle(id); err != nil || !settled {
+		t.Fatalf("settle = %v, %v", settled, err)
+	}
+	got, _ := sessions.Header(id)
+	if got.SettledAt == nil || got.PinnedAt != nil {
+		t.Fatalf("settling must unpin: settled=%v pinned=%v", got.SettledAt, got.PinnedAt)
+	}
+
+	if err := sessions.SetPinned(id, true); err != nil {
+		t.Fatalf("re-pin: %v", err)
+	}
+	got, _ = sessions.Header(id)
+	if got.PinnedAt == nil || got.SettledAt != nil {
+		t.Fatalf("pinning must unsettle: settled=%v pinned=%v", got.SettledAt, got.PinnedAt)
+	}
+
+	// Unpinning leaves the settled mark alone.
+	if _, err := sessions.Settle(id); err != nil {
+		t.Fatalf("settle: %v", err)
+	}
+	if err := sessions.SetPinned(id, false); err != nil {
+		t.Fatalf("unpin: %v", err)
+	}
+	got, _ = sessions.Header(id)
+	if got.SettledAt == nil {
+		t.Fatal("unpinning cleared the settled mark")
+	}
+}
+
+func TestSettledSweepSoftDeletesAfterRetention(t *testing.T) {
+	manager, sessions, _, _ := newTestManager(t)
+	svc := run.NewService(sessions)
+	old := time.Now().UnixMilli() - (run.SettledSessionRetention + time.Hour).Milliseconds()
+
+	mk := func(title string) string {
+		h, err := sessions.Create(types.CreateSessionOptions{Title: title, Cwd: "/tmp"})
+		if err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		return h.ID
+	}
+	set := func(id, column string) {
+		if _, err := manager.Global().Exec(
+			`UPDATE sessions SET `+column+` = ? WHERE id = ?`, old, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	settle := func(id string) {
+		if settled, err := sessions.Settle(id); err != nil || !settled {
+			t.Fatalf("settle = %v, %v", settled, err)
+		}
+	}
+
+	expired := mk("expired")
+	settle(expired)
+	set(expired, "settled_at")
+	set(expired, "updated_at")
+
+	recent := mk("recently settled")
+	settle(recent)
+	set(recent, "updated_at")
+
+	touched := mk("settled long ago, touched since")
+	settle(touched)
+	set(touched, "settled_at")
+
+	active := mk("never settled")
+	set(active, "updated_at")
+
+	legacyPinned := mk("pinned and settled before exclusivity")
+	settle(legacyPinned)
+	set(legacyPinned, "settled_at")
+	set(legacyPinned, "updated_at")
+	set(legacyPinned, "pinned_at")
+
+	deleted := svc.DeleteExpiredSettledSessions()
+	if len(deleted) != 1 || deleted[0] != expired {
+		t.Fatalf("deleted = %v, want [%s]", deleted, expired)
+	}
+	if h, _ := sessions.Header(expired); h != nil {
+		t.Fatal("expired settled chat still live")
+	}
+	// Soft-deleted, not purged: it stays restorable.
+	if h, err := sessions.HeaderIncludingDeleted(expired); err != nil || h == nil || h.DeletedAt == nil {
+		t.Fatalf("expired settled chat not soft-deleted: %+v, %v", h, err)
+	}
+	if purged := svc.PurgeExpiredDeletedSessions(); len(purged) != 0 {
+		t.Fatalf("freshly swept chat purged immediately: %v", purged)
+	}
+	for _, id := range []string{recent, touched, active, legacyPinned} {
+		if h, _ := sessions.Header(id); h == nil {
+			t.Fatalf("sweep deleted %s, which must survive", id)
+		}
+	}
+	if again := svc.DeleteExpiredSettledSessions(); len(again) != 0 {
+		t.Fatalf("second sweep = %v, want none", again)
 	}
 }

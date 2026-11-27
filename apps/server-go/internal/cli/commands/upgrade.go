@@ -25,8 +25,14 @@ const (
 type upgradeTarget struct {
 	suffix   string
 	binPath  string
+	binAsset string
 	libPath  string
 	libAsset string
+	cuaPath  string
+	cuaAsset string
+	// libvoxl is dlopened at runtime (best-effort). Empty on Windows, which has no build.
+	voxlPath  string
+	voxlAsset string
 }
 
 func resolveUpgradeTarget() (upgradeTarget, error) {
@@ -36,8 +42,10 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 		osName = "macos"
 	case "linux":
 		osName = "linux"
+	case "windows":
+		osName = "windows"
 	default:
-		return upgradeTarget{}, fmt.Errorf("unsupported OS: %s (only Linux and macOS are supported)", runtime.GOOS)
+		return upgradeTarget{}, fmt.Errorf("unsupported OS: %s (only Linux, macOS, and Windows are supported)", runtime.GOOS)
 	}
 	var arch string
 	switch runtime.GOARCH {
@@ -50,11 +58,45 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 	}
 
 	suffix := osName + "-" + arch
+	// The release asset carries .exe on Windows; the installed file must
+	// too, or Windows refuses to execute it.
+	ext := ""
+	if osName == "windows" {
+		ext = ".exe"
+	}
+	binAsset := "console-" + suffix + ext
+	binName := "console" + ext
 	libAsset := "libfff_c-" + suffix + ".so"
 	libFile := "libfff_c.so"
-	if osName != "linux" {
+	// The cua driver's file name differs on Windows (no lib prefix), matching
+	// the loader's per-GOOS libraryNames().
+	cuaAsset := "libcua_driver_sdk-" + suffix + ".so"
+	cuaFile := "libcua_driver_sdk.so"
+	switch osName {
+	case "windows":
+		libAsset = "libfff_c-" + suffix + ".dll"
+		libFile = "libfff_c.dll"
+		cuaAsset = "cua_driver_sdk-" + suffix + ".dll"
+		cuaFile = "cua_driver_sdk.dll"
+	case "macos":
 		libAsset = "libfff_c-" + suffix + ".dylib"
 		libFile = "libfff_c.dylib"
+		cuaAsset = "libcua_driver_sdk-" + suffix + ".dylib"
+		cuaFile = "libcua_driver_sdk.dylib"
+	}
+
+	voxlAsset, voxlFile := "", ""
+	switch osName {
+	case "linux":
+		voxlAsset, voxlFile = "libvoxl-"+suffix+".so", "libvoxl.so"
+	case "macos":
+		voxlAsset, voxlFile = "libvoxl-"+suffix+".dylib", "libvoxl.dylib"
+	}
+	voxlAt := func(dir string) string {
+		if voxlFile == "" {
+			return ""
+		}
+		return filepath.Join(dir, voxlFile)
 	}
 
 	// A Go binary is always compiled, so the binary swaps itself in place —
@@ -62,14 +104,24 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 	// dir (overridable via CONSOLE_INSTALL_DIR).
 	if exe, err := os.Executable(); err == nil && !isGoBuildTemp(exe) {
 		dir := filepath.Dir(exe)
-		return upgradeTarget{suffix: suffix, binPath: exe, libPath: filepath.Join(dir, libFile), libAsset: libAsset}, nil
+		return upgradeTarget{
+			suffix: suffix, binPath: exe, binAsset: binAsset,
+			libPath: filepath.Join(dir, libFile), libAsset: libAsset,
+			cuaPath: filepath.Join(dir, cuaFile), cuaAsset: cuaAsset,
+			voxlPath: voxlAt(dir), voxlAsset: voxlAsset,
+		}, nil
 	}
 	prefix := os.Getenv("CONSOLE_INSTALL_DIR")
 	if prefix == "" {
 		home, _ := os.UserHomeDir()
 		prefix = filepath.Join(home, ".local", "bin")
 	}
-	return upgradeTarget{suffix: suffix, binPath: filepath.Join(prefix, "console"), libPath: filepath.Join(prefix, libFile), libAsset: libAsset}, nil
+	return upgradeTarget{
+		suffix: suffix, binPath: filepath.Join(prefix, binName), binAsset: binAsset,
+		libPath: filepath.Join(prefix, libFile), libAsset: libAsset,
+		cuaPath: filepath.Join(prefix, cuaFile), cuaAsset: cuaAsset,
+		voxlPath: voxlAt(prefix), voxlAsset: voxlAsset,
+	}, nil
 }
 
 // isGoBuildTemp reports whether exe is a `go run`/`go test` temp binary
@@ -131,11 +183,19 @@ func UpgradeDaemon() error {
 	}
 
 	fmt.Printf("Upgrading Console (%s)...\n", target.suffix)
-	if err := downloadTo(upgradeBaseURL+"/console-"+target.suffix, target.binPath, 0o755); err != nil {
+	if err := downloadTo(upgradeBaseURL+"/"+target.binAsset, target.binPath, 0o755); err != nil {
 		return err
 	}
 	if err := downloadTo(upgradeBaseURL+"/"+target.libAsset, target.libPath, 0o644); err != nil {
 		return err
+	}
+	if err := downloadTo(upgradeBaseURL+"/"+target.cuaAsset, target.cuaPath, 0o644); err != nil {
+		return err
+	}
+	if target.voxlPath != "" {
+		if err := downloadTo(upgradeBaseURL+"/"+target.voxlAsset, target.voxlPath, 0o644); err != nil {
+			fmt.Printf("NOTE: voxl streaming library not updated (%v); Computer tab may be unavailable.\n", err)
+		}
 	}
 	fmt.Println("Binary swapped.")
 

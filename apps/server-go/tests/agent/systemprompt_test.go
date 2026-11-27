@@ -33,9 +33,8 @@ func TestSystemPromptDiscoveryAndBuild(t *testing.T) {
 		"---\ndescription: Cut a release\n---\nRun the release checklist.")
 
 	result := systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{
-		Cwd:               dir,
-		Home:              t.TempDir(), // isolate from the real user's home config
-		SkipWorkspaceTree: true,
+		Cwd:  dir,
+		Home: t.TempDir(), // isolate from the real user's home config
 	})
 
 	prompt := result.SystemPrompt
@@ -59,14 +58,16 @@ func TestSystemPromptDiscoveryAndBuild(t *testing.T) {
 	}
 }
 
-func TestSystemPromptApprovalModeInstructions(t *testing.T) {
-	dir := t.TempDir()
-	result := systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{
-		Cwd: dir, Home: t.TempDir(), SkipWorkspaceTree: true,
-		ApprovalMode: systemprompt.PlanMode,
-	})
-	if !strings.Contains(result.SystemPrompt, "Plan mode is ACTIVE") {
-		t.Fatalf("expected plan-mode instructions:\n%s", result.SystemPrompt)
+func TestModeNoticeCarriesApprovalModeInstructions(t *testing.T) {
+	if got := systemprompt.ModeNotice(systemprompt.PlanMode); !strings.Contains(got, "Plan mode") {
+		t.Fatalf("expected plan-mode instructions:\n%s", got)
+	}
+	if got := systemprompt.ModeNotice(systemprompt.FullAccess); !strings.Contains(got, "Full Access") {
+		t.Fatalf("expected full-access instructions:\n%s", got)
+	}
+	result := systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{Cwd: t.TempDir(), Home: t.TempDir()})
+	if strings.Contains(result.SystemPrompt, "Plan mode") || strings.Contains(result.SystemPrompt, "Full Access") {
+		t.Fatalf("system prompt must be mode-neutral:\n%s", result.SystemPrompt)
 	}
 }
 
@@ -76,8 +77,8 @@ func TestSystemPromptStableSplitsFromSetup(t *testing.T) {
 			t.Fatal(err)
 		}
 		return systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{
-			Cwd: dir, Home: t.TempDir(), SkipWorkspaceTree: true,
-			Model: "m", ApprovalMode: systemprompt.FullAccess,
+			Cwd: dir, Home: t.TempDir(),
+			Model: "m",
 		})
 	}
 	dirA, dirB := t.TempDir(), t.TempDir()
@@ -92,13 +93,13 @@ func TestSystemPromptStableSplitsFromSetup(t *testing.T) {
 	if a.StableSystem != b.StableSystem {
 		t.Fatalf("stable system differs across sessions:\n%s\n---\n%s", a.StableSystem, b.StableSystem)
 	}
-	for _, want := range []string{"You are a coding agent.", "Bypass Permissions", "# Tool inventory", "<critical>"} {
+	for _, want := range []string{"You are a coding agent.", "<critical>"} {
 		if !strings.Contains(a.StableSystem, want) {
 			t.Fatalf("stable system missing %q", want)
 		}
 	}
 	// Setup: per-session context.
-	for _, want := range []string{dirA, "Today is", "Follow the style guide.", "/init:"} {
+	for _, want := range []string{dirA, "Follow the style guide.", "/init:"} {
 		if !strings.Contains(a.Setup, want) {
 			t.Fatalf("setup missing %q:\n%s", want, a.Setup)
 		}

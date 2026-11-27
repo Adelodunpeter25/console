@@ -32,6 +32,8 @@ func TestCreateCapitalizesTitle(t *testing.T) {
 		{"🔥 fix login", "🔥 Fix login"},
 		{"élan vital", "Élan vital"},
 		{"v2 api work", "V2 api work"},
+		{"multi\nline\nprompt", "Multi"},
+		{"\n\n  first line  \nsecond line", "First line"},
 		{"", "New Session"},
 		{"   ", "New Session"},
 	}

@@ -5,7 +5,7 @@ package tests
 
 import (
 	"bytes"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http/httptest"
 	"os"

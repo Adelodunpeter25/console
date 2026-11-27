@@ -18,6 +18,10 @@ type TodoStore interface {
 	SaveSessionTodos(sessionID string, items []types.TodoItem) error
 }
 
+// TodoDescription is the tool description sent with every request, so it stays short.
+const TodoDescription = "Session task list for multi-step work. init/append add tasks; start marks one in progress; done marks one complete; view shows the list. " +
+	"Call start before working on a task and done right after finishing it, one at a time, not in a batch. Don't leave finished work unmarked."
+
 type todoInput struct {
 	Op    string   `json:"op" jsonschema:"required,description=Operation to apply: 'init'\\, 'start'\\, 'done'\\, 'append'\\, or 'view'"`
 	Tasks []string `json:"tasks,omitempty" jsonschema:"description=List of task item strings (used with 'init' or 'append')"`
@@ -91,7 +95,7 @@ func NewTodoToolWithUpdate(sessionID string, store TodoStore, onUpdate TodoUpdat
 		onUpdate(snapshot, action)
 	}
 
-	return NewTool("todo", "Manage the session task list for multi-step work. Operations: init, start, done, append, view.", TierRead,
+	return NewTool("todo", TodoDescription, TierRead,
 		func(ctx context.Context, in todoInput) (any, error) {
 			mu.Lock()
 			defer mu.Unlock()

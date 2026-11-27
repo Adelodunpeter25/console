@@ -28,7 +28,7 @@ func TestTurnThroughputPersistsOnAssistantMessage(t *testing.T) {
 		},
 	}}
 	registry := tools.NewRegistry(tools.DefaultTools()...)
-	agent := loop.New(provider, loop.NewExecutor(registry, permissions.FullAccess, nil), nil)
+	agent := loop.New(provider, loop.NewExecutor(registry, permissions.FullAccess), nil)
 	events, err := agent.Run(context.Background(), "s1", "go", registry.Definitions())
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestTurnThroughputOmittedWithoutUsage(t *testing.T) {
 		},
 	}}
 	registry := tools.NewRegistry(tools.DefaultTools()...)
-	agent := loop.New(provider, loop.NewExecutor(registry, permissions.FullAccess, nil), nil)
+	agent := loop.New(provider, loop.NewExecutor(registry, permissions.FullAccess), nil)
 	events, err := agent.Run(context.Background(), "s1", "go", registry.Definitions())
 	if err != nil {
 		t.Fatal(err)

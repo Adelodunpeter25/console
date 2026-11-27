@@ -109,8 +109,6 @@ pub fn client_kill() -> TerminalClientMessage {
     }
 }
 
-/// Logical size of a terminal viewport.
-
 // ── Grid snapshot — backend-agnostic view for the UI ─────────────────────
 
 /// One cell in a rendered grid snapshot.

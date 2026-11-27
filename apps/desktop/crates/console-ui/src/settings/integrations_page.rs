@@ -1,9 +1,7 @@
-//! Integrations settings page: helper binaries the *server* shells out to
-//! (gh CLI today), with live installed/missing status and the command to
-//! install what is missing.
+//! Integrations settings page: helper tools the *server* shells out to
+//! (gh CLI, the Linux desktop stack), with live installed/missing status and
+//! an Install button that runs the official setup on the server.
 //!
-//! Read-only by design — there is no install button. The install happens on
-//! the box, outside this UI; the page tells the user what to run and where.
 //! Detection runs live server-side on every refresh, so installing then
 //! hitting Refresh flips the row with no restart.
 
@@ -22,9 +20,9 @@ pub struct IntegrationsPage {
     pub loading: bool,
     pub error: Option<String>,
     pub on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    /// Install a missing binary the official way for the server's platform.
-    /// Shown only on rows that report not installed.
-    pub on_install: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    /// Install a missing integration the official way for the server's
+    /// platform. Shown only on rows that report not installed.
+    pub on_install: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 }
 
 impl RenderOnce for IntegrationsPage {
@@ -58,7 +56,7 @@ impl RenderOnce for IntegrationsPage {
                                     .text_size(px(12.5))
                                     .text_color(theme.text_secondary)
                                     .child(
-                                        "Helper tools the server uses on your behalf. Status is checked live on the server — install anything missing, then refresh.",
+                                        "Helper tools the server uses on your behalf. Status is checked live on the server — install anything missing and the row updates when it finishes.",
                                     ),
                             ),
                     )
@@ -147,7 +145,7 @@ fn refresh_button(
 fn integration_row(
     row: &IntegrationStatus,
     loading: bool,
-    on_install: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_install: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     theme: &Theme,
 ) -> impl IntoElement {
     // `installed` has explicit presence on the wire — a missing key reads as
@@ -226,8 +224,9 @@ fn integration_row(
         }
     } else {
         let install_button = {
+            let install_id = row.id.clone();
             let button = div()
-                .id("integrations-install-gh")
+                .id(format!("integrations-install-{}", row.id))
                 .px(px(12.0))
                 .py(px(6.0))
                 .rounded(px(6.0))
@@ -248,7 +247,7 @@ fn integration_row(
                     .hover(|s| s.opacity(0.9))
                     .on_click(move |_event, window, cx| {
                         cx.stop_propagation();
-                        on_install(window, cx);
+                        on_install(install_id.clone(), window, cx);
                     })
                     .into_any_element()
             }

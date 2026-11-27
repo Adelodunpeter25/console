@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
  * repo rather than showing a control that can't do anything.
  */
 @Composable
-fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean, onAddProject: () -> Unit) {
+fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean, onAddProject: () -> Unit, onConnectGithub: () -> Unit = {}) {
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
     val sessionViews by AppContainer.sessionStateHolder.views.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -41,7 +41,8 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
     val projects = projectState.projects
     var projectSheet by remember { mutableStateOf(false) }
     var branchSheet by remember { mutableStateOf(false) }
-    HoldComposerOpen(projectSheet || branchSheet)
+    var baseSheet by remember { mutableStateOf(false) }
+    HoldComposerOpen(projectSheet || branchSheet || baseSheet)
 
     val selectedProject = projectForSession(projects, view?.projectId, cwd)
 
@@ -72,6 +73,7 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
     val worktreeBranch = view?.worktreeBranch
     val currentBranch = worktreeBranch ?: branches?.firstOrNull { it.current }?.name
     val hasMessages = projectLocked
+    val worktreePending = view?.worktreePending == true
 
     LazyRow(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
         item {
@@ -88,7 +90,21 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
         }
         if (isRepo == true && currentBranch != null) {
             item {
-                PickerChip(icon = TablerIcons.Outline.GitBranch, label = currentBranch) { branchSheet = true }
+                PickerChip(icon = TablerIcons.Outline.GitBranch, label = currentBranch, modifier = Modifier.padding(end = 8.dp)) {
+                    reloadTick++
+                    branchSheet = true
+                }
+            }
+            if (worktreePending) {
+                item {
+                    PickerChip(
+                        icon = TablerIcons.Outline.GitBranch,
+                        label = "From ${view?.worktreeBase ?: "default branch"}",
+                    ) {
+                        reloadTick++
+                        baseSheet = true
+                    }
+                }
             }
         }
     }
@@ -106,7 +122,7 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
                 branches = null
                 isRepo = null
                 scope.launch {
-                    AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(cwd = proj.path))
+                    AppContainer.sessionRepository.updateSession(sessionId, UpdateSessionDto(cwd = proj.path))
                     AppContainer.sessionRepository.refreshHeader(sessionId)
                 }
             },
@@ -115,7 +131,7 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
                 branches = null
                 isRepo = null
                 scope.launch {
-                    AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(clearProject = true))
+                    AppContainer.sessionRepository.updateSession(sessionId, UpdateSessionDto(clearProject = true))
                     AppContainer.sessionRepository.refreshHeader(sessionId)
                 }
             },
@@ -123,6 +139,32 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
                 projectSheet = false
                 onAddProject()
             },
+            onConnectGithub = {
+                projectSheet = false
+                onConnectGithub()
+            },
+        )
+    }
+    if (baseSheet) {
+        BranchPickerSheet(
+            branches = branches,
+            loading = loadingBranches,
+            locked = false,
+            lockedReason = null,
+            canStartWorktree = false,
+            worktreeBranch = null,
+            title = "Start from",
+            selectedName = view?.worktreeBase ?: "",
+            onUseDefault = {
+                baseSheet = false
+                AppContainer.sessionRepository.setNewChatWorktreeBase(sessionId, null)
+            },
+            onDismiss = { baseSheet = false },
+            onSelect = { name ->
+                baseSheet = false
+                AppContainer.sessionRepository.setNewChatWorktreeBase(sessionId, name)
+            },
+            onNewWorktree = {},
         )
     }
     if (branchSheet && cwd != null) {
@@ -131,7 +173,7 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
         // Starting a worktree is further limited to a chat with no messages yet.
         val reason = when {
             running -> "Locked while a run is active — a change would only apply to the next message."
-            worktreeBranch != null -> "This chat works in its own worktree branch."
+            worktreeBranch != null && !worktreePending -> "This chat works in its own worktree branch."
             else -> null
         }
         BranchPickerSheet(
@@ -140,7 +182,8 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
             locked = reason != null,
             lockedReason = reason,
             canStartWorktree = !hasMessages,
-            worktreeBranch = worktreeBranch,
+            worktreeBranch = if (worktreePending) null else worktreeBranch,
+            selectedName = if (worktreePending) "" else null,
             switchingTo = switchingTo,
             error = switchError,
             onDismiss = {
@@ -148,6 +191,14 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
                 switchError = null
             },
             onSelect = { name ->
+                if (worktreePending) {
+                    // Picking a branch leaves the "new worktree" plan: work in the project folder.
+                    AppContainer.sessionRepository.clearNewChatWorktree(sessionId)
+                    if (branches?.firstOrNull { it.current }?.name == name) {
+                        branchSheet = false
+                        return@BranchPickerSheet
+                    }
+                }
                 if (switchingTo == null && name != currentBranch) {
                     switchError = null
                     switchingTo = name
@@ -171,7 +222,9 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
             },
             onNewWorktree = {
                 branchSheet = false
-                scope.launch {
+                if (com.console.mobile.core.chat.isNewChatId(sessionId)) {
+                    AppContainer.sessionRepository.requestNewChatWorktree(sessionId)
+                } else scope.launch {
                     try {
                         val header = AppContainer.sessionRepository.attachWorktree(sessionId)
                         // The Home list reads its own copy of the header; without this it

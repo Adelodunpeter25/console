@@ -9,9 +9,25 @@
 /// True for `http(s)://` destinations, which keep opening in the browser.
 pub fn is_http_url(link: &str) -> bool {
     let link = link.trim_start();
-    link.len() >= 7
-        && (link[..7].eq_ignore_ascii_case("http://")
-            || (link.len() >= 8 && link[..8].eq_ignore_ascii_case("https://")))
+    let starts = |prefix: &str| {
+        link.get(..prefix.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
+    };
+    starts("http://") || starts("https://")
+}
+
+/// True when `link` targets an HTML file (`.html` or `.htm`).
+pub fn is_html_link(link: &str) -> bool {
+    let path = strip_line_suffix(link.trim());
+    let file = path.rsplit('/').next().unwrap_or(path);
+    let file = file.rsplit('\\').next().unwrap_or(file);
+    match file.rfind('.') {
+        Some(dot) if dot + 1 < file.len() => {
+            let ext = &file[dot + 1..];
+            ext.eq_ignore_ascii_case("html") || ext.eq_ignore_ascii_case("htm")
+        }
+        _ => false,
+    }
 }
 
 /// Extensionless file names common enough to treat as files when they stand
@@ -56,7 +72,10 @@ pub fn is_file_link(link: &str) -> bool {
     match file.rfind('.') {
         Some(dot) if dot + 1 < file.len() => {
             let ext = &file[dot + 1..];
-            !ext.is_empty() && ext.len() <= 10 && ext.chars().all(|c| c.is_ascii_alphanumeric())
+            !ext.is_empty()
+                && ext.len() <= 10
+                && ext.chars().all(|c| c.is_ascii_alphanumeric())
+                && ext.chars().any(|c| c.is_ascii_alphabetic())
         }
         _ => false,
     }
@@ -82,10 +101,29 @@ pub fn strip_line_suffix(link: &str) -> &str {
         if j < end && j > 0 && bytes[j - 1] == b':' && j != end {
             end = j - 1;
         }
+        // `end` is a byte offset into possibly non-ASCII text (a truncated
+        // URL can end `…:12…`); snap back to a char boundary before slicing.
+        while !link.is_char_boundary(end) {
+            end -= 1;
+        }
         link[..end].trim_end()
     } else {
         link.trim_end()
     }
+}
+
+/// Parse an optional 1-based line number from a trailing `:line` or `:line:col` suffix.
+pub fn parse_line_suffix(link: &str) -> Option<u32> {
+    let trimmed = link.trim();
+    let stripped = strip_line_suffix(trimmed);
+    if stripped.len() >= trimmed.len() {
+        return None;
+    }
+    let suffix = &trimmed[stripped.len()..];
+    let suffix = suffix.strip_prefix(':')?;
+    let mut parts = suffix.split(':');
+    let line_str = parts.next()?;
+    line_str.parse::<u32>().ok().filter(|&l| l > 0)
 }
 
 /// Resolve a file link to an absolute path for `open_file_tab`.

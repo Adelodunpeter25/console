@@ -5,10 +5,10 @@ package loop
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
@@ -32,7 +32,12 @@ type TurnRequest struct {
 	// Setup is the per-session context (rules, tree, workstation). When set,
 	// Messages already starts with it as a <setup> user message; the field
 	// lets providers find that message (e.g. for cache breakpoints).
-	Setup    string
+	Setup string
+	// Tail is per-request context (mode notice, finished background work,
+	// late capability references). It is not in Messages: each provider adds
+	// it after its cache breakpoint (WithTail), so the cached prefix never
+	// contains text that changes between requests.
+	Tail     string
 	Messages []any // UserMessage | AssistantMessage | ToolResultMessage
 	Tools    []tools.Definition
 	// Provider options (all optional, zero value = provider default).
@@ -70,14 +75,16 @@ const (
 	EventUsage      EventKind = "usage"
 	// EventAskQuestion carries an AskQuestionRequest awaiting the answer route.
 	EventAskQuestion EventKind = "askQuestion"
+	// EventQuestionResolved announces that a pending question was answered.
+	EventQuestionResolved EventKind = "questionResolved"
 	// EventBrowserAction carries a BrowserActionRequest awaiting desktop client execution.
 	EventBrowserAction EventKind = "browserAction"
-	// EventPermissionRequest carries a permission Request awaiting approval.
-	EventPermissionRequest EventKind = "permissionRequest"
-	// EventQueueUpdated carries the staged QueuedPrompt (or null).
+	// EventQueueUpdated carries the queued prompts, next to run first.
 	EventQueueUpdated EventKind = "queueUpdated"
 	// EventSessionTitleUpdated carries a freshly generated title.
 	EventSessionTitleUpdated EventKind = "sessionTitleUpdated"
+	// EventSessionApprovalModeUpdated carries an updated approval mode.
+	EventSessionApprovalModeUpdated EventKind = "sessionApprovalModeUpdated"
 	// EventSubagentStart/Activity/End carry subagent lifecycle payloads.
 	EventSubagentStart    EventKind = "subagentStart"
 	EventSubagentActivity EventKind = "subagentActivity"
@@ -131,10 +138,19 @@ type Event struct {
 	Usage      *TurnUsage                  `json:"usage,omitempty"`
 	Ask        *tools.AskQuestionRequest   `json:"ask,omitempty"`
 	Browser    *tools.BrowserActionRequest `json:"browser,omitempty"`
-	Permission *permissions.Request        `json:"permission,omitempty"`
 	Queued     *types.QueuedPrompt         `json:"queuedPrompt,omitempty"`
-	Title      string                      `json:"title,omitempty"`
-	Subagent   any                         `json:"subagent,omitempty"`
+	// Drained marks an EventQueueUpdated with no Queued as "the staged prompt
+	// just started running", as opposed to it being cleared.
+	Drained bool `json:"drained,omitempty"`
+	// QueuedAll is the whole queue (next-to-run first) on EventQueueUpdated.
+	QueuedAll []types.QueuedPrompt `json:"queuedPrompts,omitempty"`
+	Title     string               `json:"title,omitempty"`
+	// StartedAt is when the run opened. It travels on EventSessionStart so
+	// clients can show elapsed time from the server's clock, not their own.
+	StartedAt    time.Time `json:"startedAt,omitempty"`
+	ApprovalMode string    `json:"approvalMode,omitempty"`
+	Source       string    `json:"source,omitempty"`
+	Subagent     any       `json:"subagent,omitempty"`
 	// Items/Action carry the session todo list for EventTodoUpdate.
 	Items  []types.TodoItem `json:"items,omitempty"`
 	Action string           `json:"action,omitempty"`
@@ -185,11 +201,14 @@ type Agent struct {
 	// conversation on every turn. It is never persisted or compacted.
 	Setup string
 	// TurnContext is called immediately before every provider request. Its
-	// returned text is added to the non-persisted setup context, allowing
-	// detached work that finishes during a tool loop to arrive before the next
-	// safe request without interrupting a stream. The callback should return a
-	// claimed/deduplicated value so it is not repeated on later requests.
+	// text rides at the tail of the request, after the cached prefix, so
+	// changing it (mode, finished background work) never invalidates the
+	// cache. Never persisted.
 	TurnContext func() string
+	// ModeNotice, when set, supplies the instruction for a permission mode.
+	// It is attached to the user message where the mode starts or changes
+	// (see ApplyModeNotices), so it is seen once and stays in history.
+	ModeNotice func(mode string) string
 	// ToolDefs, when set, supplies the provider tool list at the start of
 	// every turn (lazy tool groups can grow it mid-run). Nil keeps the
 	// list passed to Run.
@@ -198,6 +217,11 @@ type Agent struct {
 	CacheRetention CacheRetention
 	ConversationID string
 	ThinkingLevel  string
+	// StripImages omits image attachments from provider-bound history when
+	// the active model cannot see images (persisted history keeps them).
+	// oh-my-pi replaces image blocks with an omission note at the same
+	// boundary; providers reject raw image parts they cannot serve.
+	StripImages bool
 	// AccountID, when set, pins every turn to one account's credential
 	// (see TurnRequest.AccountID). Empty keeps provider defaults.
 	AccountID string
@@ -212,6 +236,9 @@ type Agent struct {
 	// OnRequest, when set, receives an estimated per-source breakdown of
 	// every provider request just before it is sent.
 	OnRequest func(Breakdown)
+	// TodoReminders nudges the model to update a stale task list. Off for
+	// subagents (no session) and plan mode.
+	TodoReminders bool
 	// ToolStats counts calls, errors (by class), and result bytes per tool
 	// (never nil after New).
 	ToolStats *ToolStats
@@ -259,6 +286,10 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 
 	history = MaterializeHistory(history)
 	history = append(history, MaterializeUserMessage(user))
+	if a.StripImages {
+		history = stripUserImages(history)
+	}
+	roundsSinceTodo := 0
 	for {
 		if a.ToolDefs != nil {
 			// Re-read each turn so lazily loaded tool groups become visible.
@@ -282,8 +313,16 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 			return
 		}
 
-		// Execute every tool call the model requested this turn.
-		results := make([]tools.ToolResult, 0, len(assistant.Content))
+		// Execute every tool call the model requested this turn. Results
+		// stream as they finish, except the last: a todo reminder may be
+		// appended to it, and the pushed copy must match the persisted one.
+		calls := 0
+		for _, part := range assistant.Content {
+			if _, ok := part.(ToolCallPart); ok {
+				calls++
+			}
+		}
+		results := make([]tools.ToolResult, 0, calls)
 		for _, part := range assistant.Content {
 			if callPart, ok := part.(ToolCallPart); ok {
 				result, err := a.executor.Execute(ctx, callPart.Call)
@@ -295,8 +334,16 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 				if a.ToolStats != nil {
 					a.ToolStats.Record(result)
 				}
-				events.Push(Event{Kind: EventToolResult, Result: &result})
+				if len(results) < calls {
+					events.Push(Event{Kind: EventToolResult, Result: &results[len(results)-1]})
+				}
 			}
+		}
+		if a.TodoReminders {
+			roundsSinceTodo = a.remindStaleTodos(sessionID, toolsList, results, roundsSinceTodo)
+		}
+		if calls > 0 {
+			events.Push(Event{Kind: EventToolResult, Result: &results[calls-1]})
 		}
 		resultMsg := ToolResultMessage{Role: RoleToolResult, Results: results}
 		resultBytes, err := ToProtoBytes(resultMsg)
@@ -361,18 +408,65 @@ func WithSetup(setup string, history []any) []any {
 	return append(out, history...)
 }
 
+var prefixTracker PrefixTracker
+
+// logTurnCache reports a turn whose prompt was mostly not served from cache,
+// and a turn the provider returned no usage for, so a provider that stops
+// reporting cache numbers is visible instead of silently counted as zero.
+func (a *Agent) logTurnCache(sessionID string, usage *TurnUsage) {
+	provider := a.ConversationID
+	if parts := strings.Split(a.ConversationID, ":"); len(parts) >= 3 {
+		provider = parts[1]
+	}
+	if usage == nil || (usage.CacheStatus == CacheUnknown && usage.PromptTokens() == 0) {
+		slog.Info("turn usage unreported", "session", sessionID, "provider", provider, "model", a.Model)
+		return
+	}
+	if !IsCacheMiss(usage) {
+		return
+	}
+	turn := 0
+	if a.Usage != nil {
+		turn = a.Usage.Snapshot().Turns
+	}
+	slog.Info("cache miss", "session", sessionID, "provider", provider, "model", a.Model, "turn", turn,
+		"read", usage.CacheRead, "write", usage.CacheWrite, "input", usage.Input,
+		"hit", fmt.Sprintf("%.0f%%", usage.HitRatio()*100))
+}
+
+// WithTail appends the request tail as a final user message; an empty tail
+// is a no-op. Providers with implicit caching use it on Messages.
+func WithTail(tail string, messages []any) []any {
+	if strings.TrimSpace(tail) == "" {
+		return messages
+	}
+	out := make([]any, 0, len(messages)+1)
+	out = append(out, messages...)
+	return append(out, UserMessage{Role: RoleUser, Content: TailText(tail)})
+}
+
+// TailText wraps tail context for the model.
+func TailText(tail string) string {
+	return "<context>\n" + tail + "\n</context>"
+}
+
 // turnOnce streams a single attempt, persisting the assistant turn only on
 // success.
 func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, toolsList []tools.Definition, events *stream.Stream[Event]) (AssistantMessage, error) {
+	history = ApplyModeNotices(history, a.ModeNotice)
 	assistant := AssistantMessage{Role: RoleAssistant, ID: newMessageID(), Content: []any{}}
 	// Bracket every provider turn with stream markers so subscribers get
 	// per-turn triplets with the canonical assistant snapshot — the desktop
 	// replaces streamed content with it.
 	turnID := newTurnID()
 	setup := a.Setup
+	tail := ""
 	if a.TurnContext != nil {
-		if contextText := strings.TrimSpace(a.TurnContext()); contextText != "" {
-			setup = strings.TrimSpace(setup + "\n\n<background-work>\n" + contextText + "\n</background-work>")
+		tail = strings.TrimSpace(a.TurnContext())
+	}
+	if a.ConversationID != "" {
+		if changed := prefixTracker.Observe(a.ConversationID, a.SystemPrompt, setup, toolsList, history); changed != "" {
+			slog.Info("request prefix changed", "session", sessionID, "part", changed, "messages", len(history))
 		}
 	}
 	if a.OnRequest != nil {
@@ -390,6 +484,7 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 			Model:          a.Model,
 			SystemPrompt:   a.SystemPrompt,
 			Setup:          setup,
+			Tail:           tail,
 			Messages:       WithSetup(setup, history),
 			Tools:          toolsList,
 			CacheRetention: a.CacheRetention,
@@ -398,6 +493,14 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 			AccountID:      a.AccountID,
 		}, turnStream)
 	}()
+
+	var textBuilder strings.Builder
+	var thinkingBuilder strings.Builder
+	var lastThoughtSig string
+	var lastThinkingSig string
+	hasText := false
+	hasThinking := false
+	var toolCalls []ToolCallPart
 
 	for {
 		event, err, ok := turnStream.Next()
@@ -412,36 +515,23 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 			if event.Text == "" {
 				break
 			}
-			// Coalesce consecutive text deltas into a single TextPart.
-			// Without this each streamed word persists as its own part,
-			// and clients render every part as a separate vertical
-			// markdown block (one word per line).
-			if n := len(assistant.Content); n > 0 {
-				if last, ok := assistant.Content[n-1].(TextPart); ok {
-					last.Text += event.Text
-					if event.ThoughtSignature != "" {
-						last.ThoughtSignature = event.ThoughtSignature
-					}
-					assistant.Content[n-1] = last
-					break
-				}
+			hasText = true
+			textBuilder.WriteString(event.Text)
+			if event.ThoughtSignature != "" {
+				lastThoughtSig = event.ThoughtSignature
 			}
-			assistant.Content = append(assistant.Content, TextPart{Type: "text", Text: event.Text, ThoughtSignature: event.ThoughtSignature})
 		case EventThinking:
 			if event.Text == "" {
 				break
 			}
-			if n := len(assistant.Content); n > 0 {
-				if last, ok := assistant.Content[n-1].(ThinkingPart); ok {
-					last.Text += event.Text
-					assistant.Content[n-1] = last
-					break
-				}
+			hasThinking = true
+			thinkingBuilder.WriteString(event.Text)
+			if event.ThoughtSignature != "" {
+				lastThinkingSig = event.ThoughtSignature
 			}
-			assistant.Content = append(assistant.Content, ThinkingPart{Type: "thinking", Text: event.Text})
 		case EventToolCall:
 			if event.Call != nil {
-				assistant.Content = append(assistant.Content, ToolCallPart{Type: "toolCall", Call: *event.Call})
+				toolCalls = append(toolCalls, ToolCallPart{Type: "toolCall", Call: *event.Call})
 				assistant.StopReason = StopToolUse
 			}
 		case EventUsage:
@@ -453,6 +543,26 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 		}
 		events.Push(event)
 	}
+
+	var content []any
+	if hasThinking {
+		content = append(content, ThinkingPart{
+			Type:      "thinking",
+			Text:      thinkingBuilder.String(),
+			Signature: lastThinkingSig,
+		})
+	}
+	if hasText {
+		content = append(content, TextPart{
+			Type:             "text",
+			Text:             textBuilder.String(),
+			ThoughtSignature: lastThoughtSig,
+		})
+	}
+	for _, tc := range toolCalls {
+		content = append(content, tc)
+	}
+	assistant.Content = content
 	if err := <-done; err != nil {
 		return assistant, err
 	}
@@ -460,6 +570,7 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 	if a.Usage != nil {
 		a.Usage.AddTurn(assistant.Usage)
 	}
+	a.logTurnCache(sessionID, assistant.Usage)
 	if assistant.StopReason == "" {
 		assistant.StopReason = StopStop
 	}
@@ -486,4 +597,73 @@ func (a *Agent) persist(sessionID string, msg types.AgentMessage) error {
 		return nil
 	}
 	return a.sessions.AppendMessage(sessionID, msg)
+}
+
+// todoReminderRounds is how many tool rounds may pass without a todo call
+// before the model is reminded about unfinished tasks.
+const todoReminderRounds = 4
+
+// remindStaleTodos returns the updated rounds-since-todo count. Once it
+// reaches todoReminderRounds with tasks still open, one line is added to a
+// result before it is persisted, so replayed history is byte-identical and
+// the provider's prompt cache stays valid.
+func (a *Agent) remindStaleTodos(sessionID string, toolsList []tools.Definition, results []tools.ToolResult, rounds int) int {
+	if a.sessions == nil {
+		return 0
+	}
+	hasTodo := false
+	for _, def := range toolsList {
+		if def.Name == "todo" {
+			hasTodo = true
+			break
+		}
+	}
+	if !hasTodo {
+		return 0
+	}
+	for _, result := range results {
+		if result.ToolName == "todo" {
+			return 0
+		}
+	}
+	rounds++
+	if rounds < todoReminderRounds {
+		return rounds
+	}
+	items, err := a.sessions.GetSessionTodos(sessionID)
+	if err != nil {
+		return rounds
+	}
+	inProgress, pending := []string{}, 0
+	for _, item := range items {
+		switch item.Status {
+		case "in_progress":
+			inProgress = append(inProgress, fmt.Sprintf("#%d", item.ID))
+		case "pending":
+			pending++
+		}
+	}
+	if len(inProgress) == 0 && pending == 0 {
+		return rounds
+	}
+	for i := len(results) - 1; i >= 0; i-- {
+		parts, ok := results[i].Content.([]map[string]any)
+		if !ok {
+			continue
+		}
+		note := "Tasks:"
+		if len(inProgress) > 0 {
+			note += " " + strings.Join(inProgress, ", ") + " in progress"
+		}
+		if pending > 0 {
+			if len(inProgress) > 0 {
+				note += ","
+			}
+			note += fmt.Sprintf(" %d pending", pending)
+		}
+		note += ". Mark any finished with todo."
+		results[i].Content = append(parts, map[string]any{"type": "text", "text": note})
+		return 0
+	}
+	return rounds
 }

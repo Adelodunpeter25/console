@@ -14,7 +14,7 @@ impl ConsoleDesktopApp {
     /// checkout, so everything that reads it — terminals, file tree, search,
     /// quick open, new chats — follows the checkout the workspace is for.
     pub(crate) fn selected_project_for_pane(&self, pane_id: &str) -> Option<ProjectInfo> {
-        let key = self.pane_project_id(pane_id)?;
+        let key = self.pane_workspace_key(pane_id)?;
         let (project_id, worktree) = console_core::split_workspace_key(&key);
         let mut project = self.projects.iter().find(|p| p.id == project_id)?.clone();
         if let Some(path) = worktree {
@@ -27,7 +27,7 @@ impl ConsoleDesktopApp {
     /// project lookups need this; the workspace key itself also encodes which
     /// worktree the pane is in.
     pub(crate) fn pane_real_project_id(&self, pane_id: &str) -> Option<String> {
-        self.pane_project_id(pane_id)
+        self.pane_workspace_key(pane_id)
             .map(|key| console_core::project_id_of_workspace_key(&key).to_owned())
     }
 
@@ -45,8 +45,8 @@ impl ConsoleDesktopApp {
     }
 
     /// The workspace a session's tabs live in: its worktree's workspace when
-    /// it runs outside the project folder, else the project's. Falls back to
-    /// what the header alone says while projects are still loading.
+    /// it runs outside the project folder, else the chat's own desk. Falls
+    /// back to what the header alone says while projects are still loading.
     pub(crate) fn workspace_key_for_header(
         &self,
         session: &console_core::SessionHeader,
@@ -64,7 +64,9 @@ impl ConsoleDesktopApp {
             Some(project) => Some(
                 match console_core::session_checkout_path(session, Some(&project.path)) {
                     Some(path) => console_core::worktree_workspace_key(&project.id, path),
-                    None => project.id.clone(),
+                    // One chat, one desk: plain chats each get their own
+                    // workspace too.
+                    None => console_core::session_workspace_key(&project.id, &session.id),
                 },
             ),
             None => console_core::workspace_key_for_session(session, None),
@@ -120,7 +122,9 @@ impl ConsoleDesktopApp {
                 .project_workspace_roots
                 .get(&new_workspace_id)
                 .cloned()
-                .unwrap_or_else(|| console_core::WorkspaceNode::leaf(pane_id.clone()));
+                .unwrap_or_else(|| {
+                    console_core::WorkspaceNode::leaf(console_core::desk_leaf_id(&new_workspace_id))
+                });
             // Drop any stale tabs from other folders (heals legacy mixed saves).
             console_ui::workspace::ops::retain_project_tabs(&mut target_root, &new_workspace_id);
             let target_pane_id = target_root
@@ -143,33 +147,37 @@ impl ConsoleDesktopApp {
                 .insert(new_workspace_id.clone(), target_pane_id.clone());
             if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
                 state.selected_project_id = new_workspace_id.clone();
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = false;
                 state.branch_is_git_repository = false;
             }
             if let Some(state) = self.workspace_pane_states.get_mut(&target_pane_id) {
                 state.selected_project_id = new_workspace_id.clone();
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = false;
                 state.branch_is_git_repository = false;
             }
             self.selected_project_id = new_workspace_id.clone();
+            // The old tree (with its browser tabs) just went into the stash,
+            // so its webviews must be hidden now: the native view paints
+            // above everything until a sync marks it inactive.
+            self.sync_workspace_webviews(cx);
             self.persist_layout();
             self.persist_workspaces();
         } else {
             if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
                 state.selected_project_id = Some(project_id.clone());
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = false;
                 state.branch_is_git_repository = false;
             }
-            self.selected_project_id = Some(project_id.clone());
+            self.selected_project_id = Some(project_id);
             // Same-folder change: keep the tab's stored project in step.
             if let Some(tid) = active_tab_id {
                 console_ui::workspace::ops::set_tab_project(
                     &mut self.workspace_root,
                     &tid,
-                    new_workspace_id.clone(),
+                    new_workspace_id,
                 );
             }
             self.persist_workspaces();
@@ -189,13 +197,12 @@ impl ConsoleDesktopApp {
         // Use the pre-move session id: after the workspace switch the old
         // pane id may no longer exist in the active tree.
         if let Some(sid) = session_id.clone() {
-            if let Some(session) = Rc::make_mut(&mut self.sessions)
-                .iter_mut()
-                .find(|s| s.id == sid)
-            {
-                session.project_id = Some(project.id.clone());
-                session.cwd = project.path.clone();
-            }
+            super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                if let Some(session) = sessions.iter_mut().find(|s| s.id == sid) {
+                    session.project_id = Some(project.id.clone());
+                    session.cwd = project.path.clone();
+                }
+            });
         }
 
         let path = project.path.clone();
@@ -203,12 +210,12 @@ impl ConsoleDesktopApp {
             .update(cx, |transcript, _| {
                 transcript.set_session_cwd(Some(path.clone()));
             });
-        self.maybe_refresh_inspector(cx);
+        self.refresh_file_tree(cx);
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        let pane_id_for_result = effective_pane.clone();
-        let project_id_for_dto = project.id.clone();
+        let pane_id_for_result = effective_pane;
+        let project_id_for_dto = project.id;
         cx.spawn(async move |_entity, cx| {
             if let Some(session_id) = session_id {
                 match client
@@ -298,7 +305,9 @@ impl ConsoleDesktopApp {
                 .project_workspace_roots
                 .get(&new_workspace_id)
                 .cloned()
-                .unwrap_or_else(|| console_core::WorkspaceNode::leaf(pane_id.clone()));
+                .unwrap_or_else(|| {
+                    console_core::WorkspaceNode::leaf(console_core::desk_leaf_id(&new_workspace_id))
+                });
             console_ui::workspace::ops::retain_project_tabs(&mut target_root, &new_workspace_id);
             let target_pane_id = target_root
                 .leaves()
@@ -319,13 +328,13 @@ impl ConsoleDesktopApp {
                 .insert(new_workspace_id.clone(), target_pane_id.clone());
             if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
                 state.selected_project_id = None;
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = true;
                 state.branch_is_git_repository = false;
             }
             if let Some(state) = self.workspace_pane_states.get_mut(&target_pane_id) {
                 state.selected_project_id = None;
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = true;
                 state.branch_is_git_repository = false;
             }
@@ -335,7 +344,7 @@ impl ConsoleDesktopApp {
         } else {
             if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
                 state.selected_project_id = None;
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = true;
                 state.branch_is_git_repository = false;
             }
@@ -357,17 +366,16 @@ impl ConsoleDesktopApp {
         self.pending_project_override
             .insert(session_id.clone(), None);
 
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|s| s.id == session_id)
-        {
-            session.project_id = None;
-        }
-        self.maybe_refresh_inspector(cx);
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|s| s.id == session_id) {
+                session.project_id = None;
+            }
+        });
+        self.refresh_file_tree(cx);
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        let pane_for_confirm = effective_pane.clone();
+        let pane_for_confirm = effective_pane;
         cx.spawn(async move |_entity, cx| {
             match client
                 .sessions
@@ -387,7 +395,7 @@ impl ConsoleDesktopApp {
                         provider: None,
                         approval_mode: None,
                         thinking_level: None,
-                            pinned: None,
+                        pinned: None,
                     },
                 )
                 .await
@@ -399,10 +407,12 @@ impl ConsoleDesktopApp {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 this.confirm_project_override(&sid, &header);
-                                this.transcript_for_pane(&pane_for_confirm)
-                                    .update(cx, |transcript, _| {
+                                this.transcript_for_pane(&pane_for_confirm).update(
+                                    cx,
+                                    |transcript, _| {
                                         transcript.set_session_cwd(Some(cwd));
-                                    });
+                                    },
+                                );
                             });
                         }
                     });
@@ -437,7 +447,9 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         if !this.projects.iter().any(|p| p.id == project.id) {
-                            Rc::make_mut(&mut this.projects).push(project.clone());
+                            super::types::rc_slice_edit(&mut this.projects, |v| {
+                                v.push(project.clone())
+                            });
                         }
                         this.select_project_for_pane(pane_id.clone(), project.id, cx);
                         crate::window::broadcast_settings_refresh(cx);
@@ -469,7 +481,7 @@ impl ConsoleDesktopApp {
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
         if !self.projects.iter().any(|p| p.id == project.id) {
-            Rc::make_mut(&mut self.projects).push(project.clone());
+            super::types::rc_slice_edit(&mut self.projects, |v| v.push(project.clone()));
         }
         self.select_project_for_pane(pane_id, project.id, cx);
         crate::window::broadcast_settings_refresh(cx);
@@ -492,7 +504,7 @@ impl ConsoleDesktopApp {
             .filter(|cwd| !cwd.is_empty());
         let Some(path) = session_cwd.or_else(|| {
             self.selected_project_for_pane(&pane_id)
-                .map(|project| project.path.clone())
+                .map(|project| project.path)
         }) else {
             return;
         };
@@ -521,11 +533,11 @@ impl ConsoleDesktopApp {
                         match result {
                             Ok(branches) => {
                                 if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
-                                    state.branches = Rc::new(branches.branches);
+                                    state.branches = Rc::from(branches.branches);
                                     state.branch_loaded = true;
                                     state.branch_is_git_repository = branches.is_git_repository;
                                 }
-                                this.maybe_refresh_inspector(cx);
+                                this.refresh_file_tree(cx);
                             }
                             Err(error) => {
                                 this.set_error(format!("Unable to switch branch: {error}"), cx)
@@ -547,19 +559,18 @@ impl ConsoleDesktopApp {
     /// new session row, no duplicate sidebar entry. Once a chat has
     /// messages its cwd is locked, so that case falls back to spawning a
     /// brand-new session rooted in a fresh worktree (server auto-derives
-    /// the branch name) and opens it in this pane, mirroring
-    /// `create_new_chat`.
+    /// the branch name) and opens it in this pane.
     pub fn new_worktree_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
-        if !self.session_has_messages(&pane_id) {
-            if let Some(session_id) = self.active_session_for_pane(&pane_id) {
-                self.attach_worktree_for_pane(pane_id, session_id, cx);
-                return;
-            }
+        if !self.session_has_messages(&pane_id)
+            && let Some(session_id) = self.active_session_for_pane(&pane_id)
+        {
+            self.attach_worktree_for_pane(pane_id, session_id, cx);
+            return;
         }
 
         let Some(path) = self
             .selected_project_for_pane(&pane_id)
-            .map(|project| project.path.clone())
+            .map(|project| project.path)
         else {
             return;
         };
@@ -596,21 +607,27 @@ impl ConsoleDesktopApp {
                         }
                         match result {
                             Ok(new_session) => {
-                                this.save_transcript_scroll_position(cx);
+                                // The new chat replaces this pane's transcript,
+                                // so the chat it was showing keeps its position.
+                                this.save_pane_scroll_position(&pane_id, cx);
                                 this.apply_session_header_for_pane(&pane_id, &new_session, cx);
                                 this.clear_error_for_pane(&pane_id, cx);
                                 if this.active_pane_id.as_deref() == Some(pane_id.as_str()) {
                                     this.selected_session_id = Some(new_session.id.clone());
                                 }
-                                Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
+                                super::types::rc_slice_edit(&mut this.sessions, |v| {
+                                    v.insert(0, new_session.clone())
+                                });
                                 this.open_chat_tab_in_pane(
                                     &pane_id,
                                     new_session.id.clone(),
                                     "New Chat",
+                                    cx,
                                 );
+                                this.restore_draft_for_pane(&pane_id, Some(&new_session.id), cx);
                                 this.sync_workspace_webviews(cx);
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
-                                    t.set_messages(Vec::new(), cx);
+                                    t.set_turns(Vec::new(), cx);
                                 });
                             }
                             Err(error) => {
@@ -682,9 +699,16 @@ impl ConsoleDesktopApp {
         cwd: String,
         cx: &mut Context<Self>,
     ) {
+        let mut seq = 0;
         if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
-            state.branch_loaded = false;
+            // A same-folder refresh keeps the current list on screen instead
+            // of flashing the loading state.
+            if state.branch_cwd.as_deref() != Some(cwd.as_str()) {
+                state.branch_loaded = false;
+            }
             state.branch_cwd = Some(cwd.clone());
+            state.branch_request_seq += 1;
+            seq = state.branch_request_seq;
         }
         let branch_client = self.client.clone();
         cx.spawn(async move |entity, cx| {
@@ -695,10 +719,12 @@ impl ConsoleDesktopApp {
                         if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
                             // The pane may have moved to another folder while
                             // this was in flight; only the latest request wins.
-                            if state.branch_cwd.as_deref() == Some(cwd.as_str()) {
+                            if state.branch_cwd.as_deref() == Some(cwd.as_str())
+                                && state.branch_request_seq == seq
+                            {
                                 state.branch_loaded = true;
                                 if let Ok(branches) = result {
-                                    state.branches = Rc::new(branches.branches);
+                                    state.branches = Rc::from(branches.branches);
                                     state.branch_is_git_repository = branches.is_git_repository;
                                 }
                             }
@@ -718,7 +744,7 @@ impl ConsoleDesktopApp {
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            this.projects = Rc::new(projects);
+                            this.projects = Rc::from(projects);
                             cx.notify();
                         });
                     }
@@ -729,7 +755,7 @@ impl ConsoleDesktopApp {
     }
 
     pub fn remove_project(&mut self, project_id: String, cx: &mut Context<Self>) {
-        Rc::make_mut(&mut self.projects).retain(|p| p.id != project_id);
+        super::types::rc_slice_edit(&mut self.projects, |v| v.retain(|p| p.id != project_id));
         if self
             .selected_project_id
             .as_deref()
@@ -759,7 +785,7 @@ impl ConsoleDesktopApp {
                 .is_some_and(|k| console_core::project_id_of_workspace_key(k) == project_id)
             {
                 state.selected_project_id = None;
-                state.branches = Rc::new(Vec::new());
+                state.branches = Rc::from([]);
                 state.branch_loaded = false;
             }
         }

@@ -1,0 +1,18 @@
+[package]
+name = "console-iroh"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+iroh = "1.4"
+tokio = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+
+[[test]]
+name = "proxy_test"
+path = "tests/proxy_test.rs"
+
+[dev-dependencies]
+reqwest = { workspace = true }

@@ -72,6 +72,24 @@ impl Transport {
         client.ports.watch(project_id).await
     }
 
+    pub async fn watch_automations(
+        &self,
+        client: &ConsoleClient,
+        session_id: Option<&str>,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<crate::services::AutomationStreamEvent>> + Send>>>
+    {
+        client.automations.watch(session_id).await
+    }
+
+    pub async fn watch_webhooks(
+        &self,
+        client: &ConsoleClient,
+        session_id: Option<&str>,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<crate::services::WebhookStreamEvent>> + Send>>>
+    {
+        client.webhooks.watch(session_id).await
+    }
+
     pub async fn watch_notifications(
         &self,
         client: &ConsoleClient,

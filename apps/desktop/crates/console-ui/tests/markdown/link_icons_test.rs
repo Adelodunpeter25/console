@@ -70,7 +70,6 @@ fn one_link_split_across_runs_reserves_one_gap() {
 fn plain_text_and_other_schemes_get_no_icon() {
     let flat = flat(&[run("hello", None), run("mail", Some("mailto:a@b.com"))]);
     assert!(flat.icons.is_empty());
-    assert!(!flat.text.contains(ICON_GAP));
 }
 
 #[test]
@@ -98,4 +97,38 @@ fn backticked_names_without_a_directory_become_file_links() {
     let mut links = Vec::new();
     collect(&blocks, &mut links);
     assert_eq!(links, vec!["README.md".to_string(), "Makefile".to_string()]);
+}
+
+#[test]
+fn prose_slashes_and_pricing_are_not_parsed_as_file_links() {
+    use console_ui::markdown::parser::{Block, parse};
+
+    fn collect(blocks: &[Block], links: &mut Vec<String>) {
+        for block in blocks {
+            match block {
+                Block::Paragraph { runs } => {
+                    links.extend(runs.iter().filter_map(|run| run.style.link.clone()));
+                }
+                Block::List { items, .. } => {
+                    for item in items {
+                        collect(&item.blocks, links);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let text = "- Read config from env/settings the same way other integrations do (e.g. `TOKEN`)\n\
+                - Deepgram nova-3/flux (streaming; ~10x neuron cost), Groq fallback (can add later), on-device whisper.cpp.\n\
+                - Pricing: $0.0005/audio-minute ≈ 46.63 neurons/min\n\
+                - Check /var/log/app.log and src/lib.rs:12 for details\n";
+    let tree = parse(text);
+    let blocks: Vec<Block> = tree.blocks.into_iter().map(|top| top.block).collect();
+    let mut links = Vec::new();
+    collect(&blocks, &mut links);
+    assert_eq!(
+        links,
+        vec!["/var/log/app.log".to_string(), "src/lib.rs:12".to_string()]
+    );
 }

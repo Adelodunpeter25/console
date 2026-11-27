@@ -41,5 +41,6 @@ type QueuedPrompt struct {
 	ModelID      string              `json:"modelId,omitempty"`
 	Provider     string              `json:"provider,omitempty"`
 	ApprovalMode string              `json:"approvalMode,omitempty"`
+	Source       string              `json:"source,omitempty"`
 	CreatedAt    string              `json:"createdAt"`
 }

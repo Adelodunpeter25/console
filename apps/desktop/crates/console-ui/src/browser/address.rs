@@ -5,20 +5,17 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-static FAVICON_CACHE: OnceLock<Mutex<HashMap<String, Arc<gpui::Image>>>> = OnceLock::new();
-static FAVICON_IN_FLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-static FAVICON_FAILED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-
-fn favicon_cache() -> &'static Mutex<HashMap<String, Arc<gpui::Image>>> {
-    FAVICON_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+#[derive(Default)]
+struct FaviconRegistry {
+    cache: HashMap<String, Arc<gpui::Image>>,
+    in_flight: HashSet<String>,
+    failed: HashSet<String>,
 }
 
-fn favicon_in_flight() -> &'static Mutex<HashSet<String>> {
-    FAVICON_IN_FLIGHT.get_or_init(|| Mutex::new(HashSet::new()))
-}
+static FAVICONS: OnceLock<Mutex<FaviconRegistry>> = OnceLock::new();
 
-fn favicon_failed() -> &'static Mutex<HashSet<String>> {
-    FAVICON_FAILED.get_or_init(|| Mutex::new(HashSet::new()))
+fn favicons() -> &'static Mutex<FaviconRegistry> {
+    FAVICONS.get_or_init(Default::default)
 }
 
 /// How long a URL must stay on screen before anything is fetched for it. A URL
@@ -39,9 +36,19 @@ fn settled(key: &str) -> bool {
         >= SETTLE_DELAY
 }
 
-static TITLE_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
-static TITLE_IN_FLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-static TITLE_FAILED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+#[derive(Default)]
+struct TitleRegistry {
+    cache: HashMap<String, String>,
+    in_flight: HashSet<String>,
+    failed: HashSet<String>,
+}
+
+static TITLES: OnceLock<Mutex<TitleRegistry>> = OnceLock::new();
+
+fn titles() -> &'static Mutex<TitleRegistry> {
+    TITLES.get_or_init(Default::default)
+}
+
 static TITLE_GENERATION: AtomicUsize = AtomicUsize::new(0);
 
 /// Bumps whenever a title arrives, so cached text built before it can be
@@ -65,47 +72,34 @@ pub fn page_title_state(url: &str) -> TitleState {
     if favicon_host(url).is_none() {
         return TitleState::Unavailable;
     }
-    let cache = TITLE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Some(title) = cache.lock().ok().and_then(|c| c.get(url).cloned()) {
-        return TitleState::Ready(title);
+    let Ok(mut reg) = titles().lock() else {
+        return TitleState::Unavailable;
+    };
+    if let Some(title) = reg.cache.get(url) {
+        return TitleState::Ready(title.clone());
     }
-    let failed = TITLE_FAILED.get_or_init(|| Mutex::new(HashSet::new()));
-    if failed.lock().is_ok_and(|f| f.contains(url)) {
+    if reg.failed.contains(url) {
         return TitleState::Unavailable;
     }
     if !settled(url) {
         return TitleState::Loading;
     }
-    let in_flight = TITLE_IN_FLIGHT.get_or_init(|| Mutex::new(HashSet::new()));
-    let should_fetch = in_flight.lock().is_ok_and(|mut f| f.insert(url.to_owned()));
-    if should_fetch {
+    if reg.in_flight.insert(url.to_owned()) {
+        drop(reg);
         let url = url.to_owned();
         tokio::spawn(async move {
             let title = console_core::fetch_page_title(&url, Duration::from_secs(5)).await;
-            match title {
-                Some(title) => {
-                    if let Ok(mut cache) = TITLE_CACHE
-                        .get_or_init(|| Mutex::new(HashMap::new()))
-                        .lock()
-                    {
-                        cache.insert(url.clone(), title);
+            if let Ok(mut reg) = titles().lock() {
+                reg.in_flight.remove(&url);
+                match title {
+                    Some(title) => {
+                        reg.cache.insert(url, title);
+                        TITLE_GENERATION.fetch_add(1, Ordering::Relaxed);
                     }
-                    TITLE_GENERATION.fetch_add(1, Ordering::Relaxed);
-                }
-                None => {
-                    if let Ok(mut failed) = TITLE_FAILED
-                        .get_or_init(|| Mutex::new(HashSet::new()))
-                        .lock()
-                    {
-                        failed.insert(url.clone());
+                    None => {
+                        reg.failed.insert(url);
                     }
                 }
-            }
-            if let Ok(mut f) = TITLE_IN_FLIGHT
-                .get_or_init(|| Mutex::new(HashSet::new()))
-                .lock()
-            {
-                f.remove(&url);
             }
         });
     }
@@ -152,15 +146,14 @@ pub fn favicon_state(url_or_host: &str) -> FaviconState {
         return FaviconState::Unavailable;
     };
 
-    if let Ok(cache) = favicon_cache().lock() {
-        if let Some(img) = cache.get(&host) {
-            return FaviconState::Ready(img.clone());
-        }
+    let Ok(mut reg) = favicons().lock() else {
+        return FaviconState::Unavailable;
+    };
+
+    if let Some(img) = reg.cache.get(&host) {
+        return FaviconState::Ready(img.clone());
     }
-    if favicon_failed()
-        .lock()
-        .is_ok_and(|failed| failed.contains(&host))
-    {
+    if reg.failed.contains(&host) {
         return FaviconState::Unavailable;
     }
 
@@ -168,22 +161,15 @@ pub fn favicon_state(url_or_host: &str) -> FaviconState {
         return FaviconState::Loading;
     }
 
-    let should_fetch = {
-        if let Ok(mut in_flight) = favicon_in_flight().lock() {
-            in_flight.insert(host.clone())
-        } else {
-            false
-        }
-    };
-
-    if should_fetch {
+    if reg.in_flight.insert(host.clone()) {
+        drop(reg);
         let host_for_task = host.clone();
         let fav_url = format!(
             "https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://{}&size=32",
             host
         );
         tokio::spawn(async move {
-            let mut loaded = false;
+            let mut decoded_image = None;
             if let Some(bytes_vec) =
                 console_core::fetch_url_bytes(&fav_url, std::time::Duration::from_secs(4)).await
             {
@@ -202,20 +188,16 @@ pub fn favicon_state(url_or_host: &str) -> FaviconState {
                     gpui::ImageFormat::from_mime_type("image/png")
                 };
                 if let Some(format) = format {
-                    let image = Arc::new(gpui::Image::from_bytes(format, bytes_vec));
-                    if let Ok(mut cache) = favicon_cache().lock() {
-                        cache.insert(host_for_task.clone(), image);
-                        loaded = true;
-                    }
+                    decoded_image = Some(Arc::new(gpui::Image::from_bytes(format, bytes_vec)));
                 }
             }
-            if !loaded {
-                if let Ok(mut failed) = favicon_failed().lock() {
-                    failed.insert(host_for_task.clone());
+            if let Ok(mut reg) = favicons().lock() {
+                reg.in_flight.remove(&host_for_task);
+                if let Some(image) = decoded_image {
+                    reg.cache.insert(host_for_task, image);
+                } else {
+                    reg.failed.insert(host_for_task);
                 }
-            }
-            if let Ok(mut in_flight) = favicon_in_flight().lock() {
-                in_flight.remove(&host_for_task);
             }
         });
     }

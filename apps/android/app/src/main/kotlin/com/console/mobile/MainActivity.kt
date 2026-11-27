@@ -15,6 +15,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import com.console.mobile.core.notification.LocalNotificationPresenter
+import com.console.mobile.core.update.AppUpdateManager
+import com.console.mobile.core.update.UpdatePromptHost
 import com.console.mobile.ui.navigation.AppNavGraph
 import com.console.mobile.ui.theme.ConsoleTheme
 
@@ -23,6 +25,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleNotificationLaunchIntent(intent)
+        AppUpdateManager.handleLaunchIntent(intent)
+        AppUpdateManager.checkOnStartup()
         setContent {
             val context = LocalContext.current
             val configuration = LocalConfiguration.current
@@ -33,6 +37,7 @@ class MainActivity : ComponentActivity() {
 
             ConsoleTheme(darkTheme = darkTheme) {
                 AppNavGraph()
+                UpdatePromptHost()
             }
         }
     }
@@ -40,6 +45,12 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleNotificationLaunchIntent(intent)
+        AppUpdateManager.handleLaunchIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        AppUpdateManager.onAppForegrounded()
     }
 
     private fun handleNotificationLaunchIntent(intent: Intent?) {

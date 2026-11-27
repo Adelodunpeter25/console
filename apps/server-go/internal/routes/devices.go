@@ -4,11 +4,12 @@
 package routes
 
 import (
-	"encoding/json"
 	"errors"
+	"github.com/MoeForge/moego/json"
 	"log/slog"
 	"time"
 
+	"github.com/Adelodunpeter25/sim-go/sdk"
 	"github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v2"
 
@@ -133,7 +134,7 @@ func registerDeviceRoutes(app *fiber.App, svc *services.DeviceService) {
 
 	h.Get("/:id/stream", func(c *fiber.Ctx) error {
 		// Attach before upgrading so not-booted / bad platform stay HTTP errors.
-		st, err := svc.OpenStream(c.Context(), c.Query("platform"), c.Params("id"))
+		st, err := svc.OpenStream(c.Context(), c.Query("platform"), c.Params("id"), sdk.ParseQuality(func(k string) string { return c.Query(k) }))
 		if err != nil {
 			return deviceFail(c, err)
 		}
@@ -173,9 +174,24 @@ func (w *deviceWSConn) write(kind int, data []byte) error {
 	return w.conn.WriteMessage(kind, data)
 }
 
-func (w *deviceWSConn) WriteText(data []byte) error   { return w.write(websocket.TextMessage, data) }
-func (w *deviceWSConn) WriteBinary(data []byte) error { return w.write(websocket.BinaryMessage, data) }
-func (w *deviceWSConn) WritePing() error              { return w.write(websocket.PingMessage, nil) }
+func (w *deviceWSConn) WriteText(data []byte) error { return w.write(websocket.TextMessage, data) }
+func (w *deviceWSConn) WriteFrame(tag byte, data []byte) error {
+	_ = w.conn.SetWriteDeadline(time.Now().Add(deviceWriteWait))
+	mw, err := w.conn.NextWriter(websocket.BinaryMessage)
+	if err != nil {
+		return err
+	}
+	if _, err := mw.Write([]byte{tag}); err != nil {
+		_ = mw.Close()
+		return err
+	}
+	if _, err := mw.Write(data); err != nil {
+		_ = mw.Close()
+		return err
+	}
+	return mw.Close()
+}
+func (w *deviceWSConn) WritePing() error { return w.write(websocket.PingMessage, nil) }
 
 func (w *deviceWSConn) WriteClose() error {
 	return w.write(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))

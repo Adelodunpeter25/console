@@ -5,13 +5,14 @@ package tools
 import (
 	"context"
 	"fmt"
+	"github.com/MoeForge/moego/regexp"
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
+	agentflags "github.com/Adelodunpeter25/console/apps/server-go/internal/agent/flags"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 	imageutil "github.com/Adelodunpeter25/console/apps/server-go/internal/utils/image"
@@ -28,6 +29,7 @@ type readFileInput struct {
 	Path      string `json:"path" jsonschema:"required,description=Absolute path to the file to read"`
 	StartLine int    `json:"startLine,omitempty" jsonschema:"description=1-based start line (inclusive)"`
 	EndLine   int    `json:"endLine,omitempty" jsonschema:"description=1-based end line (inclusive)"`
+	Raw       bool   `json:"raw,omitempty" jsonschema:"description=Return the exact file bytes with no header or line numbers, for read-modify-write. Reads the whole file (errors instead of truncating when it is too large)."`
 }
 
 // readMaxBytes/readMaxLines are the read tool's safety ceilings. The capped
@@ -45,9 +47,9 @@ const (
 )
 
 // sparseLineNumbers reports whether read_file should number only the first
-// line, every 10th line and the last line (CONSOLE_HARNESS_SPARSE_LINE_NUMBERS=1).
+// line, every 10th line and the last line (see the agent flags package).
 func sparseLineNumbers() bool {
-	return os.Getenv("CONSOLE_HARNESS_SPARSE_LINE_NUMBERS") == "1"
+	return agentflags.FromEnv(os.Getenv).SparseLineNumbers
 }
 
 // textResult wraps a formatted string as the MCP-style content array that is
@@ -65,7 +67,7 @@ func NewReadFileTool(opts ReadFileOptions) Tool {
 	if maxImageBytes <= 0 {
 		maxImageBytes = readMaxImageBytes
 	}
-	return NewTool("read_file", "Read a file on disk. Images (png, jpeg, gif, webp) are returned for viewing; other binary files are rejected. Without startLine/endLine, returns the first 300 lines; pass a range to read further.", TierRead,
+	return NewTool("readFile", "Read a file on disk. Images (png, jpeg, gif, webp) are returned for viewing; other binary files are rejected. Without startLine/endLine, returns the first 300 lines; pass a range to read further.", TierRead,
 		func(ctx context.Context, in readFileInput) (any, error) {
 			return readFileExecute(ctx, in, opts, maxImageBytes)
 		})
@@ -79,7 +81,13 @@ func readFileExecute(ctx context.Context, in readFileInput, opts ReadFileOptions
 	if in.Path == "" {
 		return nil, NewToolError("path is required")
 	}
-	info, err := os.Stat(in.Path)
+	// Resolve once up front so stat/open and the image Visual all see the
+	// same absolute path (relative paths are session-cwd relative).
+	readPath := resolveImagePath(in.Path, opts.Cwd)
+	if readPath == "" {
+		readPath = in.Path
+	}
+	info, err := os.Stat(readPath)
 	if err != nil {
 		return nil, NewToolError("Cannot read %s: %v", in.Path, err)
 	}
@@ -88,7 +96,7 @@ func readFileExecute(ctx context.Context, in readFileInput, opts ReadFileOptions
 	}
 	sizeBytes := info.Size()
 
-	f, err := os.Open(in.Path)
+	f, err := os.Open(readPath)
 	if err != nil {
 		return nil, NewToolError("Cannot read %s: %v", in.Path, err)
 	}
@@ -118,18 +126,24 @@ func readFileExecute(ctx context.Context, in readFileInput, opts ReadFileOptions
 		if err != nil {
 			return nil, NewToolError("Cannot read %s: %v (limit %d bytes).", in.Path, err, imageutil.MaxBase64)
 		}
+		// The VisualArtifact carries the workspace path so the transcript can
+		// show the image after StripImagePayloads removes the inline bytes.
+		visual := imageVisual(in.Path, opts.Cwd, imageTextLine(in.Path, payload))
 		if opts.CanSeeImages {
-			return []map[string]any{
-				imagePart(payload.Mime, payload.Data),
-				{"type": "text", "text": imageTextLine(in.Path, payload)},
+			return Envelope{
+				Content: []map[string]any{
+					imagePart(payload.Mime, payload.Data),
+					{"type": "text", "text": imageTextLine(in.Path, payload)},
+				},
+				Visual: visual,
 			}, nil
 		}
 		if opts.Describer != nil {
 			if desc, ok := opts.Describer.Describe(ctx, payload.Mime, payload.Data, in.Path); ok && strings.TrimSpace(desc) != "" {
-				return textResult(describeImageText(in.Path, payload, opts.VisionModel, desc)), nil
+				return Envelope{Content: textResult(describeImageText(in.Path, payload, opts.VisionModel, desc)), Visual: visual}, nil
 			}
 		}
-		return textResult(placeholderImageText(in.Path, payload, opts.RunModel)), nil
+		return Envelope{Content: textResult(placeholderImageText(in.Path, payload, opts.RunModel)), Visual: visual}, nil
 	}
 
 	// Binary detection runs before the line splitter so a binary file is never
@@ -147,6 +161,26 @@ func readFileExecute(ctx context.Context, in readFileInput, opts ReadFileOptions
 	if len(data) > readMaxBytes {
 		data = data[:readMaxBytes]
 		byteCapped = true
+	}
+	if in.Raw {
+		if byteCapped {
+			return nil, NewToolError("Cannot read %s raw: file is over the %d byte limit; read a line range instead, or use a shell command.", in.Path, readMaxBytes)
+		}
+		if in.StartLine == 0 && in.EndLine == 0 {
+			return textResult(string(data)), nil
+		}
+		rawLines := strings.Split(string(data), "\n")
+		from, to := in.StartLine, in.EndLine
+		if from < 1 {
+			from = 1
+		}
+		if to < 1 || to > len(rawLines) {
+			to = len(rawLines)
+		}
+		if from > to {
+			return textResult(""), nil
+		}
+		return textResult(strings.Join(rawLines[from-1:to], "\n")), nil
 	}
 	if len(data) == 0 {
 		return textResult(fmt.Sprintf("File is empty: %s", in.Path)), nil
@@ -223,7 +257,7 @@ type writeFileInput struct {
 	Content string `json:"content" jsonschema:"required,description=Full file content to write (overwrites)"`
 }
 
-var WriteFile = NewTool("write_file", "Create or overwrite a file with the given content. Parent directories are created automatically.", TierWrite,
+var WriteFile = NewTool("writeFile", "Create or overwrite a file with the given content. Parent directories are created automatically.", TierWrite,
 	func(ctx context.Context, in writeFileInput) (any, error) {
 		if in.Path == "" {
 			return nil, NewToolError("path is required")
@@ -281,7 +315,7 @@ func renderDirTree(entries []dirEntry) []string {
 	return lines
 }
 
-var ListDir = NewTool("list_dir", "List files and directories at a path.", TierRead,
+var ListDir = NewTool("listDir", "List files and directories at a path.", TierRead,
 	func(ctx context.Context, in listDirInput) (any, error) {
 		if in.Path == "" {
 			return nil, NewToolError("path is required")
@@ -373,6 +407,9 @@ var Glob = NewTool("glob", "Find files matching a glob pattern (e.g. 'src/**/*.t
 			return nil, NewToolError("Invalid glob pattern %s: %v", in.Pattern, err)
 		}
 		sort.Strings(matches)
+		if len(matches) > maxResults {
+			matches = matches[:maxResults]
+		}
 		resolvedRoot, _ := filepath.Abs(root)
 		return textResult(formatGlobMatches(matches, in.Pattern, resolvedRoot)), nil
 	})

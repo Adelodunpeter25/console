@@ -4,8 +4,8 @@ use console_core::types::terminal::{TerminalSize, TerminalSpawnParams, TerminalS
 use gpui::{
     App, Bounds, Context, ElementInputHandler, EntityInputHandler, ExternalPaths, FocusHandle,
     Focusable, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, ParentElement, Pixels, Render, ScrollWheelEvent, SharedString, Styled,
-    UTF16Selection, Window, div, prelude::*, px,
+    MouseUpEvent, ParentElement, Pixels, Render, ScrollEvent, SharedString, Styled, UTF16Selection,
+    Window, div, prelude::*, px,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -203,8 +203,7 @@ impl TerminalView {
                     let handle = handle.clone();
                     async move {
                         let full = handle.snapshot_full().await;
-                        let status = handle.status().await;
-                        let error = handle.error.read().await.clone();
+                        let (status, error) = handle.status_and_error().await;
                         // `full.damage` is intentionally dropped: damage is
                         // consumed per snapshot and can go stale when the
                         // watch loop takes two snapshots between paints, so
@@ -251,8 +250,7 @@ impl TerminalView {
                         cx.background_executor()
                             .spawn(async move {
                                 let full = handle_for_snapshot.snapshot_full().await;
-                                let status = handle_for_snapshot.status().await;
-                                let error = handle_for_snapshot.error.read().await.clone();
+                                let (status, error) = handle_for_snapshot.status_and_error().await;
                                 (
                                     full.snapshot,
                                     full.mouse_mode,
@@ -509,7 +507,7 @@ impl Render for TerminalView {
         };
 
         let snapshot = self.snapshot.clone();
-        let view_handle = cx.entity().clone();
+        let view_handle = cx.entity();
         let view_for_key = view_handle.clone();
         let handle_for_key = self.handle.clone();
         let focus_for_key = self.focus.clone();
@@ -586,16 +584,16 @@ impl Render for TerminalView {
                 )
                 .on_mouse_move(
                     cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
-                        if this.scrollbar_dragging {
-                            if let Some(bounds) = this.scrollbar_bounds {
-                                let height = f32::from(bounds.size.height);
-                                if height > 0.0 {
-                                    let frac = (f32::from(event.position.y)
-                                        - f32::from(bounds.origin.y))
-                                        / height;
-                                    this.scroll_to_frac(frac);
-                                    cx.notify();
-                                }
+                        if this.scrollbar_dragging
+                            && let Some(bounds) = this.scrollbar_bounds
+                        {
+                            let height = f32::from(bounds.size.height);
+                            if height > 0.0 {
+                                let frac = (f32::from(event.position.y)
+                                    - f32::from(bounds.origin.y))
+                                    / height;
+                                this.scroll_to_frac(frac);
+                                cx.notify();
                             }
                         }
                     }),
@@ -692,14 +690,12 @@ impl Render for TerminalView {
                             && event.keystroke.modifiers.shift
                             && event.keystroke.key == "v");
                     if is_paste {
-                        if let Some(clipboard) = cx.read_from_clipboard() {
-                            if let Some(h) = &handle_for_key {
-                                if let Some(input) =
-                                    paste_input_for_clipboard(&clipboard, bracketed_paste)
-                                {
-                                    h.send_input(input);
-                                }
-                            }
+                        if let Some(clipboard) = cx.read_from_clipboard()
+                            && let Some(h) = &handle_for_key
+                            && let Some(input) =
+                                paste_input_for_clipboard(&clipboard, bracketed_paste)
+                        {
+                            h.send_input(input);
                         }
                         view_for_key.update(cx, |view, cx| {
                             view.scroll_to_bottom();
@@ -755,41 +751,39 @@ impl Render for TerminalView {
                     }
                 },
             )
-            .on_scroll_wheel(
-                cx.listener(move |this, event: &ScrollWheelEvent, _window, cx| {
-                    let delta = match event.delta {
-                        gpui::ScrollDelta::Lines(lines) => lines.y.round() as i32,
-                        gpui::ScrollDelta::Pixels(pixels) => {
-                            (f32::from(pixels.y) / 16.0).round() as i32
-                        }
+            .on_scroll(cx.listener(move |this, event: &ScrollEvent, _window, cx| {
+                let delta = match event.delta {
+                    gpui::ScrollDelta::Lines(lines) => lines.y.round() as i32,
+                    gpui::ScrollDelta::Pixels(pixels) => {
+                        (f32::from(pixels.y) / 16.0).round() as i32
+                    }
+                };
+                if delta == 0 {
+                    return;
+                }
+                // TUI mouse reporting: forward wheel as WheelUp/WheelDown
+                // reports (one per notch) instead of scrolling local
+                // scrollback. Shift bypasses so scrollback still works.
+                let mode = this.mouse_mode();
+                if mode.enabled && !event.modifiers.shift {
+                    let pos = this.cell_at_point(event.position.x, event.position.y);
+                    let kind = if delta > 0 {
+                        TerminalMouseEventKind::WheelUp
+                    } else {
+                        TerminalMouseEventKind::WheelDown
                     };
-                    if delta == 0 {
-                        return;
+                    for _ in 0..delta.unsigned_abs().min(10) {
+                        this.forward_mouse_report(kind, pos, event.modifiers);
                     }
-                    // TUI mouse reporting: forward wheel as WheelUp/WheelDown
-                    // reports (one per notch) instead of scrolling local
-                    // scrollback. Shift bypasses so scrollback still works.
-                    let mode = this.mouse_mode();
-                    if mode.enabled && !event.modifiers.shift {
-                        let pos = this.cell_at_point(event.position.x, event.position.y);
-                        let kind = if delta > 0 {
-                            TerminalMouseEventKind::WheelUp
-                        } else {
-                            TerminalMouseEventKind::WheelDown
-                        };
-                        for _ in 0..delta.unsigned_abs().min(10) {
-                            this.forward_mouse_report(kind, pos, event.modifiers);
-                        }
-                        cx.stop_propagation();
-                        return;
-                    }
-                    if let Some(h) = &this.handle {
-                        h.scroll(delta);
-                        this.scrollback_offset = (this.scrollback_offset + delta).max(0);
-                        cx.stop_propagation();
-                    }
-                }),
-            )
+                    cx.stop_propagation();
+                    return;
+                }
+                if let Some(h) = &this.handle {
+                    h.scroll(delta);
+                    this.scrollback_offset = (this.scrollback_offset + delta).max(0);
+                    cx.stop_propagation();
+                }
+            }))
             .when_some(status_banner, |el, (msg, color)| {
                 el.child(
                     div()
@@ -873,22 +867,20 @@ impl Render for TerminalView {
                                         }
                                         // Nothing word-like under the cursor — fall
                                         // through to a fresh single-click selection.
-                                    } else if count == 3 {
-                                        if this.select_line_at_row(pos.row) {
-                                            cx.notify();
-                                            return;
-                                        }
+                                    } else if count == 3 && this.select_line_at_row(pos.row) {
+                                        cx.notify();
+                                        return;
                                     }
 
                                     // Cmd+Click (Ctrl+Click elsewhere) on a URL opens
                                     // it in the default browser instead of selecting.
-                                    if event.modifiers.platform || event.modifiers.control {
-                                        if let Some(url) = this.link_target_at(pos) {
-                                            this.clear_selection();
-                                            cx.notify();
-                                            cx.open_url(&url);
-                                            return;
-                                        }
+                                    if (event.modifiers.platform || event.modifiers.control)
+                                        && let Some(url) = this.link_target_at(pos)
+                                    {
+                                        this.clear_selection();
+                                        cx.notify();
+                                        cx.open_url(&url);
+                                        return;
                                     }
 
                                     this.selection_anchor = Some(pos);
@@ -1014,9 +1006,7 @@ impl Render for TerminalView {
                                         }
                                     },
                                     {
-                                        let snapshot = snapshot.clone();
-                                        let paint_cache = paint_cache.clone();
-                                        let view_for_canvas = view_handle.clone();
+                                        let view_for_canvas = view_handle;
                                         let focus_for_canvas = self.focus.clone();
                                         move |bounds, (cols, rows, cell_w, cell_h), window, cx| {
                                             window.handle_input(

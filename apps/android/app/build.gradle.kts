@@ -28,7 +28,9 @@ android {
         applicationId = "com.console.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
+        // CI passes the workflow run number so every published APK is newer
+        // than the last; the in-app updater compares this with latest.json.
+        versionCode = (project.findProperty("buildNumber") as String?)?.toInt() ?: 3
         versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -99,6 +101,11 @@ android {
     }
 
     sourceSets {
+        // The device player page has one source of truth: the server embeds
+        // it, and the app ships a build-time copy as an asset.
+        getByName("main") {
+            assets.srcDir(layout.buildDirectory.dir("generated/devicePlayer"))
+        }
         // Centralized unit tests live in apps/android/tests (single folder).
         // Keep the default src/test as well so IDE wizards still work.
         getByName("test") {
@@ -123,7 +130,7 @@ android {
     // Pin Compose compiler to the Kotlin version via the plugin
 }
 
-// Shared protobuf schema (docs/plan/shared-protobuf-schema.md §3): Wire reads
+// Shared protobuf schema: Wire reads
 // .proto directly; generated Kotlin lands in build/generated/source/wire and
 // is never committed. oneof -> sealed class matches ChatModels' ActivityEvent.
 wire {
@@ -187,7 +194,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3:1.5.0-alpha15")
     implementation("androidx.browser:browser:1.8.0")
     implementation("io.github.lyxnx.compose.ui:tabler-icons-android:3.31.0")
     implementation("com.valentinilk.shimmer:compose-shimmer:1.4.0")
@@ -195,6 +202,12 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-compose:3.0.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.0")
     implementation("io.coil-kt.coil3:coil-svg:3.0.0")
+
+    // Video/audio file previews: ExoPlayer streams /api/fs/file/media with
+    // HTTP range support so large files stay seekable.
+    implementation("androidx.media3:media3-exoplayer:1.6.1")
+    implementation("androidx.media3:media3-ui:1.6.1")
+    implementation("androidx.media3:media3-common:1.6.1")
 
     // Markdown parser (AST only, CommonMark + GFM) used by CustomMarkdown.
     implementation("org.jetbrains:markdown:0.7.9")
@@ -227,4 +240,21 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+}
+
+val copyDevicePlayer by tasks.registering(Copy::class) {
+    from(rootProject.file("../server-go/internal/routes/device_player.html"))
+    into(layout.buildDirectory.dir("generated/devicePlayer/devices"))
+    rename { "player.html" }
+}
+
+val copyComputerPlayer by tasks.registering(Copy::class) {
+    from(rootProject.file("../server-go/internal/routes/computer_player.html"))
+    into(layout.buildDirectory.dir("generated/devicePlayer/computer"))
+    rename { "player.html" }
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn(copyDevicePlayer)
+    dependsOn(copyComputerPlayer)
 }

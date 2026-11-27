@@ -1,3 +1,5 @@
+//go:build !windows
+
 // detaches the child into its own session so it survives the CLI exiting.
 package commands
 

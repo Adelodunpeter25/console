@@ -6,7 +6,8 @@ pub mod window_chrome;
 
 pub use ports_popover::PortsPopover;
 pub use sidebar::{
-    DraftSummary, NO_PROJECT_KEY, SidebarSessionItem, SidebarView, init_session_rename_keybindings,
+    CancelSidebarSearch, DraftSummary, NO_PROJECT_KEY, SidebarSessionItem, SidebarView,
+    init_session_rename_keybindings, init_sidebar_search_keybindings,
 };
 pub use title_bar::TitleBar;
 pub use window_chrome::{WindowControlSide, render_client_window_controls, render_window_frame};

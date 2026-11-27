@@ -1,6 +1,7 @@
 package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
+import com.console.mobile.core.chat.isNewChatId
 import console.v1.FileSearchResult
 import console.v1.SessionHeader
 import console.v1.SlashCommandInfo
@@ -10,11 +11,15 @@ import kotlinx.coroutines.withContext
 /** Composer autocomplete data sources — slash commands and `@`-mention file search. */
 class AssistRepository(private val api: ConsoleApi) {
     suspend fun listSlashCommands(sessionId: String): List<SlashCommandInfo> = withContext(Dispatchers.IO) {
-        try { api.listSlashCommands(sessionId) } catch (_: Exception) { emptyList() }
+        try { api.listSlashCommands(sessionId.takeUnless { isNewChatId(it) }) } catch (_: Exception) { emptyList() }
     }
 
     suspend fun searchMentionFiles(sessionId: String, query: String, root: String?): List<FileSearchResult> = withContext(Dispatchers.IO) {
-        try { api.assistSearchFiles(sessionId, query, root).items } catch (_: Exception) { emptyList() }
+        try {
+            api.assistSearchFiles(sessionId.takeUnless { isNewChatId(it) }, query, root).items.sortedWith(
+                compareByDescending<FileSearchResult> { it.is_dir }.thenBy { it.relative_path }
+            )
+        } catch (_: Exception) { emptyList() }
     }
 
     /**
@@ -23,12 +28,19 @@ class AssistRepository(private val api: ConsoleApi) {
      * falling back to cwd), matching the server's ResolveReference scope.
      */
     suspend fun listChatRefs(sessionId: String): List<SessionHeader> = withContext(Dispatchers.IO) {
+        if (isNewChatId(sessionId)) return@withContext emptyList()
         try {
-            val header = api.getSession(sessionId, limit = 0).header
-            val siblings = if (!header.project_id.isNullOrBlank()) {
+            val header = try {
+                api.getSession(sessionId, limit = 0).header
+            } catch (_: Exception) {
+                null
+            }
+            val siblings = if (header != null && !header.project_id.isNullOrBlank()) {
                 api.getSessions(projectId = header.project_id)
-            } else {
+            } else if (header != null && !header.cwd.isNullOrBlank()) {
                 api.getSessions(cwd = header.cwd)
+            } else {
+                api.getSessions()
             }
             siblings.filter { it.id != sessionId }
         } catch (_: Exception) {

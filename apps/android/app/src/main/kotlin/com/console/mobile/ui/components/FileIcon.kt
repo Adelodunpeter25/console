@@ -10,9 +10,12 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import io.github.lyxnx.compose.ui.tablericons.outline.Globe
 import coil3.svg.SvgDecoder
+import androidx.compose.material3.Icon
 import com.console.mobile.core.icons.getFileIconKey
 import com.console.mobile.core.icons.getLanguageIconKey
 import com.console.mobile.core.icons.getProviderIconKey
+import com.console.mobile.core.util.getToolIcon
+import com.console.mobile.data.model.ToolCall
 
 
 /**
@@ -65,6 +68,25 @@ fun FileIcon(
         contentScale = ContentScale.Fit,
         modifier = modifier.size(sizeDp.dp),
     )
+}
+
+/** Tool-call glyph: the same JS icon as desktop for the codemode REPL tool. */
+@Composable
+fun ToolIcon(
+    call: ToolCall,
+    sizeDp: Int = 16,
+    modifier: Modifier = Modifier,
+) {
+    if (call.icon == "code") {
+        FileIcon(iconKey = "javascript", sizeDp = sizeDp, modifier = modifier)
+    } else {
+        Icon(
+            getToolIcon(call),
+            contentDescription = null,
+            tint = com.console.mobile.ui.theme.NewTheme.TextSecondary,
+            modifier = modifier.size(sizeDp.dp),
+        )
+    }
 }
 
 /** Code-fence language → file-type icon (mirrors getLanguageIconKey). */

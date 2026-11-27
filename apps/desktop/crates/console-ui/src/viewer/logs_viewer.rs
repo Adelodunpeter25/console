@@ -25,14 +25,14 @@ pub const ESTIMATED_LOG_ROW_HEIGHT: f32 = 17.0;
 #[derive(IntoElement)]
 pub struct LogsViewer {
     id: String,
-    lines: Rc<Vec<String>>,
+    lines: Rc<[String]>,
     list_state: ListState,
     selection: Option<TranscriptSelection>,
     scrollbar_state: Option<Rc<ScrollbarState>>,
 }
 
 impl LogsViewer {
-    pub fn new(id: impl Into<String>, lines: Rc<Vec<String>>, list_state: ListState) -> Self {
+    pub fn new(id: impl Into<String>, lines: Rc<[String]>, list_state: ListState) -> Self {
         Self {
             id: id.into(),
             lines,
@@ -94,17 +94,16 @@ impl RenderOnce for LogsViewer {
                 move |event: &KeyDownEvent, _, cx| {
                     if (event.keystroke.modifiers.platform || event.keystroke.modifiers.control)
                         && event.keystroke.key == "c"
+                        && let Some(text) = selection.selection.borrow().selected_text()
                     {
-                        if let Some(text) = selection.selection.borrow().selected_text() {
-                            cx.write_to_clipboard(ClipboardItem::new_string(text));
-                        }
+                        cx.write_to_clipboard(ClipboardItem::new_string(text));
                     }
                 }
             })
             .child(render::frame_reset(selection))
             .child(selection_listener)
             .child(
-                list(self.list_state.clone(), move |line_ix, _window, cx| {
+                list(self.list_state, move |line_ix, _window, cx| {
                     let theme = Theme::current(cx);
                     let palette = Palette::from_theme(&theme);
                     let line = lines_rc.get(line_ix).map(String::as_str).unwrap_or("");

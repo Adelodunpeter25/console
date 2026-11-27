@@ -1,8 +1,11 @@
 package com.console.mobile.feature.chat
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,15 +13,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -33,8 +40,19 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,14 +60,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.ChangeTotals
+import com.console.mobile.core.util.formatCompactCount
+import com.console.mobile.core.util.splitRing
+import com.console.mobile.data.model.Automation
 import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.BackgroundWorkOutput
+import com.console.mobile.data.model.WebhookSubscription
 import com.console.mobile.data.model.applyFrame
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowLeft
+import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
+import io.github.lyxnx.compose.ui.tablericons.outline.Bolt
+import io.github.lyxnx.compose.ui.tablericons.outline.Calendar
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.Edit
+import io.github.lyxnx.compose.ui.tablericons.outline.PlayerPause
+import io.github.lyxnx.compose.ui.tablericons.outline.PlayerPlay
+import io.github.lyxnx.compose.ui.tablericons.outline.X
 import io.github.lyxnx.compose.ui.tablericons.outline.FileDiff
 import io.github.lyxnx.compose.ui.tablericons.outline.GridDots
 import io.github.lyxnx.compose.ui.tablericons.outline.ListCheck
@@ -73,6 +102,75 @@ fun todoCounts(items: List<TodoItem>): Pair<Int, Int> {
 }
 
 /**
+ * The instant worktree launch's state banner, above the composer:
+ * "Creating worktree…" while the server cuts the worktree (the prompt
+ * auto-runs the moment it exists), and a persistent error with Retry and
+ * Discard once the launch has failed.
+ */
+@Composable
+fun WorktreeLaunchBanner(
+    state: String?,
+    error: String?,
+    onRetry: () -> Unit,
+    onDiscard: () -> Unit,
+) {
+    when (state) {
+        "provisioning" -> Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(NewTheme.Raised)
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(NewTheme.Accent))
+            Spacer(modifier = Modifier.size(8.dp))
+            Text("Creating worktree…", color = NewTheme.TextSecondary, fontSize = 12.sp)
+        }
+        "failed" -> Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(NewTheme.Raised)
+                .border(1.dp, NewTheme.Danger.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                error?.takeIf { it.isNotBlank() } ?: "Worktree launch failed",
+                color = NewTheme.Danger,
+                fontSize = 12.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                "Retry",
+                color = NewTheme.TextPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { onRetry() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+            Text(
+                "Discard",
+                color = NewTheme.TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { onDiscard() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+/**
  * The counts floating above the composer: one compact pill each for tasks,
  * subagents and shells. Tasks and shells open their sheet; subagents toggle
  * the floating panel above the pill. The icon takes the accent while that
@@ -85,96 +183,219 @@ fun ComposerPills(
     showTasks: Boolean,
     subagents: List<SubagentInfo>,
     shellCount: Int,
+    automationCount: Int = 0,
+    webhookCount: Int = 0,
+    hasActiveAutomationOrWebhook: Boolean = false,
     changes: ChangeTotals,
     onTasks: () -> Unit,
     onSubagents: () -> Unit,
     onShells: () -> Unit,
+    onAutomations: () -> Unit = {},
     onChanges: () -> Unit,
+    suggestions: List<String> = emptyList(),
+    onSuggestion: (String) -> Unit = {},
+    onEditSuggestion: (String) -> Unit = {},
+    trailing: (@Composable () -> Unit)? = null,
 ) {
-    if (!showTasks && subagents.isEmpty() && shellCount == 0 && changes.files == 0) return
+    if (!showTasks && subagents.isEmpty() && shellCount == 0 && automationCount == 0 && webhookCount == 0 && changes.files == 0 && suggestions.isEmpty() && trailing == null) return
+    val scroll = rememberScrollState()
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-            .padding(horizontal = 10.dp).padding(bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).padding(bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (changes.files > 0) {
-            ChangesPill(changes = changes, onClick = onChanges)
+        Row(
+            modifier = Modifier.weight(1f).fadeScrollEdges(scroll).horizontalScroll(scroll),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (changes.files > 0) {
+                ChangesPill(changes = changes, onClick = onChanges)
+            }
+            if (showTasks) {
+                ContextPill(
+                    icon = TablerIcons.Outline.ListCheck,
+                    text = "$completedTasks/$totalTasks tasks",
+                    running = false,
+                    onClick = onTasks,
+                )
+            }
+            if (subagents.isNotEmpty()) {
+                ContextPill(
+                    icon = TablerIcons.Outline.GridDots,
+                    text = "${subagents.size} ${if (subagents.size == 1) "subagent" else "subagents"}",
+                    running = subagents.any { it.status == "running" },
+                    onClick = onSubagents,
+                )
+            }
+            if (shellCount > 0) {
+                ContextPill(
+                    icon = TablerIcons.Outline.Terminal2,
+                    text = "$shellCount ${if (shellCount == 1) "shell" else "shells"}",
+                    running = true,
+                    onClick = onShells,
+                )
+            }
+            if (automationCount > 0 || webhookCount > 0) {
+                val label = when {
+                    automationCount > 0 && webhookCount > 0 -> "$automationCount sched · $webhookCount hook"
+                    automationCount > 0 -> "$automationCount ${if (automationCount == 1) "schedule" else "schedules"}"
+                    else -> "$webhookCount ${if (webhookCount == 1) "webhook" else "webhooks"}"
+                }
+                ContextPill(
+                    icon = if (automationCount > 0) TablerIcons.Outline.Calendar else TablerIcons.Outline.Bolt,
+                    text = label,
+                    running = hasActiveAutomationOrWebhook,
+                    onClick = onAutomations,
+                )
+            }
+            // Follow-ups share the scroller, after the status pills, so a phone
+            // keeps one row and the pills never lose their place.
+            suggestions.forEach { text ->
+                SuggestionPill(
+                    text = text,
+                    onClick = { onSuggestion(text) },
+                    onLongClick = { onEditSuggestion(text) },
+                )
+            }
         }
-        if (showTasks) {
-            ContextPill(
-                icon = TablerIcons.Outline.ListCheck,
-                text = "$completedTasks/$totalTasks tasks",
-                running = false,
-                onClick = onTasks,
-            )
-        }
-        if (subagents.isNotEmpty()) {
-            ContextPill(
-                icon = TablerIcons.Outline.GridDots,
-                text = "${subagents.size} ${if (subagents.size == 1) "subagent" else "subagents"}",
-                running = subagents.any { it.status == "running" },
-                onClick = onSubagents,
-            )
-        }
-        if (shellCount > 0) {
-            ContextPill(
-                icon = TablerIcons.Outline.Terminal2,
-                text = "$shellCount ${if (shellCount == 1) "shell" else "shells"}",
-                running = true,
-                onClick = onShells,
-            )
-        }
+        // Sits on the same level as the pills, pinned to the right.
+        trailing?.invoke()
     }
 }
 
-/** Session change totals: "2 files changed +8 -4". Tapping opens the Changes tab. */
+/** Every pill in the row is this tall so status and suggestion pills line up. */
+private val PillHeight = 36.dp
+
+/**
+ * Session change totals: a ring split by lines added and removed, then the
+ * compact "+4.3k -1.6k". The file count rides in the accessibility label.
+ * Tapping opens the Changes tab.
+ */
 @Composable
 private fun ChangesPill(changes: ChangeTotals, onClick: () -> Unit) {
+    val label = "${changes.files} ${if (changes.files == 1) "file" else "files"} changed, +${changes.additions} -${changes.deletions}"
+    val spans = splitRing(listOf(changes.additions.toFloat(), changes.deletions.toFloat()), gap = 0.06f, min = 0.06f)
+    val addColor = NewTheme.Success
+    val delColor = NewTheme.Danger
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
             .background(NewTheme.Raised)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .semantics { contentDescription = label }
+            .height(PillHeight)
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            TablerIcons.Outline.FileDiff,
-            contentDescription = null,
-            tint = NewTheme.TextMuted,
-            modifier = Modifier.size(15.dp),
-        )
-        Text(
-            text = "${changes.files} ${if (changes.files == 1) "file" else "files"} changed",
-            color = NewTheme.TextSecondary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            modifier = Modifier.padding(start = 7.dp),
-        )
+        Canvas(modifier = Modifier.size(16.dp)) {
+            val stroke = 2.dp.toPx()
+            val inset = stroke / 2
+            val arcSize = Size(size.width - stroke, size.height - stroke)
+            listOf(addColor, delColor).zip(spans).forEach { (color, span) ->
+                if (span.len > 0f) {
+                    drawArc(color, -90f + 360f * span.start, 360f * span.len, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
+                }
+            }
+        }
         if (changes.additions > 0) {
             Text(
-                text = "+${changes.additions}",
-                color = NewTheme.Success,
+                text = "+${formatCompactCount(changes.additions)}",
+                color = addColor,
                 fontSize = 13.sp,
-                fontFamily = ConsoleMonoFamily,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
-                modifier = Modifier.padding(start = 7.dp),
+                modifier = Modifier.padding(start = 8.dp),
             )
         }
         if (changes.deletions > 0) {
             Text(
-                text = "-${changes.deletions}",
-                color = NewTheme.Danger,
+                text = "-${formatCompactCount(changes.deletions)}",
+                color = delColor,
                 fontSize = 13.sp,
-                fontFamily = ConsoleMonoFamily,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
-                modifier = Modifier.padding(start = 5.dp),
+                modifier = Modifier.padding(start = 6.dp),
             )
         }
+    }
+}
+
+/**
+ * Softens the edge of a horizontal scroller that still has content beyond it,
+ * so a pill ends in a fade and not a hard slice. An edge with nothing further
+ * to scroll stays crisp.
+ */
+private fun Modifier.fadeScrollEdges(scroll: ScrollState, width: Dp = 28.dp): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val fade = width.toPx()
+        if (scroll.value > 0) {
+            drawRect(
+                brush = Brush.horizontalGradient(listOf(Color.Transparent, Color.Black), startX = 0f, endX = fade),
+                size = Size(fade, size.height),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+        if (scroll.value < scroll.maxValue) {
+            drawRect(
+                brush = Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width - fade, endX = size.width),
+                topLeft = Offset(size.width - fade, 0f),
+                size = Size(fade, size.height),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+    }
+
+/**
+ * One follow-up prompt. The pill shape of its neighbours, with an accent send
+ * button so it reads as tappable rather than informational. The background is
+ * the solid [NewTheme.Raised]: a translucent press tint would let the
+ * transcript show through.
+ */
+@Composable
+private fun SuggestionPill(text: String, onClick: () -> Unit, onLongClick: () -> Unit) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Box {
+    Row(
+        modifier = Modifier
+            .widthIn(max = 260.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(NewTheme.Raised)
+            .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
+            .height(PillHeight)
+            .padding(start = 7.dp, end = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier.size(24.dp).clip(CircleShape).background(NewTheme.Accent),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(TablerIcons.Outline.ArrowUp, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(14.dp))
+        }
+        Text(
+            text = text,
+            color = NewTheme.TextSecondary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 8.dp),
+        )
+    }
+    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+        DropdownMenuItem(
+            text = { Text("Send", color = NewTheme.TextPrimary) },
+            onClick = { menuOpen = false; onClick() },
+            leadingIcon = { Icon(TablerIcons.Outline.ArrowUp, contentDescription = null, tint = NewTheme.TextMuted) },
+        )
+        DropdownMenuItem(
+            text = { Text("Edit Before Sending", color = NewTheme.TextPrimary) },
+            onClick = { menuOpen = false; onLongClick() },
+            leadingIcon = { Icon(TablerIcons.Outline.Edit, contentDescription = null, tint = NewTheme.TextMuted) },
+        )
+    }
     }
 }
 
@@ -186,7 +407,8 @@ private fun ContextPill(icon: ImageVector, text: String, running: Boolean, onCli
             .clip(RoundedCornerShape(999.dp))
             .background(NewTheme.Raised)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .height(PillHeight)
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -485,5 +707,111 @@ private fun StopShellButton(onClick: () -> Unit, enabled: Boolean = true) {
             tint = NewTheme.Danger.copy(alpha = if (enabled) 1f else 0.5f),
             modifier = Modifier.size(16.dp),
         )
+    }
+}
+
+@Composable
+fun AutomationsBottomSheet(
+    automations: List<Automation>,
+    webhooks: List<WebhookSubscription>,
+    onPauseAutomation: (String) -> Unit,
+    onResumeAutomation: (String) -> Unit,
+    onDeleteAutomation: (String) -> Unit,
+    onDeleteWebhook: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val total = automations.size + webhooks.size
+    BaseSheet(onDismiss = onDismiss, title = "Automations & Webhooks ($total)") {
+        if (total == 0) {
+            SectionCard { Note("No active automations or webhooks on this chat.") }
+        } else {
+            SectionCard {
+                automations.forEachIndexed { index, auto ->
+                    val isPaused = auto.status == "paused"
+                    val isError = auto.status == "error"
+                    val subtitle = if (auto.kind == "interval") {
+                        "Every ${auto.intervalSeconds}s · ${auto.status}"
+                    } else {
+                        "One-shot · ${auto.status}"
+                    }
+                    OptionRow(
+                        title = auto.prompt,
+                        subtitle = subtitle,
+                        leading = {
+                            Icon(
+                                TablerIcons.Outline.Calendar,
+                                contentDescription = null,
+                                tint = if (isError) NewTheme.Danger else if (isPaused) NewTheme.TextMuted else NewTheme.Accent,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        trailing = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(
+                                    modifier = Modifier.size(34.dp).clip(CircleShape)
+                                        .background(NewTheme.Raised)
+                                        .clickable {
+                                            if (isPaused || isError) onResumeAutomation(auto.id)
+                                            else onPauseAutomation(auto.id)
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        if (isPaused || isError) TablerIcons.Outline.PlayerPlay else TablerIcons.Outline.PlayerPause,
+                                        contentDescription = if (isPaused || isError) "Resume" else "Pause",
+                                        tint = NewTheme.TextSecondary,
+                                        modifier = Modifier.size(15.dp),
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier.size(34.dp).clip(CircleShape)
+                                        .background(NewTheme.Danger.copy(alpha = 0.16f))
+                                        .clickable { onDeleteAutomation(auto.id) },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        TablerIcons.Outline.X,
+                                        contentDescription = "Delete",
+                                        tint = NewTheme.Danger,
+                                        modifier = Modifier.size(15.dp),
+                                    )
+                                }
+                            }
+                        },
+                    ) {}
+                    if (index < automations.lastIndex || webhooks.isNotEmpty()) SectionDivider(startInset = 42.dp)
+                }
+                webhooks.forEachIndexed { index, hook ->
+                    OptionRow(
+                        title = hook.prompt,
+                        subtitle = "Webhook · ${hook.topic} · ${hook.status}",
+                        leading = {
+                            Icon(
+                                TablerIcons.Outline.Bolt,
+                                contentDescription = null,
+                                tint = NewTheme.Accent,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        trailing = {
+                            Box(
+                                modifier = Modifier.size(34.dp).clip(CircleShape)
+                                    .background(NewTheme.Danger.copy(alpha = 0.16f))
+                                    .clickable { onDeleteWebhook(hook.id) },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    TablerIcons.Outline.X,
+                                    contentDescription = "Delete",
+                                    tint = NewTheme.Danger,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                            }
+                        },
+                    ) {}
+                    if (index < webhooks.lastIndex) SectionDivider(startInset = 42.dp)
+                }
+            }
+        }
     }
 }

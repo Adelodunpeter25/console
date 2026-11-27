@@ -31,6 +31,7 @@
 //!     is cheap and holds no borrow across any modal loop.
 //!   - [`resolve_single_path`] is the async half. Awaiting it yields, and the
 //!     dispatcher polls it later when no borrow is held.
+//!
 //! Callers must await the second half OFF the UI's current stack.
 
 use std::path::PathBuf;

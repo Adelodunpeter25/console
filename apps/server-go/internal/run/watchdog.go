@@ -54,7 +54,7 @@ func (s *Service) watchRun(sessionID string, hub *Hub, done <-chan struct{}) {
 // a newer run on the same session — or the stuck turn finally returning —
 // can never be disturbed: its broadcasts become safe no-ops.
 func (s *Service) forceSettle(sessionID string, hub *Hub) {
-	s.cancelActive(sessionID)
+	s.cancelActive(sessionID, errRunAborted)
 	if !s.releaseSlot(sessionID, hub) {
 		return
 	}
@@ -80,14 +80,55 @@ func (s *Service) releaseSlot(sessionID string, hub *Hub) bool {
 
 // cancelActive cancels the active run's current context while holding the
 // service lock, so a concurrent turn-boundary swap can't strand the cancel
-// on a stale context. Returns false when no run is active.
-func (s *Service) cancelActive(sessionID string) bool {
+// on a stale context. Returns the cancelled run's entry, or nil when no run
+// is active.
+func (s *Service) cancelActive(sessionID string, cause error) *activeRun {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ar, ok := s.active[sessionID]
 	if !ok {
-		return false
+		return nil
 	}
-	ar.cancel()
-	return true
+	ar.cancel(cause)
+	return ar
+}
+
+// defaultAbortSettleTimeout bounds how long an aborted run may take to
+// unwind before its session slot is force-released. A healthy abort settles
+// in milliseconds; this only fires for runs wedged somewhere that ignores
+// ctx (a provider stream or tool call that never returns).
+const defaultAbortSettleTimeout = 20 * time.Second
+
+func (s *Service) abortSettleTimeout() time.Duration {
+	if s.AbortSettleTimeout != 0 {
+		return s.AbortSettleTimeout
+	}
+	return defaultAbortSettleTimeout
+}
+
+// armAbortSettle force-releases the session slot when an aborted run does
+// not unwind within AbortSettleTimeout. Abort only cancels; the execute
+// goroutine owns releaseSlot, so without this a wedged run holds the session
+// — and rejects every later StartRun with ErrActive — until the 15-minute
+// hub watchdog. releaseSlot is pointer-guarded, so a run that settled (or a
+// newer run that took the slot) is never disturbed.
+func (s *Service) armAbortSettle(sessionID string, ar *activeRun) {
+	timeout := s.abortSettleTimeout()
+	if timeout <= 0 {
+		return
+	}
+	go func() {
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+		select {
+		case <-ar.done:
+			return
+		case <-timer.C:
+		}
+		if s.releaseSlot(sessionID, ar.hub) {
+			slog.Warn("run abort: run did not settle, force-releasing session", "session", sessionID)
+			ar.hub.Close(OutcomeAborted)
+			s.decisions.RejectAllForSession(sessionID, "Run aborted")
+		}
+	}()
 }

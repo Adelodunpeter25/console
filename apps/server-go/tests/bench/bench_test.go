@@ -6,8 +6,8 @@ package tests
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"os/exec"
 	"path/filepath"

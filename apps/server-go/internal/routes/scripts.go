@@ -10,8 +10,7 @@
 package routes
 
 import (
-	"encoding/json"
-	"time"
+	"github.com/MoeForge/moego/json"
 
 	"github.com/gofiber/fiber/v2"
 	"google.golang.org/protobuf/proto"
@@ -142,33 +141,9 @@ func RegisterScriptRoutes(app *fiber.App, scripts *projectssvc.ProjectScriptsSer
 				}
 				return sse.Send(name, string(raw))
 			}
-			// End the stream when the run stops running, detected by a
-			// 100ms status poll.
-			poll := time.NewTicker(100 * time.Millisecond)
-			defer poll.Stop()
-			for {
-				select {
-				case event := <-events:
-					if err := sendEvent(event); err != nil {
-						return
-					}
-				case <-poll.C:
-					if !scripts.IsRunning(projectID, runID) {
-						// The stop/exit path may still have a queued final
-						// event that select has not picked up yet; drain and
-						// send it so the client always sees the terminal
-						// status before the stream ends.
-						for {
-							select {
-							case event := <-events:
-								if err := sendEvent(event); err != nil {
-									return
-								}
-							default:
-								return
-							}
-						}
-					}
+			for event := range events {
+				if err := sendEvent(event); err != nil {
+					return
 				}
 			}
 		})

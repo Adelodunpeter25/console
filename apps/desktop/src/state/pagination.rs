@@ -19,7 +19,6 @@ pub(crate) struct SessionPaginationState {
 impl ConsoleDesktopApp {
     /// Forget pagination state for a session whose chat was switched out.
     /// Called from environments.rs alongside the scroll-position clearing.
-    #[allow(dead_code)]
     pub(crate) fn clear_transcript_pagination(&mut self) {
         self.transcript_pagination.clear();
         self.pagination_in_flight.clear();
@@ -65,7 +64,6 @@ impl ConsoleDesktopApp {
     pub fn load_older_messages_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
         let Some(session_id) = self
             .active_session_for_pane(&pane_id)
-            .map(|s| s.to_string())
         else {
             return;
         };
@@ -75,10 +73,12 @@ impl ConsoleDesktopApp {
         let Some(pagination) = self.pagination_for_session(&session_id) else {
             return;
         };
-        if !pagination.has_more || pagination.next_cursor.is_none() {
+        if !pagination.has_more {
             return;
         }
-        let before = pagination.next_cursor.unwrap();
+        let Some(before) = pagination.next_cursor else {
+            return;
+        };
         self.pagination_in_flight.insert(session_id.clone());
         // Mark loading
         self.transcript_for_pane(&pane_id)
@@ -87,7 +87,7 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        let session_id_for_task = session_id.clone();
+        let session_id_for_task = session_id;
         cx.spawn(async move |_, cx| {
             match client
                 .sessions
@@ -106,8 +106,8 @@ impl ConsoleDesktopApp {
                                     return;
                                 }
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
-                                    t.prepend_messages(
-                                        detail.messages,
+                                    t.prepend_turns(
+                                        detail.turns,
                                         detail.has_more,
                                         detail.next_cursor,
                                         cx,
@@ -139,6 +139,119 @@ impl ConsoleDesktopApp {
                     });
                 }
             }
+        })
+        .detach();
+    }
+
+    /// Fetch the full prompt list (every user prompt, including ones not paged
+    /// in yet) for the session shown in `pane_id` and hand it to the popup.
+    pub fn load_prompts_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
+        let Some(session_id) = self
+            .active_session_for_pane(&pane_id)
+        else {
+            return;
+        };
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            let Ok(prompts) = client.sessions.prompts(&session_id).await else {
+                return;
+            };
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        if this.active_session_for_pane(&pane_id).as_deref()
+                            == Some(session_id.as_str())
+                        {
+                            this.transcript_for_pane(&pane_id)
+                                .update(cx, |t, cx| t.set_prompts(prompts, cx));
+                        }
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Scroll the transcript to the prompt `from_end` prompts back from the
+    /// newest (0 = newest). A prompt that has not been paged in yet is reached
+    /// by loading older pages until it arrives.
+    pub fn jump_to_prompt_for_pane(
+        &mut self,
+        pane_id: String,
+        from_end: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(session_id) = self
+            .active_session_for_pane(&pane_id)
+        else {
+            return;
+        };
+        let transcript = self.transcript_for_pane(&pane_id);
+        if transcript.update(cx, |t, cx| t.jump_to_prompt(from_end, cx)) {
+            return;
+        }
+        let Some(pagination) = self.pagination_for_session(&session_id) else {
+            return;
+        };
+        if self.pagination_in_flight.contains(&session_id) || !pagination.has_more {
+            return;
+        }
+        let Some(mut before) = pagination.next_cursor else {
+            return;
+        };
+        self.pagination_in_flight.insert(session_id.clone());
+        transcript.update(cx, |t, _| t.set_loading_older(true));
+        cx.notify();
+
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            loop {
+                let Ok(detail) = client
+                    .sessions
+                    .get_paginated(&session_id, Some(50), Some(before))
+                    .await
+                else {
+                    break;
+                };
+                let next = cx.update(|cx| {
+                    let app = entity.upgrade()?;
+                    app.update(cx, |this, cx| {
+                        if this.active_session_for_pane(&pane_id).as_deref()
+                            != Some(session_id.as_str())
+                        {
+                            return None;
+                        }
+                        let state = SessionPaginationState {
+                            has_more: detail.has_more,
+                            next_cursor: detail.next_cursor,
+                        };
+                        let transcript = this.transcript_for_pane(&pane_id);
+                        transcript.update(cx, |t, cx| {
+                            t.prepend_turns(detail.turns, state.has_more, state.next_cursor, cx);
+                        });
+                        this.set_pagination_for_session(&session_id, state, cx);
+                        let found = transcript.update(cx, |t, cx| t.jump_to_prompt(from_end, cx));
+                        // Keep paging only while the prompt is still missing.
+                        (!found).then_some(state.next_cursor).flatten()
+                    })
+                });
+                match next {
+                    Some(cursor) => before = cursor,
+                    None => break,
+                }
+            }
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.pagination_in_flight.remove(&session_id);
+                        this.transcript_for_pane(&pane_id)
+                            .update(cx, |t, _| t.set_loading_older(false));
+                        cx.notify();
+                    });
+                }
+            });
         })
         .detach();
     }

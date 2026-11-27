@@ -49,7 +49,9 @@ func toolNamesSent(t *testing.T, mode string) map[string]bool {
 
 func TestPlanModeRunOffersWritePlanAndNotTheOrdinaryWrites(t *testing.T) {
 	got := toolNamesSent(t, "plan-mode")
-	for _, want := range []string{"writePlan", "bash", "read_file", "grep", "memory", "browser"} {
+	// Under codemode the provider sees only the REPL tools; plan-mode tools
+	// (writePlan, bash, readFile, ...) remain callable inside the JS runtime.
+	for _, want := range []string{"code", "codeReset"} {
 		if !got[want] {
 			t.Errorf("a plan-mode run must be offered %q; got %v", want, keys(got))
 		}
@@ -57,14 +59,14 @@ func TestPlanModeRunOffersWritePlanAndNotTheOrdinaryWrites(t *testing.T) {
 }
 
 func TestOtherModesDoNotOfferWritePlan(t *testing.T) {
-	for _, mode := range []string{"always-ask", "accept-edits", "full-access"} {
+	for _, mode := range []string{"full-access"} {
 		if got := toolNamesSent(t, mode); got["writePlan"] {
 			t.Errorf("%s: writePlan is for plan mode only, but it was offered", mode)
 		}
 	}
 }
 
-func TestPlanModePromptNamesTheTool(t *testing.T) {
+func TestPlanModeNoticeNamesTheTool(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	provider := &setupRecorder{}
@@ -78,12 +80,12 @@ func TestPlanModePromptNamesTheTool(t *testing.T) {
 	provider.mu.Lock()
 	defer provider.mu.Unlock()
 	req := provider.reqs[0]
-	if !strings.Contains(req.SystemPrompt, "writePlan") || !strings.Contains(req.SystemPrompt, "docs/plan") {
-		t.Fatalf("the plan-mode prompt must tell the model about writePlan and where it writes:\n%s", req.SystemPrompt)
+	first, _ := req.Messages[len(req.Messages)-1].(loop.UserMessage)
+	if !strings.Contains(first.Content, "writePlan") || !strings.Contains(first.Content, "docs/plan") {
+		t.Fatalf("the plan-mode notice must tell the model about writePlan and where it writes:\n%s", first.Content)
 	}
-	// The tool inventory section lists it too.
-	if !strings.Contains(req.SystemPrompt, "`writePlan`") {
-		t.Fatalf("writePlan is missing from the tool inventory in the system prompt")
+	if strings.Contains(req.SystemPrompt, "Plan mode") {
+		t.Fatalf("mode text must stay out of the cached system prompt:\n%s", req.SystemPrompt)
 	}
 }
 
@@ -145,13 +147,13 @@ func TestPlanModeRunActuallyWritesAPlanFile(t *testing.T) {
 // `console`, `computer` and `writePlan` being left out of the table.
 func TestEveryToolARunOffersHasALabel(t *testing.T) {
 	seen := map[string]bool{}
-	for _, mode := range []string{"plan-mode", "always-ask", "full-access"} {
+	for _, mode := range []string{"plan-mode", "full-access"} {
 		for name := range toolNamesSent(t, mode) {
 			seen[name] = true
 		}
 	}
 	// Tools only present once activated: bring them in the way a run would.
-	for _, name := range []string{"visualize", "computer", "computer_reset"} {
+	for _, name := range []string{"render", "preview", "computer", "computer_reset"} {
 		seen[name] = true
 	}
 	var missing []string

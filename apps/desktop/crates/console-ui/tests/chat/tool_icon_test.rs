@@ -4,29 +4,11 @@
 //! (tools.ToolIconKey, classify.go); a call without one falls back to the
 //! generic wrench. These tests pin the key → glyph mapping.
 
-use console_core::ToolCall;
 use console_ui::primitives::{IconName, activity_icon};
-
-/// A call with only its classified icon key set — the fields the icon path
-/// actually reads.
-fn call_with_icon(icon: &str) -> ToolCall {
-    ToolCall {
-        id: "c".to_string(),
-        name: "whatever".to_string(),
-        arguments: serde_json::json!({}),
-        thought_signature: None,
-        label: None,
-        kind_flags: None,
-        icon: Some(icon.to_string()),
-    }
-}
 
 #[test]
 fn test_server_icon_keys_map_to_glyphs() {
-    assert_eq!(
-        activity_icon("search"),
-        IconName::Search.path()
-    );
+    assert_eq!(activity_icon("search"), IconName::Search.path());
     assert_eq!(activity_icon("file"), IconName::File.path());
     assert_eq!(activity_icon("folder"), IconName::Folder.path());
     assert_eq!(activity_icon("terminal"), IconName::Terminal.path());
@@ -37,14 +19,10 @@ fn test_server_icon_keys_map_to_glyphs() {
 #[test]
 fn test_every_entry_of_console_tool_icon_table() {
     for key in [
-        "sparkle", "terminal", "pencil", "file", "folder", "search", "globe",
-        "chart", "list", "memory", "package",
+        "sparkle", "terminal", "code", "pencil", "file", "folder", "search", "globe", "chart",
+        "list", "memory", "package",
     ] {
         // Every mapped key must produce something other than the wrench.
-        assert_ne!(
-            activity_icon(key),
-            IconName::Wrench.path(),
-            "{key}"
-        );
+        assert_ne!(activity_icon(key), IconName::Wrench.path(), "{key}");
     }
 }

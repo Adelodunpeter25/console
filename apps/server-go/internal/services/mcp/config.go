@@ -5,12 +5,13 @@ package mcp
 
 import (
 	"bytes"
-	"encoding/json"
+	"cmp"
 	"fmt"
+	"github.com/MoeForge/moego/json"
+	"github.com/MoeForge/moego/regexp"
 	"os"
 	"path/filepath"
-	"regexp"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -194,7 +195,9 @@ func (s *ConfigStore) List() ([]ServerConfig, error) {
 	for _, c := range file.Servers {
 		out = append(out, c)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	slices.SortFunc(out, func(a, b ServerConfig) int {
+		return cmp.Compare(a.ID, b.ID)
+	})
 	return out, nil
 }
 

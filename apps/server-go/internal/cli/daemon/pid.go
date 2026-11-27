@@ -5,8 +5,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/sysproc"
 )
 
 // WritePidFile records pid in ConsoleDir/daemon.pid.
@@ -46,26 +47,23 @@ func removePidFileFor(pid int) {
 
 // IsProcessRunning reports whether pid exists (signal 0, Unix convention).
 func IsProcessRunning(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	return syscall.Kill(pid, 0) == nil
+	return sysproc.Alive(pid)
 }
 
 // KillDaemon sends SIGTERM, waits up to 5s for graceful exit, then SIGKILL.
 // Removes whichever PID file held pid once it's confirmed gone.
 func KillDaemon(pid int) error {
-	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+	if err := sysproc.TermProcess(pid); err != nil {
 		return err
 	}
 	for i := 0; i < 50; i++ {
 		time.Sleep(100 * time.Millisecond)
-		if !IsProcessRunning(pid) {
+		if !sysproc.Alive(pid) {
 			removePidFileFor(pid)
 			return nil
 		}
 	}
-	_ = syscall.Kill(pid, syscall.SIGKILL)
+	_ = sysproc.KillProcess(pid)
 	removePidFileFor(pid)
 	return nil
 }

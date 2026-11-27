@@ -20,8 +20,8 @@ use console_ui::theme::Theme;
 
 use crate::app_menu::Quit;
 use crate::keybindings::{
-    AddProject, NewBrowser, NewChat, NewProject, NewTerminal, NewWindow, OpenSettings,
-    QuickOpenFile,
+    AddProject, CheckForUpdates, NewBrowser, NewChat, NewProject, NewTerminal, NewWindow,
+    OpenSettings, QuickOpenFile,
 };
 
 /// One dropdown entry: label, right-aligned shortcut hint, and the action to
@@ -144,6 +144,7 @@ fn file_entries() -> Vec<Entry> {
         entry("New Project…", "", NewProject),
         entry("Quick Open File…", "Ctrl+P", QuickOpenFile),
         entry("Settings…", "Ctrl+,", OpenSettings),
+        entry("Check for Updates…", "", CheckForUpdates),
         entry("Exit", "Ctrl+Q", Quit),
     ]);
     entries

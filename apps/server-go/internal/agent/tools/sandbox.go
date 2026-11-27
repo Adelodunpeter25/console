@@ -99,7 +99,7 @@ func sandboxedShellArgv(command string, mode SandboxMode) []string {
 
 // sandboxHint is added to a failed command's output in plan mode, because
 // "Operation not permitted" or "Read-only file system" alone reads as a bug.
-const sandboxHint = "\n\nPlan mode runs commands in a read-only sandbox: they can read anything and write only to the system temp folder. If this command needed to write, describe the change in your plan instead, or ask the user to leave plan mode."
+const sandboxHint = "\n\nPlan mode runs commands in a read-only sandbox: they can read anything and write only to the system temp folder. If this command needed to write: if the user explicitly asked you to implement, call await requestFullAccess('short reason') in code; otherwise describe the change in your plan instead."
 
 func looksLikeBlockedWrite(stderr string) bool {
 	s := strings.ToLower(stderr)

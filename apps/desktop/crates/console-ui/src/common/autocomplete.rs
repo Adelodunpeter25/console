@@ -10,8 +10,8 @@ use std::rc::Rc;
 
 use gpui::{
     Anchor, App, Bounds, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    Pixels, RenderOnce, StatefulInteractiveElement, Styled, Window, actions, anchored, canvas,
-    deferred, div, point, prelude::FluentBuilder, px,
+    Pixels, RenderOnce, ScrollHandle, StatefulInteractiveElement, Styled, Window, actions,
+    anchored, canvas, deferred, div, point, prelude::FluentBuilder, px,
 };
 
 use crate::primitives::{IconName, app_icon, file_type_icon};
@@ -72,7 +72,7 @@ pub struct AutocompleteTrigger {
 pub enum AutocompleteItem {
     Command(SlashCommandInfo),
     File(FileSearchResult),
-    Chat(SessionHeader),
+    Chat(Box<SessionHeader>),
 }
 
 /// Comparable identity of an [`AutocompleteView`]'s content. See
@@ -253,8 +253,7 @@ pub fn filter_items(
                     .map(AutocompleteItem::Command)
                     .collect();
             }
-            let mut out = Vec::new();
-            out.reserve(MAX_AUTOCOMPLETE_ITEMS.min(commands.len()));
+            let mut out = Vec::with_capacity(MAX_AUTOCOMPLETE_ITEMS.min(commands.len()));
             for command in commands {
                 if command.name.to_ascii_lowercase().starts_with(&query)
                     || command.description.to_ascii_lowercase().contains(&query)
@@ -296,31 +295,42 @@ pub fn filter_items(
             scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.title.cmp(&b.1.title)));
             scored
                 .into_iter()
-                .map(|(_, session)| AutocompleteItem::Chat(session.clone()))
+                .map(|(_, session)| AutocompleteItem::Chat(Box::new(session.clone())))
                 .collect()
         }
         AutocompleteKind::File => {
-            if query.is_empty() {
-                return files
+            let mut matched: Vec<_> = if query.is_empty() {
+                files.to_vec()
+            } else {
+                files
                     .iter()
-                    .take(MAX_AUTOCOMPLETE_ITEMS)
+                    .filter(|f| f.relative_path.to_ascii_lowercase().contains(&query))
                     .cloned()
-                    .map(AutocompleteItem::File)
-                    .collect();
-            }
-            let mut out = Vec::new();
-            out.reserve(MAX_AUTOCOMPLETE_ITEMS.min(files.len()));
-            for file in files {
-                if file.relative_path.to_ascii_lowercase().contains(&query) {
-                    out.push(AutocompleteItem::File(file.clone()));
-                    if out.len() >= MAX_AUTOCOMPLETE_ITEMS {
-                        break;
-                    }
-                }
-            }
-            out
+                    .collect()
+            };
+            matched.sort_by(|a, b| {
+                b.is_dir
+                    .cmp(&a.is_dir)
+                    .then_with(|| a.relative_path.cmp(&b.relative_path))
+            });
+            matched
+                .into_iter()
+                .take(MAX_AUTOCOMPLETE_ITEMS)
+                .map(AutocompleteItem::File)
+                .collect()
         }
     }
+}
+
+/// Which side of its anchor the popup unfolds toward.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AutocompletePlacement {
+    /// Above the anchor's top edge: for a composer docked at the bottom of the
+    /// window, where there is no room underneath.
+    #[default]
+    Above,
+    /// Under the anchor's bottom edge, overlapping whatever sits below it.
+    Below,
 }
 
 /// The popup view. Selection state and backend fetching remain in the desktop
@@ -334,6 +344,7 @@ pub struct AutocompleteView {
     highlighted: usize,
     loading: bool,
     anchor_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
+    placement: AutocompletePlacement,
     on_select: Rc<dyn Fn(AutocompleteItem, &mut Window, &mut App) + 'static>,
 }
 
@@ -344,8 +355,20 @@ impl AutocompleteView {
             highlighted,
             loading,
             anchor_bounds: Rc::new(Cell::new(None)),
+            placement: AutocompletePlacement::default(),
             on_select: Rc::new(|_, _, _| {}),
         }
+    }
+
+    /// Open under the anchor instead of above it. The anchor is then the text
+    /// field itself, so the list unfolds right below what is being typed.
+    pub fn below(mut self) -> Self {
+        self.placement = AutocompletePlacement::Below;
+        self
+    }
+
+    pub fn placement(&self) -> AutocompletePlacement {
+        self.placement
     }
 
     pub fn anchor_cell(&self) -> Rc<Cell<Option<Bounds<Pixels>>>> {
@@ -411,13 +434,37 @@ impl AutocompleteView {
 }
 
 impl RenderOnce for AutocompleteView {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let Some(anchor_bounds) = self.anchor_bounds.get() else {
             return div().into_any_element();
         };
+        let key = self.content_key();
+        let scroll_state = window.use_keyed_state("composer-autocomplete-scroll", cx, |_, _| {
+            (
+                ScrollHandle::new(),
+                Rc::new(Cell::new(None::<(usize, u64)>)),
+            )
+        });
+        let (scroll, last_key) = scroll_state.read(cx).clone();
+        // Only follow the highlight when it or the list changed, so manual
+        // wheel scrolling isn't snapped back every frame.
+        if last_key.get() != Some((key.highlighted, key.ids)) && key.count > 0 {
+            scroll.scroll_to_item(key.highlighted);
+            last_key.set(Some((key.highlighted, key.ids)));
+        }
         let on_select = self.on_select;
         let highlighted = self.highlighted;
+        let below = self.placement == AutocompletePlacement::Below;
+        // Above the anchor the list is a compact strip; below it can use the
+        // room down to the window edge (about eleven rows when there is space).
+        let max_height = if below {
+            let room =
+                f32::from(window.viewport_size().height) - f32::from(anchor_bounds.bottom()) - 24.0;
+            px(room.clamp(120.0, 340.0))
+        } else {
+            px(220.0)
+        };
 
         let mut popup = div()
             .id("composer-autocomplete")
@@ -429,14 +476,15 @@ impl RenderOnce for AutocompleteView {
             // clicks "just closed" the popup instead of selecting the item.
             .occlude()
             .w(anchor_bounds.size.width)
-            .max_h(px(220.0))
+            .max_h(max_height)
             .rounded(px(10.0))
             .border_1()
             .border_color(theme.border_strong)
-            .bg(theme.raised)
+            .bg(theme.menu)
             .shadow_xl()
             .overflow_y_scroll()
-            .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+            .track_scroll(&scroll)
+            .on_scroll(|_, _, cx| cx.stop_propagation())
             .p(px(4.0))
             .flex()
             .flex_col()
@@ -560,13 +608,21 @@ impl RenderOnce for AutocompleteView {
             });
         }
 
+        let (position, anchor) = if below {
+            (
+                point(anchor_bounds.origin.x, anchor_bounds.bottom() + px(6.0)),
+                Anchor::TopLeft,
+            )
+        } else {
+            (
+                point(anchor_bounds.origin.x, anchor_bounds.origin.y - px(6.0)),
+                Anchor::BottomLeft,
+            )
+        };
         deferred(
             anchored()
-                .position(point(
-                    anchor_bounds.origin.x,
-                    anchor_bounds.origin.y - px(6.0),
-                ))
-                .anchor(Anchor::BottomLeft)
+                .position(position)
+                .anchor(anchor)
                 .snap_to_window_with_margin(px(8.0))
                 .child(popup),
         )

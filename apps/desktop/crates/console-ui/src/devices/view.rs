@@ -75,7 +75,7 @@ pub struct DeviceViewer {
     /// Set by `player_event` when the page reports a post-start status
     /// (proves the start script executed), used to stop the retry loop.
     start_reported: Option<u64>,
-    devices: Rc<Vec<DeviceDescriptor>>,
+    devices: Rc<[DeviceDescriptor]>,
     selected_id: Option<String>,
     pending: DeviceViewerPending,
     booting_id: Option<String>,
@@ -83,7 +83,6 @@ pub struct DeviceViewer {
     loading: bool,
     error: Option<String>,
     stream_status: Option<String>,
-    occluded: bool,
     was_natively_focused: bool,
     last_window_focus: Option<FocusHandle>,
     switcher_menu: ContextMenuHandle,
@@ -103,7 +102,7 @@ impl DeviceViewer {
             loaded_player_base: None,
             start_generation: 0,
             start_reported: None,
-            devices: Rc::new(Vec::new()),
+            devices: Rc::from([]),
             selected_id: None,
             pending: DeviceViewerPending {
                 select: Rc::new(RefCell::new(None)),
@@ -113,7 +112,6 @@ impl DeviceViewer {
             loading: false,
             error: None,
             stream_status: None,
-            occluded: false,
             was_natively_focused: false,
             last_window_focus: None,
             switcher_menu: ContextMenuHandle::new(cx),
@@ -121,6 +119,16 @@ impl DeviceViewer {
             _subscriptions: Vec::new(),
         };
         this.build_webview(window, cx);
+        let weak = cx.entity().downgrade();
+        let focus_out = window.on_focus_out(&this.focus_handle, cx, move |_, window, cx| {
+            let focused_elsewhere = window.is_window_active() && window.focused(cx).is_some();
+            let _ = weak.update(cx, |this, cx| {
+                if focused_elsewhere {
+                    this.reclaim_native_keyboard(cx);
+                }
+            });
+        });
+        this._subscriptions.push(focus_out);
         this.refresh(window, cx);
         this
     }
@@ -146,7 +154,7 @@ impl DeviceViewer {
             cx: cx.to_async(),
             view: cx.entity().downgrade(),
         };
-        let on_ipc = deferred.clone();
+        let on_ipc = deferred;
         let on_responder_change: Box<dyn Fn(bool)> = {
             let executor = cx.foreground_executor().clone();
             let async_cx = cx.to_async();
@@ -221,12 +229,12 @@ impl DeviceViewer {
                         this.auth_token = auth_token;
                         match result {
                             Ok(devices) => {
-                                if let Some(selected) = &this.selected_id {
-                                    if !devices.iter().any(|d| &d.id == selected) {
-                                        this.selected_id = None;
-                                    }
+                                if let Some(selected) = &this.selected_id
+                                    && !devices.iter().any(|d| &d.id == selected)
+                                {
+                                    this.selected_id = None;
                                 }
-                                this.devices = Rc::new(devices);
+                                this.devices = Rc::from(devices);
                                 if this.selected_id.is_some() {
                                     this.start_selected_stream(cx);
                                 }
@@ -368,24 +376,21 @@ impl DeviceViewer {
     }
 
     fn player_event(&mut self, body: String, cx: &mut Context<Self>) {
-        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body) {
-            match value.get("type").and_then(|t| t.as_str()) {
-                Some("status") => {
-                    let status = value
-                        .get("status")
-                        .and_then(|s| s.as_str())
-                        .map(|s| s.to_string());
-                    // Any post-start status proves the start script executed
-                    // ("ready" is the page's own boot report), so the retry
-                    // loop can stop.
-                    if status.as_deref().is_some_and(|s| s != "ready") {
-                        self.start_reported = Some(self.start_generation);
-                    }
-                    self.stream_status = status;
-                    cx.notify();
-                }
-                _ => {}
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body)
+            && value.get("type").and_then(|t| t.as_str()) == Some("status")
+        {
+            let status = value
+                .get("status")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+            // Any post-start status proves the start script executed
+            // ("ready" is the page's own boot report), so the retry
+            // loop can stop.
+            if status.as_deref().is_some_and(|s| s != "ready") {
+                self.start_reported = Some(self.start_generation);
             }
+            self.stream_status = status;
+            cx.notify();
         }
     }
 
@@ -394,16 +399,17 @@ impl DeviceViewer {
             return;
         };
         // Hardware buttons ride the live stream socket when it is up.
-        if action != "appearance" && self.stream_status.as_deref() == Some("streaming") {
-            if let Some(host) = self.host.clone() {
-                host.evaluate_script(&PlayerConfig::button_script(&action.replace('_', "-")));
-                return;
-            }
+        if action != "appearance"
+            && self.stream_status.as_deref() == Some("streaming")
+            && let Some(host) = self.host.clone()
+        {
+            host.evaluate_script(&PlayerConfig::button_script(&action.replace('_', "-")));
+            return;
         }
         let client = self.client.clone();
         let view = cx.entity().downgrade();
         let platform = device_platform(&device).as_str().to_string();
-        let id = device.id.clone();
+        let id = device.id;
         let action = action.to_string();
         // Empty appearance asks the server to flip the device's real mode.
         let appearance = (action == "appearance").then(|| "toggle".to_string());
@@ -449,7 +455,7 @@ impl DeviceViewer {
         let client = self.client.clone();
         let view = cx.entity().downgrade();
         let platform = device_platform(&device).as_str().to_string();
-        let id = device.id.clone();
+        let id = device.id;
         cx.spawn(async move |_, cx| {
             let result = client.devices.boot(&id, &platform).await;
             cx.update(|cx| {
@@ -510,12 +516,12 @@ impl DeviceViewer {
                             })
                         });
                         let finished = target.is_none() || booted.is_some();
-                        if let Some(device) = booted {
-                            if this.selected_id == target {
-                                this.selected_id = Some(device.id.clone());
-                            }
+                        if let Some(device) = booted
+                            && this.selected_id == target
+                        {
+                            this.selected_id = Some(device.id.clone());
                         }
-                        this.devices = Rc::new(devices);
+                        this.devices = Rc::from(devices);
                         if finished {
                             this.booting_id = None;
                             this.start_selected_stream(cx);
@@ -554,7 +560,7 @@ impl DeviceViewer {
         let client = self.client.clone();
         let view = cx.entity().downgrade();
         let platform = device_platform(&device).as_str().to_string();
-        let id = device.id.clone();
+        let id = device.id;
         cx.spawn(async move |_, cx| {
             let shutdown = client.devices.shutdown(&id, &platform).await;
             let result = client.devices.list().await;
@@ -566,7 +572,7 @@ impl DeviceViewer {
                             this.error = Some(err.to_string());
                         }
                         if let Ok(devices) = result {
-                            this.devices = Rc::new(devices);
+                            this.devices = Rc::from(devices);
                             this.start_selected_stream(cx);
                         }
                         cx.notify();
@@ -584,7 +590,7 @@ impl DeviceViewer {
         let name = device_display_name(&device);
         let client = self.client.clone();
         let platform = device_platform(&device).as_str().to_string();
-        let id = device.id.clone();
+        let id = device.id;
         let handler = self.on_screenshot.clone();
         let window_handle = window.window_handle();
         cx.spawn(async move |_, cx| {
@@ -614,21 +620,12 @@ impl DeviceViewer {
 
     /// Per-frame push from the app: whether this surface is the visible right
     /// panel tab, and whether a GPUI overlay is open above it.
-    pub fn sync_native_state(
-        &mut self,
-        surface_visible: bool,
-        overlay_open: bool,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn sync_native_state(&mut self, surface_visible: bool, cx: &mut Context<Self>) {
         let Some(host) = self.host.clone() else {
             return;
         };
-        let occluded = overlay_open || self.switcher_menu.is_open();
-        if self.occluded != occluded {
-            self.occluded = occluded;
-        }
         let has_device = self.selected_id.is_some();
-        let show = surface_visible && has_device && !occluded;
+        let show = surface_visible && has_device;
         if !show {
             // The surface cannot use the keyboard while it is hidden; give
             // keyboard focus back unconditionally. `native_focus_within()`
@@ -701,10 +698,6 @@ impl DeviceViewer {
             }
         }
         self.was_natively_focused = natively_focused;
-    }
-
-    pub fn overlay_open(&self) -> bool {
-        self.switcher_menu.is_open()
     }
 
     fn toolbar_button(
@@ -813,6 +806,8 @@ impl DeviceViewer {
                             .flex_1()
                             .min_w_0()
                             .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
                             .text_size(px(12.0))
                             .text_color(theme.text)
                             .child(selected_label),
@@ -820,6 +815,8 @@ impl DeviceViewer {
                     .when_some(status, |el, s| {
                         el.child(
                             div()
+                                .flex_shrink_0()
+                                .whitespace_nowrap()
                                 .text_size(px(10.0))
                                 .px(px(6.0))
                                 .py(px(2.0))
@@ -840,8 +837,8 @@ impl DeviceViewer {
                             let id = device.id.clone();
                             let label = format!(
                                 "{} · {} · {}",
-                                device_display_name(&device),
-                                device_platform(&device).label(),
+                                device_display_name(device),
+                                device_platform(device).label(),
                                 device_state_label(&device.state)
                             );
                             let selected = selected_id.as_deref() == Some(&device.id);
@@ -892,7 +889,7 @@ impl DeviceViewer {
                         .unwrap_or_else(|| "Ready".to_string()),
                 );
             }
-            return Some(device_state_label(&device.state).to_string());
+            return Some(device_state_label(&device.state));
         }
         None
     }
@@ -1050,7 +1047,6 @@ impl DeviceViewer {
 
     fn render_video_area(&self, theme: Theme) -> AnyElement {
         let host = self.host.clone();
-        let occluded = self.occluded;
         let has_device = self.selected_id.is_some();
         div()
             .flex_1()
@@ -1096,19 +1092,6 @@ impl DeviceViewer {
                                 .text_color(theme.text_tertiary)
                                 .child("Pick a simulator or emulator above."),
                         ),
-                )
-            })
-            .when(occluded && has_device, |el| {
-                el.child(
-                    div()
-                        .absolute()
-                        .size_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .bg(theme.canvas)
-                        .text_color(theme.text_tertiary)
-                        .child("Device hidden while menu is open"),
                 )
             })
             .into_any_element()

@@ -1,6 +1,7 @@
 package com.console.mobile.feature.chat
 import com.console.mobile.feature.chat.markdown.CustomMarkdown
 
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,9 +41,9 @@ import com.console.mobile.core.chat.ActivityEvent
 import com.console.mobile.core.chat.RunActivityState
 import com.console.mobile.core.chat.RunStatus
 import com.console.mobile.core.util.formatDurationMs
-import com.console.mobile.core.util.getToolIcon
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
+import com.console.mobile.ui.components.ToolIcon
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.delay
 
@@ -79,7 +79,12 @@ private fun groupEvents(events: List<ActivityEvent>): List<RenderGroup> {
  * Collapsible "Worked for Xs" header + grouped tool/thinking/text events.
  */
 @Composable
-fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = null) {
+fun RunActivity(
+    activity: RunActivityState,
+    running: Boolean,
+    cwd: String? = null,
+    onExpandToolCall: (messageId: String, callId: String) -> Unit = { _, _ -> },
+) {
     var expanded by remember(activity.runId, running) { mutableStateOf(running) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(running) {
@@ -126,7 +131,7 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
                         if (g.calls.size == 1) {
                             val call = g.calls.first()
                             Box(modifier = Modifier.padding(vertical = 2.dp)) {
-                                ToolCallRow(call = call, result = byId[call.id], cwd = cwd)
+                                ToolCallRow(call = call, result = byId[call.id], cwd = cwd, onExpandToolCall = onExpandToolCall)
                             }
                         } else {
                             ToolGroupRow(
@@ -134,6 +139,7 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
                                 calls = g.calls,
                                 results = g.results,
                                 cwd = cwd,
+                                onExpandToolCall = onExpandToolCall,
                             )
                         }
                     }
@@ -149,6 +155,7 @@ fun ToolGroupRow(
     calls: List<ToolCall>,
     results: List<ToolResult>,
     cwd: String? = null,
+    onExpandToolCall: (messageId: String, callId: String) -> Unit = { _, _ -> },
 ) {
     var expanded by remember(calls.firstOrNull()?.id) { mutableStateOf(false) }
     val byId = results.associateBy { it.toolCallId }
@@ -170,12 +177,7 @@ fun ToolGroupRow(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                getToolIcon(calls.first()),
-                contentDescription = null,
-                tint = NewTheme.TextSecondary,
-                modifier = Modifier.size(16.dp),
-            )
+            ToolIcon(calls.first(), sizeDp = 16)
             Spacer(Modifier.width(8.dp))
             Text(
                 // The group's parameter is already the resolved display label.
@@ -232,7 +234,7 @@ fun ToolGroupRow(
             ) {
                 calls.forEach { call ->
                     Box(modifier = Modifier.padding(vertical = 2.dp)) {
-                        ToolCallRow(call = call, result = byId[call.id], cwd = cwd)
+                        ToolCallRow(call = call, result = byId[call.id], cwd = cwd, onExpandToolCall = onExpandToolCall)
                     }
                 }
             }
@@ -261,10 +263,21 @@ private fun CollapsibleThinking(text: String) {
  * collapsing the run never moves or hides the card.
  */
 @Composable
-fun RunVisuals(activity: RunActivityState) {
+fun RunVisuals(
+    activity: RunActivityState,
+    onOpenHtmlPreview: (com.console.mobile.data.model.HtmlArtifact) -> Unit = {},
+    onOpenHtmlEditor: (String) -> Unit = {},
+) {
     activity.events.forEach { e ->
         if (e is ActivityEvent.ToolCallEvent) {
             e.result?.visual?.let { com.console.mobile.feature.chat.visual.VisualResultCard(it) }
+            e.result?.html?.let {
+                com.console.mobile.feature.chat.html.HtmlResultCard(
+                    artifact = it,
+                    onOpenPreview = onOpenHtmlPreview,
+                    onOpenEditor = onOpenHtmlEditor,
+                )
+            }
         }
     }
 }

@@ -1,4 +1,6 @@
 package com.console.mobile.feature.chat
+
+import kotlinx.coroutines.flow.map
 import io.github.lyxnx.compose.ui.tablericons.outline.MessageChatbot
 
 import androidx.compose.foundation.background
@@ -40,7 +42,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,6 +64,7 @@ import com.console.mobile.core.util.detectComposerTrigger
 import com.console.mobile.core.util.filterChatRefs
 import com.console.mobile.core.util.parseFileMentions
 import com.console.mobile.core.util.slugifyChatTitle
+import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import console.v1.FileSearchResult
 import console.v1.SessionHeader
 import console.v1.SlashCommandInfo
@@ -67,6 +72,7 @@ import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.components.common.new.BlurredBottomBar
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Microphone
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
@@ -87,6 +93,7 @@ fun Composer(
     running: Boolean,
     projectLocked: Boolean,
     onAddProject: () -> Unit,
+    onConnectGithub: () -> Unit = {},
     topBanner: (@Composable () -> Unit)? = null,
     onSend: () -> Unit,
     onStop: () -> Unit,
@@ -98,6 +105,86 @@ fun Composer(
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
     val sessionCwd = sessionViews[sessionId]?.sessionCwd
     val projectRoot = projectState.projects.firstOrNull { p -> sessionCwd != null && (p.path == sessionCwd || sessionCwd.startsWith(p.path + "/")) }?.path ?: sessionCwd
+    // Speech-to-text dictation. Enabled only when the server has a
+    // credential; the status loads at app start, never only from Providers.
+    val authState by AppContainer.authStateHolder.state.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(authState.sttStatus) {
+        if (authState.sttStatus == null) {
+            AppContainer.authRepository.loadSttStatus()
+        }
+    }
+    val dictationEnabled = authState.sttStatus?.configured == true
+    var dictationRecording by remember(sessionId) { mutableStateOf(false) }
+    var dictationTranscribing by remember(sessionId) { mutableStateOf(false) }
+    var dictationElapsedSecs by remember(sessionId) { mutableStateOf(0) }
+    var dictationError by remember(sessionId) { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val recorder = remember(sessionId) { com.console.mobile.core.audio.DictationRecorder(context.applicationContext) }
+    androidx.compose.runtime.DisposableEffect(sessionId) {
+        onDispose { recorder.cancel() }
+    }
+    fun startDictation() {
+        dictationError = null
+        try {
+            recorder.start()
+            dictationRecording = true
+            dictationElapsedSecs = 0
+        } catch (e: Exception) {
+            dictationError = "Couldn't start recording. ${e.message.orEmpty().trim()} In Settings, allow microphone access for Console."
+        }
+    }
+    fun finishDictation() {
+        dictationRecording = false
+        val bytes = try {
+            recorder.stop()
+        } catch (e: Exception) {
+            dictationError = e.message ?: "Recording failed."
+            return
+        }
+        if (bytes.isEmpty()) {
+            dictationError = "Nothing was recorded — check the microphone and try again."
+            return
+        }
+        dictationTranscribing = true
+        val draft = value
+        scope.launch {
+            try {
+                val text = AppContainer.authRepository.transcribeStt(bytes, "dictation.m4a", "audio/mp4").trim()
+                if (text.isEmpty()) {
+                    dictationError = "I couldn't hear anything — try again."
+                } else {
+                    val separator = if (draft.isBlank()) "" else " "
+                    onChange((draft + separator + text).trimEnd())
+                }
+            } catch (e: Exception) {
+                dictationError = "Transcription failed: ${e.message.orEmpty().ifBlank { "Couldn't reach the server." }}"
+            } finally {
+                dictationTranscribing = false
+            }
+        }
+    }
+    val micPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) startDictation()
+        else dictationError = "Microphone access denied. Allow it in Settings → Apps → Console → Permissions."
+    }
+    // The elapsed label ticks while a take runs; at 120s the take ends on its
+    // own, since longer audio would exceed the server's 4 MB cap.
+    androidx.compose.runtime.LaunchedEffect(dictationRecording) {
+        if (!dictationRecording) return@LaunchedEffect
+        val startedAt = System.currentTimeMillis()
+        while (true) {
+            kotlinx.coroutines.delay(250)
+            val secs = ((System.currentTimeMillis() - startedAt) / 1000).toInt()
+            dictationElapsedSecs = secs
+            if (secs >= com.console.mobile.core.audio.MAX_RECORD_SECONDS) {
+                finishDictation()
+                break
+            }
+        }
+    }
 
     var fieldValue by remember(sessionId) { mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length))) }
     if (fieldValue.text != value) {
@@ -157,8 +244,10 @@ fun Composer(
         }
     }
     var chatRefSessions by remember(sessionId) { mutableStateOf<List<SessionHeader>>(emptyList()) }
-    LaunchedEffect(sessionId) {
-        chatRefSessions = AppContainer.assistRepository.listChatRefs(sessionId)
+    LaunchedEffect(sessionId, trigger is ComposerTrigger.Chat) {
+        if (chatRefSessions.isEmpty() || trigger is ComposerTrigger.Chat) {
+            chatRefSessions = AppContainer.assistRepository.listChatRefs(sessionId)
+        }
     }
     var mentionResults by remember { mutableStateOf<List<FileSearchResult>>(emptyList()) }
     LaunchedEffect(trigger) {
@@ -180,20 +269,19 @@ fun Composer(
     }
 
     fun applyChatSuggestion(session: SessionHeader, replaceFrom: Int) {
-        val slug = slugifyChatTitle(session.title ?: "").ifBlank { session.id }
+        val slug = slugifyChatTitle(session.title).ifBlank { session.id }
         confirmedChatRefs = confirmedChatRefs + slug
         applySuggestion("\$$slug ", replaceFrom)
     }
 
     fun applyFileSuggestion(file: console.v1.FileSearchResult, replaceFrom: Int) {
-        confirmedPaths = confirmedPaths + file.relative_path
-        applySuggestion("@${file.relative_path} ", replaceFrom)
+        val path = if (file.is_dir && !file.relative_path.endsWith('/')) "${file.relative_path}/" else file.relative_path
+        confirmedPaths = confirmedPaths + path
+        applySuggestion("@$path ", replaceFrom)
     }
 
     fun applySkillSuggestion(command: SlashCommandInfo, replaceFrom: Int) {
-        if (!command.builtin) {
-            confirmedSkills = confirmedSkills + command.name
-        }
+        confirmedSkills = confirmedSkills + command.name
         applySuggestion("/${command.name} ", replaceFrom)
     }
 
@@ -205,6 +293,9 @@ fun Composer(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val focusRequest by AppContainer.chatStateHolder.sessions
+        .map { it[sessionId]?.focusRequest ?: 0 }
+        .collectAsStateWithLifecycle(initialValue = 0)
     // The user's intent, not raw focus. A sheet or the picker steals window focus,
     // which would otherwise look like "the user left"; focus changes seen while
     // something is held are ignored, so intent survives and is restored after.
@@ -225,6 +316,16 @@ fun Composer(
             keyboard?.show()
         } catch (_: Exception) {
             // Not attached yet; the next tap will do it.
+        }
+    }
+    LaunchedEffect(focusRequest) {
+        if (focusRequest > 0) {
+            fieldValue = fieldValue.copy(selection = TextRange(fieldValue.text.length))
+            wantsOpen = true
+            // The chip row is removed in the same state update that bumps this
+            // counter; request focus after that composition settles.
+            kotlinx.coroutines.android.awaitFrame()
+            focusField()
         }
     }
     // Open for reasons other than the keyboard: a sheet/picker is showing, focus
@@ -304,8 +405,9 @@ fun Composer(
             if (topBanner != null) topBanner()
             // Kept in composition while collapsed (just zero-height) so a sheet it owns
             // and its loaded branch list survive the composer folding up.
-            Collapsible(progress = expansion, anchorBottom = true, modifier = Modifier.fillMaxWidth()) {
-                ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject)
+            // Project and branch are only chosen before the first message, so the strip is gone after.
+            if (!projectLocked) Collapsible(progress = expansion, anchorBottom = true, modifier = Modifier.fillMaxWidth()) {
+                ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject, onConnectGithub = onConnectGithub)
             }
             // Attachments are content, not configuration, so they stay visible collapsed.
             if (attachments.isNotEmpty()) {
@@ -334,6 +436,7 @@ fun Composer(
                     ) {
                         val mentions = parseFileMentions(old.text)
                         val skills = com.console.mobile.core.util.parseSkillMentions(old.text)
+                        val chats = com.console.mobile.core.util.parseChatMentions(old.text)
                         var targetStart: Int? = null
                         var targetEnd: Int? = null
 
@@ -348,6 +451,13 @@ fun Composer(
                             if (skillTarget != null) {
                                 targetStart = skillTarget.range.first
                                 targetEnd = if (old.text[deletedAt].isWhitespace() && skillTarget.range.last + 1 == deletedAt) deletedAt + 1 else skillTarget.range.last + 1
+                            } else {
+                                val chatTarget = chats.firstOrNull { deletedAt in it.range && it.slug in confirmedChatRefs }
+                                    ?: if (old.text[deletedAt].isWhitespace()) chats.firstOrNull { it.range.last + 1 == deletedAt && it.slug in confirmedChatRefs } else null
+                                if (chatTarget != null) {
+                                    targetStart = chatTarget.range.first
+                                    targetEnd = if (old.text[deletedAt].isWhitespace() && chatTarget.range.last + 1 == deletedAt) deletedAt + 1 else chatTarget.range.last + 1
+                                }
                             }
                         }
 
@@ -360,6 +470,7 @@ fun Composer(
                 // Prune confirmations whose text is gone.
                 confirmedPaths = confirmedPaths.filter { "@$it" in nextText }.toSet()
                 confirmedSkills = confirmedSkills.filter { "/$it" in nextText }.toSet()
+                confirmedChatRefs = confirmedChatRefs.filter { "\$$it" in nextText }.toSet()
                 fieldValue = if (nextSelection != null) {
                     TextFieldValue(text = nextText, selection = nextSelection)
                 } else {
@@ -378,7 +489,23 @@ fun Composer(
             focusRequester = focusRequester,
             onFocusChange = onFieldFocusChange,
             onTapBubble = ::focusField,
+            dictationEnabled = dictationEnabled,
+            dictationRecording = dictationRecording,
+            dictationTranscribing = dictationTranscribing,
+            dictationElapsedSecs = dictationElapsedSecs,
+            onMicClick = {
+                if (dictationRecording) finishDictation()
+                else if (!dictationTranscribing) micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+            },
         )
+        if (dictationError != null) {
+            Text(
+                dictationError!!,
+                color = NewTheme.Danger,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+        }
         val anchor = fieldCoordinates
         if (anchor != null) {
             when (val t = trigger) {
@@ -449,6 +576,12 @@ private fun ComposerInput(
     focusRequester: FocusRequester,
     onFocusChange: (Boolean) -> Unit,
     onTapBubble: () -> Unit,
+    // Speech-to-text dictation (see DictationButton); owned by Composer.
+    dictationEnabled: Boolean,
+    dictationRecording: Boolean,
+    dictationTranscribing: Boolean,
+    dictationElapsedSecs: Int,
+    onMicClick: () -> Unit,
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     // Derived from the text's own line height so everything tracks the system font size.
@@ -462,14 +595,19 @@ private fun ComposerInput(
     // expanded, growing to the same maximum as before as you type.
     val fieldMinHeight = androidx.compose.ui.unit.lerp(lineDp, lineDp * 2, expansion)
     val fieldMaxHeight = androidx.compose.ui.unit.lerp(lineDp, maxOf(80.dp, lineDp * 2), expansion)
-    // Collapsed, the send button sits at the end of the same row, so text must stop short of it.
+    // Collapsed, the attach (+) button sits at the start and send sits at the end of the same row.
+    val fieldStartPad = androidx.compose.ui.unit.lerp(SEND_SIZE + 4.dp, 8.dp, expansion)
     val fieldEndPad = androidx.compose.ui.unit.lerp(SEND_SIZE + 4.dp, 8.dp, expansion)
     // Pill when collapsed, the rounded rect when expanded; radii larger than half
     // the height are clamped, so 26dp reads as a full pill at any font scale.
     val bubbleShape = RoundedCornerShape(androidx.compose.ui.unit.lerp(26.dp, 20.dp, expansion))
+    val sessionViews by AppContainer.sessionStateHolder.views.collectAsStateWithLifecycle()
+    val planOn = com.console.mobile.data.model.ApprovalMode.fromValue(sessionViews[sessionId]?.approvalMode) ==
+        com.console.mobile.data.model.ApprovalMode.PlanMode
     Box(
         modifier = Modifier.fillMaxWidth().clip(bubbleShape)
             .background(NewTheme.Card)
+            .then(if (planOn) Modifier.planModeStripes() else Modifier)
             .onGloballyPositioned(onCoordinatesChange)
             // The whole pill is the tap target, not just the sliver of text.
             .pointerInput(Unit) { detectTapGestures { onTapBubble() } }
@@ -485,7 +623,7 @@ private fun ComposerInput(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 8.dp, end = fieldEndPad, top = fieldVPad, bottom = fieldVPad)
+                .padding(start = fieldStartPad, end = fieldEndPad, top = fieldVPad, bottom = fieldVPad)
                 .heightIn(min = fieldMinHeight, max = fieldMaxHeight)
                 .onGloballyPositioned { fieldHeightPx = it.size.height }
                 .clipToBounds(),
@@ -565,6 +703,13 @@ private fun ComposerInput(
                                     contentDescription = null,
                                     tint = MentionAccent,
                                 )
+                            } else if (seg.path.endsWith('/')) {
+                                androidx.compose.material3.Icon(
+                                    TablerIcons.Outline.Folder,
+                                    contentDescription = null,
+                                    tint = MentionAccent,
+                                    modifier = Modifier.size(12.dp),
+                                )
                             } else {
                                 FileIcon(filename = seg.path.substringAfterLast('/'), sizeDp = 12)
                             }
@@ -573,21 +718,18 @@ private fun ComposerInput(
                 }
             }
         }
-            // Attach and the chips only exist once expanded; the send button below is
-            // the one control that is always there, so it lives outside this row.
+            // Chips only exist once expanded; attach (+) and send/mic are pinned
+            // to the bottom corners so they stay visible when collapsed too.
             Collapsible(progress = expansion, modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(
-                        modifier = Modifier.size(SEND_SIZE).clip(CircleShape).clickable(onClickLabel = "Attach image", onClick = attach),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(20.dp))
-                    }
-                    // Fills the gap so the chips stay clear of the send button; the model
-                    // chip truncates rather than pushing anything off a narrow screen.
+                    // Reserves the slot the pinned attach (+) button floats over.
+                    Spacer(Modifier.size(SEND_SIZE))
+                    // Fills the gap so the chips stay clear of the pinned mic and
+                    // send buttons; the model chip truncates rather than pushing
+                    // anything off a narrow screen.
                     ThinkingChip(sessionId = sessionId, running = running)
                     Row(
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
@@ -596,6 +738,12 @@ private fun ComposerInput(
                     ) {
                         ModelChip(sessionId = sessionId, modifier = Modifier.weight(1f, fill = false))
                     }
+                    // Reserves the mic + send slots the pinned controls float
+                    // over, so the model picker moves aside instead of being
+                    // covered. The mic zone widens while recording so the
+                    // timer label never reaches the picker either.
+                    val micSlot = SEND_SIZE + 8.dp + if (dictationRecording) 30.dp else 0.dp
+                    Spacer(Modifier.size(width = micSlot, height = SEND_SIZE))
                     // Reserves the slot the send button floats over.
                     Spacer(Modifier.size(SEND_SIZE))
                 }
@@ -604,6 +752,32 @@ private fun ComposerInput(
         // Pinned bottom-end: beside the text when collapsed, at the end of the
         // action row when expanded. The bubble's height animates and the button
         // rides its bottom edge, so it slides into place with no separate animation.
+        // The mic pins just left of send in BOTH states — never floating over
+        // the model picker (which is pushed aside by the row's reservations).
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .size(SEND_SIZE)
+                .clip(CircleShape)
+                .clickable(onClickLabel = "Attach image", onClick = attach),
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.material3.Icon(
+                TablerIcons.Outline.Plus,
+                contentDescription = "Attach",
+                tint = NewTheme.TextSecondary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        DictationButton(
+                enabled = dictationEnabled,
+                recording = dictationRecording,
+                transcribing = dictationTranscribing,
+                elapsedSecs = dictationElapsedSecs,
+                onMicClick = onMicClick,
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .offset(x = -(SEND_SIZE + 8.dp)),
+        )
         SendStopButton(
             running = running,
             canSend = canSend,
@@ -616,6 +790,95 @@ private fun ComposerInput(
 
 private val SEND_SIZE = 35.dp
 
+/**
+ * Voice dictation control, pinned just left of the send button. Idle: the
+ * mic starts a take. Recording: the red stop control takes its place with
+ * the live elapsed label. Unconfigured: dimmed and inert.
+ */
+@Composable
+private fun DictationButton(
+    enabled: Boolean,
+    recording: Boolean,
+    transcribing: Boolean,
+    elapsedSecs: Int,
+    onMicClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp, Alignment.End),
+    ) {
+        if (recording) {
+            Text(
+                text = "%d:%02d".format(elapsedSecs / 60, elapsedSecs % 60),
+                color = NewTheme.Danger,
+                fontSize = 12.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                modifier = Modifier.padding(end = 2.dp),
+            )
+        }
+        when {
+            recording -> {
+                Box(
+                    modifier = Modifier.size(SEND_SIZE).clip(CircleShape).background(NewTheme.Danger)
+                        .clickable(onClickLabel = "Stop recording", onClick = onMicClick),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(
+                        TablerIcons.Outline.PlayerStop,
+                        contentDescription = "Stop recording",
+                        tint = NewTheme.OnPrimary,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+            }
+            transcribing -> {
+                Box(
+                    modifier = Modifier.size(SEND_SIZE),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        color = NewTheme.TextSecondary,
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                }
+            }
+            !enabled -> {
+                // Dim and inert until the server has a credential: a button
+                // that fails on tap is worse than a visibly disabled one.
+                Box(
+                    modifier = Modifier.size(SEND_SIZE).clip(CircleShape)
+                        .background(NewTheme.Card),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(
+                        TablerIcons.Outline.Microphone,
+                        contentDescription = "Set up Speech to Text in Settings",
+                        tint = NewTheme.TextMuted.copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+            else -> {
+                Box(
+                    modifier = Modifier.size(SEND_SIZE).clip(CircleShape).background(NewTheme.Card)
+                        .clickable(onClickLabel = "Record dictation", onClick = onMicClick),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(
+                        TablerIcons.Outline.Microphone,
+                        contentDescription = "Record dictation",
+                        tint = NewTheme.TextSecondary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun SendStopButton(
     running: Boolean,
@@ -624,7 +887,9 @@ private fun SendStopButton(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (running) {
+    // While a run is active, typed text sends (it queues for the next turn);
+    // Stop shows only when there is nothing to send.
+    if (running && !canSend) {
         // Same footprint as the send button so the composer doesn't resize
         // mid-send, and destructive red so the control's meaning is readable at
         // a glance rather than only from a tiny glyph.

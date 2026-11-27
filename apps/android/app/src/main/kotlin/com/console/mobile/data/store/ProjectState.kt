@@ -5,6 +5,7 @@ import console.v1.SessionHeader
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 data class ProjectState(
     val projects: List<ProjectInfo> = emptyList(),
@@ -22,34 +23,53 @@ class ProjectStateHolder(initial: ProjectState = ProjectState()) {
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<ProjectState> = _state.asStateFlow()
 
-    fun setLoading(loading: Boolean) { _state.value = _state.value.copy(loading = loading) }
-    fun setError(error: String?) { _state.value = _state.value.copy(error = error) }
-    fun patchSessionsLoading(loading: Boolean) { _state.value = _state.value.copy(sessionsLoading = loading) }
-    fun patchDeletedLoading(loading: Boolean) { _state.value = _state.value.copy(deletedLoading = loading) }
+    fun setLoading(loading: Boolean) { _state.update { it.copy(loading = loading) } }
+    fun setError(error: String?) { _state.update { it.copy(error = error) } }
+    fun patchSessionsLoading(loading: Boolean) { _state.update { it.copy(sessionsLoading = loading) } }
+    fun patchDeletedLoading(loading: Boolean) { _state.update { it.copy(deletedLoading = loading) } }
 
     fun setProjects(v: List<ProjectInfo>) {
-        _state.value = _state.value.copy(projects = v, loading = false, error = null)
+        _state.update { it.copy(projects = v, loading = false, error = null) }
     }
-    fun addProject(p: ProjectInfo) { _state.value = _state.value.copy(projects = _state.value.projects + p) }
-    fun removeProject(id: String) { _state.value = _state.value.copy(projects = _state.value.projects.filter { it.id != id }) }
+    fun addProject(p: ProjectInfo) { _state.update { it.copy(projects = it.projects + p) } }
+    fun removeProject(id: String) { _state.update { it.copy(projects = it.projects.filter { p -> p.id != id }) } }
     fun setSessions(v: List<SessionHeader>) {
-        _state.value = _state.value.copy(sessions = v, sessionsLoading = false, error = null)
+        _state.update { it.copy(sessions = v, sessionsLoading = false, error = null) }
     }
-    fun prependSession(s: SessionHeader) { _state.value = _state.value.copy(sessions = listOf(s) + _state.value.sessions) }
+    fun prependSession(s: SessionHeader) { _state.update { it.copy(sessions = listOf(s) + it.sessions) } }
+    fun mergeSessions(incoming: List<SessionHeader>) {
+        if (incoming.isEmpty()) return
+        _state.update { current ->
+            val existingIds = current.sessions.mapTo(HashSet()) { it.id }
+            val fresh = incoming.filterNot { it.id in existingIds }
+            if (fresh.isEmpty()) current else current.copy(sessions = current.sessions + fresh)
+        }
+    }
     fun patchSession(id: String, patch: SessionHeader) {
-        _state.value = _state.value.copy(sessions = _state.value.sessions.map { if (it.id == id) patch else it })
+        _state.update { it.copy(sessions = it.sessions.map { s -> if (s.id == id) patch else s }) }
+    }
+    fun unsettleSession(id: String) {
+        _state.update {
+            it.copy(
+                sessions = it.sessions.map { s ->
+                    if (s.id == id && s.settled_at != null) s.copy(settled_at = null) else s
+                }
+            )
+        }
     }
     fun updateSessionTitle(id: String, title: String) {
-        _state.value = _state.value.copy(
-            sessions = _state.value.sessions.map {
-                if (it.id == id) it.copy(title = title) else it
-            }
-        )
+        _state.update {
+            it.copy(
+                sessions = it.sessions.map { s ->
+                    if (s.id == id) s.copy(title = title) else s
+                }
+            )
+        }
     }
-    fun removeSession(id: String) { _state.value = _state.value.copy(sessions = _state.value.sessions.filter { it.id != id }) }
+    fun removeSession(id: String) { _state.update { it.copy(sessions = it.sessions.filter { s -> s.id != id }) } }
     fun setDeleted(v: List<SessionHeader>) {
-        _state.value = _state.value.copy(deletedSessions = v, deletedLoading = false, error = null)
+        _state.update { it.copy(deletedSessions = v, deletedLoading = false, error = null) }
     }
-    fun removeDeleted(id: String) { _state.value = _state.value.copy(deletedSessions = _state.value.deletedSessions.filter { it.id != id }) }
-    fun clear() { _state.value = ProjectState() }
+    fun removeDeleted(id: String) { _state.update { it.copy(deletedSessions = it.deletedSessions.filter { s -> s.id != id }) } }
+    fun clear() { _state.update { ProjectState() } }
 }

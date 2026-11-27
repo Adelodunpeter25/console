@@ -25,10 +25,10 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use console_core::{
-    ApprovalMode, GitBranchInfo, ImageAttachment, Model, ProjectInfo, ProviderCatalogEntry,
-    SelectedModel, ThinkingLevel,
+    ApprovalMode, GitBranchInfo, GithubRepo, ImageAttachment, Model, ProjectInfo,
+    ProviderCatalogEntry, SelectedModel, ThinkingLevel,
 };
-use gpui::{App, AppContext, Entity, KeyBinding, Window};
+use gpui::{App, AppContext, Entity, KeyBinding, Window, px};
 
 use crate::common::{AutocompleteContentKey, AutocompleteView, PickerTab};
 use crate::input::{ComposerInput, ComposerMention};
@@ -90,6 +90,59 @@ impl BranchChoice {
     }
 }
 
+/// A large paste held in the card until launch. The upload endpoint is
+/// per-session and the card has no session before submit, so the chip points
+/// at a placeholder `path` that is swapped for the server path at launch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PendingPaste {
+    pub path: String,
+    pub label: String,
+    pub text: String,
+}
+
+const PENDING_PASTE_PREFIX: &str = "pending-paste:";
+
+/// Swap each pending paste's placeholder for its upload result: an uploaded
+/// paste keeps its label in the prompt and contributes the server path; a
+/// failed one has its label replaced by the raw text. Labels are matched in
+/// context-file order, which is their order in the prompt.
+pub fn resolve_pending_pastes(
+    prompt: &str,
+    context_files: &[String],
+    resolved: &[(PendingPaste, Option<String>)],
+) -> (String, Vec<String>) {
+    let mut prompt = prompt.to_string();
+    let mut files = Vec::with_capacity(context_files.len());
+    let mut cursor = 0;
+    for path in context_files {
+        if !path.starts_with(PENDING_PASTE_PREFIX) {
+            files.push(path.clone());
+            continue;
+        }
+        let Some((paste, uploaded)) = resolved.iter().find(|(paste, _)| &paste.path == path) else {
+            continue;
+        };
+        let found = prompt[cursor..].find(&paste.label).map(|at| cursor + at);
+        match (uploaded, found) {
+            (Some(real), Some(at)) => {
+                files.push(real.clone());
+                cursor = at + paste.label.len();
+            }
+            (Some(real), None) => files.push(real.clone()),
+            (None, Some(at)) => {
+                prompt.replace_range(at..at + paste.label.len(), &paste.text);
+                cursor = at + paste.text.len();
+            }
+            (None, None) => {
+                prompt.push('\n');
+                prompt.push_str(&paste.text);
+                cursor = prompt.len();
+            }
+        }
+    }
+    (prompt, files)
+}
+
 /// Everything the app needs to create the session the user described.
 #[derive(Clone, Default)]
 pub struct FloatingSubmit {
@@ -99,10 +152,15 @@ pub struct FloatingSubmit {
     pub mentions: Vec<ComposerMention>,
     /// Staged images, carried onto the new session so the launch doesn't
     /// silently drop a pasted screenshot.
-    pub attachments: Rc<Vec<ImageAttachment>>,
+    pub attachments: Rc<[ImageAttachment]>,
+    pub pending_pastes: Vec<PendingPaste>,
     pub project_id: Option<String>,
     pub cwd: Option<String>,
     pub branch: BranchChoice,
+    /// The existing branch to cut a "New worktree" launch's branch from.
+    /// None lets the server pick the repo default; remote branches
+    /// (origin/…) are valid here.
+    pub worktree_base: Option<String>,
     pub model: Option<SelectedModel>,
     pub thinking_level: Option<ThinkingLevel>,
     /// How much the agent may do unattended. The card seeds this from the
@@ -113,10 +171,13 @@ pub struct FloatingSubmit {
 
 /// The app-state snapshot pushed into the card on open.
 pub struct FloatingSnapshot {
-    pub projects: Rc<Vec<ProjectInfo>>,
+    pub projects: Rc<[ProjectInfo]>,
     pub selected_project_id: Option<String>,
-    pub branches: Rc<Vec<GitBranchInfo>>,
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub github_repos: Option<Rc<[GithubRepo]>>,
+    pub github_repos_loading: bool,
+    pub github_repos_error: Option<String>,
+    pub branches: Rc<[GitBranchInfo]>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
     pub favorites: Rc<HashSet<String>>,
     pub selected_model: Option<SelectedModel>,
@@ -130,10 +191,13 @@ impl FloatingSnapshot {
     /// has pushed a real one.
     pub fn empty() -> Self {
         Self {
-            projects: Rc::new(Vec::new()),
+            projects: Rc::from([]),
             selected_project_id: None,
-            branches: Rc::new(Vec::new()),
-            providers: Rc::new(Vec::new()),
+            github_repos: None,
+            github_repos_loading: false,
+            github_repos_error: None,
+            branches: Rc::from([]),
+            providers: Rc::from([]),
             models_by_provider: Rc::new(HashMap::new()),
             favorites: Rc::new(HashSet::new()),
             selected_model: None,
@@ -153,18 +217,27 @@ pub struct FloatingComposerState {
     pub model_search: Entity<ComposerInput>,
     pub project_menu: ContextMenuHandle,
     pub branch_menu: ContextMenuHandle,
+    /// The worktree cut-point menu, shown only while "New worktree" is the
+    /// chosen branch mode.
+    pub worktree_base_menu: ContextMenuHandle,
     pub model_menu: ContextMenuHandle,
     pub thinking_menu: ContextMenuHandle,
-    pub approval_menu: ContextMenuHandle,
     pub picker_tab: PickerTab,
     pub open: bool,
     pub submitting: bool,
     pub error: Option<String>,
-    pub projects: Rc<Vec<ProjectInfo>>,
+    pub projects: Rc<[ProjectInfo]>,
     pub selected_project_id: Option<String>,
-    pub branches: Rc<Vec<GitBranchInfo>>,
+    /// The connected GitHub account's repos for the project menu's GitHub
+    /// section (None error + None repos = not connected). Seeded on open and
+    /// refreshed in place, so a refresh from any menu reaches an open card.
+    pub github_repos: Option<Rc<[GithubRepo]>>,
+    pub github_repos_loading: bool,
+    pub github_repos_error: Option<String>,
+    pub branches: Rc<[GitBranchInfo]>,
     pub branch: BranchChoice,
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub worktree_base: Option<String>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
     pub favorites: Rc<HashSet<String>>,
     pub selected_model: Option<SelectedModel>,
@@ -175,7 +248,17 @@ pub struct FloatingComposerState {
     /// alongside the branch rather than inherited silently.
     pub approval_mode: ApprovalMode,
     /// Staged images, mirrored from the app so the card can paint chips.
-    pub attachments: Rc<Vec<ImageAttachment>>,
+    pub attachments: Rc<[ImageAttachment]>,
+    pub pending_pastes: Vec<PendingPaste>,
+    /// Dictation state, mirrored from the app's STT flow each frame: enabled
+    /// (credentials configured), live take (with elapsed secs), transcribing
+    /// spinner, and the failure text shown like the docked composers'.
+    pub mic_enabled: bool,
+    pub mic_recording: bool,
+    pub mic_elapsed_secs: u32,
+    pub mic_transcribing: bool,
+    pub mic_error: Option<String>,
+    next_paste_id: usize,
     /// The @-file / slash-command popup for the prompt field, if any.
     pub autocomplete: Option<AutocompleteView>,
     /// Content identity of `autocomplete`, so a per-frame rebuild that yields
@@ -184,37 +267,82 @@ pub struct FloatingComposerState {
 }
 
 impl FloatingComposerState {
-    pub fn new(window: &mut Window, cx: &mut App) -> Self {
-        let input = cx.new(|cx| ComposerInput::new(window, cx).placeholder("Describe a task…"));
+    pub fn new(
+        window: &mut Window,
+        cx: &mut App,
+        // Runs when the card's project menu opens — the app fetches the
+        // GitHub repo list here if it was never loaded, the same hook the
+        // docked panes wire onto their own menu handles.
+        on_project_menu_open: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        let input = cx.new(|cx| {
+            let mut input = ComposerInput::new(window, cx)
+                .enable_large_paste_chip()
+                .placeholder("Describe a task…");
+            // Seven prompt lines at the field's 22px line height.
+            input.set_composer_max_height(px(154.0));
+            input
+        });
         let model_search = cx.new(|cx| ComposerInput::new(window, cx).search_field());
 
         Self {
             input,
             model_search,
-            project_menu: ContextMenuHandle::new(cx),
+            project_menu: {
+                let on_open = std::rc::Rc::new(on_project_menu_open);
+                ContextMenuHandle::new(cx).on_toggle(move |open, window, cx| {
+                    if open {
+                        (on_open)(window, cx);
+                    }
+                })
+            },
             branch_menu: ContextMenuHandle::new(cx),
+            worktree_base_menu: ContextMenuHandle::new(cx),
             model_menu: ContextMenuHandle::new(cx),
             thinking_menu: ContextMenuHandle::new(cx),
-            approval_menu: ContextMenuHandle::new(cx),
             picker_tab: PickerTab::Favorites,
             open: false,
             submitting: false,
             error: None,
-            projects: Rc::new(Vec::new()),
+            projects: Rc::from([]),
             selected_project_id: None,
-            branches: Rc::new(Vec::new()),
+            github_repos: None,
+            github_repos_loading: false,
+            github_repos_error: None,
+            branches: Rc::from([]),
             branch: BranchChoice::default(),
-            providers: Rc::new(Vec::new()),
+            worktree_base: None,
+            providers: Rc::from([]),
             models_by_provider: Rc::new(HashMap::new()),
             favorites: Rc::new(HashSet::new()),
             selected_model: None,
             thinking_level: None,
             supported_thinking_levels: Vec::new(),
             approval_mode: ApprovalMode::default(),
-            attachments: Rc::new(Vec::new()),
+            attachments: Rc::from([]),
+            pending_pastes: Vec::new(),
+            mic_enabled: false,
+            mic_recording: false,
+            mic_elapsed_secs: 0,
+            mic_transcribing: false,
+            mic_error: None,
+            next_paste_id: 0,
             autocomplete: None,
             autocomplete_key: None,
         }
+    }
+
+    /// Collapse a large paste into a chip at the caret and hold its text for
+    /// upload at launch.
+    pub fn stage_pending_paste(&mut self, text: String, cx: &mut App) {
+        let lines = text.split('\n').count() - usize::from(text.ends_with('\n'));
+        let label = format!("pasted {} lines", crate::input::thousands(lines));
+        self.next_paste_id += 1;
+        let path = format!("{PENDING_PASTE_PREFIX}{}", self.next_paste_id);
+        self.input.update(cx, |input, cx| {
+            input.insert_paste_mention(0..0, &path, label.clone(), cx);
+        });
+        self.pending_pastes.push(PendingPaste { path, label, text });
     }
 
     /// Push an app-state snapshot in and show the card. Called fresh on every
@@ -223,6 +351,9 @@ impl FloatingComposerState {
         let FloatingSnapshot {
             projects,
             selected_project_id,
+            github_repos,
+            github_repos_loading,
+            github_repos_error,
             branches,
             providers,
             models_by_provider,
@@ -235,6 +366,9 @@ impl FloatingComposerState {
 
         self.projects = projects;
         self.selected_project_id = selected_project_id;
+        self.github_repos = github_repos;
+        self.github_repos_loading = github_repos_loading;
+        self.github_repos_error = github_repos_error;
         self.branches = branches;
         self.providers = providers;
         self.models_by_provider = models_by_provider;
@@ -246,11 +380,13 @@ impl FloatingComposerState {
         // An existing-branch base is a per-launch decision, not a sticky
         // preference — reset it rather than inheriting the last one.
         self.branch = BranchChoice::default();
+        self.worktree_base = None;
         self.submitting = false;
         self.error = None;
         self.autocomplete = None;
         self.autocomplete_key = None;
-        self.attachments = Rc::new(Vec::new());
+        self.attachments = Rc::from([]);
+        self.pending_pastes.clear();
         self.open = true;
 
         self.input.update(cx, |input, cx| {
@@ -274,7 +410,7 @@ impl FloatingComposerState {
     /// equal list must not count as a change. An empty list is compared by
     /// length rather than by `Rc` identity, because the store hands back a
     /// fresh `Rc` for "no attachments" each time.
-    pub fn set_attachments(&mut self, attachments: Rc<Vec<ImageAttachment>>) -> bool {
+    pub fn set_attachments(&mut self, attachments: Rc<[ImageAttachment]>) -> bool {
         let unchanged = self.attachments.len() == attachments.len()
             && (attachments.is_empty() || Rc::ptr_eq(&self.attachments, &attachments));
         if unchanged {
@@ -328,18 +464,29 @@ impl FloatingComposerState {
         FloatingComposerData {
             projects: self.projects.clone(),
             selected_project_id: self.selected_project_id.clone(),
+            github_repos: self.github_repos.clone(),
+            github_repos_loading: self.github_repos_loading,
+            github_repos_error: self.github_repos_error.clone(),
             branches: self.branches.clone(),
             branch: self.branch.clone(),
+            worktree_base: self.worktree_base.clone(),
             providers: self.providers.clone(),
             models_by_provider: self.models_by_provider.clone(),
             favorites: self.favorites.clone(),
             selected_model: self.selected_model.clone(),
             picker_tab: self.picker_tab.clone(),
             model_search_query,
+            // Overwritten per frame by the app, which owns the clone state.
+            repo_cloning: None,
             thinking_level: self.thinking_level,
             supported_thinking_levels: self.supported_thinking_levels.clone(),
             approval_mode: self.approval_mode,
             attachments: self.attachments.clone(),
+            mic_enabled: self.mic_enabled,
+            mic_recording: self.mic_recording,
+            mic_elapsed_secs: self.mic_elapsed_secs,
+            mic_transcribing: self.mic_transcribing,
+            mic_error: self.mic_error.clone(),
             autocomplete: self.autocomplete.clone(),
             submitting: self.submitting,
             error: self.error.clone(),
@@ -358,12 +505,13 @@ impl FloatingComposerState {
         if text.trim().is_empty() {
             return None;
         }
-        let project_id = self.selected_project_id.clone()?;
-        let cwd = self
-            .projects
-            .iter()
-            .find(|p| p.id == project_id)
-            .map(|p| p.path.clone());
+        let project_id = self.selected_project_id.clone();
+        let cwd = project_id.as_ref().and_then(|id| {
+            self.projects
+                .iter()
+                .find(|p| &p.id == id)
+                .map(|p| p.path.clone())
+        });
         // Mentions and staged images are read here, before the field is
         // cleared, so the created session inherits what the user attached.
         let mentions = self.input.read(cx).mentions().to_vec();
@@ -371,9 +519,11 @@ impl FloatingComposerState {
             prompt: text,
             mentions,
             attachments: self.attachments.clone(),
-            project_id: Some(project_id),
+            pending_pastes: self.pending_pastes.clone(),
+            project_id,
             cwd,
             branch: self.branch.clone(),
+            worktree_base: self.worktree_base.clone(),
             model: self.selected_model.clone(),
             thinking_level: self.thinking_level,
             approval_mode: self.approval_mode,
@@ -399,19 +549,32 @@ impl FloatingComposerState {
         if matches!(self.branch, BranchChoice::FromBranch(_)) {
             self.branch = BranchChoice::default();
         }
+        self.worktree_base = None;
+    }
+
+    pub fn choose_no_project(&mut self) {
+        self.selected_project_id = None;
+        self.branches = Rc::from([]);
+        self.branch = BranchChoice::default();
+        self.worktree_base = None;
     }
 
     /// Hand the card a freshly fetched branch list, for after a project switch.
     /// The project itself is already set by `choose_project`; this only
     /// delivers the refs, so the branch menu stops offering the previous
     /// project's branches.
-    pub fn set_branches(&mut self, branches: Rc<Vec<GitBranchInfo>>) {
+    pub fn set_branches(&mut self, branches: Rc<[GitBranchInfo]>) {
         self.branches = branches;
         // The chosen base may not exist in the new project.
         if let BranchChoice::FromBranch(name) = &self.branch
             && !self.branches.iter().any(|b| &b.name == name)
         {
             self.branch = BranchChoice::default();
+        }
+        if let Some(base) = &self.worktree_base
+            && !self.branches.iter().any(|b| &b.name == base)
+        {
+            self.worktree_base = None;
         }
     }
 
@@ -429,7 +592,7 @@ impl FloatingComposerState {
     /// anything changed, so the caller can skip a notify.
     pub fn set_model_catalog(
         &mut self,
-        providers: Rc<Vec<ProviderCatalogEntry>>,
+        providers: Rc<[ProviderCatalogEntry]>,
         models_by_provider: Rc<HashMap<String, Vec<Model>>>,
         favorites: Rc<HashSet<String>>,
     ) -> bool {

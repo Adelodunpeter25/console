@@ -1,10 +1,9 @@
-//! Sidebar and window layout: visibility, width resizing, collapsed date
-//! groups, and window-bounds persistence.
+//! Sidebar and window layout: visibility, width resizing, collapsed project
+//! sections, and window-bounds persistence.
 
 use std::rc::Rc;
 use std::time::Duration;
 
-use console_ui::utils::SessionDateGroup;
 use gpui::{Context, Window};
 
 use super::{ConsoleDesktopApp, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH};
@@ -25,31 +24,33 @@ const WORKSPACES_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 /// a drag still coalesces through [`WINDOW_SAVE_DEBOUNCE`].
 const WINDOW_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
-fn strip_diff_tabs(mut root: console_core::WorkspaceNode) -> console_core::WorkspaceNode {
-    for leaf in root.leaves_mut() {
-        leaf.tabs.retain(|tab| {
-            !matches!(
-                tab,
-                console_core::WorkspaceTabConfig::Diff { .. }
-                    | console_core::WorkspaceTabConfig::ChangesReview { .. }
-            )
-        });
-        if let Some(active) = &leaf.active_tab_id {
-            if active.starts_with("diff:") || active.starts_with("changesReview:") {
-                leaf.active_tab_id = leaf.tabs.last().map(|t| t.id());
-            }
+fn total_tabs(node: &console_core::WorkspaceNode) -> usize {
+    match node {
+        console_core::WorkspaceNode::Leaf(leaf) => leaf.tabs.len(),
+        console_core::WorkspaceNode::Split(split) => {
+            total_tabs(&split.children[0]) + total_tabs(&split.children[1])
         }
     }
-    root
 }
 
 fn clean_root_for_workspace(
-    root: console_core::WorkspaceNode,
+    root: &console_core::WorkspaceNode,
     project_id: &Option<String>,
 ) -> console_core::WorkspaceNode {
-    let mut clean = strip_diff_tabs(root);
+    let mut clean = root.clone();
     // A workspace must never persist tabs pointing at another folder.
+    let before = total_tabs(&clean);
     console_ui::workspace::ops::retain_project_tabs(&mut clean, project_id);
+    let after = total_tabs(&clean);
+    if after < before {
+        // A tab whose folder no longer matches its desk is dropped at write
+        // time. Silent loss here is what made an earlier tab-loss bug look
+        // like a save/restore failure.
+        log::warn!(
+            "workspace {} dropped {before} -> {after} tab(s) with a foreign folder",
+            project_id.as_deref().unwrap_or("<none>"),
+        );
+    }
     clean
 }
 
@@ -63,33 +64,14 @@ impl ConsoleDesktopApp {
         persistence::layout::save(persistence::PersistedLayoutState {
             sidebar_visible: self.sidebar_visible,
             sidebar_width: self.sidebar_width,
-            right_sidebar_visible: self.right_sidebar_visible,
-            right_sidebar_width: self.right_sidebar_width,
-            right_sidebar_bottom_height: self.right_sidebar_bottom_height,
-            collapsed_groups: self
-                .collapsed_groups
-                .iter()
-                .map(|group| group.index())
-                .collect(),
-            sidebar_sort_mode: self.sidebar_sort_mode.label().to_string(),
+            active_workspace_id: Some(
+                self.selected_project_id
+                    .clone()
+                    .unwrap_or_else(|| "__default__".to_string()),
+            ),
             collapsed_projects: self.collapsed_projects.iter().cloned().collect(),
-            open_auxiliary_tabs: self.inspector_open_auxiliary_tabs.clone(),
-        });
-        let cur_wid = self
-            .selected_project_id
-            .clone()
-            .unwrap_or_else(|| "__default__".to_string());
-        // Build the document from memory: every field comes from live state,
-        // so no disk re-read is needed to preserve anything.
-        persistence::save_workspace_state(&persistence::WorkspaceStateDocument {
-            version: 1,
-            active_workspace_id: Some(cur_wid),
-            sidebar_visible: self.sidebar_visible,
-            sidebar_width: self.sidebar_width,
-            right_sidebar_visible: self.right_sidebar_visible,
-            right_sidebar_width: self.right_sidebar_width,
-            right_sidebar_bottom_height: self.right_sidebar_bottom_height,
-            right_sidebar_bottom_collapsed: self.right_sidebar_bottom_collapsed,
+            pinned_collapsed: self.pinned_collapsed,
+            workspaces_collapsed: self.workspaces_collapsed,
         });
     }
 
@@ -100,7 +82,7 @@ impl ConsoleDesktopApp {
         if !self.is_main_window {
             return;
         }
-        let Some(bytes) = self.serialized_workspaces() else {
+        let Some((document, bytes)) = self.serialized_workspaces() else {
             return;
         };
         // Skip redundant writes: tab actions often persist without changes.
@@ -123,7 +105,7 @@ impl ConsoleDesktopApp {
             self.workspaces_dirty.set(true);
             return;
         }
-        self.write_workspaces_bytes(bytes);
+        self.write_workspaces(document, bytes);
     }
 
     /// Render-loop trailing flush for throttled workspace saves. Called from
@@ -134,7 +116,7 @@ impl ConsoleDesktopApp {
             return;
         }
         self.workspaces_dirty.set(false);
-        let Some(bytes) = self.serialized_workspaces() else {
+        let Some((document, bytes)) = self.serialized_workspaces() else {
             return;
         };
         if self
@@ -145,19 +127,19 @@ impl ConsoleDesktopApp {
         {
             return;
         }
-        self.write_workspaces_bytes(bytes);
+        self.write_workspaces(document, bytes);
     }
 
     /// Serialize the persistable workspace document (compact JSON bytes), or
     /// `None` when serialization fails (nothing is written then).
-    fn serialized_workspaces(&self) -> Option<Vec<u8>> {
+    fn serialized_workspaces(&self) -> Option<(persistence::WorkspacesDocument, Vec<u8>)> {
         let mut workspaces_map = std::collections::HashMap::new();
 
         for (proj_id_opt, root) in &self.project_workspace_roots {
             let wid = proj_id_opt
                 .clone()
                 .unwrap_or_else(|| "__default__".to_string());
-            let clean_root = clean_root_for_workspace(root.clone(), proj_id_opt);
+            let clean_root = clean_root_for_workspace(root, proj_id_opt);
             // Remembered split focus when still present, else the first leaf.
             // The top-level active tab follows that pane (not always the first).
             let pane_id = self
@@ -231,7 +213,7 @@ impl ConsoleDesktopApp {
             .clone()
             .unwrap_or_else(|| "__default__".to_string());
         let clean_cur_root =
-            clean_root_for_workspace(self.workspace_root.clone(), &self.selected_project_id);
+            clean_root_for_workspace(&self.workspace_root, &self.selected_project_id);
         let cur_pane_id = self
             .active_pane_id
             .clone()
@@ -254,7 +236,7 @@ impl ConsoleDesktopApp {
             .and_then(|key| self.workspace_path_for_key(key))
             .or_else(|| cur_proj.map(|p| p.path.clone()))
             .or_else(|| {
-                let (_, cwd) = self.active_inspector_target();
+                let (_, cwd) = self.active_pane_target();
                 cwd
             });
         let (cur_term_count, cur_term_active_idx) = cur_cwd
@@ -289,7 +271,7 @@ impl ConsoleDesktopApp {
         workspaces_map.insert(
             cur_wid.clone(),
             persistence::PersistedWorkspace {
-                id: cur_wid.clone(),
+                id: cur_wid,
                 project_id: self.selected_project_id.clone(),
                 cwd: cur_cwd,
                 name: cur_proj.map(|p| p.name.clone()),
@@ -304,28 +286,18 @@ impl ConsoleDesktopApp {
 
         let doc = persistence::WorkspacesDocument {
             version: 1,
-            active_workspace_id: Some(cur_wid),
             workspaces: workspaces_map.into_values().collect(),
         };
-        serde_json::to_vec(&doc).ok()
+        let bytes = serde_json::to_vec(&doc).ok()?;
+        Some((doc, bytes))
     }
 
-    /// Record + write already-serialized workspace bytes.
-    fn write_workspaces_bytes(&self, bytes: Vec<u8>) {
-        *self.persisted_workspaces_bytes.borrow_mut() = Some(bytes.clone());
+    /// Record + write the workspace section.
+    fn write_workspaces(&self, document: persistence::WorkspacesDocument, bytes: Vec<u8>) {
+        *self.persisted_workspaces_bytes.borrow_mut() = Some(bytes);
         self.last_workspaces_persist
             .set(Some(std::time::Instant::now()));
-        persistence::save_workspaces_bytes(&bytes);
-    }
-
-    /// Collapse or expand a sidebar date group.
-    pub fn toggle_sidebar_group(&mut self, group: SessionDateGroup, cx: &mut Context<Self>) {
-        let collapsed = Rc::make_mut(&mut self.collapsed_groups);
-        if !collapsed.remove(&group) {
-            collapsed.insert(group);
-        }
-        self.persist_layout();
-        cx.notify();
+        persistence::save_workspaces(document);
     }
 
     /// Collapse or expand a sidebar project section (`project id`, or "none"
@@ -339,9 +311,14 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// Switch the sidebar session sort axis, persisting the choice.
-    pub fn toggle_sidebar_sort_mode(&mut self, cx: &mut Context<Self>) {
-        self.sidebar_sort_mode = self.sidebar_sort_mode.toggle();
+    pub fn toggle_sidebar_pinned(&mut self, cx: &mut Context<Self>) {
+        self.pinned_collapsed = !self.pinned_collapsed;
+        self.persist_layout();
+        cx.notify();
+    }
+
+    pub fn toggle_sidebar_workspaces(&mut self, cx: &mut Context<Self>) {
+        self.workspaces_collapsed = !self.workspaces_collapsed;
         self.persist_layout();
         cx.notify();
     }
@@ -475,26 +452,35 @@ impl ConsoleDesktopApp {
         self.persist_window_state(window, cx);
     }
 
+    /// Write every debounced section now. Runs before the process exits, where
+    /// the render loop will not get another frame to flush them.
+    pub(crate) fn flush_state_for_exit(&mut self) {
+        if !self.is_main_window {
+            return;
+        }
+        self.flush_pending_window_state();
+        self.persist_layout();
+        self.workspaces_dirty.set(false);
+        let Some((document, bytes)) = self.serialized_workspaces() else {
+            return;
+        };
+        let unchanged = self
+            .persisted_workspaces_bytes
+            .borrow()
+            .as_deref()
+            .is_some_and(|last| last == bytes.as_slice());
+        if !unchanged {
+            self.write_workspaces(document, bytes);
+        }
+    }
+
     fn flush_pending_window_state(&mut self) {
         if let Some(state) = self.pending_window_state.take() {
             persistence::window::save(state);
             self.saved_window_state = Some(state);
-            let cur_wid = self
-                .selected_project_id
-                .clone()
-                .unwrap_or_else(|| "__default__".to_string());
             // Same no-re-read rule as `persist_layout`: every field comes
             // from live state, including the bottom-split fields.
-            persistence::save_workspace_state(&persistence::WorkspaceStateDocument {
-                version: 1,
-                active_workspace_id: Some(cur_wid),
-                sidebar_visible: self.sidebar_visible,
-                sidebar_width: self.sidebar_width,
-                right_sidebar_visible: self.right_sidebar_visible,
-                right_sidebar_width: self.right_sidebar_width,
-                right_sidebar_bottom_height: self.right_sidebar_bottom_height,
-                right_sidebar_bottom_collapsed: self.right_sidebar_bottom_collapsed,
-            });
+            self.persist_layout();
         }
     }
 }

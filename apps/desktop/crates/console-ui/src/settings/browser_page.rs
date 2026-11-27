@@ -75,7 +75,11 @@ impl RenderOnce for BrowserPage {
                         .child(format!(
                             "{} {} in history",
                             self.history_count,
-                            if self.history_count == 1 { "site" } else { "sites" }
+                            if self.history_count == 1 {
+                                "site"
+                            } else {
+                                "sites"
+                            }
                         )),
                 )
                 .child(
@@ -240,7 +244,11 @@ impl RenderOnce for BrowserPage {
                                 .when(!self.importing && self.selected_profile.is_some(), |el| {
                                     el.hover(|s| s.opacity(0.9))
                                 })
-                                .child(if self.importing { "Importing…" } else { "Import" })
+                                .child(if self.importing {
+                                    "Importing…"
+                                } else {
+                                    "Import"
+                                })
                                 .tooltip(Tooltip::text(
                                     "Import history and cookies from the selected profile",
                                 ))

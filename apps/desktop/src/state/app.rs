@@ -4,12 +4,10 @@
 //! domain handlers live in sibling modules (`projects`, `attachments`,
 //! `errors`, `sessions`, `layout`, `run`) as additional `impl` blocks.
 
-use crate::persistence;
 use crate::types::WorkspacePaneState;
 use console_core::{AgentMessage, ApprovalMode, ConsoleClient, WorkspaceNode};
 use console_ui::common::input::PromptHistoryEntry;
 use console_ui::markdown::render::TranscriptSelection;
-use console_ui::utils::SessionDateGroup;
 use console_ui::{
     CommandPalette, ComposerAttachmentPaste, ComposerEvent, ComposerInput, ContextMenuHandle,
     FloatingComposerState, GlobalSearchPanel, PickerTab, ProjectBrowsePalette, QuickOpenPalette,
@@ -23,16 +21,17 @@ use std::rc::Rc;
 /// with the full paths of any file mentions it carried, so recalling an
 /// older prompt from history can rebuild its mention chips, plus the id of
 /// the user message it became so the app can re-stage its image attachments.
-pub(crate) fn user_prompt_history(messages: &[AgentMessage]) -> Vec<PromptHistoryEntry> {
-    messages
+pub(crate) fn user_prompt_history(turns: &[console_core::Turn]) -> Vec<PromptHistoryEntry> {
+    turns
         .iter()
-        .filter_map(|message| match message {
-            AgentMessage::User {
+        .filter_map(|turn| match turn.user.as_ref() {
+            Some(AgentMessage::User {
                 id,
                 content,
                 context_files,
+                source: None,
                 ..
-            } => Some(PromptHistoryEntry::new(
+            }) => Some(PromptHistoryEntry::new(
                 content.clone(),
                 context_files.clone().unwrap_or_default(),
                 id.clone(),
@@ -48,23 +47,20 @@ const SIDEBAR_DEFAULT_WIDTH: f32 = 260.0;
 pub(crate) const SIDEBAR_MIN_WIDTH: f32 = 180.0;
 /// Shared with `layout` for clamping the sidebar's drag-resize width.
 pub(crate) const SIDEBAR_MAX_WIDTH: f32 = 520.0;
-pub(crate) const RIGHT_SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
-pub(crate) const RIGHT_SIDEBAR_MIN_WIDTH: f32 = 220.0;
-pub(crate) const RIGHT_SIDEBAR_MAX_WIDTH: f32 = 550.0;
-pub(crate) const RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT: f32 = 180.0;
-pub(crate) const RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT: f32 = 100.0;
-pub(crate) const RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT: f32 = 450.0;
 
 pub use super::types::{ConsoleDesktopApp, ImageFileState};
 
 impl ConsoleDesktopApp {
-    pub fn new(
+    pub(crate) fn new(
         window: &mut Window,
         target: crate::window::WindowLaunchTarget,
+        startup: crate::persistence::StartupState,
         cx: &mut Context<Self>,
     ) -> Self {
         let client = ConsoleClient::new(None);
-        let ws_doc = persistence::load_workspaces();
+        console_ui::chat::set_workspace_image_client(&client);
+        console_ui::chat::set_html_render_client(&client);
+        let ws_doc = startup.workspaces.clone();
         let mut project_workspace_roots = std::collections::HashMap::new();
         let mut project_active_panes = std::collections::HashMap::new();
         let mut persisted_bottom_terminals = std::collections::HashMap::new();
@@ -77,10 +73,22 @@ impl ConsoleDesktopApp {
             // The settings took over the window; a Settings tab saved by an
             // older build must not come back as one.
             console_ui::workspace::ops::retain_non_settings_tabs(&mut root);
-            if let Some(pane_id) = ws.active_pane_id {
-                if root.leaves().iter().any(|leaf| leaf.id == pane_id) {
-                    project_active_panes.insert(ws.project_id.clone(), pane_id);
-                }
+            // Desks saved by an older build all shared one pane id, which made
+            // pane state — drafts, staged comments, the loaded branch — bleed
+            // between desks. Namespace each desk's panes under its key.
+            let renames = console_core::namespace_pane_ids(&mut root, &ws.project_id);
+            let active_pane_id = ws
+                .active_pane_id
+                .map(|pane_id| {
+                    renames
+                        .iter()
+                        .find(|(old, _)| old == &pane_id)
+                        .map(|(_, new)| new.clone())
+                        .unwrap_or(pane_id)
+                })
+                .filter(|pane_id| root.leaves().iter().any(|leaf| leaf.id == *pane_id));
+            if let Some(pane_id) = active_pane_id {
+                project_active_panes.insert(ws.project_id.clone(), pane_id);
             }
             project_workspace_roots.insert(ws.project_id, root);
             if let Some(cwd) = ws.cwd {
@@ -94,70 +102,27 @@ impl ConsoleDesktopApp {
                 }
             }
         }
-        let ws_state = persistence::load_workspace_state();
-        // One read of state.json split in memory: window, layout, drafts and
-        // environments previously re-read + re-parsed the same file each.
-        let store_doc = persistence::read_document();
-        let layout = store_doc.layout.clone().unwrap_or_default();
+        // The window frame, the sidebar layout, the workspace tree, the
+        // servers and the drafts all come from one read of the state file.
+        let layout = startup.layout.clone();
 
         let (
             sidebar_visible,
             sidebar_width,
-            right_sidebar_visible,
-            right_sidebar_width,
-            right_sidebar_bottom_height,
-            right_sidebar_bottom_collapsed,
             initial_selected_project_id,
             initial_root,
             initial_saved_window_state,
         ) = match &target {
             crate::window::WindowLaunchTarget::RestorePersisted => {
-                let sb_visible = ws_state.sidebar_visible;
-                let sb_width = if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0
-                {
-                    ws_state
-                        .sidebar_width
-                        .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
-                } else if layout.sidebar_width.is_finite() {
+                let sb_visible = layout.sidebar_visible;
+                let sb_width = if layout.sidebar_width.is_finite() && layout.sidebar_width > 0.0 {
                     layout
                         .sidebar_width
                         .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
                 } else {
                     SIDEBAR_DEFAULT_WIDTH
                 };
-                let rsb_visible = ws_state.right_sidebar_visible;
-                let rsb_width = if ws_state.right_sidebar_width.is_finite()
-                    && ws_state.right_sidebar_width > 0.0
-                {
-                    ws_state
-                        .right_sidebar_width
-                        .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
-                } else if layout.right_sidebar_width.is_finite() {
-                    layout
-                        .right_sidebar_width
-                        .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
-                } else {
-                    RIGHT_SIDEBAR_DEFAULT_WIDTH
-                };
-                let rsb_bottom_height = if ws_state.right_sidebar_bottom_height.is_finite()
-                    && ws_state.right_sidebar_bottom_height > 0.0
-                {
-                    ws_state.right_sidebar_bottom_height.clamp(
-                        RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
-                        RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
-                    )
-                } else if layout.right_sidebar_bottom_height.is_finite()
-                    && layout.right_sidebar_bottom_height > 0.0
-                {
-                    layout.right_sidebar_bottom_height.clamp(
-                        RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
-                        RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
-                    )
-                } else {
-                    RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
-                };
-                let rsb_bottom_collapsed = ws_state.right_sidebar_bottom_collapsed;
-                let proj_id = ws_state.active_workspace_id.as_ref().and_then(|wid| {
+                let proj_id = layout.active_workspace_id.as_ref().and_then(|wid| {
                     if wid == "__default__" {
                         None
                     } else {
@@ -169,57 +134,21 @@ impl ConsoleDesktopApp {
                     .and_then(|pid| project_workspace_roots.get(&Some(pid.clone())).cloned())
                     .or_else(|| project_workspace_roots.get(&None).cloned())
                     .unwrap_or_else(|| WorkspaceNode::leaf("pane-main"));
-                (
-                    sb_visible,
-                    sb_width,
-                    rsb_visible,
-                    rsb_width,
-                    rsb_bottom_height,
-                    rsb_bottom_collapsed,
-                    proj_id,
-                    root,
-                    store_doc.window.clone(),
-                )
+                (sb_visible, sb_width, proj_id, root, startup.window)
             }
             crate::window::WindowLaunchTarget::Fresh { .. }
             | crate::window::WindowLaunchTarget::Session(_) => {
-                let sb_visible = ws_state.sidebar_visible;
-                let sb_width = if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0
-                {
-                    ws_state
+                let sb_visible = layout.sidebar_visible;
+                let sb_width = if layout.sidebar_width.is_finite() && layout.sidebar_width > 0.0 {
+                    layout
                         .sidebar_width
                         .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
                 } else {
                     SIDEBAR_DEFAULT_WIDTH
                 };
-                let rsb_visible = ws_state.right_sidebar_visible;
-                let rsb_width = if ws_state.right_sidebar_width.is_finite()
-                    && ws_state.right_sidebar_width > 0.0
-                {
-                    ws_state
-                        .right_sidebar_width
-                        .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
-                } else {
-                    RIGHT_SIDEBAR_DEFAULT_WIDTH
-                };
-                let rsb_bottom_height = if ws_state.right_sidebar_bottom_height.is_finite()
-                    && ws_state.right_sidebar_bottom_height > 0.0
-                {
-                    ws_state.right_sidebar_bottom_height.clamp(
-                        RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
-                        RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
-                    )
-                } else {
-                    RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
-                };
-                let rsb_bottom_collapsed = ws_state.right_sidebar_bottom_collapsed;
                 (
                     sb_visible,
                     sb_width,
-                    rsb_visible,
-                    rsb_width,
-                    rsb_bottom_height,
-                    rsb_bottom_collapsed,
                     None,
                     WorkspaceNode::leaf("pane-main"),
                     None,
@@ -234,7 +163,7 @@ impl ConsoleDesktopApp {
             .filter(|id| initial_root.leaves().iter().any(|leaf| &leaf.id == id))
             .or_else(|| initial_root.first_leaf().map(|l| l.id.clone()))
             .or_else(|| Some("pane-main".into()));
-        let transcript_view = cx.new(|cx| TranscriptView::new(cx));
+        let transcript_view = cx.new(TranscriptView::new);
         let composer_input = cx.new(|cx| {
             ComposerInput::new(window, cx)
                 .enable_large_paste_chip()
@@ -250,6 +179,11 @@ impl ConsoleDesktopApp {
                 .search_field()
                 .placeholder("Rename session")
         });
+        let sidebar_search_input = cx.new(|cx| {
+            ComposerInput::new(window, cx)
+                .search_field()
+                .placeholder("Search sessions...")
+        });
         // Search field inside the model picker popover. Cleared each time the
         // popover opens and focused a couple of frames later, once the deferred
         // popover subtree has joined the dispatch tree.
@@ -260,20 +194,23 @@ impl ConsoleDesktopApp {
         });
         let entity = cx.entity().downgrade();
         {
-            let entity = entity.clone();
+            let transcript_entity = entity.clone();
             transcript_view.update(cx, |transcript, _| {
-                super::transcript_wiring::wire_preview_image(transcript, entity.clone());
-                super::transcript_wiring::wire_view_subagent(transcript, entity.clone());
+                super::transcript_wiring::wire_preview_image(transcript, transcript_entity.clone());
+                super::transcript_wiring::wire_view_subagent(transcript, transcript_entity.clone());
                 super::transcript_wiring::wire_open_file_for_active_pane(
                     transcript,
-                    entity.clone(),
+                    transcript_entity.clone(),
                 );
                 super::transcript_wiring::wire_open_change_for_active_pane(
                     transcript,
-                    entity.clone(),
+                    transcript_entity.clone(),
                 );
-                super::transcript_wiring::wire_fork_for_active_pane(transcript, entity.clone());
-                super::transcript_wiring::wire_cite_for_active_pane(transcript, entity.clone());
+                super::transcript_wiring::wire_fork_for_active_pane(
+                    transcript,
+                    transcript_entity.clone(),
+                );
+                super::transcript_wiring::wire_cite_for_active_pane(transcript, transcript_entity);
             });
         }
         let model_menu = ContextMenuHandle::new(cx).on_toggle({
@@ -284,9 +221,8 @@ impl ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         cx.defer(move |cx| {
                             if let Some(window) = cx.active_window() {
-                                let _ = window.update(cx, |_, window, cx| {
+                                let _ = window.update(cx, |_, _window, cx| {
                                     app.update(cx, |this, cx| {
-                                        this.approval_menu.close(window, cx);
                                         // Lazy: fetch only the active provider's live models.
                                         // Static catalog stays visible as fallback, so we
                                         // avoid N network calls on every open. Favorites
@@ -321,116 +257,78 @@ impl ConsoleDesktopApp {
                 }
             }
         });
-        let approval_menu = ContextMenuHandle::new(cx).on_toggle({
-            let entity = entity.clone();
-            move |open, _window, cx| {
-                if open {
-                    if let Some(app) = entity.upgrade() {
-                        cx.defer(move |cx| {
-                            if let Some(window) = cx.active_window() {
-                                let _ = window.update(cx, |_, window, cx| {
-                                    app.update(cx, |this, cx| this.model_menu.close(window, cx));
-                                });
-                            }
-                        });
-                    }
-                }
-            }
-        });
         let project_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
             move |open, _window, cx| {
-                if open {
-                    if let Some(app) = entity.upgrade() {
-                        cx.defer(move |cx| {
-                            if let Some(window) = cx.active_window() {
-                                let _ = window.update(cx, |_, window, cx| {
-                                    app.update(cx, |this, cx| this.branch_menu.close(window, cx));
-                                });
-                            }
-                        });
-                    }
+                if open && let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.ensure_github_repos(cx));
+                    cx.defer(move |cx| {
+                        if let Some(window) = cx.active_window() {
+                            let _ = window.update(cx, |_, window, cx| {
+                                app.update(cx, |this, cx| this.branch_menu.close(window, cx));
+                            });
+                        }
+                    });
                 }
             }
         });
         let branch_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
             move |open, _window, cx| {
-                if open {
-                    if let Some(app) = entity.upgrade() {
-                        cx.defer(move |cx| {
-                            if let Some(window) = cx.active_window() {
-                                let _ = window.update(cx, |_, window, cx| {
-                                    app.update(cx, |this, cx| this.project_menu.close(window, cx));
-                                });
-                            }
+                if open && let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        let session_cwd = this
+                            .active_session_for_pane("pane-main")
+                            .and_then(|sid| this.sessions.iter().find(|s| s.id == sid))
+                            .map(|s| s.cwd.clone())
+                            .filter(|cwd| !cwd.is_empty());
+                        let target_cwd = session_cwd.or_else(|| {
+                            this.selected_project_for_pane("pane-main")
+                                .map(|project| project.path)
                         });
-                    }
+                        if let Some(cwd) = target_cwd {
+                            this.reload_branches_for_pane("pane-main".to_string(), cwd, cx);
+                        }
+                    });
+                    cx.defer(move |cx| {
+                        if let Some(window) = cx.active_window() {
+                            let _ = window.update(cx, |_, window, cx| {
+                                app.update(cx, |this, cx| this.project_menu.close(window, cx));
+                            });
+                        }
+                    });
                 }
             }
         });
         let usage_menu = ContextMenuHandle::new(cx).on_toggle({
-            let entity = entity.clone();
+            let entity = entity;
             move |open, _window, cx| {
-                if open {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            let session_id = this
-                                .active_session_for_pane("pane-main")
-                                .unwrap_or_default();
-                            this.maybe_fetch_usage(&session_id, cx);
-                            this.fetch_context_usage(&session_id, cx);
-                        });
-                    }
+                if open && let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        let session_id = this
+                            .active_session_for_pane("pane-main")
+                            .unwrap_or_default();
+                        this.maybe_fetch_usage(&session_id, cx);
+                        this.fetch_context_usage(&session_id, cx);
+                    });
                 }
             }
         });
+        let thinking_menu = ContextMenuHandle::new(cx);
 
         let tasks_menu = ContextMenuHandle::new(cx);
         let subagents_menu = ContextMenuHandle::new(cx);
         let shells_menu = ContextMenuHandle::new(cx);
+        let automations_menu = ContextMenuHandle::new(cx);
 
-        let drafts = store_doc.drafts.map(|s| s.drafts).unwrap_or_default();
-        // All persisted drafts (except new_chat) are already confirmed for sidebar display.
-        let sidebar_draft_ids: std::collections::HashSet<String> = drafts
-            .keys()
-            .filter(|k| k.as_str() != "new_chat" && !drafts[*k].prompt.trim().is_empty())
-            .cloned()
-            .collect();
-        if let Some(initial_draft) = drafts.get("new_chat") {
-            if !initial_draft.prompt.trim().is_empty() || !initial_draft.context_files.is_empty() {
-                let mentions = initial_draft
-                    .mentions
-                    .iter()
-                    .map(|mention| console_ui::ComposerMention {
-                        range: mention.start..mention.end,
-                        path: mention.path.clone(),
-                        label: mention.label.clone().unwrap_or_else(|| {
-                            std::path::Path::new(&mention.path)
-                                .file_name()
-                                .and_then(|n| n.to_str())
-                                .unwrap_or(&mention.path)
-                                .to_string()
-                        }),
-                    })
-                    .collect();
-                let context_files = initial_draft.context_files.clone();
-                composer_input.update(cx, |input, cx| {
-                    input.set_content_with_mentions(initial_draft.prompt.clone(), mentions, cx);
-                    input.set_context_files(context_files);
-                    cx.notify();
-                });
-            }
-        }
+        let drafts = std::collections::HashMap::new();
+        let sidebar_draft_ids = std::collections::HashSet::new();
 
-        // Flush unsaved drafts when the app quits: the 500ms debounced save
-        // can be cut short by an exit, losing the last edit (e.g. a
-        // just-cited quote).
-        let drafts_quit_subscription = cx.on_app_quit(|this, _| {
-            let drafts = this.drafts.clone();
-            async move {
-                crate::persistence::store::save_drafts(drafts);
-            }
+        let drafts_quit_subscription = cx.on_app_quit(|this, cx| {
+            this.flush_state_for_exit();
+            this.snapshot_visible_pane_scrolls(cx);
+            this.persist_transcript_scroll();
+            async move {}
         });
 
         let subscriptions = vec![
@@ -438,7 +336,11 @@ impl ConsoleDesktopApp {
             cx.observe_window_activation(window, |this, window, cx| {
                 this.is_window_active = window.is_window_active();
                 if this.is_window_active {
-                    crate::state::clear_all_notifications();
+                    // The chat in front of the user is seen the moment the
+                    // window returns, whatever finished while they were away.
+                    // Reading it clears its own banner; the banners of chats
+                    // the user has not opened stay until they are.
+                    this.report_read_for_active_chat(cx);
                 }
                 cx.notify();
             }),
@@ -450,26 +352,31 @@ impl ConsoleDesktopApp {
                         // submitting so attachments and run state resolve
                         // against the chat this input is mounted in.
                         let context_files = context_files.clone();
-                        this.active_pane_id = Some("pane-main".to_string());
-                        this.selected_session_id = this.active_session_for_pane("pane-main");
                         let pane_id = "pane-main".to_string();
+                        let prompt = this.prompt_with_staged_comments(&pane_id, prompt, cx);
+                        if prompt.trim().is_empty() {
+                            return;
+                        }
+                        this.reveal_chat_for_pane(&pane_id, cx);
+                        this.active_pane_id = Some(pane_id.clone());
+                        this.selected_session_id = this.active_session_for_pane(&pane_id);
                         if this.is_active_session_running_for_pane(&pane_id) {
-                            let attachments = (*this.attachments_for_pane(&pane_id)).clone();
-                            let annotations = (*this.annotations_for_pane(&pane_id)).clone();
+                            let attachments = this.attachments_for_pane(&pane_id).to_vec();
+                            let annotations = this.annotations_for_pane(&pane_id).to_vec();
                             this.queue_prompt_for_pane(
                                 pane_id,
-                                prompt.clone(),
+                                prompt,
                                 attachments,
                                 annotations,
-                                context_files.clone(),
+                                context_files,
                                 cx,
                             );
                             return;
                         }
-                        let attachments = (*this.attachments_for_pane("pane-main")).clone();
-                        let annotations = (*this.annotations_for_pane("pane-main")).clone();
+                        let attachments = this.attachments_for_pane(&pane_id).to_vec();
+                        let annotations = this.annotations_for_pane(&pane_id).to_vec();
                         this.submit_prompt_with_context(
-                            prompt.clone(),
+                            prompt,
                             attachments,
                             annotations,
                             context_files,
@@ -477,17 +384,13 @@ impl ConsoleDesktopApp {
                         );
                     }
                     ComposerEvent::SubmitSteer(prompt, context_files) => {
-                        this.active_pane_id = Some("pane-main".to_string());
-                        this.selected_session_id = this.active_session_for_pane("pane-main");
-                        this.submit_steer_for_pane(
-                            "pane-main".to_string(),
-                            prompt.clone(),
-                            context_files.clone(),
-                            cx,
-                        );
+                        let pane_id = "pane-main".to_string();
+                        let prompt = this.prompt_with_staged_comments(&pane_id, prompt, cx);
+                        this.active_pane_id = Some(pane_id.clone());
+                        this.selected_session_id = this.active_session_for_pane(&pane_id);
+                        this.submit_steer_for_pane(pane_id, prompt, context_files.clone(), cx);
                     }
                     ComposerEvent::Edited => {
-                        // Save raw text for crash safety; does NOT update sidebar_draft_ids.
                         let input = input.read(cx);
                         let text = input.content().to_string();
                         let mentions = input.mentions().to_vec();
@@ -503,6 +406,9 @@ impl ConsoleDesktopApp {
                             &annotations,
                             cx,
                         );
+                        if let Some(session_id) = session_id {
+                            this.schedule_draft_push(session_id, cx);
+                        }
                     }
                     ComposerEvent::Focus => cx.notify(),
                     // Backspace on an empty composer removes the last staged
@@ -519,7 +425,9 @@ impl ConsoleDesktopApp {
                             .clone()
                             .unwrap_or_else(|| "pane-main".to_string());
                         if let Some(staged) = this.attachments.get_mut(&pane_id) {
-                            Rc::make_mut(staged).pop();
+                            super::types::rc_slice_edit(staged, |v| {
+                                v.pop();
+                            });
                             if staged.is_empty() {
                                 this.attachments.remove(&pane_id);
                             }
@@ -557,6 +465,18 @@ impl ConsoleDesktopApp {
                 },
             ),
             cx.subscribe(
+                &composer_input,
+                |this, _input, event: &console_ui::input::ComposerImagesRemoved, cx| {
+                    this.remove_images_by_number("pane-main", &event.0, cx);
+                },
+            ),
+            cx.subscribe(
+                &composer_input,
+                |this, _input, event: &console_ui::input::ComposerImagePreview, cx| {
+                    this.preview_attachment("pane-main", event.0 - 1, cx);
+                },
+            ),
+            cx.subscribe(
                 &question_input,
                 |this, _input, event: &ComposerEvent, cx| match event {
                     // Typing is repainted by the input entity itself; a full
@@ -585,49 +505,69 @@ impl ConsoleDesktopApp {
                     _ => {}
                 },
             ),
+            cx.subscribe(
+                &sidebar_search_input,
+                |this, _input, event: &ComposerEvent, cx| match event {
+                    ComposerEvent::Edited => {
+                        let q = this.sidebar_search_input.read(cx).content().to_string();
+                        this.on_sidebar_search_query_changed(q, cx);
+                    }
+                    ComposerEvent::Submit(..) => {
+                        this.open_first_search_result(cx);
+                    }
+                    _ => {}
+                },
+            ),
         ];
 
         let client_for_palettes = client.clone();
         // A single card is open at a time; the shared prompt field is reused so
         // opening one comment never leaves a stale focus handle behind.
         let (file_comment_tx, file_comment_rx) = tokio::sync::mpsc::unbounded_channel();
+        // Editor saves go out through the API; the channel keeps the
+        // package's synchronous save handler from blocking on I/O.
+        let (file_save_tx, file_save_rx) = tokio::sync::mpsc::unbounded_channel();
         // The browser suggestion source starts from the persisted history.
         crate::state::chrome_import::init_from_disk();
         let mut app = Self {
             client,
-            transport: console_core::services::Transport::default(),
-            sessions: Rc::new(Vec::new()),
+            transport: console_core::services::Transport,
+            sessions: Rc::from([]),
             selected_session_id: None,
             session_rename_id: None,
             session_rename_input,
+            sidebar_search_active: false,
+            sidebar_search_query: String::new(),
+            sidebar_search_input,
+            sidebar_search_task: None,
+            palette_search_task: None,
             workspace_root: initial_root,
             project_workspace_roots,
             project_active_panes,
             workspaces_dirty: std::cell::Cell::new(false),
             last_workspaces_persist: std::cell::Cell::new(None),
             persisted_workspaces_bytes: std::cell::RefCell::new(None),
-            drafts_save_pending: false,
             drafts_push_pending: std::collections::HashSet::new(),
             pending_project_override: std::collections::HashMap::new(),
             active_pane_id: initial_active_pane_id,
-            providers: Rc::new(Vec::new()),
+            providers: Rc::from([]),
             models_by_provider: Rc::new(std::collections::HashMap::new()),
             loading_models: std::collections::HashSet::new(),
             selected_model: None,
-            active_picker_tab: PickerTab::Provider("antigravity".to_string()),
+            active_picker_tab: PickerTab::Favorites,
             favorites: Rc::new(std::collections::HashSet::new()),
-            approval_mode: ApprovalMode::AlwaysAsk,
-            approval_mode_history: Vec::new(),
+            approval_mode: ApprovalMode::default(),
             thinking_level: None,
             model_menu,
-            approval_menu,
+            thinking_menu,
             usage_menu,
             tasks_menu,
             subagents_menu,
             shells_menu,
-            projects: Rc::new(Vec::new()),
+            automations_menu,
+            projects: Rc::from([]),
             selected_project_id: initial_selected_project_id,
-            branches: Rc::new(Vec::new()),
+            branches: Rc::from([]),
             branch_loaded: false,
             branch_is_git_repository: false,
             branch_pending: false,
@@ -637,6 +577,7 @@ impl ConsoleDesktopApp {
             workspace_pane_states: std::collections::HashMap::new(),
             autocomplete_states: std::collections::HashMap::new(),
             transcript_scroll_positions: std::collections::HashMap::new(),
+            transcript_scroll_save_pending: std::cell::Cell::new(false),
             transcript_pagination: std::collections::HashMap::new(),
             pagination_in_flight: std::collections::HashSet::new(),
             composer_input,
@@ -645,11 +586,13 @@ impl ConsoleDesktopApp {
             browser_annotations: std::collections::HashMap::new(),
             history_draft_attachments: std::collections::HashMap::new(),
             history_draft_annotations: std::collections::HashMap::new(),
-            pending_permissions: std::collections::HashMap::new(),
             pending_questions: std::collections::HashMap::new(),
+            answered_question_ids: std::collections::HashSet::new(),
             question_selected: std::collections::HashMap::new(),
             todo_items: std::collections::HashMap::new(),
             queued_prompts: std::collections::HashMap::new(),
+            suggestions: std::collections::HashMap::new(),
+            pills_scrolls: std::collections::HashMap::new(),
             agent_notices: std::collections::HashMap::new(),
             error_message: None,
             session_errors: std::collections::HashMap::new(),
@@ -657,58 +600,65 @@ impl ConsoleDesktopApp {
             error_generation: 0,
             zoomed_image: None,
             running_sessions: std::collections::HashMap::new(),
+            wake_records: std::collections::HashMap::new(),
+            wake_boundary_pushed_at: std::collections::HashMap::new(),
             session_run_tokens: std::collections::HashMap::new(),
             stream_render_pending: std::collections::HashMap::new(),
             sidebar_visible,
             sidebar_width,
-            right_sidebar_visible,
-            right_sidebar_width,
-            right_sidebar_resize_start: None,
-            right_sidebar_bottom_height,
-            right_sidebar_bottom_resize_start: None,
-            right_sidebar_bottom_collapsed,
             right_sidebar_terminals_by_cwd: std::collections::HashMap::new(),
             persisted_bottom_terminals,
             persisted_script_tabs,
-            right_sidebar_bottom_run_selected: false,
             project_scripts_by_project: std::collections::HashMap::new(),
             project_script_streams: std::collections::HashMap::new(),
             project_script_stream_seq: 0,
             active_project_shortcuts: std::collections::HashMap::new(),
-            inspector_active_tab: console_ui::InspectorTab::default(),
-            inspector_open_auxiliary_tabs: layout.open_auxiliary_tabs(),
             device_view: None,
+            computer_view: None,
             forwarded_ports_by_project: std::collections::HashMap::new(),
             ports_menu_handle: console_ui::ContextMenuHandle::new(cx),
             menubar_file_menu: console_ui::ContextMenuHandle::new(cx),
             menubar_edit_menu: console_ui::ContextMenuHandle::new(cx),
-            inspector_add_tab_menu: console_ui::ContextMenuHandle::new(cx),
-            inspector_search_query: String::new(),
-            inspector_tree: Rc::new(Vec::new()),
-            inspector_working_changes: Rc::new(Vec::new()),
-            inspector_git_badges: Rc::new(std::collections::HashMap::new()),
-            inspector_fs_watch: None,
-            inspector_git_watch: None,
+            new_split_pane: None,
+            new_tab_menus: std::collections::HashMap::new(),
+            file_tree_nodes: Rc::from([]),
+            working_changes: Rc::from([]),
+            git_badges: Rc::new(std::collections::HashMap::new()),
+            file_tree_fs_watch: None,
+            file_tree_git_watch: None,
             port_stream: None,
+            automations: Vec::new(),
+            webhooks: Vec::new(),
+            automation_stream: None,
+            webhook_stream: None,
             fs_tree_fetch_pending: false,
-            inspector_session_changes: Rc::new(Vec::new()),
-            inspector_changes_scope: console_core::types::ChangesScope::default(),
-            inspector_changes_scope_menu: console_ui::ContextMenuHandle::new(cx),
             changes_review_data: std::collections::HashMap::new(),
-            changes_review_collapsed: std::collections::HashMap::new(),
-            inspector_expanded_folders: Rc::new(std::collections::HashSet::new()),
-            inspector_selected_path: None,
+            file_tree_data: std::collections::HashMap::new(),
+            file_tree_expanded: std::collections::HashMap::new(),
+            file_tree_scrolls: std::collections::HashMap::new(),
+            changes_review_expanded: std::collections::HashMap::new(),
+            file_tree_selected_path: None,
             session_subagents: std::collections::HashMap::new(),
             session_background_work: std::collections::HashMap::new(),
-            preview_tab: None,
             open_file_contents: std::collections::HashMap::new(),
             open_file_errors: std::collections::HashMap::new(),
             open_image_contents: std::collections::HashMap::new(),
+            open_media_contents: std::collections::HashMap::new(),
+            file_media_views: std::collections::HashMap::new(),
             svg_preview_mode: std::collections::HashMap::new(),
             open_diff_contents: std::collections::HashMap::new(),
             viewer_list_states: std::collections::HashMap::new(),
             viewer_scrollbar_states: std::collections::HashMap::new(),
             viewer_editor_views: std::collections::HashMap::new(),
+            viewer_editor_subscriptions: std::collections::HashMap::new(),
+            dirty_file_paths_cache: std::collections::HashMap::new(),
+            viewer_file_etags: std::collections::HashMap::new(),
+            file_save_tx,
+            file_saves_in_flight: std::collections::HashSet::new(),
+            file_saves_pending: std::collections::HashSet::new(),
+            file_closes_awaiting_save: std::collections::HashMap::new(),
+            pending_file_line: std::collections::HashMap::new(),
+
             file_comment_tx,
             viewer_diff_views: std::collections::HashMap::new(),
             viewer_cached_markdown_views: std::collections::HashMap::new(),
@@ -727,7 +677,14 @@ impl ConsoleDesktopApp {
                 .new(|cx| GlobalSearchPanel::new(client_for_palettes.clone(), window, cx)),
             project_browse_palette: cx
                 .new(|cx| ProjectBrowsePalette::new(client_for_palettes.clone(), window, cx)),
-            floating_composer: FloatingComposerState::new(window, cx),
+            floating_composer: {
+                let entity = cx.entity().downgrade();
+                FloatingComposerState::new(window, cx, move |_window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.ensure_github_repos(cx));
+                    }
+                })
+            },
             terminals: std::collections::HashMap::new(),
             browser_views: std::collections::HashMap::new(),
             agent_browser_tabs: std::collections::HashMap::new(),
@@ -743,12 +700,26 @@ impl ConsoleDesktopApp {
             github_busy: false,
             github_form_open: false,
             github_error: None,
+            github_repos: None,
+            github_repos_loading: false,
+            github_repos_error: None,
+            github_repos_loaded: false,
+            repo_task_cloning: None,
             provider_credentials: std::collections::HashMap::new(),
             provider_credential_busy: std::collections::HashSet::new(),
             provider_credential_forms_open: std::collections::HashSet::new(),
             provider_credential_error: None,
+            stt_status: None,
+            stt_busy: false,
+            stt_form_open: false,
+            stt_error: None,
+            stt_recorder: None,
+            stt_recording_pane: None,
+            stt_recording_started_at: None,
+            stt_recording_secs: 0,
+            stt_transcribing: false,
+            stt_mic_error: None,
             server_device: None,
-            server_devices: Vec::new(),
             server_pairing_grant: None,
             server_auth_busy: false,
             server_auth_error: None,
@@ -766,6 +737,7 @@ impl ConsoleDesktopApp {
             chrome_profiles_loading: false,
             chrome_importing: false,
             chrome_status: None,
+            update_status: Default::default(),
             usage_last_fetched: None,
             context_usage: std::collections::HashMap::new(),
             environments: Vec::new(),
@@ -778,21 +750,13 @@ impl ConsoleDesktopApp {
             new_project_dialog_handle: None,
             file_browser_window_handle: None,
             new_project_dialog_view: None,
-            main_window_handle: Some(window.window_handle().into()),
+            main_window_handle: Some(window.window_handle()),
             is_main_window: matches!(&target, crate::window::WindowLaunchTarget::RestorePersisted),
             drafts,
             sidebar_draft_ids,
-            drafts_collapsed: false,
-            pinned_collapsed: false,
+            pinned_collapsed: layout.pinned_collapsed,
+            workspaces_collapsed: layout.workspaces_collapsed,
             settled_collapsed: true,
-            collapsed_groups: Rc::new(
-                layout
-                    .collapsed_groups
-                    .iter()
-                    .filter_map(|index| SessionDateGroup::ALL.get(*index).copied())
-                    .collect(),
-            ),
-            sidebar_sort_mode: layout.sidebar_sort_mode(),
             collapsed_projects: Rc::new(layout.collapsed_projects.iter().cloned().collect()),
             is_window_active: window.is_window_active(),
             _subscriptions: subscriptions,
@@ -814,8 +778,11 @@ impl ConsoleDesktopApp {
         // Restore the "the panel has been seen" bit *before* environments
         // init, which is where the panel is first considered. Loading it
         // afterwards would open the panel once on every launch.
-        app.onboarding_seen = crate::persistence::onboarding_seen();
-        app.init_environments(store_doc.environments.clone(), inherited_environment_id, cx);
+        app.onboarding_seen = startup.onboarding_seen;
+        // Remembered transcript scroll positions, so a chat reopens where it
+        // was left rather than at the top.
+        app.seed_transcript_scroll_positions(startup.transcript_scroll.as_ref());
+        app.init_environments(startup.environments.clone(), inherited_environment_id, cx);
 
         // Windows is a thin client: with no server configured there is nothing
         // to show, so go straight to the add-server form instead of a dead
@@ -826,11 +793,15 @@ impl ConsoleDesktopApp {
         }
 
         app.refresh_auth_status(cx);
+        // The composer's mic button reads configured straight from app state,
+        // so it must be loaded without a trip through the Providers page.
+        app.refresh_stt_status(cx);
         app.init_notifications(cx);
 
         app.wire_palette_callbacks(cx);
         app.wire_floating_composer_input(cx);
         app.init_file_comments(file_comment_rx, cx);
+        app.init_file_saves(file_save_rx, cx);
 
         app.workspace_pane_states.insert(
             "pane-main".to_string(),
@@ -841,35 +812,43 @@ impl ConsoleDesktopApp {
                 selected_model: app.selected_model.clone(),
                 active_picker_tab: app.active_picker_tab.clone(),
                 approval_mode: app.approval_mode,
-                approval_mode_history: Vec::new(),
                 thinking_level: app.thinking_level,
                 model_menu: app.model_menu.clone(),
-                approval_menu: app.approval_menu.clone(),
+                thinking_menu: app.thinking_menu.clone(),
                 usage_menu: app.usage_menu.clone(),
                 tasks_menu: app.tasks_menu.clone(),
                 subagents_menu: app.subagents_menu.clone(),
                 shells_menu: app.shells_menu.clone(),
+                automations_menu: app.automations_menu.clone(),
                 selected_project_id: app.selected_project_id.clone(),
                 branches: app.branches.clone(),
                 branch_loaded: app.branch_loaded,
                 branch_is_git_repository: app.branch_is_git_repository,
                 branch_cwd: None,
+                branch_request_seq: 0,
                 branch_pending: app.branch_pending,
                 project_menu: app.project_menu.clone(),
                 branch_menu: app.branch_menu.clone(),
                 model_search,
                 loaded_session_id: None,
+                comments_project: None,
                 file_comments: Vec::new(),
+                pending_staged_comments: Vec::new(),
                 next_file_comment_id: 1,
                 tab_strip_follow: console_ui::workspace::TabStripFollow::new(),
             },
         );
+
+        let initial_session = app.active_session_for_pane("pane-main");
+        app.restore_draft_for_pane("pane-main", initial_session.as_deref(), cx);
 
         app.bootstrap_backend(target, cx);
 
         // Port forwards can be created by the agent or another client. Keep the
         // title-bar popover synchronized without repeatedly probing the server.
         app.init_port_stream(cx);
+        app.init_automation_stream(cx);
+        app.init_webhook_stream(cx);
 
         app
     }

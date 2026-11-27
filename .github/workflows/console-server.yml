@@ -2,9 +2,10 @@
 # one executable) for every platform on each push to main, then uploads them
 # to a rolling GitHub Release tagged `console-server` (latest always wins).
 #
-# Assets per platform: console-<suffix> + libfff_c-<suffix>.{so,dylib} sidecar
-# (fff file-search native lib, dlopened at runtime — same assets as
-# apps/server-go/scripts/fetch-fff-lib.sh, which only covers the host).
+# Assets per platform: console-<suffix> + libfff_c-<suffix>.{so,dylib,dll}
+# (fff file-search native lib) + libcua_driver_sdk-<suffix>.{so,dylib,dll}
+# (cua computer-use driver) — both dlopened at runtime, same assets as
+# apps/server-go/scripts/fetch-{fff,cua}-lib.sh, which only cover the host.
 # `console start` re-executes the same binary with CONSOLE_SERVE=1, so one
 # installed file both manages and IS the daemon.
 name: Build console
@@ -12,6 +13,15 @@ name: Build console
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/server-go/**"
+      - "proto/**"
+      - ".github/workflows/console-server.yml"
+
+# A newer push supersedes an in-flight build, freeing scarce macOS runners.
+concurrency:
+  group: console-server-build-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -26,8 +36,14 @@ jobs:
             runner: ubuntu-latest
             goos: linux
             goarch: amd64
+            bin: console-linux-x64
             fff-asset: c-lib-x86_64-unknown-linux-gnu.so
             lib-asset: libfff_c-linux-x64.so
+            cua-driver: linux-x64-gnu
+            cua-lib: libcua_driver_sdk.so
+            cua-asset: libcua_driver_sdk-linux-x64.so
+            voxl-triple: x86_64-unknown-linux-gnu
+            voxl-asset: libvoxl-linux-x64.so
           # Native arm64 runner (free on public repos) instead of a cross
           # toolchain: the build is cgo for the fff dlopen bindings, and a
           # matching host keeps that a plain gcc link.
@@ -41,20 +57,53 @@ jobs:
             runner: ubuntu-22.04-arm
             goos: linux
             goarch: arm64
+            bin: console-linux-arm64
             fff-asset: c-lib-aarch64-unknown-linux-gnu.so
             lib-asset: libfff_c-linux-arm64.so
+            cua-driver: linux-arm64-gnu
+            cua-lib: libcua_driver_sdk.so
+            cua-asset: libcua_driver_sdk-linux-arm64.so
+            voxl-triple: aarch64-unknown-linux-gnu
+            voxl-asset: libvoxl-linux-arm64.so
           - os-suffix: macos-x64
             runner: macos-15
             goos: darwin
             goarch: amd64
+            bin: console-macos-x64
             fff-asset: c-lib-x86_64-apple-darwin.dylib
             lib-asset: libfff_c-macos-x64.dylib
+            cua-driver: darwin-x64
+            cua-lib: libcua_driver_sdk.dylib
+            cua-asset: libcua_driver_sdk-macos-x64.dylib
+            voxl-triple: x86_64-apple-darwin
+            voxl-asset: libvoxl-macos-x64.dylib
           - os-suffix: macos-arm64
             runner: macos-15
             goos: darwin
             goarch: arm64
+            bin: console-macos-arm64
             fff-asset: c-lib-aarch64-apple-darwin.dylib
             lib-asset: libfff_c-macos-arm64.dylib
+            cua-driver: darwin-arm64
+            cua-lib: libcua_driver_sdk.dylib
+            cua-asset: libcua_driver_sdk-macos-arm64.dylib
+            voxl-triple: aarch64-apple-darwin
+            voxl-asset: libvoxl-macos-arm64.dylib
+          # windows-x64 only for now: the sidecars ship an arm64 Windows
+          # build too, but the mingw cgo toolchain on the arm64 Windows
+          # runner is not proven, so x64 ships first. The .exe suffix is
+          # explicit (bin) because Windows will not execute a binary
+          # without it.
+          - os-suffix: windows-x64
+            runner: windows-latest
+            goos: windows
+            goarch: amd64
+            bin: console-windows-x64.exe
+            fff-asset: c-lib-x86_64-pc-windows-msvc.dll
+            lib-asset: libfff_c-windows-x64.dll
+            cua-driver: win32-x64-msvc
+            cua-lib: cua_driver_sdk.dll
+            cua-asset: cua_driver_sdk-windows-x64.dll
     steps:
       - uses: actions/checkout@v4
 
@@ -62,11 +111,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.26"
+          go-version: "1.26.10"
           cache-dependency-path: apps/server-go/go.sum
 
-      # server-go uses cgo (fff dlopen bindings).
-      # Flags: -trimpath for reproducible builds; -s -w strips debug info.
+      # server-go uses cgo (fff + cua + voxl dlopen bindings). On Windows the
+      # runner's preinstalled mingw-w64 gcc satisfies that; a matching host
+      # keeps it a plain gcc link like the native unix runners.
       - name: Build console binary
         env:
           GOOS: ${{ matrix.goos }}
@@ -74,23 +124,50 @@ jobs:
           CGO_ENABLED: 1
         run: >
           go -C apps/server-go build -trimpath -ldflags="-s -w"
-          -o ../../console-${{ matrix.os-suffix }} ./cmd/console
+          -o ../../${{ matrix.bin }} ./cmd/console
 
-      # Fetch the target platform's libfff_c from fff releases
-      # (fetch-fff-lib.sh only covers the runner's own platform).
-      - name: Stage fff native sidecar
+      # Stage the native sidecars dlopened at runtime: fff (file search)
+      # ships as a raw file, the cua driver (computer-use) inside a .tgz.
+      # The fetch scripts only cover the runner's own platform, so both are
+      # fetched for the target platform here. bash shell so the step also
+      # runs on the Windows runner, where PowerShell would alias curl to
+      # Invoke-WebRequest.
+      - name: Stage native sidecars
+        shell: bash
+        env:
+          # Must match fetch-cua-lib.sh VERSION and the runtime ABI check.
+          CUA_VERSION: "0.38.0"
         run: |
           curl -fL --retry 5 --retry-all-errors --retry-delay 5 \
-            "https://github.com/dmtrKovalenko/fff/releases/latest/download/${{ matrix.fff-asset }}" \
+            "https://github.com/dmtrKovalenko/fff/releases/download/0.11.1-nightly.ab3002a/${{ matrix.fff-asset }}" \
             -o "${{ matrix.lib-asset }}"
+          cua_tmp="$(mktemp -d)"
+          curl -fL --retry 5 --retry-all-errors --retry-delay 5 \
+            "https://github.com/trycua/cua/releases/download/cua-driver-rs-v${CUA_VERSION}/trycua-cua-driver-${{ matrix.cua-driver }}-${CUA_VERSION}.tgz" \
+            -o "$cua_tmp/driver.tgz"
+          tar -xzf "$cua_tmp/driver.tgz" -C "$cua_tmp" "package/${{ matrix.cua-lib }}"
+          mv "$cua_tmp/package/${{ matrix.cua-lib }}" "${{ matrix.cua-asset }}"
+          rm -rf "$cua_tmp"
+
+      # libvoxl (desktop streaming) is dlopened at runtime from beside the
+      # binary. Windows has no libvoxl build; the computer service is a stub there.
+      - name: Stage voxl library
+        if: matrix.voxl-triple != ''
+        shell: bash
+        run: |
+          voxl_dir="$(go -C apps/server-go mod download -json github.com/Adelodunpeter25/voxl-go@v0.4.1-0.20261121122719-bf233246a93f | python3 -c 'import sys,json; print(json.load(sys.stdin)["Dir"])')"
+          src="$(ls "$voxl_dir"/libs/${{ matrix.voxl-triple }}/libvoxl.*)"
+          cp "$src" "${{ matrix.voxl-asset }}"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
           name: console-${{ matrix.os-suffix }}
           path: |
-            console-${{ matrix.os-suffix }}
+            ${{ matrix.bin }}
             ${{ matrix.lib-asset }}
+            ${{ matrix.cua-asset }}
+            ${{ matrix.voxl-asset }}
           if-no-files-found: error
 
   # Single publisher: the matrix jobs previously uploaded to the same
@@ -129,9 +206,20 @@ jobs:
             files: |
               dist/console-linux-x64
               dist/libfff_c-linux-x64.so
+              dist/libcua_driver_sdk-linux-x64.so
+              dist/libvoxl-linux-x64.so
               dist/console-linux-arm64
               dist/libfff_c-linux-arm64.so
+              dist/libcua_driver_sdk-linux-arm64.so
+              dist/libvoxl-linux-arm64.so
               dist/console-macos-x64
               dist/libfff_c-macos-x64.dylib
+              dist/libcua_driver_sdk-macos-x64.dylib
+              dist/libvoxl-macos-x64.dylib
               dist/console-macos-arm64
               dist/libfff_c-macos-arm64.dylib
+              dist/libcua_driver_sdk-macos-arm64.dylib
+              dist/libvoxl-macos-arm64.dylib
+              dist/console-windows-x64.exe
+              dist/libfff_c-windows-x64.dll
+              dist/cua_driver_sdk-windows-x64.dll

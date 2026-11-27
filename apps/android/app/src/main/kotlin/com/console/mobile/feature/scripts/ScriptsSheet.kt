@@ -44,6 +44,7 @@ import com.console.mobile.ui.components.common.new.Banner
 import com.console.mobile.ui.components.common.new.BaseSheet
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.LoadingState
+import com.console.mobile.ui.components.common.new.SheetTitle
 import com.console.mobile.ui.components.common.new.TintPill
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import com.console.mobile.ui.theme.NewTheme
@@ -86,20 +87,14 @@ fun ScriptsSheet(
 
     LaunchedEffect(projectId, cwd) { repo.refresh(projectId, cwd) }
 
-    BaseSheet(onDismiss = onDismiss, title = "Run scripts", scrollable = false) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = when {
-                    state.source == "missing" -> "No console.toml found for this project"
-                    state.source.isNotBlank() -> "From ${state.source}"
-                    else -> "Project run scripts"
-                },
-                color = NewTheme.TextMuted,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(start = 4.dp),
-            )
+    BaseSheet(onDismiss = onDismiss, scrollable = false) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                SheetTitle("Run scripts")
+            }
             IconButton(
                 onClick = { scope.launch { repo.refresh(projectId, cwd) } },
                 modifier = Modifier.size(40.dp),

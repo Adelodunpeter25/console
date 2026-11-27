@@ -16,9 +16,9 @@ package msgparts
 
 import (
 	"bytes"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/base64"
+	"github.com/MoeForge/moego/json"
 	"reflect"
 	"strings"
 )

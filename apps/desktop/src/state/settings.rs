@@ -15,11 +15,17 @@ impl ConsoleDesktopApp {
             self.init_environments(Some(persisted), self.active_env_id.clone(), cx);
         }
         self.refresh_auth_status(cx);
+        // The composer's mic button reads this without the Providers page, so
+        // it loads here too, not only from the settings tab.
+        self.refresh_stt_status(cx);
         self.refresh_deleted_sessions(cx);
         self.load_projects(cx);
         self.load_sessions(cx);
         self.load_providers(cx);
         self.fetch_usage(cx);
+        // The project menu's GitHub section reads this list; fetching here
+        // means it is ready the first time the menu opens.
+        self.refresh_github_repos(cx);
 
         let client = self.client.clone();
         cx.spawn(async move |this, cx| {
@@ -104,7 +110,7 @@ impl ConsoleDesktopApp {
             self.close_settings(window, cx);
             return;
         }
-        self.open_settings_tab(console_ui::settings::SettingsTab::Providers, window, cx);
+        self.open_settings_tab(console_ui::settings::SettingsTab::Servers, window, cx);
     }
 
     /// Open the settings on a given tab, taking over the window.
@@ -121,27 +127,26 @@ impl ConsoleDesktopApp {
                 // key is stored, so the credential status has to be current.
                 self.refresh_provider_credentials(cx);
             }
-            console_ui::settings::SettingsTab::Servers => {
-                // The device list is the state of this app's pairing with the
-                // server, so it is read when the tab is opened.
-                self.refresh_server_devices(cx);
-            }
+            console_ui::settings::SettingsTab::Servers => {}
             console_ui::settings::SettingsTab::Integrations => self.refresh_integrations(cx),
             console_ui::settings::SettingsTab::Providers => {
                 self.refresh_github_status(cx);
                 self.refresh_provider_credentials(cx);
+                self.refresh_stt_status(cx);
             }
             _ => {}
         }
         self.refresh_auth_status(cx);
         self.refresh_deleted_sessions(cx);
 
+        let client = self.client.clone();
         let settings_view = self.get_or_create_settings_view(tab, window, cx);
         settings_view.update(cx, |view, cx| {
-            view.set_tab(tab, cx);
+            view.set_tab(tab, client, cx);
         });
 
         self.settings_open = true;
+        self.sync_workspace_webviews(cx);
         // The workspace is unmounted while the settings are open, so the
         // composer that had the focus goes with it. The settings take the
         // focus instead, or the window root would swallow every keystroke.
@@ -168,6 +173,7 @@ impl ConsoleDesktopApp {
             return;
         }
         self.settings_open = false;
+        self.sync_workspace_webviews(cx);
         // A modal that was open on top of the settings goes with them: it
         // belongs to a view that is no longer on screen. Deferred: GPUI holds
         // the settings view borrowed while it dispatches a click raised inside
@@ -212,7 +218,7 @@ impl ConsoleDesktopApp {
             ..Default::default()
         };
 
-        let entity = cx.entity().clone();
+        let entity = cx.entity();
         let app_entity = cx.entity().downgrade();
 
         cx.defer(move |cx| {
@@ -221,7 +227,7 @@ impl ConsoleDesktopApp {
                 .open_window(options, |window, cx| {
                     let view = cx.new(|cx| NewProjectDialog::new(app_entity, window, cx));
                     *dialog_ref.borrow_mut() = Some(view.downgrade());
-                    cx.new(|cx| gpui_component::Root::new(view, window, cx))
+                    view
                 })
                 .ok();
 
@@ -242,8 +248,10 @@ impl ConsoleDesktopApp {
     pub fn close_new_project_dialog(&mut self, cx: &mut Context<Self>) {
         if let Some(handle) = self.new_project_dialog_handle.take() {
             self.new_project_dialog_view = None;
-            let _ = cx.update_window(handle, |_root, window, _cx| {
-                window.remove_window();
+            cx.defer(move |cx| {
+                let _ = handle.update(cx, |_root, window, _cx| {
+                    window.remove_window();
+                });
             });
         }
     }
@@ -288,7 +296,7 @@ impl ConsoleDesktopApp {
             ..Default::default()
         };
 
-        let this_entity = cx.entity().clone();
+        let this_entity = cx.entity();
 
         cx.defer(move |cx| {
             let handle = cx
@@ -336,13 +344,13 @@ impl ConsoleDesktopApp {
                         })
                     };
 
-                    let view = cx.new(|cx| {
+                    
+                    cx.new(|cx| {
                         let mut browser =
                             FileBrowser::new(client.clone(), on_choose, on_cancel, window, cx);
                         browser.open(start_path.clone(), cx);
                         browser
-                    });
-                    cx.new(|cx| gpui_component::Root::new(view, window, cx))
+                    })
                 })
                 .ok();
 

@@ -41,10 +41,12 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			provider TEXT NOT NULL,
 			message_count INTEGER NOT NULL DEFAULT 0,
 			status TEXT NOT NULL DEFAULT 'idle',
-			approval_mode TEXT NOT NULL DEFAULT 'always-ask',
+			approval_mode TEXT NOT NULL DEFAULT 'plan-mode',
 			thinking_level TEXT,
 			pinned_at INTEGER,
 			settled_at INTEGER,
+			last_activity_at INTEGER,
+			last_read_at INTEGER,
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL,
 			deleted_at INTEGER,
@@ -57,6 +59,49 @@ func InitGlobalDB(db *sql.DB, path string) error {
 		CREATE INDEX IF NOT EXISTS idx_sessions_cwd ON sessions(cwd);
 		CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
 		CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC);
+
+		-- Automations: server-side schedules an agent created for its own
+		-- session (console.automation.* tools). Global, not per-session: the
+		-- scanner sweeps due rows across all sessions in one query, and
+		-- schedules must survive server restarts independent of session DBs.
+		CREATE TABLE IF NOT EXISTS automations (
+			id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			prompt TEXT NOT NULL,
+			kind TEXT NOT NULL CHECK (kind IN ('once', 'interval')),
+			interval_seconds INTEGER,
+			run_at INTEGER,
+			next_run_at INTEGER NOT NULL,
+			status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'done', 'error')),
+			last_fired_at INTEGER,
+			last_error TEXT,
+			created_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_automations_due ON automations(status, next_run_at);
+		CREATE INDEX IF NOT EXISTS idx_automations_session ON automations(session_id);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_automations_one_active ON automations(session_id) WHERE status = 'active';
+
+		-- Webhook subscriptions: generic external event triggers an agent
+		-- creates for its own session (console.webhooks.*). Global so the
+		-- public ingress route can match incoming events across all sessions
+		-- and subscriptions survive server restarts.
+		CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+			id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			topic TEXT NOT NULL,
+			secret TEXT NOT NULL,
+			filter_json TEXT NOT NULL DEFAULT '{}',
+			prompt TEXT NOT NULL,
+			once INTEGER NOT NULL DEFAULT 1,
+			status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'done', 'expired', 'error')),
+			expires_at INTEGER,
+			last_fired_at INTEGER,
+			fire_count INTEGER NOT NULL DEFAULT 0,
+			last_error TEXT,
+			created_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_webhook_subs_topic ON webhook_subscriptions(topic, status);
+		CREATE INDEX IF NOT EXISTS idx_webhook_subs_session ON webhook_subscriptions(session_id);
 
 		CREATE TABLE IF NOT EXISTS model_favorites (
 			provider TEXT NOT NULL,
@@ -73,6 +118,20 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			body TEXT NOT NULL,
 			updated_at INTEGER NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS file_comments (
+			id TEXT PRIMARY KEY,
+			project_id TEXT NOT NULL,
+			path TEXT NOT NULL,
+			side INTEGER NOT NULL,
+			start_line INTEGER NOT NULL,
+			end_line INTEGER NOT NULL,
+			text TEXT NOT NULL,
+			snippet TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_file_comments_project_path ON file_comments(project_id, path);
 
 		CREATE TABLE IF NOT EXISTS auth_devices (
 			id TEXT PRIMARY KEY,
@@ -135,6 +194,8 @@ func InitGlobalDB(db *sql.DB, path string) error {
 		"capabilities TEXT",
 		"pinned_at INTEGER",
 		"settled_at INTEGER",
+		"last_activity_at INTEGER",
+		"last_read_at INTEGER",
 	} {
 		name := col[:len(col)-len(" TEXT")]
 		if strings.HasSuffix(col, " INTEGER") {
@@ -153,6 +214,9 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			return err
 		}
 	}
+	if _, err := db.Exec(`UPDATE sessions SET approval_mode = 'plan-mode' WHERE approval_mode NOT IN ('plan-mode', 'full-access')`); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -168,7 +232,7 @@ func InitSessionDB(db *sql.DB, path string) error {
 			project_id TEXT,
 			model_id TEXT NOT NULL,
 			provider TEXT NOT NULL,
-			approval_mode TEXT NOT NULL DEFAULT 'always-ask',
+			approval_mode TEXT NOT NULL DEFAULT 'plan-mode',
 			thinking_level TEXT,
 			repaired INTEGER NOT NULL DEFAULT 0,
 			created_at INTEGER NOT NULL,
@@ -183,6 +247,9 @@ func InitSessionDB(db *sql.DB, path string) error {
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+
+		-- Turn pagination walks user rows backwards to find turn boundaries.
+		CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(role) WHERE role = 'user';
 
 		CREATE TABLE IF NOT EXISTS session_file_changes (
 			path TEXT NOT NULL,
@@ -205,6 +272,12 @@ func InitSessionDB(db *sql.DB, path string) error {
 			content TEXT NOT NULL,
 			status TEXT NOT NULL,
 			updated_at INTEGER NOT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS session_suggestions (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			items TEXT NOT NULL,
+			created_at INTEGER NOT NULL
 		);
 
 		CREATE TABLE IF NOT EXISTS session_subagents (
@@ -277,6 +350,31 @@ func InitSessionDB(db *sql.DB, path string) error {
 		}
 	}
 
+	// The queue holds any number of prompts, oldest first by seq. The old
+	// single-row table is only a source for rows staged before the upgrade.
+	if _, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS session_queue (
+			seq INTEGER PRIMARY KEY AUTOINCREMENT,
+			queue_id TEXT NOT NULL UNIQUE,
+			prompt TEXT NOT NULL,
+			context_files TEXT,
+			attachments TEXT,
+			annotations TEXT,
+			model_id TEXT,
+			provider TEXT,
+			approval_mode TEXT,
+			source TEXT,
+			created_at INTEGER NOT NULL
+		);
+		INSERT OR IGNORE INTO session_queue
+			(queue_id, prompt, context_files, attachments, annotations, model_id, provider, approval_mode, created_at)
+			SELECT queue_id, prompt, context_files, attachments, annotations, model_id, provider, approval_mode, created_at
+			FROM session_queued_prompt;
+		DELETE FROM session_queued_prompt;
+	`); err != nil {
+		return err
+	}
+
 	// Additive migration for session DBs created before per-file review
 	// tracking: add the reviewed column when missing.
 	var reviewedCount int
@@ -305,6 +403,19 @@ func InitSessionDB(db *sql.DB, path string) error {
 		}
 	}
 
+	// Additive migration: add source to pre-existing session_queue rows.
+	var queueSourceCount int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('session_queue') WHERE name = 'source'`,
+	).Scan(&queueSourceCount); err != nil {
+		return err
+	}
+	if queueSourceCount == 0 {
+		if _, err := db.Exec(`ALTER TABLE session_queue ADD COLUMN source TEXT`); err != nil {
+			return err
+		}
+	}
+
 	// Additive migration: add thinking_level to pre-existing session_meta rows.
 	var thinkingCount int
 	if err := db.QueryRow(
@@ -318,13 +429,25 @@ func InitSessionDB(db *sql.DB, path string) error {
 		}
 	}
 
+	// Only Plan and Full Access remain; legacy modes fall back to Plan.
+	for _, stmt := range []string{
+		`UPDATE session_meta SET approval_mode = 'plan-mode' WHERE approval_mode NOT IN ('plan-mode', 'full-access')`,
+		`UPDATE session_queued_prompt SET approval_mode = 'plan-mode' WHERE approval_mode IS NOT NULL AND approval_mode NOT IN ('plan-mode', 'full-access')`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+
 	return migrateMessageParts(db)
 }
 
 // migrateMessageParts adds the split-message storage next to the original
-// `content` column, which stays authoritative until a later, deliberate step
-// drops it. Every statement is additive and idempotent, so an old database
-// upgrades in place and a new one is created the same way.
+// `content` column. The column is created for new databases too, so writes
+// have one shape; the server's stage-6 migration (services/session/drop.go)
+// audits the rebuild and then drops it, the first time a session is opened.
+// Every statement is additive and idempotent, so an old database upgrades in
+// place and a new one is created the same way.
 //
 //	skeleton     the message JSON with its heavy bodies replaced by slot markers
 //	text         the human-readable words, for search

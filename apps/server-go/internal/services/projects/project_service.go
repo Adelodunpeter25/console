@@ -59,6 +59,9 @@ func (s *ProjectService) GetByDir(dir string) (types.ProjectInfo, error) {
 }
 
 func (s *ProjectService) List() ([]types.ProjectInfo, error) {
+	if err := s.pruneMissing(); err != nil {
+		return nil, err
+	}
 	rows, err := s.manager.Global().Query(
 		`SELECT id, name, dir, created_at, updated_at FROM projects ORDER BY updated_at DESC`)
 	if err != nil {
@@ -74,6 +77,40 @@ func (s *ProjectService) List() ([]types.ProjectInfo, error) {
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// pruneMissing deletes projects whose directory is gone (deleted, moved,
+// unmounted) before the list is served — a row pointing at nothing cannot
+// be opened, so it gets the same cascade as Delete instead of haunting the
+// picker. Only a definitive "does not exist" prunes: a transient stat
+// failure must not wipe a project that is merely unreachable.
+func (s *ProjectService) pruneMissing() error {
+	rows, err := s.manager.Global().Query(`SELECT id, dir FROM projects`)
+	if err != nil {
+		return err
+	}
+	var stale []string
+	for rows.Next() {
+		var id, dir string
+		if err := rows.Scan(&id, &dir); err != nil {
+			rows.Close()
+			return err
+		}
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			stale = append(stale, id)
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, id := range stale {
+		if _, err := s.Delete(id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Delete closes cached session connections, removes the project's storage

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "title": "Workspace image",
+  "blocks": [
+    {
+      "type": "image",
+      "path": "/workspace/assets/chart.png",
+      "alt": "Quarterly revenue chart"
+    },
+    { "type": "text", "text": "Captured from the run." }
+  ]
+}

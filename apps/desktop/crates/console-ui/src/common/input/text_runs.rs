@@ -96,9 +96,9 @@ pub fn input_text_runs(
                 selected_range.is_some_and(|range| range.start < end && range.end > start);
             let hidden_prefix = is_in_mention
                 && end == start + 1
-                && mentions.iter().any(|m| {
-                    m.range.start == start && (m.is_chat() || m.is_skill())
-                });
+                && mentions
+                    .iter()
+                    .any(|m| m.range.start == start && (m.is_chat() || m.is_skill()));
             let color = if is_selected {
                 gpui::white()
             } else if hidden_prefix {

@@ -4,8 +4,6 @@
 use std::path::Path;
 
 use console_core::ImageAttachment;
-use std::rc::Rc;
-
 use console_ui::attachment_image;
 use gpui::{ClipboardEntry, Context, ExternalPaths, Window};
 
@@ -83,8 +81,7 @@ impl ConsoleDesktopApp {
         }
 
         if !staged.is_empty() {
-            self.append_attachments_for_pane(pane_id, staged);
-            cx.notify();
+            self.stage_images(pane_id, staged, cx);
         }
         if !paths.is_empty() {
             let entity = cx.entity().downgrade();
@@ -102,8 +99,7 @@ impl ConsoleDesktopApp {
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            this.append_attachments_for_pane(&pane_id, attachments);
-                            cx.notify();
+                            this.stage_images(&pane_id, attachments, cx);
                         });
                     }
                 });
@@ -143,8 +139,7 @@ impl ConsoleDesktopApp {
             cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.append_attachments_for_pane(&pane_id, attachments);
-                        cx.notify();
+                        this.stage_images(&pane_id, attachments, cx);
                     });
                 }
             });
@@ -165,7 +160,7 @@ impl ConsoleDesktopApp {
             // picker re-enters GPUI's dispatcher and double-borrows the App
             // RefCell. Decoding the image afterwards is real work and stays
             // on the background executor.
-            let picked = cx.update(|cx| crate::picker::pick_image_file(cx));
+            let picked = cx.update(crate::picker::pick_image_file);
             let Some(path) = crate::picker::resolve_single_path(picked).await else {
                 return;
             };
@@ -180,10 +175,7 @@ impl ConsoleDesktopApp {
             cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| match attachment {
-                        Some(attachment) => {
-                            this.append_attachments_for_pane(&pane_id, vec![attachment]);
-                            cx.notify();
-                        }
+                        Some(attachment) => this.stage_images(&pane_id, vec![attachment], cx),
                         None => this.set_error("That file is not a supported image.", cx),
                     });
                 }
@@ -213,7 +205,64 @@ impl ConsoleDesktopApp {
             data: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes),
             mime_type: "image/png".to_string(),
         };
-        self.append_attachments_for_pane(&pane_id, vec![attachment]);
+        self.stage_images(&pane_id, vec![attachment], cx);
+    }
+
+    /// Stage images and put an `[Image N]` chip for each in the prompt text,
+    /// so the model sees where in the message each picture belongs.
+    pub(crate) fn stage_images(
+        &mut self,
+        key: &str,
+        items: Vec<ImageAttachment>,
+        cx: &mut Context<Self>,
+    ) {
+        if items.is_empty() {
+            return;
+        }
+        let first = self.attachments_for_pane(key).len() + 1;
+        let count = items.len();
+        self.append_attachments_for_pane(key, items);
+        self.composer_for_attachment_key(key).update(cx, |input, cx| {
+            for number in first..first + count {
+                input.insert_image_chip(number, cx);
+            }
+        });
+        self.save_pane_draft(key, cx);
+        cx.notify();
+    }
+
+    fn composer_for_attachment_key(&self, key: &str) -> gpui::Entity<console_ui::ComposerInput> {
+        if key == super::floating_composer::FLOATING_KEY {
+            self.floating_composer.input.clone()
+        } else {
+            self.composer_for_pane(key)
+        }
+    }
+
+    /// Drop the attachments whose chips an edit deleted (1-based numbers) and
+    /// renumber the chips left, so `[Image N]` keeps matching the Nth image.
+    pub(crate) fn remove_images_by_number(
+        &mut self,
+        key: &str,
+        removed: &[usize],
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(staged) = self.attachments.get_mut(key) {
+            super::types::rc_slice_edit(staged, |v| {
+                for &number in removed.iter().rev() {
+                    if number >= 1 && number <= v.len() {
+                        v.remove(number - 1);
+                    }
+                }
+            });
+            if staged.is_empty() {
+                self.attachments.remove(key);
+            }
+        }
+        let removed = removed.to_vec();
+        self.composer_for_attachment_key(key)
+            .update(cx, |input, cx| input.renumber_images(&removed, cx));
+        self.save_pane_draft(key, cx);
         cx.notify();
     }
 
@@ -221,14 +270,17 @@ impl ConsoleDesktopApp {
     /// staging path — the chip row for `pane_id` renders that pane's list,
     /// so removal must hit the same pane.
     pub fn remove_attachment(&mut self, pane_id: &str, index: usize, cx: &mut Context<Self>) {
-        if let Some(staged) = self.attachments.get_mut(pane_id) {
-            if index < staged.len() {
-                Rc::make_mut(staged).remove(index);
-                if staged.is_empty() {
-                    self.attachments.remove(pane_id);
-                }
-                cx.notify();
+        if let Some(staged) = self.attachments.get_mut(pane_id)
+            && index < staged.len()
+        {
+            super::types::rc_slice_edit(staged, |v| {
+                v.remove(index);
+            });
+            if staged.is_empty() {
+                self.attachments.remove(pane_id);
             }
+            self.save_pane_draft(pane_id, cx);
+            cx.notify();
         }
     }
 
@@ -239,11 +291,10 @@ impl ConsoleDesktopApp {
             .get(pane_id)
             .and_then(|v| v.get(index))
             .cloned()
+            && let Some(image) = attachment_image(&attachment)
         {
-            if let Some(image) = attachment_image(&attachment) {
-                self.zoomed_image = Some(image);
-                cx.notify();
-            }
+            self.zoomed_image = Some(image);
+            cx.notify();
         }
     }
 
@@ -263,12 +314,7 @@ impl ConsoleDesktopApp {
     /// inline behavior — the collapse is a UX improvement, not a dependency.
     /// `pane_id` is the paste event's pane, captured so async results land
     /// where the paste happened even if focus moves during the upload.
-    pub fn stage_large_paste(
-        &mut self,
-        pane_id: &str,
-        text: String,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn stage_large_paste(&mut self, pane_id: &str, text: String, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_for_pane(pane_id) else {
             self.paste_text_inline(pane_id, text, cx);
             return;
@@ -300,19 +346,22 @@ impl ConsoleDesktopApp {
     ) {
         match uploaded {
             Ok(result) => {
-                let input = self.composer_for_pane(&pane_id);
+                let input = self.composer_for_pane(pane_id);
                 input.update(cx, |input, cx| {
                     input.insert_paste_mention(
                         0..0,
                         &result.path,
-                        format!("pasted {} lines", console_ui::input::thousands(result.lines)),
+                        format!(
+                            "pasted {} lines",
+                            console_ui::input::thousands(result.lines)
+                        ),
                         cx,
                     );
                 });
                 cx.notify();
             }
             Err(error) => {
-                self.set_error(&format!("Paste upload failed: {error}"), cx);
+                self.set_error(format!("Paste upload failed: {error}"), cx);
                 self.paste_text_inline(pane_id, text, cx);
             }
         }
@@ -328,4 +377,3 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 }
-

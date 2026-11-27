@@ -1,0 +1,378 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #0c0c0e; overflow: hidden; user-select: none; -webkit-user-select: none; }
+  #stage { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { flex: none; display: block; touch-action: none; -webkit-user-drag: none; cursor: default; }
+  #status { display: none; position: absolute; left: 8px; bottom: 8px; font: 11px/1.4 -apple-system, system-ui, sans-serif; color: rgba(255,255,255,.9); background: rgba(180,30,30,.85); padding: 4px 8px; border-radius: 6px; pointer-events: none; }
+  #status.loading { background: rgba(20,20,24,.85); }
+  #status.loading::before { content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 6px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="screen" tabindex="0"></canvas>
+  <div id="status"></div>
+</div>
+<script>
+(function () {
+  const statusEl = document.getElementById('status');
+  const canvas = document.getElementById('screen');
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  let ws = null, decoder = null, retry = null;
+  let streamW = 1920, streamH = 1080;
+  let needKey = true, currentUrl = null;
+
+  // Modifier keysyms the server may still think are down when focus is lost
+  // (for example Command+Tab on macOS). XFCE binds Super+P to display
+  // settings, so a stuck Super turns a plain "p" into that shortcut.
+  const modifierKeysyms = [0xffe1, 0xffe2, 0xffe3, 0xffe4, 0xffe7, 0xffe8, 0xffe9, 0xffea, 0xffeb, 0xffec, 0xffed, 0xffee];
+  const heldModifiers = new Set();
+
+  // Same story for mouse buttons: a button released after focus moved away
+  // never reaches the canvas, so the server keeps dragging and leaves a
+  // selection highlight on the desktop.
+  let heldButtons = 0;
+  let lastPointer = { x: 0, y: 0 };
+
+  function isModifier(keysym) {
+    return modifierKeysyms.indexOf(keysym) !== -1;
+  }
+
+  function mouseMask(buttons) {
+    let mask = 0;
+    if (buttons & 1) mask |= 1;
+    if (buttons & 4) mask |= 2;
+    if (buttons & 2) mask |= 4;
+    return mask;
+  }
+
+  function releaseModifiers() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      heldModifiers.clear();
+      return;
+    }
+    heldModifiers.forEach((keysym) => {
+      sendInput({ type: 'key', keysym, down: false });
+    });
+    heldModifiers.clear();
+  }
+
+  function releaseButtons(force) {
+    if (!force && !heldButtons) return;
+    heldButtons = 0;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      sendInput({ type: 'mouse', x: lastPointer.x, y: lastPointer.y, mask: 0, wheel: 0 });
+    }
+  }
+
+  function releaseInput() {
+    releaseModifiers();
+    releaseButtons(false);
+  }
+
+  function postStatus(s) {
+    if (window.AndroidBridge && window.AndroidBridge.postMessage) {
+      try { window.AndroidBridge.postMessage(JSON.stringify({ type: 'status', status: s })); } catch(e) {}
+    }
+    if (window.ipc && window.ipc.postMessage) {
+      try { window.ipc.postMessage(JSON.stringify({ type: 'status', status: s })); } catch(e) {}
+    }
+  }
+
+  function setStatus(msg, state) {
+    if (state) postStatus(state);
+    if (!msg) { statusEl.style.display = 'none'; return; }
+    statusEl.textContent = msg;
+    // A dropped first connection is usually just the desktop still starting;
+    // treat every retry as loading and reserve red for a real failure.
+    statusEl.className = state === 'error' ? '' : 'loading';
+    statusEl.style.display = 'block';
+  }
+
+  function resizeCanvas() {
+    const stage = document.getElementById('stage');
+    const stageW = stage.clientWidth;
+    const stageH = stage.clientHeight;
+    if (!stageW || !stageH || !streamW || !streamH) return;
+    const scale = Math.min(stageW / streamW, stageH / streamH);
+    canvas.style.width = (streamW * scale) + 'px';
+    canvas.style.height = (streamH * scale) + 'px';
+  }
+  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('blur', releaseInput);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releaseInput();
+  });
+
+  function initDecoder() {
+    if (decoder && decoder.state !== 'closed') {
+      try { decoder.close(); } catch(e) {}
+    }
+    needKey = true;
+    decoder = new VideoDecoder({
+      output: (frame) => {
+        if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
+          canvas.width = frame.displayWidth;
+          canvas.height = frame.displayHeight;
+          streamW = frame.displayWidth;
+          streamH = frame.displayHeight;
+          resizeCanvas();
+        }
+        ctx.drawImage(frame, 0, 0);
+        frame.close();
+        setStatus(null, 'streaming');
+      },
+      error: (e) => {
+        console.error('decoder error', e);
+        needKey = true;
+      }
+    });
+
+    decoder.configure({
+      codec: 'avc1.420028',
+      optimizeForLatency: true
+    });
+  }
+
+  function stop() {
+    releaseInput();
+    if (retry) { clearTimeout(retry); retry = null; }
+    currentUrl = null;
+    if (ws) {
+      try { ws.onclose = null; ws.close(); } catch(e) {}
+      ws = null;
+    }
+    if (decoder && decoder.state !== 'closed') {
+      try { decoder.close(); } catch(e) {}
+      decoder = null;
+    }
+    setStatus(null, 'idle');
+  }
+
+  function start(cfg) {
+    if (typeof cfg === 'string') {
+      try { cfg = JSON.parse(cfg); } catch(e) {}
+    }
+    const url = cfg && cfg.streamUrl;
+    if (!url) return;
+    stop();
+    currentUrl = url;
+    connect(url);
+  }
+
+  function connect(wsUrl) {
+    if (!wsUrl) return;
+    setStatus('Connecting to remote desktop...', 'connecting');
+    initDecoder();
+
+    ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+      heldModifiers.clear();
+      // Clear input state a previous session may have left down.
+      modifierKeysyms.forEach((keysym) => {
+        sendInput({ type: 'key', keysym, down: false });
+      });
+      releaseButtons(true);
+      setStatus(null, 'waiting for video');
+      canvas.focus();
+    };
+
+    ws.onclose = () => {
+      setStatus('Connecting to remote desktop...', 'reconnecting');
+      if (currentUrl === wsUrl) {
+        retry = setTimeout(() => connect(wsUrl), 1500);
+      }
+    };
+
+    ws.onerror = () => {
+      setStatus('Connection error', 'error');
+    };
+
+    ws.onmessage = (evt) => {
+      if (typeof evt.data === 'string') {
+        try {
+          const m = JSON.parse(evt.data);
+          if (m.type === 'resize' && m.width && m.height) {
+            streamW = m.width;
+            streamH = m.height;
+            resizeCanvas();
+          }
+        } catch(e) {}
+        return;
+      }
+
+      const buf = evt.data;
+      if (buf.byteLength <= 16) return;
+      const view = new DataView(buf);
+      const tag = view.getUint8(0);
+      if (tag !== 0x01) return;
+
+      const flags = view.getUint8(1);
+      const isKey = (flags & 0x01) !== 0;
+
+      if (needKey && !isKey) return;
+      needKey = false;
+
+      const nal = new Uint8Array(buf, 16);
+      try {
+        decoder.decode(new EncodedVideoChunk({
+          type: isKey ? 'key' : 'delta',
+          timestamp: performance.now() * 1000,
+          data: nal
+        }));
+      } catch(err) {
+        needKey = true;
+      }
+    };
+  }
+
+  function getCoords(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return { x: 0, y: 0 };
+    const x = Math.max(0, Math.min(streamW, Math.round((clientX - rect.left) * (streamW / rect.width))));
+    const y = Math.max(0, Math.min(streamH, Math.round((clientY - rect.top) * (streamH / rect.height))));
+    return { x, y };
+  }
+
+  function sendInput(msg) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(msg));
+    }
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const { x, y } = getCoords(e.clientX, e.clientY);
+    lastPointer = { x, y };
+    heldButtons = mouseMask(e.buttons);
+    sendInput({ type: 'mouse', x, y, mask: heldButtons, wheel: 0 });
+  });
+
+  canvas.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    canvas.focus();
+    const { x, y } = getCoords(e.clientX, e.clientY);
+    lastPointer = { x, y };
+    heldButtons = mouseMask(e.buttons);
+    sendInput({ type: 'mouse', x, y, mask: heldButtons, wheel: 0 });
+  });
+
+  // Listen on the window so a button released after the pointer left the
+  // canvas still reaches the server.
+  window.addEventListener('mouseup', (e) => {
+    if (e.target === canvas) {
+      const { x, y } = getCoords(e.clientX, e.clientY);
+      lastPointer = { x, y };
+    }
+    heldButtons = mouseMask(e.buttons);
+    sendInput({ type: 'mouse', x: lastPointer.x, y: lastPointer.y, mask: heldButtons, wheel: 0 });
+  });
+
+  // Touch support for mobile
+  canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+      e.preventDefault();
+      const t = e.touches[0];
+      const { x, y } = getCoords(t.clientX, t.clientY);
+      lastPointer = { x, y };
+      heldButtons = 1;
+      sendInput({ type: 'mouse', x, y, mask: 1, wheel: 0 });
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 1) {
+      e.preventDefault();
+      const t = e.touches[0];
+      const { x, y } = getCoords(t.clientX, t.clientY);
+      lastPointer = { x, y };
+      heldButtons = 1;
+      sendInput({ type: 'mouse', x, y, mask: 1, wheel: 0 });
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', (e) => {
+    if (e.changedTouches.length === 1) {
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      const { x, y } = getCoords(t.clientX, t.clientY);
+      lastPointer = { x, y };
+      heldButtons = 0;
+      sendInput({ type: 'mouse', x, y, mask: 0, wheel: 0 });
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const { x, y } = getCoords(e.clientX, e.clientY);
+    // The remote X server reads a positive wheel value as wheel-up, so flip
+    // the browser delta to match macOS natural scrolling.
+    const wheel = e.deltaY < 0 ? 120 : -120;
+    sendInput({ type: 'mouse', x, y, mask: 0, wheel });
+  }, { passive: false });
+
+  function toKeysym(e) {
+    if (e.key === 'Backspace') return 0xff08;
+    if (e.key === 'Tab') return 0xff09;
+    if (e.key === 'Enter') return 0xff0d;
+    if (e.key === 'Escape') return 0xff1b;
+    if (e.key === 'Delete') return 0xffff;
+    if (e.key === 'ArrowLeft') return 0xff51;
+    if (e.key === 'ArrowUp') return 0xff52;
+    if (e.key === 'ArrowRight') return 0xff53;
+    if (e.key === 'ArrowDown') return 0xff54;
+    if (e.key === 'Shift') return 0xffe1;
+    if (e.key === 'Control') return 0xffe3;
+    if (e.key === 'Alt') return 0xffe9;
+    if (e.key === 'Meta' || e.key === 'OS') return 0xffeb;
+    if (e.key.length === 1) return e.key.charCodeAt(0);
+    return 0;
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (document.activeElement !== canvas) return;
+    const keysym = toKeysym(e);
+    if (keysym) {
+      e.preventDefault();
+      if (isModifier(keysym)) heldModifiers.add(keysym);
+      sendInput({ type: 'key', keysym, down: true });
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    const keysym = toKeysym(e);
+    if (!keysym) return;
+    // A modifier release must reach the server even if focus moved before
+    // the key came up; otherwise the X server keeps it held.
+    if (document.activeElement !== canvas && !heldModifiers.has(keysym)) return;
+    e.preventDefault();
+    heldModifiers.delete(keysym);
+    sendInput({ type: 'key', keysym, down: false });
+  });
+
+  window.__consoleComputer = {
+    start,
+    stop,
+    sendKey: (keysym, down) => sendInput({ type: 'key', keysym, down }),
+  };
+
+  // Auto-connect if loaded directly from server with ?token= or same-origin
+  if (window.location.protocol === 'http:' || (window.location.protocol === 'https:' && window.location.host !== 'appassets.androidplatform.net')) {
+    const loc = window.location;
+    const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+    const params = new URLSearchParams(loc.search);
+    const token = params.get('token') ? '?token=' + encodeURIComponent(params.get('token')) : '';
+    start({ streamUrl: proto + '//' + loc.host + '/api/computer/ws' + token });
+  }
+})();
+</script>
+</body>
+</html>

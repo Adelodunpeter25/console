@@ -5,9 +5,17 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use super::{layout::PersistedLayoutState, window::PersistedWindowState};
+use super::layout::PersistedLayoutState;
+use super::window::PersistedWindowState;
+use super::workspace::WorkspacesDocument;
+use super::workspace_state;
 
-const STORAGE_VERSION: u32 = 1;
+/// On-disk shape of `state.json`.
+///
+/// v1 kept the drafts in this file and the workspace tree and the sidebar
+/// layout in `workspace.json` and `workspace-state.json`. v2 makes them
+/// sections of this one file, so a launch reads one document instead of three.
+const STORAGE_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PersistedEnvironment {
@@ -20,34 +28,6 @@ pub struct PersistedEnvironment {
 pub struct PersistedEnvironmentsState {
     pub environments: Vec<PersistedEnvironment>,
     pub active_id: Option<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PersistedDraftMention {
-    pub start: usize,
-    pub end: usize,
-    pub path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PersistedDraft {
-    pub prompt: String,
-    pub updated_at: i64,
-    #[serde(default)]
-    pub mentions: Vec<PersistedDraftMention>,
-    #[serde(default)]
-    pub context_files: Vec<String>,
-    #[serde(default)]
-    pub attachments: Vec<console_core::ImageAttachment>,
-    #[serde(default)]
-    pub annotations: Vec<console_core::BrowserElementAnnotation>,
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct PersistedDraftsState {
-    pub drafts: std::collections::HashMap<String, PersistedDraft>,
 }
 
 /// Which servers have already been shown the first-run setup panel.
@@ -77,17 +57,57 @@ pub struct PersistedOnboardingState {
     pub dismissed: std::collections::HashSet<String>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub(crate) struct StorageDocument {
-    pub(crate) version: u32,
-    pub(crate) window: Option<PersistedWindowState>,
-    pub(crate) layout: Option<PersistedLayoutState>,
-    pub(crate) environments: Option<PersistedEnvironmentsState>,
-    pub(crate) drafts: Option<PersistedDraftsState>,
-    pub(crate) onboarding: Option<PersistedOnboardingState>,
+/// Where one chat's transcript was left.
+///
+/// The message id names the anchor row, so the position survives a reload
+/// whose rows sit at different indices. A chat whose anchor row has no id
+/// (an optimistic user message, before the server assigned one) keeps only
+/// the tail flag, and lands at the tail when it is restored.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PersistedTranscriptScroll {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
+    #[serde(default)]
+    pub offset_in_row: f32,
+    #[serde(default)]
+    pub at_tail: bool,
 }
 
-pub(crate) fn storage_directory() -> PathBuf {
+/// Every chat's scroll position, keyed by session id.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PersistedTranscriptScrollState {
+    #[serde(default)]
+    pub positions: std::collections::HashMap<String, PersistedTranscriptScroll>,
+}
+
+/// The one document the app keeps on disk.
+///
+/// The workspace tree and the sidebar layout used to live in `workspace.json`
+/// and `workspace-state.json`; they are sections here now, so a launch reads
+/// this file once instead of three times.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct StorageDocument {
+    #[serde(default)]
+    pub version: u32,
+    #[serde(default)]
+    pub window: Option<PersistedWindowState>,
+    #[serde(default)]
+    pub layout: Option<PersistedLayoutState>,
+    #[serde(default)]
+    pub environments: Option<PersistedEnvironmentsState>,
+    #[serde(default)]
+    pub onboarding: Option<PersistedOnboardingState>,
+    #[serde(default)]
+    pub workspaces: Option<WorkspacesDocument>,
+    /// Per-chat transcript scroll positions. Optional, so a document written
+    /// before this section existed still parses; the version does not move
+    /// for it, because a bumped version would make the reader drop every
+    /// other section along with it.
+    #[serde(default)]
+    pub transcript_scroll: Option<PersistedTranscriptScrollState>,
+}
+
+pub fn storage_directory() -> PathBuf {
     console_shared::path::storage_directory()
 }
 
@@ -95,9 +115,17 @@ fn storage_path() -> PathBuf {
     storage_directory().join("state.json")
 }
 
-/// Read the whole state file once; startup splits it in memory instead of
-/// re-reading + re-parsing per section (window, layout, drafts, envs).
-pub(crate) fn read_document() -> StorageDocument {
+/// Read the state document.
+///
+/// The pre-v2 files are folded in while they still exist, so a launch sees
+/// the same workspace tree and sidebar layout it saw before the merge.
+pub fn read_document() -> StorageDocument {
+    let mut document = read_state_file();
+    fold_legacy_files(&mut document);
+    document
+}
+
+fn read_state_file() -> StorageDocument {
     let Ok(contents) = fs::read_to_string(storage_path()) else {
         return StorageDocument {
             version: STORAGE_VERSION,
@@ -106,11 +134,55 @@ pub(crate) fn read_document() -> StorageDocument {
     };
 
     match serde_json::from_str::<StorageDocument>(&contents) {
-        Ok(document) if document.version == STORAGE_VERSION => document,
+        // v1 is accepted as-is: every section it wrote still exists, and the
+        // drafts it carries are read from here until they move to their file.
+        Ok(mut document) if document.version == STORAGE_VERSION || document.version == 1 => {
+            document.version = STORAGE_VERSION;
+            document
+        }
         _ => StorageDocument {
             version: STORAGE_VERSION,
             ..Default::default()
         },
+    }
+}
+
+/// Fold the pre-v2 files into the state document.
+///
+/// `workspace.json` held the workspace tree and `workspace-state.json` the
+/// sidebar layout. The legacy files win for the fields they held, because
+/// that is what the app read before the merge; the layout-only fields stay as
+/// the state document has them.
+fn fold_legacy_files(document: &mut StorageDocument) {
+    if document.workspaces.is_none()
+        && let Some(workspaces) = super::workspace::read_legacy()
+    {
+        document.workspaces = Some(workspaces);
+    }
+
+    let Some(legacy) = workspace_state::read_legacy() else {
+        return;
+    };
+    let mut layout = document.layout.clone().unwrap_or_default();
+    layout.sidebar_visible = legacy.sidebar_visible;
+    layout.sidebar_width = legacy.sidebar_width;
+    layout.active_workspace_id = legacy.active_workspace_id;
+    document.layout = Some(layout);
+}
+
+/// Drop the pre-v2 files once the state document holds their content.
+fn remove_legacy_files() {
+    for path in [
+        super::workspace::legacy_path(),
+        workspace_state::legacy_path(),
+    ] {
+        match fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                log::warn!("Failed to remove legacy state file {path:?}: {error}");
+            }
+        }
     }
 }
 
@@ -120,11 +192,16 @@ fn write_document(document: &StorageDocument) -> std::io::Result<()> {
     fs::create_dir_all(directory)?;
 
     let temporary_path = path.with_extension(format!("json.{}.tmp", std::process::id()));
-    // Compact JSON: these files are never hand-read and are rewritten often
-    // (drafts save per keystroke burst); pretty-printing costs ~2-3x size+time.
+    // Compact JSON: this file is never hand-read and is rewritten often
+    // (layout saves on every resize); pretty-printing costs ~2-3x size+time.
     let contents = serde_json::to_vec(document).map_err(std::io::Error::other)?;
     fs::write(&temporary_path, contents)?;
-    fs::rename(temporary_path, path)
+    fs::rename(temporary_path, path)?;
+    // The pre-v2 files are redundant now that the state document holds their
+    // content. Removing them after the write (never before) means a crash
+    // mid-migration cannot lose either copy.
+    remove_legacy_files();
+    Ok(())
 }
 
 fn update_document(update: impl FnOnce(&mut StorageDocument)) {
@@ -136,10 +213,6 @@ fn update_document(update: impl FnOnce(&mut StorageDocument)) {
     }
 }
 
-pub fn load_window() -> Option<PersistedWindowState> {
-    read_document().window
-}
-
 pub fn save_window(state: PersistedWindowState) {
     update_document(|document| document.window = Some(state));
 }
@@ -148,14 +221,17 @@ pub fn save_layout(state: PersistedLayoutState) {
     update_document(|document| document.layout = Some(state));
 }
 
-pub fn load_environments() -> Option<PersistedEnvironmentsState> {
-    read_document().environments
+pub fn save_workspaces(state: WorkspacesDocument) {
+    update_document(|document| document.workspaces = Some(state));
 }
 
-/// Server ids whose setup panel has been dismissed. Absent means none, which is
-/// what makes every server show the panel until it is dismissed.
-pub fn load_onboarding() -> Option<PersistedOnboardingState> {
-    read_document().onboarding
+/// Write the per-chat transcript scroll positions.
+pub fn save_transcript_scroll(state: PersistedTranscriptScrollState) {
+    update_document(|document| document.transcript_scroll = Some(state));
+}
+
+pub fn load_environments() -> Option<PersistedEnvironmentsState> {
+    read_document().environments
 }
 
 /// Mark one server's setup panel as dismissed, leaving every other server's
@@ -166,16 +242,6 @@ pub fn dismiss_onboarding() {
         state.seen = true;
         document.onboarding = Some(state);
     });
-}
-
-/// Whether the setup panel has already been skipped.
-///
-/// The panel is shown once, to the person, and never again — including on
-/// a server added later.
-pub fn onboarding_seen() -> bool {
-    load_onboarding()
-        .map(|state| state.seen || !state.dismissed.is_empty())
-        .unwrap_or(false)
 }
 
 pub fn save_environments(state: PersistedEnvironmentsState) {
@@ -199,8 +265,3 @@ pub fn save_environment_list_preserving_active(environments: Vec<PersistedEnviro
     });
 }
 
-pub fn save_drafts(drafts: std::collections::HashMap<String, PersistedDraft>) {
-    update_document(|document| {
-        document.drafts = Some(PersistedDraftsState { drafts });
-    });
-}

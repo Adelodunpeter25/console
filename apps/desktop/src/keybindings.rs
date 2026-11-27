@@ -19,6 +19,13 @@ actions!(
         CloseTab,
         /// Create a chat session in the active pane.
         NewChat,
+        /// Toggle the settled mark on the chat the user is looking at: file
+        /// it away, or bring a settled chat back to active (cmd-shift-s).
+        SettleSession,
+        /// Toggle the pinned mark on the chat the user is looking at (cmd-shift-p).
+        PinSession,
+        /// Delete the chat the user is looking at (cmd-shift-d).
+        DeleteSession,
         /// Open a new terminal tab in the active pane (cmd-shift-t).
         NewTerminal,
         /// Open a new browser tab in the active pane (cmd-shift-b).
@@ -32,6 +39,8 @@ actions!(
         NewProject,
         /// Open the quick file search palette scoped to the active pane's project (cmd-p).
         QuickOpenFile,
+        /// Focus the sidebar session search input (cmd-f).
+        FocusSidebarSearch,
         /// Toggle the command palette.
         ToggleCommandPalette,
         /// Toggle the open-tab palette (browser tabs first, then terminals,
@@ -44,6 +53,8 @@ actions!(
         FocusComposer,
         /// Toggle the active pane's model picker (cmd-/).
         ToggleModelPicker,
+        /// Toggle the active pane's thinking mode selector (cmd-.).
+        ToggleThinkingPicker,
         /// Move keyboard focus into the open picker's search field (/).
         /// Scoped to the open-menu key context, so it only fires while a
         /// menu/popover card is open.
@@ -54,10 +65,9 @@ actions!(
         CycleApprovalMode,
         /// Open settings window.
         OpenSettings,
+        CheckForUpdates,
         /// Toggle the left sidebar.
         ToggleLeftSidebar,
-        /// Toggle the right workspace inspector panel.
-        ToggleRightSidebar,
         /// Jump to the nth visible sidebar session (browser-tab style).
         SwitchSession1,
         SwitchSession2,
@@ -92,27 +102,38 @@ pub fn init(cx: &mut App) {
         // case-sensitively, and macOS reports an uppercase "N" while
         // Shift is held. (No separate cmd-* bindings — "cmd" parses to
         // the same platform modifier as "secondary".)
-        KeyBinding::new("secondary-shift-n", NewWindow, None),
-        KeyBinding::new("secondary-shift-N", NewWindow, None),
-        KeyBinding::new("secondary-shift-t", NewTerminal, None),
-        KeyBinding::new("secondary-shift-T", NewTerminal, None),
+        console_ui::key_binding("secondary-shift-n", NewWindow, None, cx),
+        console_ui::key_binding("secondary-shift-N", NewWindow, None, cx),
+        console_ui::key_binding("secondary-shift-t", NewTerminal, None, cx),
+        console_ui::key_binding("secondary-shift-T", NewTerminal, None, cx),
         // Browser tabs are deferred on Windows.
         #[cfg(not(target_os = "windows"))]
-        KeyBinding::new("secondary-shift-b", NewBrowser, None),
+        console_ui::key_binding("secondary-shift-b", NewBrowser, None, cx),
         #[cfg(not(target_os = "windows"))]
-        KeyBinding::new("secondary-shift-B", NewBrowser, None),
-        KeyBinding::new("secondary-w", CloseTab, None),
-        KeyBinding::new("secondary-n", NewChat, None),
+        console_ui::key_binding("secondary-shift-B", NewBrowser, None, cx),
+        console_ui::key_binding("secondary-w", CloseTab, None, cx),
+        console_ui::key_binding("secondary-n", NewChat, None, cx),
+        // ⇧⌘S files the chat away. Both letter spellings are bound for the
+        // reason spelled out above: macOS reports an uppercase "S" while
+        // Shift is held.
+        console_ui::key_binding("secondary-shift-s", SettleSession, None, cx),
+        console_ui::key_binding("secondary-shift-S", SettleSession, None, cx),
+        console_ui::key_binding("secondary-shift-p", PinSession, None, cx),
+        console_ui::key_binding("secondary-shift-P", PinSession, None, cx),
+        console_ui::key_binding("secondary-shift-d", DeleteSession, None, cx),
+        console_ui::key_binding("secondary-shift-D", DeleteSession, None, cx),
         // cmd-o / cmd-p — same as Zed; our File menu owns the key equivalents
         // so AppKit routes them to us instead of the system Open/Print handlers.
-        KeyBinding::new("secondary-o", AddProject, None),
-        KeyBinding::new("secondary-p", QuickOpenFile, None),
-        KeyBinding::new("secondary-k", ToggleCommandPalette, None),
-        KeyBinding::new("secondary-t", ToggleTabPalette, None),
-        KeyBinding::new("secondary-shift-f", ToggleGlobalSearch, None),
-        KeyBinding::new("secondary-shift-F", ToggleGlobalSearch, None),
-        KeyBinding::new("secondary-l", FocusComposer, None),
-        KeyBinding::new("secondary-/", ToggleModelPicker, None),
+        console_ui::key_binding("secondary-o", AddProject, None, cx),
+        console_ui::key_binding("secondary-p", QuickOpenFile, None, cx),
+        console_ui::key_binding("secondary-f", FocusSidebarSearch, None, cx),
+        console_ui::key_binding("secondary-k", ToggleCommandPalette, None, cx),
+        console_ui::key_binding("secondary-t", ToggleTabPalette, None, cx),
+        console_ui::key_binding("secondary-shift-f", ToggleGlobalSearch, None, cx),
+        console_ui::key_binding("secondary-shift-F", ToggleGlobalSearch, None, cx),
+        console_ui::key_binding("secondary-l", FocusComposer, None, cx),
+        console_ui::key_binding("secondary-/", ToggleModelPicker, None, cx),
+        console_ui::key_binding("secondary-.", ToggleThinkingPicker, None, cx),
         // Plain `/` refocuses the open picker's search box. Scoped to the
         // menu context so it can only fire while a menu/popover card is
         // open — everywhere else `/` types normally. `ConsoleMenu` matches
@@ -123,19 +144,17 @@ pub fn init(cx: &mut App) {
         // Shift+Tab cycles approval mode, but only while the composer holds
         // focus — elsewhere Shift+Tab is focus-previous as usual.
         KeyBinding::new("shift-tab", CycleApprovalMode, Some("ComposerInput")),
-        KeyBinding::new("secondary-,", OpenSettings, None),
-        KeyBinding::new("secondary-b", ToggleLeftSidebar, None),
-        KeyBinding::new("alt-b", ToggleRightSidebar, None),
-        KeyBinding::new("alt-B", ToggleRightSidebar, None),
-        KeyBinding::new("secondary-1", SwitchSession1, None),
-        KeyBinding::new("secondary-2", SwitchSession2, None),
-        KeyBinding::new("secondary-3", SwitchSession3, None),
-        KeyBinding::new("secondary-4", SwitchSession4, None),
-        KeyBinding::new("secondary-5", SwitchSession5, None),
-        KeyBinding::new("secondary-6", SwitchSession6, None),
-        KeyBinding::new("secondary-7", SwitchSession7, None),
-        KeyBinding::new("secondary-8", SwitchSession8, None),
-        KeyBinding::new("secondary-9", SwitchSession9, None),
+        console_ui::key_binding("secondary-,", OpenSettings, None, cx),
+        console_ui::key_binding("secondary-b", ToggleLeftSidebar, None, cx),
+        console_ui::key_binding("secondary-1", SwitchSession1, None, cx),
+        console_ui::key_binding("secondary-2", SwitchSession2, None, cx),
+        console_ui::key_binding("secondary-3", SwitchSession3, None, cx),
+        console_ui::key_binding("secondary-4", SwitchSession4, None, cx),
+        console_ui::key_binding("secondary-5", SwitchSession5, None, cx),
+        console_ui::key_binding("secondary-6", SwitchSession6, None, cx),
+        console_ui::key_binding("secondary-7", SwitchSession7, None, cx),
+        console_ui::key_binding("secondary-8", SwitchSession8, None, cx),
+        console_ui::key_binding("secondary-9", SwitchSession9, None, cx),
         // Option+1–9 (Alt elsewhere): switch tabs within the active workspace
         // pane. `alt` is the Option modifier in GPUI keystroke strings. These
         // intentionally shadow the focused terminal's own key handling —
@@ -211,12 +230,69 @@ pub fn init_handlers(cx: &mut App) {
         }
     });
 
+    cx.on_action(|_: &SettleSession, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.toggle_settle_selected_session(cx));
+        }
+    });
+
+    cx.on_action(|_: &PinSession, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.toggle_pin_selected_session(cx));
+        }
+    });
+
+    cx.on_action(|_: &DeleteSession, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.delete_selected_session(window, cx);
+                        });
+                    })
+                    .ok();
+            });
+        }
+    });
+
     cx.on_action(|_: &OpenSettings, cx| {
         if let Some((window, app)) = crate::window::get_active_window(cx) {
             cx.defer(move |cx| {
                 window
                     .update(cx, |_, window, cx| {
                         app.update(cx, |this, cx| this.open_settings(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+
+    cx.on_action(|_: &CheckForUpdates, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.open_settings_tab(
+                                console_ui::settings::SettingsTab::Updates,
+                                window,
+                                cx,
+                            );
+                            this.check_for_update(cx);
+                        });
+                    })
+                    .ok();
+            });
+        }
+    });
+
+    cx.on_action(|_: &FocusSidebarSearch, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.start_sidebar_search(window, cx));
                     })
                     .ok();
             });
@@ -319,6 +395,18 @@ pub fn init_handlers(cx: &mut App) {
         }
     });
 
+    cx.on_action(|_: &ToggleThinkingPicker, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.toggle_thinking_picker(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+
     cx.on_action(|_: &FocusModelSearch, cx| {
         if let Some((window, app)) = crate::window::get_active_window(cx) {
             cx.defer(move |cx| {
@@ -346,12 +434,6 @@ pub fn init_handlers(cx: &mut App) {
     cx.on_action(|_: &ToggleLeftSidebar, cx| {
         if let Some((_, app)) = crate::window::get_active_window(cx) {
             app.update(cx, |this, cx| this.toggle_left_sidebar(cx));
-        }
-    });
-
-    cx.on_action(|_: &ToggleRightSidebar, cx| {
-        if let Some((_, app)) = crate::window::get_active_window(cx) {
-            app.update(cx, |this, cx| this.toggle_right_sidebar(cx));
         }
     });
 

@@ -1,8 +1,37 @@
 use anyhow::{Context, Result};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::de::DeserializeOwned;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+fn shared_tunnels() -> &'static tokio::sync::RwLock<HashMap<String, Arc<console_iroh::Tunnel>>> {
+    static TUNNELS: std::sync::OnceLock<
+        tokio::sync::RwLock<HashMap<String, Arc<console_iroh::Tunnel>>>,
+    > = std::sync::OnceLock::new();
+    TUNNELS.get_or_init(Default::default)
+}
+
+/// Retrieve or create a long-lived loopback tunnel for an iroh node ID.
+///
+/// Tunnels are shared across the desktop process (probing, pairing, regular
+/// requests) so that dialing happens once and the live connection is reused.
+pub async fn get_or_create_tunnel(node_id: &str) -> Result<Arc<console_iroh::Tunnel>> {
+    let registry = shared_tunnels();
+    if let Some(tunnel) = registry.read().await.get(node_id) {
+        tunnel.warm_up();
+        return Ok(tunnel.clone());
+    }
+    let mut write_guard = registry.write().await;
+    if let Some(tunnel) = write_guard.get(node_id) {
+        tunnel.warm_up();
+        return Ok(tunnel.clone());
+    }
+    let tunnel = Arc::new(console_iroh::Tunnel::new(node_id).await?);
+    tunnel.warm_up();
+    write_guard.insert(node_id.to_string(), tunnel.clone());
+    Ok(tunnel)
+}
 
 #[derive(Clone)]
 pub struct HttpTransport {
@@ -24,13 +53,38 @@ impl HttpTransport {
         Self {
             base_url: Arc::new(RwLock::new(resolved_url)),
             auth_token: Arc::new(RwLock::new(auth_token)),
-            http: reqwest::Client::builder().build().unwrap(),
+            http: reqwest::Client::builder().build().unwrap_or_default(),
         }
     }
 
+    /// Point the transport at a server. A `console-iroh://<node-id>` address
+    /// is reached through a local tunnel: the base URL becomes the tunnel's
+    /// loopback port, so HTTP and WebSocket callers need no changes. The
+    /// tunnel is made without touching the network, and a background dial
+    /// starts immediately so the connection is usually live by the first
+    /// request. If the tunnel cannot be built the iroh address is kept, and
+    /// requests fail with a clear connection error rather than reaching a
+    /// stale server.
     pub async fn set_base_url(&self, url: impl Into<String>) {
-        let mut base = self.base_url.write().await;
-        *base = url.into();
+        let url = url.into();
+        let resolved = match console_shared::pairing::iroh_node_id(&url) {
+            Some(node_id) => match self.tunnel_for(node_id).await {
+                Ok(tunnel) => {
+                    tunnel.warm_up();
+                    tunnel.base_url()
+                }
+                Err(err) => {
+                    log::warn!("iroh tunnel to {node_id} failed: {err:#}");
+                    url
+                }
+            },
+            None => url,
+        };
+        *self.base_url.write().await = resolved;
+    }
+
+    async fn tunnel_for(&self, node_id: &str) -> Result<Arc<console_iroh::Tunnel>> {
+        get_or_create_tunnel(node_id).await
     }
 
     pub async fn base_url(&self) -> String {
@@ -49,10 +103,10 @@ impl HttpTransport {
     pub async fn build_headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        if let Some(token) = self.auth_token.read().await.as_ref() {
-            if let Ok(val) = HeaderValue::from_str(&format!("Bearer {}", token)) {
-                headers.insert(AUTHORIZATION, val);
-            }
+        if let Some(token) = self.auth_token.read().await.as_ref()
+            && let Ok(val) = HeaderValue::from_str(&format!("Bearer {}", token))
+        {
+            headers.insert(AUTHORIZATION, val);
         }
         headers
     }
@@ -66,12 +120,12 @@ impl HttpTransport {
     ) -> Result<tokio_tungstenite::tungstenite::handshake::client::Request> {
         use tokio_tungstenite::tungstenite::client::IntoClientRequest;
         let mut request = url.into_client_request()?;
-        if let Some(token) = self.auth_token.read().await.as_ref() {
-            if !token.is_empty() {
-                let value = HeaderValue::from_str(&format!("Bearer {}", token))
-                    .context("invalid auth token for websocket handshake")?;
-                request.headers_mut().insert(AUTHORIZATION, value);
-            }
+        if let Some(token) = self.auth_token.read().await.as_ref()
+            && !token.is_empty()
+        {
+            let value = HeaderValue::from_str(&format!("Bearer {}", token))
+                .context("invalid auth token for websocket handshake")?;
+            request.headers_mut().insert(AUTHORIZATION, value);
         }
         Ok(request)
     }
@@ -103,15 +157,28 @@ impl HttpTransport {
     }
 }
 
-/// Decode already-buffered JSON on Tokio's blocking pool.
+/// Decode already-buffered JSON off the polling thread.
+///
+/// Prefers Tokio's blocking pool, but gpui executors poll service futures
+/// outside any runtime context where `spawn_blocking` panics — fall back to
+/// a plain thread there instead.
 pub async fn decode_json_bytes<T>(bytes: Vec<u8>) -> Result<T>
 where
     T: DeserializeOwned + Send + 'static,
 {
-    tokio::task::spawn_blocking(move || serde_json::from_slice::<T>(&bytes))
-        .await
-        .context("JSON decode worker failed")?
-        .context("Failed to decode JSON response")
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => handle
+            .spawn_blocking(move || serde_json::from_slice::<T>(&bytes))
+            .await
+            .context("JSON decode worker failed")?
+            .context("Failed to decode JSON response"),
+        Err(_) => {
+            let joined = std::thread::spawn(move || serde_json::from_slice::<T>(&bytes))
+                .join()
+                .map_err(|_| anyhow::anyhow!("JSON decode worker panicked"))?;
+            joined.context("Failed to decode JSON response")
+        }
+    }
 }
 
 /// Probe an arbitrary backend URL for reachability — used by the settings
@@ -121,6 +188,18 @@ where
 pub async fn probe_backend(url: &str, timeout: std::time::Duration) -> Result<()> {
     let trimmed = url.trim_end_matches('/');
     anyhow::ensure!(!trimmed.is_empty(), "Backend URL is empty.");
+    let _tunnel;
+    let iroh_base;
+    let trimmed = if let Some(node_id) = console_shared::pairing::iroh_node_id(trimmed) {
+        let tunnel = get_or_create_tunnel(node_id)
+            .await
+            .context("Could not reach the server over iroh.")?;
+        iroh_base = tunnel.base_url();
+        _tunnel = tunnel;
+        iroh_base.as_str()
+    } else {
+        trimmed
+    };
     let base = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
         trimmed.to_string()
     } else {

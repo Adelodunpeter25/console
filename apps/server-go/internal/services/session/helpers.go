@@ -3,7 +3,7 @@ package session
 
 import (
 	"database/sql"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 )
 
 // projectIDBySession returns the project id for a session and whether the
@@ -28,10 +28,14 @@ func (s *Service) projectIDBySession(sessionID string) (id string, ok bool, err 
 	return "", true, nil
 }
 
-func (s *Service) bumpSessionUpdated(sessionID string, now int64, delta int) {
-	_, _ = s.manager.Global().Exec(
-		`UPDATE sessions SET updated_at = ?, message_count = message_count + ? WHERE id = ?`,
-		now, delta, sessionID)
+func (s *Service) recordMessages(sessionID string, now int64, count int, bumpUpdated bool) {
+	query := `UPDATE sessions SET message_count = message_count + ? WHERE id = ?`
+	args := []any{count, sessionID}
+	if bumpUpdated {
+		query = `UPDATE sessions SET updated_at = ?, message_count = message_count + ? WHERE id = ?`
+		args = append([]any{now}, args...)
+	}
+	_, _ = s.manager.Global().Exec(query, args...)
 }
 
 // ProjectByDir is the exported wrapper for create/update project inference.

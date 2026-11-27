@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -56,6 +56,60 @@ func TestWireFrameBackgroundWorkUsesWorkRecord(t *testing.T) {
 	}
 	if _, ok := payload["Type"]; ok {
 		t.Fatalf("nested background event leaked into wire payload: %#v", payload)
+	}
+}
+
+func TestWireFrameSessionApprovalModeUpdated(t *testing.T) {
+	name, body, drop := run.WireFrame(loop.Event{
+		Kind:         loop.EventSessionApprovalModeUpdated,
+		ApprovalMode: "full-access",
+	})
+	if drop {
+		t.Fatal("sessionApprovalModeUpdated frame was dropped")
+	}
+	if name != "sessionApprovalModeUpdated" {
+		t.Fatalf("event name = %q", name)
+	}
+
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope["type"] != "sessionApprovalModeUpdated" {
+		t.Fatalf("envelope type = %v", envelope["type"])
+	}
+	if envelope["approvalMode"] != "full-access" {
+		t.Fatalf("approvalMode payload = %#v", envelope)
+	}
+}
+
+func TestWireFrameSessionStartCarriesServerElapsed(t *testing.T) {
+	start := time.Now().Add(-2 * time.Second)
+	name, body, drop := run.WireFrame(loop.Event{
+		Kind:      loop.EventSessionStart,
+		StartedAt: start,
+	})
+	if drop || name != "sessionStart" {
+		t.Fatalf("sessionStart frame = %q drop=%v", name, drop)
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := envelope["startedAt"].(string); !ok {
+		t.Fatalf("startedAt = %#v", envelope["startedAt"])
+	}
+	elapsed, ok := envelope["elapsedMs"].(float64)
+	if !ok || elapsed < 1900 || elapsed > 6000 {
+		t.Fatalf("elapsedMs = %#v", envelope["elapsedMs"])
 	}
 }
 

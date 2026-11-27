@@ -9,13 +9,50 @@ use console_core::{
     ApprovalMode, ProjectInfo, ProjectInfoExt, SelectedModel, SessionHeader, SessionHeaderExt,
     UpdateSessionDto,
 };
-use console_ui::utils::{SidebarSortMode, group_indices_by_date, group_indices_by_project};
+use console_ui::utils::group_indices_by_project;
 use gpui::{Context, Window};
 
 use super::ConsoleDesktopApp;
 use super::user_prompt_history;
 
 impl ConsoleDesktopApp {
+    /// Store a fresh session list and bring the Dock badge in line with it.
+    /// Every place that replaces the list goes through here, so the badge can
+    /// never drift from what the sidebar shows.
+    pub(crate) fn set_session_list(
+        &mut self,
+        sessions: Vec<SessionHeader>,
+        cx: &mut Context<Self>,
+    ) {
+        // Decided on the fresh list, before it replaces the local one: the
+        // server is the one that knows a chat finished while the app was away,
+        // and a stale local copy would hide exactly that.
+        let active = self
+            .active_pane_id
+            .as_deref()
+            .and_then(|pane| self.active_session_for_pane(pane));
+        let read_active = console_core::types::notification::fresh_list_needs_read(
+            &sessions,
+            active.as_deref(),
+            self.is_window_active,
+        );
+        self.sessions = Rc::from(sessions);
+        self.refresh_dock_badge();
+        if read_active && let Some(active) = active {
+            // The refresh this triggers returns the chat read, so it ends there.
+            self.force_session_read(&active, cx);
+        }
+    }
+
+    /// Recount the Dock badge from the current session list. Called after any
+    /// local edit that changes a chat's unread or settled state, so the badge
+    /// follows an optimistic change at once instead of at the next refresh.
+    pub(crate) fn refresh_dock_badge(&self) {
+        super::macos_notifications::set_dock_badge(console_core::types::notification::badge_count(
+            &self.sessions,
+        ));
+    }
+
     pub fn load_sessions(&mut self, cx: &mut Context<Self>) {
         let client = self.client.clone();
         // Chats known when the request left: one created while it was in
@@ -32,12 +69,16 @@ impl ConsoleDesktopApp {
                                     .sessions
                                     .iter()
                                     .any(|s| !known_at_request.contains(&s.id));
-                                this.sessions = Rc::new(sessions);
+                                this.set_session_list(sessions, cx);
+                                // Chats that no longer exist cannot be
+                                // restored to, so their remembered positions
+                                // are dropped.
+                                this.prune_transcript_scroll_positions(cx);
                                 // A worktree whose chats are all gone loses its
                                 // workspace too — unless the response may predate
                                 // a chat just created (it would look dead).
                                 if !created_meanwhile {
-                                    this.sweep_dead_worktree_workspaces(cx);
+                                    this.sweep_dead_workspaces(cx);
                                 }
                                 cx.notify();
                             });
@@ -105,17 +146,23 @@ impl ConsoleDesktopApp {
             return;
         }
 
-        let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
+        let Some(current_title) = self
+            .sessions
+            .iter()
             .find(|session| session.id == session_id)
+            .map(|session| session.title.as_str())
         else {
             return;
         };
-        if session.title == title {
+        if current_title == title {
             cx.notify();
             return;
         }
-        session.title = title.clone();
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.title = title.clone();
+            }
+        });
         console_ui::workspace::ops::rename_tabs(
             &mut self.workspace_root,
             |tab| {
@@ -169,11 +216,106 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    pub(crate) fn toggle_pin_session(
+    pub fn start_sidebar_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sidebar_visible = true;
+        self.sidebar_search_active = true;
+        if self.sidebar_search_query.is_empty() {
+            self.sidebar_search_input.update(cx, |input, cx| {
+                input.clear(cx);
+            });
+        } else {
+            self.sidebar_search_input.update(cx, |input, cx| {
+                input.select_all_text(cx);
+            });
+        }
+        let focus = self.sidebar_search_input.read(cx).focus();
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    pub fn clear_sidebar_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sidebar_search_active = false;
+        self.sidebar_search_query.clear();
+        self.sidebar_search_task = None;
+        self.sidebar_search_input.update(cx, |input, cx| {
+            input.clear(cx);
+        });
+        let focus = self.active_composer_input().read(cx).focus();
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    pub fn reset_or_close_sidebar_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let has_text = !self.sidebar_search_input.read(cx).content().is_empty();
+        if has_text {
+            self.sidebar_search_query.clear();
+            self.sidebar_search_task = None;
+            self.sidebar_search_input.update(cx, |input, cx| {
+                input.clear(cx);
+            });
+            let focus = self.sidebar_search_input.read(cx).focus();
+            window.focus(&focus, cx);
+            cx.notify();
+        } else {
+            self.clear_sidebar_search(window, cx);
+        }
+    }
+
+    pub fn open_first_search_result(&mut self, cx: &mut Context<Self>) {
+        let ids = self.visible_session_ids();
+        if let Some(first_id) = ids.into_iter().next() {
+            self.select_and_open_session(first_id, cx);
+        }
+    }
+
+    pub fn on_sidebar_search_query_changed(&mut self, query: String, cx: &mut Context<Self>) {
+        self.sidebar_search_query = query.clone();
+        self.sidebar_list_state.scroll_to_reveal_item(0);
+        let client = self.client.clone();
+        let trimmed = query.trim().to_string();
+        if trimmed.is_empty() {
+            self.sidebar_search_task = None;
+            cx.notify();
+            return;
+        }
+        self.sidebar_search_task = Some(cx.spawn(async move |entity, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(150))
+                .await;
+            if let Ok(results) = client.sessions.search_by_title(&trimmed).await {
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if this.sidebar_search_query.trim() == trimmed {
+                                this.merge_sidebar_search_results(results, cx);
+                            }
+                        });
+                    }
+                });
+            }
+        }));
+        cx.notify();
+    }
+
+    pub fn merge_sidebar_search_results(
         &mut self,
-        session_id: String,
+        server_sessions: Vec<SessionHeader>,
         cx: &mut Context<Self>,
     ) {
+        let existing_ids: HashSet<String> = self.sessions.iter().map(|s| s.id.clone()).collect();
+        let new_sessions: Vec<SessionHeader> = server_sessions
+            .into_iter()
+            .filter(|s| !existing_ids.contains(&s.id))
+            .collect();
+        if !new_sessions.is_empty() {
+            let mut all = self.sessions.to_vec();
+            all.extend(new_sessions);
+            self.sessions = Rc::from(all);
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_pin_session(&mut self, session_id: String, cx: &mut Context<Self>) {
         let Some(current) = self
             .sessions
             .iter()
@@ -183,16 +325,19 @@ impl ConsoleDesktopApp {
             return;
         };
         let pinned = !current;
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|session| session.id == session_id)
-        {
-            session.pinned_at = if pinned {
-                Some(chrono::Utc::now().timestamp_millis())
-            } else {
-                None
-            };
-        }
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.pinned_at = if pinned {
+                    Some(chrono::Utc::now().timestamp_millis())
+                } else {
+                    None
+                };
+                // Pinned and settled are mutually exclusive: pinning unsettles.
+                if pinned {
+                    session.settled_at = None;
+                }
+            }
+        });
         cx.notify();
 
         let client = self.client.clone();
@@ -219,12 +364,14 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                if let Some(session) = Rc::make_mut(&mut this.sessions)
-                                    .iter_mut()
-                                    .find(|session| session.id == session_id)
-                                {
-                                    session.pinned_at = header.pinned_at;
-                                }
+                                super::types::rc_slice_update(&mut this.sessions, |sessions| {
+                                    if let Some(session) =
+                                        sessions.iter_mut().find(|session| session.id == session_id)
+                                    {
+                                        session.pinned_at = header.pinned_at;
+                                        session.settled_at = header.settled_at;
+                                    }
+                                });
                                 cx.notify();
                             });
                         }
@@ -257,24 +404,175 @@ impl ConsoleDesktopApp {
         self.set_settled(session_id, false, cx);
     }
 
+    /// The focused chat a session shortcut acts on: the active pane's chat,
+    /// falling back to the last session picked in the sidebar. Drafts are
+    /// excluded: the sidebar and workspace treat them differently from
+    /// saved sessions.
+    pub(crate) fn focused_session_id(&self) -> Option<String> {
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        let session_id = self
+            .active_session_for_pane(&pane_id)
+            .or_else(|| self.selected_session_id.clone())?;
+        if self.sidebar_draft_ids.contains(&session_id) {
+            return None;
+        }
+        Some(session_id)
+    }
+
+    /// Toggle the pinned mark on the chat the user is looking at.
+    pub(crate) fn toggle_pin_selected_session(&mut self, cx: &mut Context<Self>) {
+        if let Some(session_id) = self.focused_session_id() {
+            self.toggle_pin_session(session_id, cx);
+        }
+    }
+
+    /// Toggle the settled mark on the chat the user is looking at: the active
+    /// pane's chat, falling back to the last session picked in the sidebar.
+    /// A settled chat comes back to active; an active one files away.
+    pub(crate) fn toggle_settle_selected_session(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self.focused_session_id() else {
+            return;
+        };
+        let settled = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .is_some_and(|session| session.settled_at.is_some());
+        self.set_settled(session_id, !settled, cx);
+    }
+
+    /// Delete a session: tear down its open tabs, cleanup in-memory state,
+    /// select the next appropriate session, and notify the backend to soft-delete.
+    pub(crate) fn delete_session(&mut self, id: String, cx: &mut Context<Self>) {
+        let del_id = id.clone();
+        super::types::rc_slice_edit(&mut self.sessions, |v| v.retain(|s| s.id != id));
+        self.refresh_dock_badge();
+        // The chat is gone, so its remembered position is too.
+        self.forget_transcript_scroll_position(&id, cx);
+        self.close_matching_workspace_tabs(|t| t.id() == format!("chat:{}", id), cx);
+        for root in self.project_workspace_roots.values_mut() {
+            console_ui::workspace::ops::close_matching_tabs(root, |t| {
+                t.id() == format!("chat:{}", id)
+            });
+        }
+        // Deleting a chat removes its own desk with it (worktree desks too,
+        // once their last chat goes).
+        self.sweep_dead_workspaces(cx);
+        // The chat's agent browser tabs go with it.
+        self.close_session_browser_tabs(&id, cx);
+        // Drop all run-derived state for the deleted session, now keyed by session id.
+        self.running_sessions.remove(&id);
+        self.pending_questions.remove(&id);
+        self.question_selected.remove(&id);
+        self.todo_items.remove(&id);
+        self.agent_notices.remove(&id);
+        if self.selected_session_id.as_deref() == Some(&id) {
+            self.selected_session_id = self
+                .active_pane_id
+                .as_deref()
+                .and_then(|pane_id| self.active_session_for_pane(pane_id));
+            let pane_id = self
+                .active_pane_id
+                .clone()
+                .unwrap_or_else(|| "pane-main".to_string());
+            let composer = self.composer_for_pane(&pane_id);
+            let transcript = self.transcript_for_pane(&pane_id);
+            composer.update(cx, |input, cx| {
+                input.set_prompt_history(Vec::new(), cx);
+            });
+            transcript.update(cx, |t, cx| {
+                t.set_turns(Vec::new(), cx);
+            });
+            if let Some(next_id) = self.selected_session_id.clone() {
+                self.load_session_messages_for_pane(pane_id, next_id, cx);
+            }
+        }
+        self.refresh_file_tree(cx);
+        cx.notify();
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            if let Err(error) = client.sessions.delete(&del_id).await {
+                let message = format!("Unable to delete the session: {error}");
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.set_error(message, cx));
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Delete the currently focused chat session. If the session is running
+    /// an active task/agent, presents a confirmation dialog first to prevent
+    /// unintentional interruption; otherwise soft-deletes it immediately.
+    pub(crate) fn delete_selected_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(session_id) = self.focused_session_id() else {
+            return;
+        };
+
+        if self.is_session_running(&session_id) {
+            let session_title = self
+                .sessions
+                .iter()
+                .find(|s| s.id == session_id)
+                .map(|s| s.title.clone())
+                .unwrap_or_else(|| "Untitled".to_string());
+            let to_delete = session_id;
+            let entity = cx.entity().downgrade();
+            crate::window::confirm_then(
+                window,
+                cx,
+                &format!("Delete \"{session_title}\"?"),
+                move |_window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.delete_session(to_delete, cx);
+                        });
+                    }
+                },
+            );
+        } else {
+            self.delete_session(session_id, cx);
+        }
+    }
+
     fn set_settled(&mut self, session_id: String, settled: bool, cx: &mut Context<Self>) {
         let Some(previous) = self
             .sessions
             .iter()
             .find(|session| session.id == session_id)
-            .map(|session| session.settled_at)
+            .map(|session| (session.settled_at, session.pinned_at))
         else {
             return;
         };
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|session| session.id == session_id)
-        {
-            session.settled_at = if settled {
-                Some(chrono::Utc::now().timestamp_millis())
-            } else {
-                None
-            };
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.settled_at = if settled {
+                    Some(chrono::Utc::now().timestamp_millis())
+                } else {
+                    None
+                };
+                // Pinned and settled are mutually exclusive: settling unpins.
+                if settled {
+                    session.pinned_at = None;
+                }
+            }
+        });
+        // A settled chat drops out of the Dock badge count, an unsettled one
+        // comes back into it.
+        self.refresh_dock_badge();
+        // Settling a chat closes its tab(s), active or not. The optimistic
+        // mark lands first so the pane sync below sees the settled session.
+        if settled {
+            self.close_session_chat_tabs(&session_id, cx);
+            // Settling closes the whole workspace, not just the chat tab: the
+            // splits, terminals and browsers go with it.
+            self.sweep_dead_workspaces(cx);
         }
         cx.notify();
 
@@ -295,12 +593,14 @@ impl ConsoleDesktopApp {
                             app.update(cx, |this, cx| {
                                 // Roll the optimistic mark back before
                                 // showing the server's refusal.
-                                if let Some(session) = Rc::make_mut(&mut this.sessions)
-                                    .iter_mut()
-                                    .find(|session| session.id == session_id)
-                                {
-                                    session.settled_at = previous;
-                                }
+                                super::types::rc_slice_update(&mut this.sessions, |sessions| {
+                                    if let Some(session) =
+                                        sessions.iter_mut().find(|session| session.id == session_id)
+                                    {
+                                        (session.settled_at, session.pinned_at) = previous;
+                                    }
+                                });
+                                this.refresh_dock_badge();
                                 this.set_error_for_session(&session_id, message, cx)
                             });
                         }
@@ -324,52 +624,59 @@ impl ConsoleDesktopApp {
         };
 
         // Optimistically sync provider changes to open chat tabs, local session state, and usage meter
-        if let Some(ref prov) = payload.provider {
-            if !prov.is_empty() {
+        if let Some(ref prov) = payload.provider
+            && !prov.is_empty()
+        {
+            console_ui::workspace::ops::sync_chat_provider(
+                &mut self.workspace_root,
+                |tab| {
+                    matches!(tab, console_core::WorkspaceTabConfig::Chat { session_id: sid, .. }
+                            if sid == &session_id)
+                },
+                prov.clone(),
+            );
+            for root in self.project_workspace_roots.values_mut() {
                 console_ui::workspace::ops::sync_chat_provider(
-                    &mut self.workspace_root,
+                    root,
                     |tab| {
                         matches!(tab, console_core::WorkspaceTabConfig::Chat { session_id: sid, .. }
-                            if sid == &session_id)
+                                if sid == &session_id)
                     },
                     prov.clone(),
                 );
-                for root in self.project_workspace_roots.values_mut() {
-                    console_ui::workspace::ops::sync_chat_provider(
-                        root,
-                        |tab| {
-                            matches!(tab, console_core::WorkspaceTabConfig::Chat { session_id: sid, .. }
-                                if sid == &session_id)
-                        },
-                        prov.clone(),
-                    );
-                }
-                if let Some(session) = Rc::make_mut(&mut self.sessions)
-                    .iter_mut()
-                    .find(|session| session.id == session_id)
-                {
-                    session.provider = prov.clone();
-                    if let Some(ref mid) = payload.model_id {
-                        session.model_id = mid.clone();
-                    }
-                    if payload.thinking_level.is_some() {
-                        session.thinking_level = payload
-                            .thinking_level
-                            .as_ref()
-                            .map(|t| t.as_str().to_string());
-                    }
-                }
-                self.persist_workspaces();
-                self.maybe_fetch_usage(&session_id, cx);
-                self.fetch_context_usage(&session_id, cx);
-                cx.notify();
             }
+            self.persist_workspaces();
+            self.maybe_fetch_usage(&session_id, cx);
+            self.fetch_context_usage(&session_id, cx);
+            cx.notify();
+        }
+
+        let thinking_changed = super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                if let Some(prov) = payload.provider.as_deref().filter(|p| !p.is_empty()) {
+                    session.provider = prov.to_string();
+                }
+                if let Some(ref mid) = payload.model_id {
+                    session.model_id = mid.clone();
+                }
+                if payload.thinking_level.is_some() {
+                    session.thinking_level = payload
+                        .thinking_level
+                        .as_ref()
+                        .map(|t| t.as_str().to_string());
+                    return true;
+                }
+            }
+            false
+        });
+        if thinking_changed {
+            cx.notify();
         }
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
         let sid = session_id.clone();
-        let pid = pane_id.clone();
+        let pid = pane_id;
         cx.spawn(
             async move |_entity, cx| match client.sessions.update(&sid, payload).await {
                 Ok(header) => {
@@ -450,9 +757,22 @@ impl ConsoleDesktopApp {
         answer: serde_json::Value,
         cx: &mut Context<Self>,
     ) {
+        self.answered_question_ids
+            .insert(question.request_id.clone());
         self.clear_question_selected_for_session(&session_id);
         self.clear_question_inputs_for_session(&session_id, cx);
         self.clear_error_for_session(&session_id, cx);
+        if let Some(ans_str) = answer.as_str()
+            && ans_str == "Approve"
+            && question.question.contains("Full Access")
+        {
+            let pane_ids: Vec<String> = self.workspace_pane_states.keys().cloned().collect();
+            for pane_id in pane_ids {
+                if self.active_session_for_pane(&pane_id).as_deref() == Some(&session_id) {
+                    self.set_pane_approval_mode(&pane_id, console_core::ApprovalMode::FullAccess);
+                }
+            }
+        }
         cx.notify();
 
         let client = self.client.clone();
@@ -508,23 +828,28 @@ impl ConsoleDesktopApp {
             self.set_pane_thinking_level(pane_id, Some(level));
         }
 
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|session| session.id == header.id)
-        {
-            session.cwd = header.cwd.clone();
-            session.project_id = header.project_id.clone();
-            session.model_id = header.model_id.clone();
-            session.provider = header.provider.clone();
-            session.approval_mode = header.approval_mode.clone();
-            session.thinking_level = header.thinking_level.clone();
-            session.status = header.status.clone();
-            session.updated_at = header.updated_at;
-            // Keep the sidebar row and any open chat tabs in step when the
-            // backend renames the session (e.g. after the first turn) or updates
-            // the provider/model.
-            if !header.title.trim().is_empty() && session.title != header.title {
-                session.title = header.title.clone();
+        let (found_session, renamed) =
+            super::types::rc_slice_update(&mut self.sessions, |sessions| {
+                if let Some(session) = sessions.iter_mut().find(|session| session.id == header.id) {
+                    session.cwd = header.cwd.clone();
+                    session.project_id = header.project_id.clone();
+                    session.model_id = header.model_id.clone();
+                    session.provider = header.provider.clone();
+                    session.approval_mode = header.approval_mode.clone();
+                    session.thinking_level = header.thinking_level.clone();
+                    session.status = header.status.clone();
+                    session.updated_at = header.updated_at;
+                    let renamed = !header.title.trim().is_empty() && session.title != header.title;
+                    if renamed {
+                        session.title = header.title.clone();
+                    }
+                    (true, renamed)
+                } else {
+                    (false, false)
+                }
+            });
+        if found_session {
+            if renamed {
                 console_ui::workspace::ops::rename_tabs(
                     &mut self.workspace_root,
                     |tab| {
@@ -589,7 +914,7 @@ impl ConsoleDesktopApp {
         // against that — skipped when already loaded for this folder.
         if !header.cwd.is_empty()
             && !self.pending_project_override.contains_key(&header.id)
-            && self.pane_project_id(pane_id).is_some()
+            && self.pane_workspace_key(pane_id).is_some()
             && self
                 .workspace_pane_states
                 .get(pane_id)
@@ -610,7 +935,7 @@ impl ConsoleDesktopApp {
                 transcript.set_session_cwd(cwd);
             });
 
-        self.maybe_refresh_inspector(cx);
+        self.refresh_file_tree(cx);
     }
 
     /// Point a pane's project picker at the project a loaded session belongs
@@ -625,10 +950,10 @@ impl ConsoleDesktopApp {
         // just-cleared No project whose update hasn't landed): apply it and
         // skip header resolution plus the branch fetch.
         if let Some(override_project) = self.pending_project_override.get(&header.id).cloned() {
-            if override_project != self.pane_project_id(pane_id) {
+            if override_project != self.pane_workspace_key(pane_id) {
                 if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
                     state.selected_project_id = override_project.clone();
-                    Rc::make_mut(&mut state.branches).clear();
+                    state.branches = Rc::from([]);
                     state.branch_loaded = true;
                     state.branch_is_git_repository = false;
                 }
@@ -645,12 +970,12 @@ impl ConsoleDesktopApp {
                 header
                     .project_id
                     .as_deref()
-                    .and_then(|id| self.projects.iter().find(|project| &project.id == id))
+                    .and_then(|id| self.projects.iter().find(|project| project.id == id))
             });
         let target_id = resolved.map(|project| {
             match console_core::session_checkout_path(header, Some(&project.path)) {
                 Some(path) => console_core::worktree_workspace_key(&project.id, path),
-                None => project.id.clone(),
+                None => console_core::session_workspace_key(&project.id, &header.id),
             }
         });
         // Same project (worktree or not): the pane's workspace already fits
@@ -664,12 +989,12 @@ impl ConsoleDesktopApp {
             (None, None) => true,
             _ => false,
         };
-        if same_project(&target_id, &self.pane_project_id(pane_id)) {
+        if same_project(&target_id, &self.pane_workspace_key(pane_id)) {
             return;
         }
         if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
             state.selected_project_id = target_id.clone();
-            Rc::make_mut(&mut state.branches).clear();
+            state.branches = Rc::from([]);
             state.branch_loaded = resolved.is_none();
             state.branch_is_git_repository = false;
         }
@@ -679,7 +1004,7 @@ impl ConsoleDesktopApp {
             return;
         };
 
-        self.reload_branches_for_pane(pane_id.to_string(), project.path.clone(), cx);
+        self.reload_branches_for_pane(pane_id.to_string(), project.path, cx);
         cx.notify();
     }
 
@@ -690,21 +1015,17 @@ impl ConsoleDesktopApp {
         // A pending user pick beats a possibly stale server header. `None`
         // (cleared to No project) resolves to no project immediately.
         if let Some(override_project) = self.pending_project_override.get(session_id) {
-            match override_project {
-                None => return None,
-                Some(pid) => {
-                    if let Some(p) = self.projects.iter().find(|p| &p.id == pid) {
-                        return Some(p.clone());
-                    }
-                    // Project gone (deleted?): fall through to normal order.
-                }
-            }
-        }
-        let target_session = self.sessions.iter().find(|s| s.id == session_id)?;
-        if let Some(pid) = &target_session.project_id {
+            let pid = override_project.as_ref()?;
             if let Some(p) = self.projects.iter().find(|p| &p.id == pid) {
                 return Some(p.clone());
             }
+            // Project gone (deleted?): fall through to normal order.
+        }
+        let target_session = self.sessions.iter().find(|s| s.id == session_id)?;
+        if let Some(pid) = &target_session.project_id
+            && let Some(p) = self.projects.iter().find(|p| &p.id == pid)
+        {
+            return Some(p.clone());
         }
         self.projects
             .iter()
@@ -713,19 +1034,18 @@ impl ConsoleDesktopApp {
     }
 
     /// The workspace key a session opens in: its worktree's workspace when it
-    /// runs in one, else its project's. A project the user just picked in the
-    /// footer wins (and means the project's own folder), like it does for
-    /// `target_project_for_session`.
+    /// runs in one, else its own chat workspace. A project the user just
+    /// picked in the footer wins (and means the project's own folder), like it
+    /// does for `target_project_for_session`.
     pub(crate) fn target_workspace_for_session(&self, session_id: &str) -> Option<String> {
         let project = self.target_project_for_session(session_id)?;
-        if self.pending_project_override.contains_key(session_id) {
-            return Some(project.id);
-        }
         let session = self.sessions.iter().find(|s| s.id == session_id)?;
+        // One chat, one desk: even a footer-project override opens the chat
+        // into its own workspace rooted at the picked project's folder.
         Some(
             match console_core::session_checkout_path(session, Some(&project.path)) {
                 Some(path) => console_core::worktree_workspace_key(&project.id, path),
-                None => project.id,
+                None => console_core::session_workspace_key(&project.id, session_id),
             },
         )
     }
@@ -744,13 +1064,12 @@ impl ConsoleDesktopApp {
             return;
         }
         self.pending_project_override.remove(session_id);
-        if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|session| session.id == session_id)
-        {
-            session.project_id = header.project_id.clone();
-            session.cwd = header.cwd.clone();
-        }
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.project_id = header.project_id.clone();
+                session.cwd = header.cwd.clone();
+            }
+        });
     }
 
     /// Remember which pane holds focus for the current workspace, so splits
@@ -800,17 +1119,27 @@ impl ConsoleDesktopApp {
         let target_project = self.target_project_for_session(id);
         // The workspace key: the project id, or project + worktree path.
         let target_project_id = self.target_workspace_for_session(id);
+        // The desk we're leaving goes cached with its live transcript entity,
+        // but the persisted scroll map is only as fresh as the last snapshot —
+        // record the outgoing chat's position before the tree swap.
+        self.save_pane_scroll_position(active_pane_id, cx);
 
         // A workspace switch occurs if target_project_id differs from current project,
         // or if switching from an unassociated workspace into a project when tabs are already open.
         let is_different_project = match (&self.selected_project_id, &target_project_id) {
             (Some(current), Some(target)) => current != target,
             (Some(_), None) => true,
-            (None, Some(_)) => self
-                .workspace_root
-                .leaves()
-                .iter()
-                .any(|l| !l.tabs.is_empty()),
+            (None, Some(target)) => {
+                self.workspace_root
+                    .leaves()
+                    .iter()
+                    .any(|l| !l.tabs.is_empty())
+                    // A parked workspace comes back whole, even from an empty desk.
+                    || self
+                        .project_workspace_roots
+                        .get(&Some(target.clone()))
+                        .is_some_and(|root| !console_ui::workspace::ops::is_workspace_empty(root))
+            }
             (None, None) => false,
         };
 
@@ -829,31 +1158,25 @@ impl ConsoleDesktopApp {
             }
             // Remember this workspace's focused pane before leaving it.
             self.remember_active_pane();
-            // Save current project's workspace tabs
-            self.project_workspace_roots.insert(
-                self.selected_project_id.clone(),
-                self.workspace_root.clone(),
+            // Park the desk whole under its key and load the target desk.
+            let outgoing_key = self.selected_project_id.clone();
+            self.workspace_root = console_ui::workspace::ops::switch_desk(
+                &mut self.project_workspace_roots,
+                &self.workspace_root,
+                &outgoing_key,
+                &target_project_id,
             );
-
             // Switch active project
             self.selected_project_id = target_project_id.clone();
             if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
                 state.selected_project_id = target_project_id.clone();
-                Rc::make_mut(&mut state.branches).clear();
+                state.branches = Rc::from([]);
                 state.branch_loaded = target_project.is_none();
                 state.branch_is_git_repository = false;
             }
 
             // Restore previously opened tabs for this project, or start a clean leaf
-            if let Some(saved_root) = self
-                .project_workspace_roots
-                .get(&target_project_id)
-                .cloned()
-            {
-                self.workspace_root = saved_root;
-            } else {
-                self.workspace_root = console_core::WorkspaceNode::leaf(active_pane_id);
-            }
+            // (a desk that has never been visited starts with a pane of its own).
             // Back on this workspace's remembered split focus before opening.
             self.restore_active_pane(&target_project_id);
             // Heal legacy mixed saves and keep any existing copy's folder in step.
@@ -879,6 +1202,10 @@ impl ConsoleDesktopApp {
             }
             self.persist_layout();
             self.persist_workspaces();
+            // The swapped-out tree may have had the visible browser tab; the
+            // new tree's webview set is entirely different, so re-sync
+            // visibility or the old browser keeps painting above everything.
+            self.sync_workspace_webviews(cx);
         } else if self.selected_project_id.is_none() && target_project_id.is_some() {
             self.selected_project_id = target_project_id.clone();
             if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
@@ -902,10 +1229,10 @@ impl ConsoleDesktopApp {
             // project: pin pane + global to explicit None and persist.
             if target_project_id.is_none() {
                 let mut changed = false;
-                if self.pane_project_id(active_pane_id).is_some() {
+                if self.pane_workspace_key(active_pane_id).is_some() {
                     if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
                         state.selected_project_id = None;
-                        std::rc::Rc::make_mut(&mut state.branches).clear();
+                        state.branches = Rc::from([]);
                         state.branch_loaded = true;
                         state.branch_is_git_repository = false;
                     }
@@ -931,69 +1258,117 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
-        let prev_sid = self
-            .active_session_for_pane(&active_pane_id)
-            .map(|s| s.to_string());
+        let prev_sid = self.active_session_for_pane(&active_pane_id);
 
-        self.save_transcript_scroll_position(cx);
+        // The chat this pane is showing keeps its position: the new one
+        // replaces its transcript.
+        if let Some(prev_sid) = prev_sid.as_deref() {
+            self.save_transcript_scroll_position_for_pane(&active_pane_id, prev_sid, cx);
+        }
 
         let target_session = self.sessions.iter().find(|s| s.id == id).cloned();
         let is_different_project = self.switch_workspace_for_session(&id, &active_pane_id, cx);
 
         self.selected_session_id = Some(id.clone());
+        // A parked workspace has no chat tab left; the chat belongs in its first
+        // pane, not in whichever split was focused when it was parked.
+        if self.workspace_chat().is_none()
+            && let Some(first) = self.workspace_root.first_leaf().map(|leaf| leaf.id.clone())
+        {
+            self.active_pane_id = Some(first);
+        }
         let title = target_session
             .as_ref()
             .map(|s| s.display_title().to_string())
             .unwrap_or_else(|| "Chat".to_string());
-        self.open_chat_tab(id.clone(), title);
+        self.open_chat_tab(id.clone(), title, cx);
+        // The swapped-in tree decides which webview may stay on screen.
+        self.sync_workspace_webviews(cx);
 
         if !is_different_project && prev_sid.as_deref() == Some(&id) {
+            // Already on screen, so nothing reloads. Opening it from a banner
+            // is the user looking at the result, so report the read here: the
+            // loader is what reports it for every other way of opening a chat.
+            self.report_session_read(&id, cx);
             cx.notify();
             return;
         }
 
-        let draft = self.get_draft_with_mentions(Some(&id));
-        let draft_ctx_files = self.get_draft_context_files(Some(&id));
-        self.active_composer_input().update(cx, |input, cx| {
-            input.set_prompt_history(Vec::new(), cx);
-            if let Some((draft_text, mentions)) = draft {
-                input.set_content_with_mentions(draft_text, mentions, cx);
-            } else {
-                input.clear(cx);
-            }
-            input.set_context_files(draft_ctx_files);
-            cx.notify();
-        });
+        self.sidebar_draft_ids.remove(&id);
+        // open_chat_tab may have redirected the active pane (chat already open
+        // in another split, or a workspace swap); restore into the pane that
+        // actually shows the chat or the draft saves under the wrong key.
+        let restore_pane = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| active_pane_id.clone());
+        self.restore_draft_for_pane(&restore_pane, Some(&id), cx);
         self.active_transcript_view().update(cx, |t, cx| {
-            t.set_messages(Vec::new(), cx);
+            t.set_turns(Vec::new(), cx);
+            t.clear_session_changes(cx);
         });
         self.load_session_messages(id, cx);
         cx.notify();
     }
 
     /// Visible sidebar session ids top-to-bottom, mirroring the sidebar
-    /// render: sessions with confirmed drafts live in Drafts (excluded here)
-    /// and collapsed date groups are skipped.
+    /// render: collapsed project groups are skipped.
     pub fn visible_session_ids(&self) -> Vec<String> {
-        let draft_ids: HashSet<String> = self
-            .draft_summaries()
-            .into_iter()
-            .filter_map(|d| d.session_id)
-            .collect();
-        let timestamp = |index: usize| {
-            let session = &self.sessions[index];
-            if draft_ids.contains(&session.id) {
-                0
-            } else {
-                session.sort_timestamp()
+        let timestamp = |index: usize| self.sessions[index].sort_timestamp();
+        let is_live_pinned = |index: usize| self.sessions[index].pinned_at.is_some();
+        let is_searching =
+            self.sidebar_search_active && !self.sidebar_search_query.trim().is_empty();
+        if is_searching {
+            let query_lower = self.sidebar_search_query.trim().to_lowercase();
+            let matches_query = |s: &SessionHeader| {
+                query_lower.is_empty()
+                    || s.display_title().to_lowercase().contains(&query_lower)
+                    || s.title.to_lowercase().contains(&query_lower)
+            };
+            let mut ids = Vec::new();
+            for (index, session) in self.sessions.iter().enumerate() {
+                if is_live_pinned(index) && matches_query(session) {
+                    ids.push(session.id.clone());
+                }
             }
-        };
-        let is_live_pinned = |index: usize| {
-            let session = &self.sessions[index];
-            session.pinned_at.is_some() && !draft_ids.contains(&session.id)
-        };
+            let grouped = group_indices_by_project(
+                self.sessions.len(),
+                |index| {
+                    let session = &self.sessions[index];
+                    self.projects
+                        .iter()
+                        .find(|project| project.matches_session(session))
+                        .map(|project| project.id.clone())
+                },
+                timestamp,
+                |id| {
+                    self.projects
+                        .iter()
+                        .find(|project| project.id == id)
+                        .map(|project| project.created_at)
+                        .unwrap_or(i64::MIN)
+                },
+            );
+            for (_, positions) in grouped {
+                for idx in positions {
+                    let session = &self.sessions[idx];
+                    if !is_live_pinned(idx) && matches_query(session) {
+                        ids.push(session.id.clone());
+                    }
+                }
+            }
+            for session in self.sessions.iter() {
+                if session.settled_at.is_some()
+                    && matches_query(session)
+                    && !ids.contains(&session.id)
+                {
+                    ids.push(session.id.clone());
+                }
+            }
+            return ids;
+        }
         let mut ids = Vec::new();
-        if !self.pinned_collapsed {
+        if !self.pinned_collapsed && !self.workspaces_collapsed {
             for (index, session) in self.sessions.iter().enumerate() {
                 // Settled chats are hidden from the sidebar, so they take no
                 // slot in the cmd+1-9 mapping either.
@@ -1002,50 +1377,36 @@ impl ConsoleDesktopApp {
                 }
             }
         }
-        match self.sidebar_sort_mode {
-            SidebarSortMode::Date => {
-                let grouped = group_indices_by_date(self.sessions.len(), timestamp);
-                for (group, positions) in grouped {
-                    if self.collapsed_groups.contains(&group) {
-                        continue;
-                    }
-                    for idx in positions {
-                        let session = &self.sessions[idx];
-                        if !draft_ids.contains(&session.id)
-                            && !is_live_pinned(idx)
-                            && session.settled_at.is_none()
-                        {
-                            ids.push(session.id.clone());
-                        }
-                    }
-                }
+        let grouped = group_indices_by_project(
+            self.sessions.len(),
+            |index| {
+                let session = &self.sessions[index];
+                self.projects
+                    .iter()
+                    .find(|project| project.matches_session(session))
+                    .map(|project| project.id.clone())
+            },
+            timestamp,
+            |id| {
+                self.projects
+                    .iter()
+                    .find(|project| project.id == id)
+                    .map(|project| project.created_at)
+                    .unwrap_or(i64::MIN)
+            },
+        );
+        for (key, positions) in grouped {
+            if self.workspaces_collapsed {
+                break;
             }
-            SidebarSortMode::Project => {
-                let grouped = group_indices_by_project(
-                    self.sessions.len(),
-                    |index| {
-                        let session = &self.sessions[index];
-                        self.projects
-                            .iter()
-                            .find(|project| project.matches_session(session))
-                            .map(|project| project.id.clone())
-                    },
-                    timestamp,
-                );
-                for (key, positions) in grouped {
-                    let collapse_key = key.unwrap_or_else(|| "none".to_string());
-                    if self.collapsed_projects.contains(&collapse_key) {
-                        continue;
-                    }
-                    for idx in positions {
-                        let session = &self.sessions[idx];
-                        if !draft_ids.contains(&session.id)
-                            && !is_live_pinned(idx)
-                            && session.settled_at.is_none()
-                        {
-                            ids.push(session.id.clone());
-                        }
-                    }
+            let collapse_key = key.unwrap_or_else(|| "none".to_string());
+            if self.collapsed_projects.contains(&collapse_key) {
+                continue;
+            }
+            for idx in positions {
+                let session = &self.sessions[idx];
+                if !is_live_pinned(idx) && session.settled_at.is_none() {
+                    ids.push(session.id.clone());
                 }
             }
         }
@@ -1078,8 +1439,10 @@ impl ConsoleDesktopApp {
     }
 
     /// Fork the pane's session through one assistant message into a new idle
-    /// chat sharing cwd/worktree, then open the fork in that pane. No-op
-    /// while the session is running (the server rejects active runs).
+    /// chat sharing cwd/worktree, then open the fork in that pane. Allowed
+    /// while the source is running: only finalized messages carry a
+    /// server-assigned id, so the in-flight message simply has no fork
+    /// button, and the fork sits idle until prompted.
     pub fn fork_session_for_pane(
         &mut self,
         pane_id: String,
@@ -1089,9 +1452,6 @@ impl ConsoleDesktopApp {
         let Some(session_id) = self.active_session_for_pane(&pane_id) else {
             return;
         };
-        if self.is_session_running(&session_id) {
-            return;
-        }
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
             match client.sessions.fork(&session_id, &message_id).await {
@@ -1100,7 +1460,9 @@ impl ConsoleDesktopApp {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 let new_id = header.id.clone();
-                                Rc::make_mut(&mut this.sessions).insert(0, header);
+                                super::types::rc_slice_edit(&mut this.sessions, |v| {
+                                    v.insert(0, header)
+                                });
                                 this.active_pane_id = Some(pane_id.clone());
                                 this.select_and_open_session(new_id, cx);
                             });
@@ -1122,6 +1484,187 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// The window just came to the front: the chat in the active pane is now in
+    /// front of the user, so whatever finished while they were away is seen.
+    ///
+    /// The read is forced rather than gated on the local list. A run that ended
+    /// while the window was in the background made the chat unread on the
+    /// server, but the app only heard "the run ended" and still holds
+    /// `unread: false`, so a gated report would skip it. One idempotent request
+    /// per window focus is cheap, and the server ignores it for a read chat.
+    pub(crate) fn report_read_for_active_chat(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self
+            .active_pane_id
+            .as_deref()
+            .and_then(|pane| self.active_session_for_pane(pane))
+        else {
+            return;
+        };
+        self.force_session_read(&session_id, cx);
+    }
+
+    /// Tell the server this chat was shown, which clears its unread dot (and a
+    /// lingering needs-attention) on every device. The local header is cleared
+    /// first so the dot does not linger until the next list refresh, and the
+    /// call is skipped for a chat already read, so reopening a quiet chat
+    /// costs no request. Best-effort: a failed report only means the dot
+    /// clears on the next refresh instead.
+    pub(crate) fn report_session_read(&mut self, session_id: &str, cx: &mut Context<Self>) {
+        let needs_report = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .is_some_and(console_core::types::notification::needs_read_report);
+        if !needs_report {
+            return;
+        }
+        let is_running = self.running_sessions.contains_key(session_id);
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.unread = false;
+                if session.status == "needs_attention" && !is_running {
+                    session.status = "done".to_string();
+                }
+            }
+        });
+        super::macos_notifications::clear_for_session(session_id);
+        self.refresh_dock_badge();
+        cx.notify();
+
+        let client = self.client.clone();
+        let session_id = session_id.to_string();
+        cx.spawn(async move |_entity, _cx| {
+            if let Err(error) = client.sessions.mark_read(&session_id).await {
+                log::warn!("mark read failed for {session_id}: {error}");
+            }
+        })
+        .detach();
+    }
+
+    /// Report a read for a chat that just finished while on screen, after a
+    /// short beat. The server writes the run's final status and its activity
+    /// time slightly after the stream's end event, and a read that lands first
+    /// would be overwritten by that activity and leave the chat unread.
+    pub(crate) fn schedule_read_after_finish(&mut self, session_id: &str, cx: &mut Context<Self>) {
+        let session_id = session_id.to_string();
+        cx.spawn(async move |entity, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(600))
+                .await;
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        // Still the chat in front of the user, in a focused window.
+                        let still_viewing = this.is_window_active
+                            && this
+                                .active_pane_id
+                                .as_deref()
+                                .and_then(|pane| this.active_session_for_pane(pane))
+                                .as_deref()
+                                == Some(session_id.as_str());
+                        if still_viewing {
+                            // The local header is stale: the list has not been
+                            // refreshed since the run ended, so force the call.
+                            this.force_session_read(&session_id, cx);
+                        }
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Like [`Self::report_session_read`] but always calls the server: the
+    /// local header may not know yet that the run just made the chat unread.
+    fn force_session_read(&mut self, session_id: &str, cx: &mut Context<Self>) {
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.unread = false;
+            }
+        });
+        super::macos_notifications::clear_for_session(session_id);
+        self.refresh_dock_badge();
+        cx.notify();
+        let client = self.client.clone();
+        let session_id = session_id.to_string();
+        cx.spawn(
+            async move |entity, cx| match client.sessions.mark_read(&session_id).await {
+                Ok(()) => {
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| this.load_sessions(cx));
+                        }
+                    });
+                }
+                Err(error) => log::warn!("mark read failed for {session_id}: {error}"),
+            },
+        )
+        .detach();
+    }
+
+    /// The row menu's read-state entry: clears an unread chat, or brings the
+    /// dot back on a read one.
+    pub(crate) fn toggle_session_read(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let unread = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .is_some_and(|session| session.unread);
+        if unread {
+            self.report_session_read(&session_id, cx);
+        } else {
+            self.mark_session_unread(session_id, cx);
+        }
+    }
+
+    /// Make a read chat unread again ("Mark as unread" in the row menu). The
+    /// dot appears at once; a server refusal (a running or settled chat)
+    /// rolls it back and shows the reason.
+    pub(crate) fn mark_session_unread(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let Some(already_unread) = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .map(|session| session.unread)
+        else {
+            return;
+        };
+        if already_unread {
+            return;
+        }
+        super::types::rc_slice_update(&mut self.sessions, |sessions| {
+            if let Some(session) = sessions.iter_mut().find(|session| session.id == session_id) {
+                session.unread = true;
+            }
+        });
+        self.refresh_dock_badge();
+        cx.notify();
+
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_entity, cx| {
+            if let Err(error) = client.sessions.mark_unread(&session_id).await {
+                let message = format!("Unable to mark as unread: {error}");
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            super::types::rc_slice_update(&mut this.sessions, |sessions| {
+                                if let Some(session) =
+                                    sessions.iter_mut().find(|session| session.id == session_id)
+                                {
+                                    session.unread = false;
+                                }
+                            });
+                            this.refresh_dock_badge();
+                            this.set_error_for_session(&session_id, message, cx)
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
     /// Load a chat into one pane without replacing another pane's transcript.
     /// Uses tail pagination (limit 50) for fast initial paint; older pages
     /// auto-chain while the user holds at the top so the first prompt is
@@ -1132,22 +1675,16 @@ impl ConsoleDesktopApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.pull_draft(session_id.clone(), cx);
+        self.report_session_read(&session_id, cx);
         let client = self.client.clone();
-        let saved_position = self.transcript_scroll_positions.get(&session_id).copied();
+        let saved_position = self.transcript_scroll_positions.get(&session_id).cloned();
         cx.spawn(async move |entity, cx| {
-            match client
-                .sessions
-                .get(
-                    &session_id,
-                    Some(console_core::SessionPageOptions {
-                        limit: Some(50),
-                        before: None,
-                    }),
-                )
-                .await
-            {
-                Ok(detail) => {
+            // One round-trip carries the header, first message page and the
+            // rest of the chat's state, so the transcript is measured once.
+            let bootstrap = client.sessions.get_bootstrap(&session_id).await;
+            match bootstrap {
+                Ok(bootstrap) => {
+                    let detail = bootstrap.detail;
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
@@ -1159,25 +1696,21 @@ impl ConsoleDesktopApp {
                                     return;
                                 }
                                 this.apply_session_header_for_pane(&pane_id, &detail.header, cx);
-                                this.refresh_turn_changes_for_pane(&pane_id, &session_id, cx);
-                                if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
-                                    state.loaded_session_id = Some(session_id.clone());
-                                }
                                 let composer = this.composer_for_pane(&pane_id);
                                 let transcript = this.transcript_for_pane(&pane_id);
                                 let running_started_at = this
                                     .is_session_running(&session_id)
                                     .then(|| this.running_sessions.get(&session_id).copied())
                                     .flatten();
+
                                 composer.update(cx, |input, cx| {
-                                    input.set_prompt_history(
-                                        user_prompt_history(&detail.messages),
-                                        cx,
-                                    );
+                                    input
+                                        .set_prompt_history(user_prompt_history(&detail.turns), cx);
                                 });
                                 let app_entity_for_older = entity.clone();
                                 transcript.update(cx, |t, cx| {
-                                    t.set_messages(detail.messages, cx);
+                                    t.set_session_changes(Rc::from(bootstrap.changes), cx);
+                                    t.set_turns(detail.turns, cx);
                                     t.set_pagination(detail.has_more, detail.next_cursor);
                                     // Wire Load older handler for this pane/session
                                     let pane_for_older = pane_id.clone();
@@ -1192,11 +1725,37 @@ impl ConsoleDesktopApp {
                                             });
                                         }
                                     });
+                                    let pane_for_prompts = pane_id.clone();
+                                    let app_for_prompts = app_entity_for_older.clone();
+                                    t.set_on_request_prompts(move |_window, cx| {
+                                        if let Some(app) = app_for_prompts.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.load_prompts_for_pane(
+                                                    pane_for_prompts.clone(),
+                                                    cx,
+                                                );
+                                            });
+                                        }
+                                    });
+                                    let pane_for_jump = pane_id.clone();
+                                    let app_for_jump = app_entity_for_older.clone();
+                                    t.set_on_jump_to_prompt(move |from_end, _window, cx| {
+                                        if let Some(app) = app_for_jump.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.jump_to_prompt_for_pane(
+                                                    pane_for_jump.clone(),
+                                                    from_end,
+                                                    cx,
+                                                );
+                                            });
+                                        }
+                                    });
                                     if let Some(started_at) = running_started_at {
                                         t.resume_streaming(started_at, cx);
                                     }
                                     if let Some(position) = saved_position {
                                         t.restore_scroll_anchor(
+                                            position.message_id.as_deref(),
                                             position.row_index,
                                             position.offset_in_row,
                                             position.at_tail,
@@ -1220,80 +1779,33 @@ impl ConsoleDesktopApp {
                                     this.attach_session_run_for_pane(
                                         pane_id.clone(),
                                         session_id.clone(),
+                                        None,
                                         cx,
                                     );
                                 }
 
-                                // Hydrate the persisted todo checklist so a
-                                // reopened session shows its outstanding tasks
-                                // right away instead of waiting for the next
-                                // run's todoUpdate (docs/todo-integration.md).
-                                let todo_client = client.clone();
-                                let todo_pane_id = pane_id.clone();
-                                let todo_session_id = session_id.clone();
-                                cx.spawn(async move |entity, cx| {
-                                    if let Ok(items) =
-                                        todo_client.sessions.get_todos(&todo_session_id).await
-                                    {
-                                        let _ = cx.update(|cx| {
-                                            if let Some(app) = entity.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    // Ignore a slower response after
-                                                    // this pane has switched to
-                                                    // another active tab.
-                                                    if this
-                                                        .active_session_for_pane(&todo_pane_id)
-                                                        .as_deref()
-                                                        != Some(todo_session_id.as_str())
-                                                    {
-                                                        return;
-                                                    }
-                                                    this.set_todo_items_for_session(
-                                                        &todo_session_id,
-                                                        items,
-                                                    );
-                                                    cx.notify();
-                                                });
-                                            }
-                                        });
-                                    }
-                                })
-                                .detach();
-
-                                // Shells started before this window attached.
-                                this.load_background_work(session_id.clone(), cx);
-
-                                // Hydrate any staged next-turn prompt so a queue
-                                // set before restart or on another device shows
-                                // immediately without waiting for queueUpdated SSE.
-                                let queue_client = client.clone();
-                                let queue_pane_id = pane_id.clone();
-                                let queue_session_id = session_id.clone();
-                                cx.spawn(async move |entity, cx| {
-                                    if let Ok(q) =
-                                        queue_client.runs.get_queued_prompt(&queue_session_id).await
-                                    {
-                                        let _ = cx.update(|cx| {
-                                            if let Some(app) = entity.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    if this
-                                                        .active_session_for_pane(&queue_pane_id)
-                                                        .as_deref()
-                                                        != Some(queue_session_id.as_str())
-                                                    {
-                                                        return;
-                                                    }
-                                                    this.set_queued_prompt_for_session(
-                                                        &queue_session_id,
-                                                        q,
-                                                    );
-                                                    cx.notify();
-                                                });
-                                            }
-                                        });
-                                    }
-                                })
-                                .detach();
+                                // The bootstrap carries the persisted checklist,
+                                // suggestions, queue, shells and draft alongside
+                                // the transcript, all under the stale guard above.
+                                this.set_todo_items_for_session(&session_id, bootstrap.todos);
+                                this.set_suggestions(&session_id, bootstrap.suggestions, cx);
+                                this.apply_background_work(
+                                    session_id.clone(),
+                                    bootstrap.background_work,
+                                    cx,
+                                );
+                                this.set_queue_from_server(&session_id, bootstrap.queued_prompts);
+                                this.adopt_bootstrap_draft(bootstrap.draft, cx);
+                                if let Some(q) = bootstrap
+                                    .pending_questions
+                                    .iter()
+                                    .find(|q| !this.answered_question_ids.contains(&q.request_id))
+                                {
+                                    this.set_pending_question_for_session(
+                                        &session_id,
+                                        Some(console_core::AskQuestionRequest::from_proto(q)),
+                                    );
+                                }
 
                                 cx.notify();
                             });

@@ -59,8 +59,6 @@ impl RenderOnce for BlockedFilePanel {
                     .p(px(24.0))
                     .rounded(px(8.0))
                     .bg(theme.surface)
-                    .border_1()
-                    .border_color(theme.border)
                     .flex()
                     .flex_col()
                     .items_center()

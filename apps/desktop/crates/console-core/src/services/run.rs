@@ -146,40 +146,6 @@ impl RunService {
         }
     }
 
-    pub async fn approve_permission(
-        &self,
-        session_id: &str,
-        payload: ApproveToolPermissionDto,
-    ) -> Result<bool> {
-        let url = self
-            .transport
-            .url(&format!("/api/sessions/{}/approve", session_id))
-            .await;
-        let resp = self
-            .transport
-            .client()
-            .post(&url)
-            .headers(self.transport.build_headers().await)
-            .json(&payload)
-            .send()
-            .await
-            .context("Failed to approve tool permission")?;
-
-        let body: ApiResponse<serde_json::Value> = self
-            .transport
-            .decode_json(resp)
-            .await
-            .context("Failed to parse permission response")?;
-        if body.success {
-            Ok(payload.allow)
-        } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to approve permission".into())
-            ))
-        }
-    }
-
     /// Start a run and stream its events over SSE.
     ///
     /// Returns an owned stream so the transport switch in
@@ -307,6 +273,74 @@ impl RunService {
             Err(anyhow!(
                 body.error
                     .unwrap_or_else(|| "Failed to get queued prompt".into())
+            ))
+        }
+    }
+
+    /// Every queued prompt, next to run first.
+    pub async fn get_queued_prompts(&self, session_id: &str) -> Result<Vec<QueuedPrompt>> {
+        #[derive(serde::Deserialize)]
+        struct QueuedPrompts {
+            #[serde(default, rename = "queuedPrompts")]
+            queued_prompts: Vec<QueuedPrompt>,
+        }
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/queue/all", session_id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get queued prompts")?;
+
+        let body: ApiResponse<QueuedPrompts> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse queued prompts response")?;
+        if body.success {
+            Ok(body.data.map(|d| d.queued_prompts).unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to get queued prompts".into())
+            ))
+        }
+    }
+
+    /// Remove one queued prompt; true when it was queued.
+    pub async fn delete_queued_prompt(&self, session_id: &str, queue_id: &str) -> Result<bool> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/queue/{}", session_id, queue_id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .delete(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to delete queued prompt")?;
+
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse delete queued prompt response")?;
+        if body.success {
+            Ok(body
+                .data
+                .and_then(|v| v.get("deleted").and_then(|b| b.as_bool()))
+                .unwrap_or(true))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to delete queued prompt".into())
             ))
         }
     }

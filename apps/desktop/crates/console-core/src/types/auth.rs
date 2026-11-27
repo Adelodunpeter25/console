@@ -20,6 +20,7 @@ pub enum OAuthProviderId {
     Antigravity,
     Codex,
     Claude,
+    Devin,
 }
 
 impl OAuthProviderId {
@@ -28,6 +29,7 @@ impl OAuthProviderId {
             Self::Antigravity => "antigravity",
             Self::Codex => "codex",
             Self::Claude => "claude",
+            Self::Devin => "devin",
         }
     }
 }
@@ -52,6 +54,7 @@ pub fn auth_status_for<'a>(
         "codex" | "openai" => status.codex.as_ref(),
         // "anthropic" is the catalog's name for the claude provider.
         "claude" | "anthropic" => status.claude.as_ref(),
+        "devin" => status.devin.as_ref(),
         _ => None,
     }
 }
@@ -69,6 +72,7 @@ pub fn merge_provider_status(
         "antigravity" => &mut status.antigravity,
         "codex" | "openai" => &mut status.codex,
         "claude" | "anthropic" => &mut status.claude,
+        "devin" => &mut status.devin,
         _ => return,
     };
     *slot = Some(patch);

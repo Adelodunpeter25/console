@@ -7,12 +7,14 @@ package tools
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 const (
@@ -31,6 +33,22 @@ func truncateMarkdown(text string) string {
 		return text
 	}
 	return text[:firecrawlMaxMarkdown] + firecrawlTruncateNotice
+}
+
+// renderScrapeMarkdown renders a scraped page over the cap: head for the
+// model, full markdown spilled to a file it can re-read. Search results keep
+// the plain truncation — spilling a file per hit would be noise.
+func renderScrapeMarkdown(url, text string) string {
+	if len(text) <= firecrawlMaxMarkdown {
+		return text
+	}
+	path, err := utils.SpillFile(utils.SpillDir(""), utils.SpillURLName(url), ".md", text)
+	if err != nil {
+		return truncateMarkdown(text)
+	}
+	return text[:firecrawlMaxMarkdown] + fmt.Sprintf(
+		"\n\n[...content truncated at %s: full markdown saved to %s...]",
+		utils.HumanBytes(firecrawlMaxMarkdown), path)
 }
 
 func firecrawlBaseURL() string {
@@ -110,7 +128,7 @@ func firecrawlScrape(ctx context.Context, url string) (markdown, title, sourceUR
 	if sc, ok := meta["statusCode"].(float64); ok {
 		statusCode = int(sc)
 	}
-	return truncateMarkdown(md), title, sourceURL, statusCode, true, nil
+	return renderScrapeMarkdown(url, md), title, sourceURL, statusCode, true, nil
 }
 
 // FirecrawlSearchResult is one hit from firecrawlSearch.

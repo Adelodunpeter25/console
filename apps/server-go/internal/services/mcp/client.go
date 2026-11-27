@@ -4,8 +4,8 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"net/http"
 	"os"
 	"os/exec"

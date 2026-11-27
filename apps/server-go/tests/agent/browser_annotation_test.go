@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"strings"
 	"testing"
 
@@ -210,5 +210,20 @@ func TestAnnotationCharsTracksRenderedSize(t *testing.T) {
 	}
 	if loop.AnnotationChars(nil) != 0 {
 		t.Error("nil annotations should measure zero")
+	}
+}
+
+func TestMaterializeUserMessageSkipsSkillAndChatChips(t *testing.T) {
+	user := loop.UserMessage{
+		Role:         loop.RoleUser,
+		Content:      "/review $my-chat a.rs",
+		ContextFiles: []string{"skill:review", "chat:my-chat", "a.rs"},
+	}
+	got := loop.MaterializeUserMessage(user).Content
+	if strings.Contains(got, "skill:") || strings.Contains(got, "chat:") {
+		t.Errorf("chip paths leaked into agent text: %q", got)
+	}
+	if !strings.Contains(got, "   a.rs ") {
+		t.Errorf("file path missing: %q", got)
 	}
 }

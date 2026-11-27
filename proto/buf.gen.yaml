@@ -1,5 +1,7 @@
 version: v1
 plugins:
-  - remote: buf.build/protocolbuffers/go:v1.36.12
+  # Local protoc-gen-go (install: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12).
+  # Was a buf remote plugin; those no longer parse in current buf releases.
+  - plugin: go
     out: apps/server-go/internal/gen
     opt: paths=source_relative

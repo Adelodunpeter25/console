@@ -1,4 +1,6 @@
-use console_shared::composer::file_comments::{FileCommentRef, format_file_comment, split_file_comments};
+use console_shared::composer::file_comments::{
+    FileCommentRef, format_file_comment, split_file_comments,
+};
 
 #[test]
 fn round_trips_comments_after_text() {
@@ -12,8 +14,16 @@ fn round_trips_comments_after_text() {
     assert_eq!(
         comments,
         vec![
-            FileCommentRef { path: "src/a.rs".into(), lines: "3".into(), text: "rename".into() },
-            FileCommentRef { path: "src/b.rs".into(), lines: "10–12".into(), text: "line one\nline two".into() },
+            FileCommentRef {
+                path: "src/a.rs".into(),
+                lines: "3".into(),
+                text: "rename".into()
+            },
+            FileCommentRef {
+                path: "src/b.rs".into(),
+                lines: "10–12".into(),
+                text: "line one\nline two".into()
+            },
         ]
     );
 }

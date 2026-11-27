@@ -3,5 +3,7 @@
 //! `$OUT_DIR/console.v1.serde.rs`. Both are generated at build time and
 //! never committed.
 
+#![allow(clippy::all)]
+
 include!(concat!(env!("OUT_DIR"), "/console.v1.rs"));
 include!(concat!(env!("OUT_DIR"), "/console.v1.serde.rs"));

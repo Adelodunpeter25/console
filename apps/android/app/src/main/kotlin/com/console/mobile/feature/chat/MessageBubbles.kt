@@ -17,9 +17,18 @@ fun MessageBubbleItem(
     fileChanges: List<SessionFileChange> = emptyList(),
     onOpenChange: ((SessionFileChange) -> Unit)? = null,
     onFork: ((String) -> Unit)? = null,
+    onReply: ((String) -> Unit)? = null,
 ) {
     when (item) {
-        is UserMessage -> UserBubble(content = item.content, createdAt = item.createdAt, attachments = item.attachments)
+        is UserMessage -> UserBubble(
+            content = item.content,
+            createdAt = item.createdAt,
+            attachments = item.attachments,
+            annotations = item.annotations,
+            contextFiles = item.contextFiles,
+            planMode = item.approvalMode == com.console.mobile.data.model.ApprovalMode.PlanMode.value,
+            source = item.source,
+        )
         is ToolResultMessage -> {}
         is AssistantMessage -> {
             val hasToolCalls = item.content.any { it is ToolCallPart }
@@ -37,6 +46,7 @@ fun MessageBubbleItem(
                 messageId = item.id,
                 onFork = onFork,
                 tokPerSec = item.tokPerSec,
+                onReply = onReply,
             )
         }
     }

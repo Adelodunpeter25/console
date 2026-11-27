@@ -8,8 +8,8 @@ actions too, since every low-level operation is a method here.
 
 ## Rules
 
-- Calls are **synchronous**. No `async`, `await`, `.then`, or Promises — the
-  call blocks and returns the result.
+- Methods wait for their result, and modern JavaScript features such as
+  `async`, `await`, and Promises are supported.
 - The **final expression is the result**. No top-level `return`; `print()`
   narrates intermediate values.
 - **Never** complete a purchase, send a message or email, change
@@ -30,7 +30,7 @@ existing tab without owning it. `browser.close` refuses to close tabs the
 kernel did not open — to close one of those, ask the user, since you have no
 tool that closes user tabs.
 
-- `browser.open({url})` → `{tabId, url, title}` — opens a fresh tab and makes it the target of later calls.
+- `browser.open({url})` → `{tabId, url, title, requestedUrl, redirected}` — opens a fresh tab and makes it the target of later calls.
 - `browser.page({tabId?})` → `{tabId, url, title, active, owned}` — attaches; no tabId picks the chat's current browser tab.
 - `browser.tabs()` → array of `{tabId, url, title, active, owned}`.
 
@@ -38,7 +38,7 @@ tool that closes user tabs.
 
 All of these act on the active tab; pass `{tabId}` to target another:
 
-- `browser.goto({url})` → `{tabId, url, title}` — navigates the active tab.
+- `browser.goto({url})` → `{tabId, url, title, requestedUrl, redirected}` — navigates the active tab.
 - `browser.snapshot({selector?})` → the accessibility tree as text, with refs like `e12`. Scope with `{selector}` to keep it small.
 - `browser.content({selector?})` → page text (or one selector's text).
 - `browser.query({selector})` → structured JSON `{count, items}` for up to 30 visible matches — use for cards, tables, lists.
@@ -46,7 +46,7 @@ All of these act on the active tab; pass `{tabId}` to target another:
 - `browser.click({ref | selector | text | role, name | handle})` → `{tabId, url, title}`.
 - `browser.type({ref | selector | role, name | handle, text, submit?})` → identity — clears and fills a text field; `submit: true` presses Enter.
 - `browser.waitFor({selector? | text? | url?, timeoutMs?})` → `{ok, url, title}` — waits until a visible selector, page text, or URL substring appears (default 10s, max 60s).
-- `browser.close({tabId})`, `browser.closeAll()` — close kernel-owned tabs.
+- `browser.close({tabId?})`, `browser.closeAll()` — close kernel-owned tabs (defaults to the active tab when `tabId` is omitted).
 
 ### Targets
 

@@ -16,6 +16,10 @@ use crate::theme::Theme;
 /// the two stay visually identical.
 pub const FILE_MENTION_ICON_SIZE: f32 = 11.0;
 
+/// Downward nudge for the chip icon. Centering on the line box leaves the icon
+/// visually high against lowercase text, whose x-height sits below that centre.
+pub const FILE_MENTION_ICON_Y_NUDGE: f32 = 1.0;
+
 /// Corner radius for the file-mention pill. Matches the composer's painted quad.
 pub const FILE_MENTION_RADIUS: f32 = 4.0;
 
@@ -61,23 +65,24 @@ pub fn file_mention_chip(path: &str, label: impl Into<String>, theme: Theme) -> 
 
 /// The icon a mention chip paints: a file-type icon for files, one generic
 /// icon for skills.
-pub(crate) fn mention_icon(path: &str, theme: Theme) -> gpui::AnyElement {
+pub(crate) fn mention_icon(path: &str, size: f32, theme: Theme) -> gpui::AnyElement {
     if path.starts_with(console_shared::composer::mentions::CHAT_PATH_PREFIX) {
         crate::primitives::app_icon(
             crate::primitives::IconName::ChatRoundLine,
-            FILE_MENTION_ICON_SIZE,
+            size,
             theme.accent,
         )
         .into_any_element()
     } else if path.starts_with(console_shared::composer::mentions::SKILL_PATH_PREFIX) {
-        crate::primitives::app_icon(
-            crate::primitives::IconName::Sparkle,
-            FILE_MENTION_ICON_SIZE,
-            theme.accent,
-        )
-        .into_any_element()
+        crate::primitives::app_icon(crate::primitives::IconName::Sparkle, size, theme.accent)
+            .into_any_element()
+    } else if path.starts_with(console_shared::composer::mentions::IMAGE_PATH_PREFIX) {
+        crate::primitives::file_type_icon("image.png", size).into_any_element()
+    } else if path.ends_with('/') || path.ends_with('\\') || std::path::Path::new(path).is_dir() {
+        crate::primitives::app_icon(crate::primitives::IconName::Folder, size, theme.accent)
+            .into_any_element()
     } else {
-        crate::primitives::file_type_icon(path, FILE_MENTION_ICON_SIZE).into_any_element()
+        crate::primitives::file_type_icon(path, size).into_any_element()
     }
 }
 
@@ -85,6 +90,10 @@ pub(crate) fn mention_icon(path: &str, theme: Theme) -> gpui::AnyElement {
 /// Because `\u{00A0}` is a Unicode glue character, it wraps with the filename to new rows
 /// without ever collapsing or protruding into negative coordinates.
 pub const FILE_MENTION_SPACER: &str = "\u{00A0}\u{00A0}\u{00A0}\u{00A0}";
+
+/// Right padding inside the pill, as text so the chip's own wash stops short of
+/// the following space and a visible gap is left before the next word.
+pub const FILE_MENTION_TRAIL: &str = "\u{00A0}";
 
 /// A file mention range in a flat string. The range covers only the visible
 /// filename; the surrounding whitespace remains part of the normal text flow.
@@ -95,6 +104,8 @@ pub(crate) struct InlineFileMention {
 }
 
 struct MentionIconLayout {
+    /// Set for an `[Image N]` chip, so a click can open that image.
+    image_number: Option<usize>,
     spacer_range: Range<usize>,
     chip_range: Range<usize>,
     icon: gpui::AnyElement,
@@ -124,6 +135,13 @@ pub(crate) struct InlineFileMentionText {
     /// shared selection state plus this element's registry key. `None` for
     /// surfaces without selection (the composer's own field).
     selection: Option<(TranscriptSelection, TextKey)>,
+    /// Opens the picture behind an `[Image N]` chip (1-based) when it is clicked.
+    on_image_click: Option<Rc<dyn Fn(usize, &mut Window, &mut App)>>,
+    /// Hover state for `[Image N]` chips plus the images their cards show.
+    image_hover: Option<(
+        gpui::Entity<crate::common::image_hover::ImageChipHover>,
+        Vec<console_core::ImageAttachment>,
+    )>,
 }
 
 impl InlineFileMentionText {
@@ -132,7 +150,26 @@ impl InlineFileMentionText {
             text: text.into(),
             mentions,
             selection: None,
+            on_image_click: None,
+            image_hover: None,
         }
+    }
+
+    pub(crate) fn image_hover(
+        mut self,
+        state: gpui::Entity<crate::common::image_hover::ImageChipHover>,
+        attachments: Vec<console_core::ImageAttachment>,
+    ) -> Self {
+        self.image_hover = Some((state, attachments));
+        self
+    }
+
+    pub(crate) fn on_image_click(
+        mut self,
+        handler: Rc<dyn Fn(usize, &mut Window, &mut App)>,
+    ) -> Self {
+        self.on_image_click = Some(handler);
+        self
     }
 
     /// Make this text selectable inside the transcript: its flat text and
@@ -140,14 +177,6 @@ impl InlineFileMentionText {
     /// washes across it.
     pub(crate) fn with_selection(mut self, selection: TranscriptSelection, key: TextKey) -> Self {
         self.selection = Some((selection, key));
-        self
-    }
-}
-
-impl IntoElement for InlineFileMentionText {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
         self
     }
 }
@@ -179,7 +208,8 @@ impl Element for InlineFileMentionText {
         sorted_mentions.sort_by_key(|m| m.range.start);
 
         let mut display_text = String::with_capacity(
-            self.text.len() + sorted_mentions.len() * FILE_MENTION_SPACER.len(),
+            self.text.len()
+                + sorted_mentions.len() * (FILE_MENTION_SPACER.len() + FILE_MENTION_TRAIL.len()),
         );
         struct PreparedMention {
             spacer_range: Range<usize>,
@@ -202,7 +232,17 @@ impl Element for InlineFileMentionText {
             let spacer_start = display_text.len();
             display_text.push_str(FILE_MENTION_SPACER);
             let spacer_end = display_text.len();
-            display_text.push_str(&self.text[mention.range.clone()]);
+            // Chat and skill chips show just the slug/name; the `$` or `/`
+            // stays in the text sent.
+            let has_prefix = [
+                console_shared::composer::mentions::CHAT_PATH_PREFIX,
+                console_shared::composer::mentions::SKILL_PATH_PREFIX,
+            ]
+            .iter()
+            .any(|prefix| mention.path.starts_with(prefix));
+            let shown_start = mention.range.start + usize::from(has_prefix);
+            display_text.push_str(&self.text[shown_start..mention.range.end]);
+            display_text.push_str(FILE_MENTION_TRAIL);
             let chip_end = display_text.len();
             last_idx = mention.range.end;
 
@@ -259,11 +299,15 @@ impl Element for InlineFileMentionText {
         for m in prepared_mentions {
             let mut icon = div()
                 .absolute()
-                .child(mention_icon(&m.path, theme))
+                .child(mention_icon(&m.path, FILE_MENTION_ICON_SIZE, theme))
                 .into_any_element();
             let layout_id = icon.request_layout(window, cx);
             child_layout_ids.push(layout_id);
             mention_icons.push(MentionIconLayout {
+                image_number: m
+                    .path
+                    .strip_prefix(console_shared::composer::mentions::IMAGE_PATH_PREFIX)
+                    .and_then(|n| n.parse().ok()),
                 spacer_range: m.spacer_range,
                 chip_range: m.chip_range,
                 icon,
@@ -329,7 +373,9 @@ impl Element for InlineFileMentionText {
             };
             let icon_origin = point(
                 first_rect.origin.x + px(3.0),
-                first_rect.origin.y + (first_rect.size.height - icon_size) / 2.0,
+                first_rect.origin.y
+                    + (first_rect.size.height - icon_size) / 2.0
+                    + px(FILE_MENTION_ICON_Y_NUDGE),
             );
             let child_origin = window.layout_bounds(mention_icon.layout_id).origin;
             let offset = icon_origin - child_origin;
@@ -337,6 +383,35 @@ impl Element for InlineFileMentionText {
                 gpui::Point::new(offset.x.round(), offset.y.round()),
                 |window| mention_icon.icon.prepaint(window, cx),
             );
+        }
+
+        if let Some((state, attachments)) = &self.image_hover {
+            let theme = Theme::current(cx);
+            let icons = &layout_state.mention_icons;
+            let card = state.update(cx, |hover, _| {
+                hover.card(
+                    attachments,
+                    |number| {
+                        let chip = icons.iter().find(|m| m.image_number == Some(number))?;
+                        range_rects(&layout, &chip.chip_range, 0.0, 2.0)
+                            .first()
+                            .copied()
+                    },
+                    theme,
+                )
+            });
+            if let Some(mut card) = card {
+                // `defer_draw` expects a laid-out element; a bare one panics in prepaint.
+                card.layout_as_root(
+                    gpui::size(
+                        gpui::AvailableSpace::Definite(window.viewport_size().width),
+                        gpui::AvailableSpace::Definite(window.viewport_size().height),
+                    ),
+                    window,
+                    cx,
+                );
+                window.defer_draw(card, gpui::Point::default(), 100, None);
+            }
         }
     }
 
@@ -356,14 +431,9 @@ impl Element for InlineFileMentionText {
 
         for mention_icon in &layout_state.mention_icons {
             let rects = range_rects(&layout, &mention_icon.chip_range, 0.0, 2.0);
-            let num_rects = rects.len();
-            for (index, rect) in rects.into_iter().enumerate() {
-                let mut quad_rect = rect;
-                if index == num_rects - 1 {
-                    quad_rect.size.width += px(4.0);
-                }
+            for rect in rects {
                 window.paint_quad(quad(
-                    quad_rect,
+                    rect,
                     px(FILE_MENTION_RADIUS),
                     mention_bg,
                     px(1.0),
@@ -408,6 +478,59 @@ impl Element for InlineFileMentionText {
         );
         for mention_icon in &mut layout_state.mention_icons {
             mention_icon.icon.paint(window, cx);
+        }
+
+        if self.on_image_click.is_some() || self.image_hover.is_some() {
+            let chips: Vec<(usize, Vec<Bounds<gpui::Pixels>>)> = layout_state
+                .mention_icons
+                .iter()
+                .filter_map(|m| {
+                    Some((
+                        m.image_number?,
+                        range_rects(&layout, &m.chip_range, 0.0, 2.0),
+                    ))
+                })
+                .collect();
+            let mouse = window.mouse_position();
+            if chips
+                .iter()
+                .any(|(_, rects)| rects.iter().any(|r| r.contains(&mouse)))
+            {
+                window.set_window_cursor_style(gpui::CursorStyle::PointingHand);
+            }
+            if let Some(handler) = self.on_image_click.clone() {
+                let state = self.image_hover.as_ref().map(|(state, _)| state.clone());
+                let chips = chips.clone();
+                window.on_mouse_event(move |event: &gpui::MouseDownEvent, phase, window, cx| {
+                    if phase != gpui::DispatchPhase::Bubble
+                        || event.button != gpui::MouseButton::Left
+                    {
+                        return;
+                    }
+                    if let Some((number, _)) = chips
+                        .iter()
+                        .find(|(_, rects)| rects.iter().any(|r| r.contains(&event.position)))
+                    {
+                        if let Some(state) = &state {
+                            state.update(cx, |hover, cx| hover.dismiss(cx));
+                        }
+                        handler(*number, window, cx);
+                    }
+                });
+            }
+            if let Some((state, _)) = self.image_hover.clone() {
+                crate::common::image_hover::dismiss_on_scroll(window, state.clone());
+                window.on_mouse_event(move |event: &gpui::MouseMoveEvent, phase, _window, cx| {
+                    if phase != gpui::DispatchPhase::Bubble {
+                        return;
+                    }
+                    let hovered = chips
+                        .iter()
+                        .find(|(_, rects)| rects.iter().any(|r| r.contains(&event.position)))
+                        .map(|(number, _)| *number);
+                    state.update(cx, |hover, cx| hover.hover(hovered, cx));
+                });
+            }
         }
     }
 }

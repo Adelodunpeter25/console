@@ -62,7 +62,7 @@ import com.console.mobile.ui.components.common.new.SectionSkeleton
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UsageSettings(onBack: () -> Unit) {
+fun UsageSettings(onBack: (() -> Unit)? = null) {
     val usageState by AppContainer.usageStateHolder.state.collectAsStateWithLifecycle()
     val authState by AppContainer.authStateHolder.state.collectAsStateWithLifecycle()
     var refreshing by remember { mutableStateOf(false) }
@@ -115,7 +115,7 @@ fun UsageSettings(onBack: () -> Unit) {
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {
-                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
+                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 96.dp)) {
                     Text("Remaining quota for your signed-in providers. Pull to refresh.", color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp))
                     cards.forEach { card ->
                         UsageProviderCard(

@@ -6,7 +6,7 @@ package browseruse
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"sync"
 	"time"
 
@@ -32,7 +32,7 @@ type browserTool struct {
 // variables and owned tabs never leak into another session's kernel.
 func NewBrowserTool(manager *Manager, sessionID string, handler tools.BrowserHandler) tools.Tool {
 	inner := tools.NewTool("browser",
-		"Drive the built-in desktop browser with the preinstalled browser object (browser.open, browser.click, browser.query, ...). One call can navigate, wait, extract and loop; variables persist until reset. The /browser-use instructions in this conversation document the methods; when they are not loaded yet, read the browser-use skill to load them. When a browsing workflow is done, close the tabs it opened with the browser_reset tool.",
+		"Drive the built-in desktop browser with the preinstalled browser object (browser.open, browser.click, browser.query, ...). One call can navigate, wait, extract and loop; variables persist until reset. The /browser-use instructions in this conversation document the methods; when they are not loaded, always read the browser-use skill to load them. Always close the tabs you opened with the browser_reset tool when the browser workflow is done.",
 		// Read-tier, like the low-level tool it replaced: browsing is
 		// observation, and plan mode may read pages. A click on a page is
 		// gated by the skill's risk rules, not the approval table.
@@ -41,6 +41,29 @@ func NewBrowserTool(manager *Manager, sessionID string, handler tools.BrowserHan
 			return nil, tools.NewToolError("browser requires call context")
 		})
 	return &browserTool{Tool: inner, manager: manager, sessionID: sessionID, handler: handler}
+}
+
+// MethodSignatures lists the methods available on the browser object.
+func MethodSignatures() []string {
+	return []string{
+		"browser.open({url})",
+		"browser.goto({url, tabId?})",
+		"browser.snapshot({tabId?})",
+		"browser.content({tabId?})",
+		"browser.query({selector, tabId?})",
+		"browser.click({selector? | text? | ref?})",
+		"browser.type({text, selector? | ref?})",
+		"browser.waitFor({selector? | text? | url?})",
+		"browser.extract({fields})",
+		"browser.scroll({direction})",
+		"browser.tabs()",
+		"browser.close({tabId})",
+		"browser.paginate({nextSelector})",
+	}
+}
+
+func (t *browserTool) Methods() []string {
+	return MethodSignatures()
 }
 
 // Execute dispatches to the session's runtime. The handler arrives per run,
@@ -77,7 +100,7 @@ type browserResetTool struct {
 // Closing tabs changes what the user sees, but only among tabs the kernel
 // itself opened, which is why the tool is read-tier like computer_reset.
 func NewResetTool(manager *Manager, sessionID string, handler tools.BrowserHandler) tools.Tool {
-	inner := tools.NewTool("browser_reset",
+	inner := tools.NewTool("browserReset",
 		"Clean up browser use: close the tabs the kernel opened (all of them, or one with tabId). A full reset also forgets every browser variable. Tabs you or the user opened another way are never closed.",
 		tools.TierRead,
 		func(ctx context.Context, in browserResetInput) (any, error) {

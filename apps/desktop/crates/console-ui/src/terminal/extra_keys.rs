@@ -7,6 +7,12 @@ use crate::theme::Theme;
 /// experiments and is not shown in the app.
 pub struct ExtraKeysBar;
 
+impl Default for ExtraKeysBar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExtraKeysBar {
     pub fn new() -> Self {
         Self

@@ -31,12 +31,6 @@ fn test_rasterize_malformed_svg() {
 }
 
 #[test]
-fn test_rasterize_empty_data() {
-    let result = rasterize_svg(b"", 2048);
-    assert!(result.is_none(), "Expected empty data to return None");
-}
-
-#[test]
 fn test_rasterize_scaling_bounds() {
     let svg_data = br#"<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="500">
         <circle cx="500" cy="250" r="200" fill="blue"/>

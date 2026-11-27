@@ -315,17 +315,3 @@ func (r *Runtime) sessionsClearQueue(_ context.Context, args map[string]any) (*j
 	}
 	return marshalResult(map[string]any{"session_id": id, "cleared": cleared})
 }
-
-// optionalString reads a string argument. A value of any other type is an
-// error rather than being treated as absent.
-func optionalString(args map[string]any, name string) (string, error) {
-	value, present := args[name]
-	if !present {
-		return "", nil
-	}
-	text, ok := value.(string)
-	if !ok {
-		return "", fmt.Errorf("%s must be a string, got %v", name, value)
-	}
-	return text, nil
-}

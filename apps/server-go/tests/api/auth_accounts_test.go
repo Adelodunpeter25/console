@@ -288,11 +288,15 @@ func TestAuthAccountsEnvAccountLocked(t *testing.T) {
 func TestAuthAccountsUnknownProviders(t *testing.T) {
 	app, _ := newAuthAccountsApp(t)
 
-	if code, _ := do(t, app, "PATCH", "/api/auth/accounts/devin/acc_x", `{"active":true}`); code != 501 {
-		t.Fatalf("devin patch = %d, want 501", code)
+	// Devin is a full account provider now: an unknown account id is a 404,
+	// not the old reserved-provider 501.
+	if code, _ := do(t, app, "PATCH", "/api/auth/accounts/devin/acc_x", `{"active":true}`); code != 404 {
+		t.Fatalf("devin patch = %d, want 404", code)
 	}
-	if code, _ := do(t, app, "DELETE", "/api/auth/accounts/devin/acc_x", ""); code != 501 {
-		t.Fatalf("devin delete = %d, want 501", code)
+	// Delete is idempotent like the other providers: an unknown account id
+	// still answers 200 with the post-delete status.
+	if code, _ := do(t, app, "DELETE", "/api/auth/accounts/devin/acc_x", ""); code != 200 {
+		t.Fatalf("devin delete = %d, want 200", code)
 	}
 	if code, _ := do(t, app, "PATCH", "/api/auth/accounts/nope/acc_x", `{"active":true}`); code != 400 {
 		t.Fatalf("unknown provider patch = %d, want 400", code)

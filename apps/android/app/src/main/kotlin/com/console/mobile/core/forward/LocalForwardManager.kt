@@ -247,7 +247,8 @@ class LocalForwardManager(
                 if (!ws.send(buffer.toByteString(0, read))) break
             }
             ws.close(1000, null)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             runCatching { ws?.cancel() }
         } finally {
             // Tear both ends down: a closed socket makes the listener's writes

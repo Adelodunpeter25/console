@@ -11,7 +11,7 @@ use super::macos_notifications;
 impl ConsoleDesktopApp {
     pub fn init_notifications(&mut self, cx: &mut Context<Self>) {
         let client = self.client.clone();
-        let transport = self.transport.clone();
+        let transport = self.transport;
         let entity = cx.entity().downgrade();
 
         // Native center delegate + authorization. Clicks arrive as session ids.
@@ -38,6 +38,13 @@ impl ConsoleDesktopApp {
             loop {
                 match transport.watch_notifications(&client).await {
                     Ok(mut stream) => {
+                        // Pushes sent while the stream was down are gone;
+                        // the server kept the latest set, so ask for it.
+                        let _ = cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| this.reload_open_suggestions(cx));
+                            }
+                        });
                         while let Some(event_res) = stream.next().await {
                             if let Ok(event) = event_res {
                                 let session_id = event.session_id.clone();
@@ -46,14 +53,47 @@ impl ConsoleDesktopApp {
                                     // finished background work. Its old run stream has
                                     // ended, so re-attach to the new run. Wait briefly
                                     // so the old run's sessionEnd lands first.
+                                    let wake_message = event.body.clone();
+                                    let resumed_at = chrono::Utc::now().timestamp();
                                     cx.background_executor()
                                         .timer(std::time::Duration::from_millis(400))
                                         .await;
                                     let _ = cx.update(|cx| {
                                         if let Some(app) = entity.upgrade() {
                                             app.update(cx, |this, cx| {
-                                                this.attach_resumed_session(&session_id, cx);
+                                                this.attach_resumed_session(
+                                                    &session_id,
+                                                    &wake_message,
+                                                    resumed_at,
+                                                    cx,
+                                                );
                                             });
+                                        }
+                                    });
+                                    continue;
+                                }
+                                if event.kind == "suggestions" {
+                                    // Silent signal: chips for the chat that just
+                                    // finished. Dropped if the chat started working
+                                    // again before they arrived.
+                                    let items = event.items.clone();
+                                    let _ = cx.update(|cx| {
+                                        if let Some(app) = entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.set_suggestions(&session_id, items, cx);
+                                            });
+                                        }
+                                    });
+                                    continue;
+                                }
+                                if event.kind == "read_state" {
+                                    // Silent signal: another device (or this one) read
+                                    // or unread a chat. Refresh the headers so the dot
+                                    // and the Dock badge follow without waiting for the
+                                    // 30-second poll. Cheap: one list request.
+                                    let _ = cx.update(|cx| {
+                                        if let Some(app) = entity.upgrade() {
+                                            app.update(cx, |this, cx| this.load_sessions(cx));
                                         }
                                     });
                                     continue;
@@ -61,13 +101,48 @@ impl ConsoleDesktopApp {
                                 if event.kind == "session_deleted" {
                                     // Silent signal: the chat was deleted (here or on
                                     // another device or by the retention sweep). Its
-                                    // agent browser tabs go with it; the notification
-                                    // is a no-op when none are open.
+                                    // sidebar row, chat tabs and agent browser tabs go
+                                    // with it; a no-op for a chat already dropped here.
                                     if !session_id.is_empty() {
                                         let _ = cx.update(|cx| {
                                             if let Some(app) = entity.upgrade() {
                                                 app.update(cx, |this, cx| {
-                                                    this.close_session_browser_tabs(&session_id, cx);
+                                                    if this
+                                                        .sessions
+                                                        .iter()
+                                                        .any(|s| s.id == session_id)
+                                                    {
+                                                        super::types::rc_slice_edit(
+                                                            &mut this.sessions,
+                                                            |v| v.retain(|s| s.id != session_id),
+                                                        );
+                                                        this.close_session_chat_tabs(
+                                                            &session_id,
+                                                            cx,
+                                                        );
+                                                    }
+                                                    this.wake_records.remove(&session_id);
+                                                    this.close_session_browser_tabs(
+                                                        &session_id,
+                                                        cx,
+                                                    );
+                                                });
+                                            }
+                                        });
+                                    }
+                                    continue;
+                                }
+                                if event.kind == "background_work" {
+                                    // Silent signal: background shell status changed. Refresh
+                                    // the session's work list so the shell pill updates immediately.
+                                    if !session_id.is_empty() {
+                                        let _ = cx.update(|cx| {
+                                            if let Some(app) = entity.upgrade() {
+                                                app.update(cx, |this, cx| {
+                                                    this.load_background_work(
+                                                        session_id.clone(),
+                                                        cx,
+                                                    );
                                                 });
                                             }
                                         });
@@ -133,18 +208,77 @@ impl ConsoleDesktopApp {
     }
 
     /// Re-attach every pane showing `session_id` to its freshly woken run.
-    fn attach_resumed_session(&mut self, session_id: &str, cx: &mut Context<Self>) {
-        if session_id.is_empty() || self.is_session_running(session_id) {
+    fn attach_resumed_session(
+        &mut self,
+        session_id: &str,
+        wake_message: &str,
+        resumed_at: i64,
+        cx: &mut Context<Self>,
+    ) {
+        if session_id.is_empty() {
             return;
         }
+        let is_background_wake = !wake_message.is_empty()
+            && wake_message != "Scheduled automation running"
+            && wake_message != "Webhook event received";
+        if is_background_wake {
+            let records = self.wake_records.entry(session_id.to_string()).or_default();
+            let already_recorded = records
+                .last()
+                .is_some_and(|record| record.at >= resumed_at - 5);
+            if !already_recorded {
+                records.push(console_core::WakeRecord {
+                    message: wake_message.to_string(),
+                    at: resumed_at,
+                });
+                if records.len() > 16 {
+                    let excess = records.len() - 16;
+                    records.drain(..excess);
+                }
+            }
+        }
+        if self.is_session_running(session_id) {
+            return;
+        }
+        // The wake turn just started: seed timers from the recorded
+        // backgroundWorkContinue / resumed receipt time, not the original prompt.
+        let wake_at = self
+            .wake_records
+            .get(session_id)
+            .and_then(|records| records.last())
+            .map(|record| record.at);
         let pane = self
             .workspace_root
             .leaves()
             .into_iter()
             .map(|leaf| leaf.id.clone())
             .find(|id| self.active_session_for_pane(id).as_deref() == Some(session_id));
-        if let Some(pane_id) = pane {
-            self.attach_session_run_for_pane(pane_id, session_id.to_string(), cx);
+        let Some(pane_id) = pane else { return };
+
+        // The backgroundWorkContinue frame is broadcast once at wake time; a
+        // client that missed it (old run stream ended) never sees it again
+        // because attach passes no `since`. Push the transcript boundary here
+        // unless the live handler already did.
+        let boundary = self
+            .wake_records
+            .get(session_id)
+            .and_then(|records| records.last())
+            .filter(|record| {
+                record.at
+                    > self
+                        .wake_boundary_pushed_at
+                        .get(session_id)
+                        .copied()
+                        .unwrap_or(i64::MIN)
+            })
+            .map(|record| (record.message.clone(), record.at));
+        if let Some((message, at)) = boundary {
+            self.wake_boundary_pushed_at
+                .insert(session_id.to_string(), at);
+            self.transcript_for_pane(&pane_id).update(cx, |t, cx| {
+                t.push_run_boundary(message, at, cx);
+            });
         }
+        self.attach_session_run_for_pane(pane_id, session_id.to_string(), wake_at, cx);
     }
 }

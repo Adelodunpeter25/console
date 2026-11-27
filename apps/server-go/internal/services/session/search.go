@@ -13,8 +13,9 @@
 package session
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -44,6 +45,8 @@ type SearchScope struct {
 	Cwd       string
 	// Exclude lists sessions to skip, such as the one the caller is running in.
 	Exclude []string
+	// IncludeDeleted also searches soft-deleted (trashed) sessions.
+	IncludeDeleted bool
 }
 
 // SearchOptions tunes a search.
@@ -70,6 +73,10 @@ type SearchHit struct {
 	Role         string `json:"role"`
 	CreatedAt    int64  `json:"created_at"`
 	Snippet      string `json:"snippet"`
+	// SessionDeleted is true when the session the hit came from is
+	// soft-deleted (in the trash); such a session is only readable
+	// through a reader that includes deleted sessions.
+	SessionDeleted bool `json:"session_deleted,omitempty"`
 	// Matches are the occurrences within the message's full searchable text.
 	Matches []Match `json:"matches"`
 	// SnippetStart is where the snippet begins within that text, in characters,
@@ -161,6 +168,7 @@ func (s *Service) Search(scope SearchScope, query string, opts SearchOptions) (*
 		}
 		res.SessionsSearched++
 		for _, hit := range hits {
+			hit.SessionDeleted = h.DeletedAt != nil
 			if len(res.Hits) >= limit {
 				res.Truncated = true
 				res.Note = "stopped at the result limit; narrow the query or raise limit to see more"
@@ -170,7 +178,9 @@ func (s *Service) Search(scope SearchScope, query string, opts SearchOptions) (*
 		}
 	}
 	// Newest message first across sessions.
-	sort.SliceStable(res.Hits, func(i, j int) bool { return res.Hits[i].CreatedAt > res.Hits[j].CreatedAt })
+	slices.SortStableFunc(res.Hits, func(a, b SearchHit) int {
+		return cmp.Compare(b.CreatedAt, a.CreatedAt)
+	})
 	return res, nil
 }
 
@@ -195,16 +205,16 @@ func normalizeRoles(roles []string) ([]string, error) {
 
 func (s *Service) searchScope(scope SearchScope) ([]types.SessionHeader, error) {
 	if scope.SessionID != "" {
-		h, err := s.Header(scope.SessionID)
+		h, err := s.HeaderIncludingDeleted(scope.SessionID)
 		if err != nil {
 			return nil, err
 		}
-		if h == nil || h.DeletedAt != nil {
+		if h == nil || (h.DeletedAt != nil && !scope.IncludeDeleted) {
 			return nil, fmt.Errorf("session %q not found", scope.SessionID)
 		}
 		return []types.SessionHeader{*h}, nil
 	}
-	return s.ListFiltered(ListFilter{Cwd: scope.Cwd, ProjectID: scope.ProjectID})
+	return s.ListFiltered(ListFilter{Cwd: scope.Cwd, ProjectID: scope.ProjectID, IncludeDeleted: scope.IncludeDeleted})
 }
 
 // searchSession finds up to perSession hits in one session, newest first.
@@ -215,7 +225,7 @@ func (s *Service) searchSession(h types.SessionHeader, words, roles []string, pe
 		return nil, err
 	}
 	// Old messages have no searchable text until they are split.
-	s.ensureBackfilled(h.ID, projectID, conn)
+	s.ensureContentDropped(h.ID, projectID, conn)
 
 	roleMarks := strings.TrimSuffix(strings.Repeat("?,", len(roles)), ",")
 	args := make([]any, 0, len(roles))
@@ -290,7 +300,9 @@ func findMatches(text string, words []string) []Match {
 			return nil
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Start < out[j].Start })
+	slices.SortFunc(out, func(a, b Match) int {
+		return cmp.Compare(a.Start, b.Start)
+	})
 	return out
 }
 

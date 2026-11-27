@@ -55,10 +55,21 @@ impl ServerAuthService {
         device_name: &str,
     ) -> Result<(PairingData, String)> {
         let base_url = normalize_server_url(host);
+        // An iroh address is dialled through a tunnel; the address itself
+        // is what gets stored for later requests.
+        let tunnel = match console_shared::pairing::iroh_node_id(&base_url) {
+            Some(node_id) => Some(
+                crate::utils::http_transport::get_or_create_tunnel(node_id)
+                    .await
+                    .context("Failed to reach the server over iroh")?,
+            ),
+            None => None,
+        };
+        let request_base = tunnel.as_ref().map_or(base_url.clone(), |t| t.base_url());
         let response = self
             .transport
             .client()
-            .post(format!("{base_url}/api/auth/pair"))
+            .post(format!("{request_base}/api/auth/pair"))
             .headers(self.transport.build_headers().await)
             .json(&PairingRequest {
                 grant: code.to_string(),
@@ -96,40 +107,6 @@ impl ServerAuthService {
         serde_json::from_value(data).context("Failed to parse pairing grant response")
     }
 
-    /// The devices paired with this server.
-    pub async fn devices(&self) -> Result<Vec<ServerDevice>> {
-        let response = self
-            .transport
-            .client()
-            .get(&self.transport.url("/api/auth/devices").await)
-            .headers(self.transport.build_headers().await)
-            .send()
-            .await
-            .context("Failed to list devices")?;
-        let data = decode_data(response)
-            .await
-            .context("Failed to list devices")?;
-        let list: ServerDevicesResponse =
-            serde_json::from_value(data).context("Failed to parse devices")?;
-        Ok(list.devices)
-    }
-
-    /// Revoke a paired device. Idempotent on the server.
-    pub async fn revoke_device(&self, id: &str) -> Result<()> {
-        let response = self
-            .transport
-            .client()
-            .delete(&self.transport.url(&format!("/api/auth/devices/{id}")).await)
-            .headers(self.transport.build_headers().await)
-            .send()
-            .await
-            .context("Failed to revoke device")?;
-        if !response.status().is_success() {
-            return Err(anyhow!("Failed to revoke device"));
-        }
-        Ok(())
-    }
-
     /// Put a freshly issued device token on the shared transport, so every
     /// later request is authenticated.
     pub async fn apply_pairing(&self, data: &PairingData) -> Result<()> {
@@ -152,7 +129,10 @@ fn normalize_server_url(host: &str) -> String {
     if trimmed.is_empty() {
         return "http://localhost:3000".to_string();
     }
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+    if trimmed.starts_with("http://")
+        || trimmed.starts_with("https://")
+        || trimmed.starts_with("console-iroh://")
+    {
         return trimmed.to_string();
     }
     format!(

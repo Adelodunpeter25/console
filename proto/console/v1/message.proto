@@ -55,6 +55,13 @@ message AgentUserMessage {
   repeated BrowserAnnotation annotations = 4;
   // Server-injected turn (e.g. background work finished); never shown in chat.
   bool synthetic = 5;
+  // Approval mode the turn ran under. Absent on messages stored before the
+  // field existed; clients treat that as unknown, not as a default mode.
+  optional string approval_mode = 6;
+  // Server-initiated turn source ("automation", "webhook"); absent for user-typed prompts.
+  optional string source = 7;
+  // Human label for a synthetic wake turn (e.g. "Bash tool completed, continuing agent").
+  optional string wake_label = 8;
 }
 
 message TextPart {
@@ -64,6 +71,9 @@ message TextPart {
 
 message ThinkingPart {
   string text = 1;
+  // Provider reasoning-continuity token (e.g. Devin's thinking signature),
+  // echoed back verbatim on replay. Absent in old stored sessions.
+  optional string signature = 2;
 }
 
 message ToolCall {
@@ -80,6 +90,9 @@ message ToolCall {
   optional string label = 5;
   optional uint32 kind_flags = 6;
   optional string icon = 7;
+  // Server-derived one-line detail from the call arguments: target path,
+  // command, memory query, script calls, etc. Absent in old sessions.
+  optional string summary = 8;
 }
 
 message ImagePart {
@@ -117,12 +130,24 @@ message VisualPart {
   bytes spec = 2;
 }
 
+// HtmlPart is a client-rendered HTML page artifact attached to a tool result.
+// Like VisualPart it never reaches a model provider; Path points at a
+// workspace .html file clients fetch through the sandboxed html route.
+// Snapshot is an optional PNG for the collapsed card state.
+message HtmlPart {
+  string path = 1;
+  string title = 2;
+  uint32 height = 3;
+  optional bytes snapshot = 4;
+}
+
 message ToolResult {
   string tool_call_id = 1;
   optional string tool_name = 2;
   bytes content = 3;
   optional bool is_error = 4;
   optional VisualPart visual = 5;
+  optional HtmlPart html = 6;
   // Note: the loop's echoed call args are dropped here — they already live
   // in the assistant turn's toolCall part, and no client reads them.
 }
@@ -140,4 +165,52 @@ message AgentMessage {
   // Injected on load from the row; absent in freshly persisted bytes.
   optional string id = 4;
   optional int64 created_at = 5;
+}
+enum RunStatus {
+  RUN_STATUS_UNSPECIFIED = 0;
+  RUN_STATUS_WORKING = 1;
+  RUN_STATUS_COMPLETED = 2;
+  RUN_STATUS_ABORTED = 3;
+  RUN_STATUS_ERROR = 4;
+}
+
+// A tool call inside a run. The result's content is omitted from history
+// pages (visual/html artifacts stay, since the transcript renders them);
+// result_size is the omitted content length so clients can show a size and
+// fetch the body on expand.
+message RunToolCall {
+  ToolCall call = 1;
+  optional ToolResult result = 2;
+  uint32 result_size = 3;
+  // Row id of the tool-result message holding the full content.
+  string result_message_id = 4;
+}
+
+message RunActivityEvent {
+  string id = 1;
+  oneof event {
+    string thinking = 2;
+    string text = 3;
+    RunToolCall tool_call = 4;
+  }
+}
+
+message RunActivity {
+  string run_id = 1;
+  int64 started_at = 2;
+  int64 elapsed_ms = 3;
+  RunStatus status = 4;
+  repeated RunActivityEvent events = 5;
+}
+
+// One user-visible turn, assembled by the server: the prompt (or a wake
+// divider), the activity between, and the final assistant messages. id is
+// the first row's id and stays stable across pages.
+message TranscriptTurn {
+  string id = 1;
+  int64 created_at = 2;
+  optional AgentMessage user_message = 3;
+  optional string wake_label = 4;
+  optional RunActivity run = 5;
+  repeated AgentMessage responses = 6;
 }

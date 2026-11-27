@@ -6,43 +6,24 @@
 // re-running with an already-rotated refresh token.
 package shared
 
-import "sync"
+import "golang.org/x/sync/singleflight"
 
-var (
-	flightMu      sync.Mutex
-	flights       = map[string]chan struct{}{}
-	flightResults = map[string]any{}
-	flightErrs    = map[string]error{}
-)
+var flightGroup singleflight.Group
 
 // SingleFlight deduplicates concurrent fn calls with the same key: the
 // first caller runs fn, later callers block until it finishes and get its
-// result. New callers after a completed run execute fn again — same
-// semantics as antigravity's refresh dedupe, which this mirrors.
+// result. New callers after a completed run execute fn again.
 func SingleFlight[T any](key string, fn func() (T, error)) (T, error) {
-	flightMu.Lock()
-	if ch, ok := flights[key]; ok {
-		flightMu.Unlock()
-		<-ch
-		flightMu.Lock()
-		out, err := flightResults[key], flightErrs[key]
-		flightMu.Unlock()
-		if typed, ok := out.(T); ok {
-			return typed, err
-		}
+	v, err, _ := flightGroup.Do(key, func() (any, error) {
+		return fn()
+	})
+	if err != nil {
 		var zero T
 		return zero, err
 	}
-	ch := make(chan struct{})
-	flights[key] = ch
-	flightMu.Unlock()
-
-	out, err := fn()
-
-	flightMu.Lock()
-	flightResults[key], flightErrs[key] = out, err
-	delete(flights, key)
-	flightMu.Unlock()
-	close(ch)
-	return out, err
+	if typed, ok := v.(T); ok {
+		return typed, nil
+	}
+	var zero T
+	return zero, nil
 }

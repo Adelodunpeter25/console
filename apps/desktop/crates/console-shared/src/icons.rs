@@ -245,9 +245,7 @@ fn named_icon(name: &str) -> Option<&'static str> {
         Some("webpack")
     } else if name.starts_with("rollup.config.") {
         Some("rollup")
-    } else if name.starts_with("next.config.") {
-        Some("next")
-    } else if name == "next-env.d.ts" {
+    } else if name.starts_with("next.config.") || name == "next-env.d.ts" {
         Some("next")
     } else if name.starts_with("nuxt.config.") || name == ".nuxtrc" {
         Some("nuxt")

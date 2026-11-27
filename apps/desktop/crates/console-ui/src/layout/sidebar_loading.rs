@@ -52,6 +52,67 @@ pub fn session_loading_state(
     None
 }
 
+/// What the status slot at the left of a sidebar row shows.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RowStatus {
+    Running,
+    NeedsAttention,
+    /// A run finished after the chat was last shown: the dot.
+    Unread,
+    /// Finished and already seen: the check.
+    Done,
+    /// Never run, or idle: the slot stays empty.
+    Quiet,
+}
+
+/// Choose the row's status icon. Precedence is fixed: running, then needs
+/// attention (a pending question, or an errored run not yet opened), then
+/// unread (the dot), then done and read (the check), then nothing. The
+/// server's `unread` flag is the only unread input, so the sidebar never
+/// re-derives it.
+pub fn row_status(
+    session: &SessionHeader,
+    loading_state: Option<SidebarLoadingState>,
+) -> RowStatus {
+    let running = matches!(loading_state, Some(SidebarLoadingState::Working { .. }))
+        || session.status == "working"
+        || session.status == "running";
+    if running {
+        return RowStatus::Running;
+    }
+    let needs_attention = matches!(loading_state, Some(SidebarLoadingState::Waiting))
+        || session.status == "needs_attention"
+        || session.status == "waiting";
+    if needs_attention {
+        return RowStatus::NeedsAttention;
+    }
+    if session.unread {
+        return RowStatus::Unread;
+    }
+    if session.status == "done" || session.status == "completed" {
+        return RowStatus::Done;
+    }
+    RowStatus::Quiet
+}
+
+/// Which read-state entry a row's menu offers. An unread chat offers "Mark as
+/// read". A read chat offers "Mark as unread", except while it is running (it
+/// shows its spinner) or once settled (it is filed away): the server refuses
+/// both, so the entry is hidden rather than offered and then failed.
+pub fn read_action(
+    session: &SessionHeader,
+    status: RowStatus,
+) -> Option<crate::primitives::ReadAction> {
+    use crate::primitives::ReadAction;
+    if session.unread {
+        Some(ReadAction::MarkRead)
+    } else if session.settled_at.is_none() && status != RowStatus::Running {
+        Some(ReadAction::MarkUnread)
+    } else {
+        None
+    }
+}
+
 /// Render the compact status icon used beside a session title.
 pub fn status_indicator(state: SidebarLoadingState, theme: Theme) -> Option<AnyElement> {
     match state {
@@ -74,11 +135,16 @@ pub fn is_generic_title(title: &str) -> bool {
 }
 
 /// The session's title is still the placeholder but the first prompt is
-/// already sent, so the server is generating a real one: show a loading
+/// already running or sent, so the server is generating a real one: show a loading
 /// label instead of the placeholder text. The same update that delivers the
 /// generated title clears the state, so no event link is needed.
-pub fn title_is_pending(session: &SessionHeader) -> bool {
-    is_generic_title(session.display_title()) && session.message_count.unwrap_or(0) >= 1
+pub fn title_is_pending(
+    session: &SessionHeader,
+    loading_state: Option<SidebarLoadingState>,
+) -> bool {
+    let is_active = loading_state.is_some();
+    let has_messages = session.message_count.unwrap_or(0) >= 1;
+    is_generic_title(session.display_title()) && (is_active || has_messages)
 }
 
 /// Render the live elapsed label for a working row. Waiting rows deliberately

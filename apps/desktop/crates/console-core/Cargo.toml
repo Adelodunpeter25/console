@@ -4,11 +4,16 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+prost = { workspace = true }
 console-proto = { workspace = true }
 console-shared = { workspace = true }
+console-iroh = { workspace = true }
 reqwest = { workspace = true }
 futures-util = { workspace = true }
 tokio = { workspace = true }
@@ -26,16 +31,8 @@ name = "browser_history_test"
 path = "tests/browser_history_test.rs"
 
 [[test]]
-name = "terminal_query_replies_test"
-path = "tests/terminal/terminal_query_replies_test.rs"
-
-[[test]]
 name = "terminal_snapshot_test"
 path = "tests/terminal/terminal_snapshot_test.rs"
-
-[[test]]
-name = "terminal_tui_e2e_test"
-path = "tests/terminal/terminal_tui_e2e_test.rs"
 
 [[test]]
 name = "local_forward_test"
@@ -62,10 +59,6 @@ name = "mcp_server_reply_shape_test"
 path = "tests/mcp/server_reply_shape_test.rs"
 
 [[test]]
-name = "types_test"
-path = "tests/types/types_test.rs"
-
-[[test]]
 name = "message_convert_test"
 path = "tests/types/message_convert_test.rs"
 
@@ -82,8 +75,16 @@ name = "background_work_test"
 path = "tests/types/background_work_test.rs"
 
 [[test]]
+name = "update_test"
+path = "tests/update/update_test.rs"
+
+[[test]]
 name = "patch_body_test"
 path = "tests/settings/patch_body_test.rs"
+
+[[test]]
+name = "bootstrap_dto_test"
+path = "tests/session/bootstrap_dto_test.rs"
 
 [[test]]
 name = "changes_scope_test"
@@ -112,3 +113,7 @@ path = "tests/types/visual_test.rs"
 [[test]]
 name = "background_shell_test"
 path = "tests/types/background_shell_test.rs"
+
+[[test]]
+name = "session_start_event_test"
+path = "tests/types/session_start_event_test.rs"

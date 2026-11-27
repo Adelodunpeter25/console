@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	integrationssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
 	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/sysproc"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
@@ -59,6 +59,7 @@ func (r *managedRun) publish(event types.ScriptRunEvent) {
 			case ch <- event:
 			case <-time.After(2 * time.Second):
 			}
+			close(ch)
 			continue
 		}
 		select {
@@ -270,7 +271,7 @@ func (s *ProjectScriptsService) RunIn(projectID, scriptID, cwd string) (types.Sc
 	cmd.Dir = root
 	cmd.Env = BuildScriptEnv()
 	cmd.Stdin = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // own process group
+	sysproc.OwnGroup(cmd) // own process group
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return types.ScriptRun{}, err
@@ -420,11 +421,9 @@ func (s *ProjectScriptsService) Stop(projectID, runID string) bool {
 		run.mu.Unlock()
 		return false
 	}
-	// Signal the whole process group; fall back to the direct child.
+	// Signal the whole process group; TermTree falls back to the direct child.
 	if run.process.Process != nil {
-		if err := syscall.Kill(-run.process.Process.Pid, syscall.SIGTERM); err != nil {
-			_ = run.process.Process.Kill()
-		}
+		sysproc.TermTree(run.process.Process.Pid)
 	}
 	sig := "SIGTERM"
 	run.Signal = &sig
@@ -476,6 +475,7 @@ func (s *ProjectScriptsService) Subscribe(projectID, runID string) (chan types.S
 	}
 	if snap.Status != "running" {
 		ch <- types.ScriptRunEvent{Type: "exit", Status: snap.Status, ExitCode: snap.ExitCode}
+		close(ch)
 	} else {
 		run.mu.Lock()
 		run.subscribers[ch] = true

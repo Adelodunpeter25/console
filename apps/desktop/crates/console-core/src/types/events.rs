@@ -50,13 +50,6 @@ pub struct PasteResult {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ApproveToolPermissionDto {
-    pub request_id: String,
-    pub allow: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct BackgroundWork {
     pub id: String,
     pub session_id: String,
@@ -80,6 +73,24 @@ pub struct BackgroundWork {
 }
 
 impl BackgroundWork {
+    /// Decode the proto row served by the binary session bootstrap.
+    pub fn from_proto(p: console_proto::BackgroundWork) -> Self {
+        Self {
+            id: p.id,
+            session_id: p.session_id,
+            parent_run_id: p.parent_run_id,
+            parent_call_id: p.parent_call_id,
+            kind: p.kind,
+            status: p.status,
+            created_at: p.created_at,
+            started_at: p.started_at,
+            finished_at: p.finished_at,
+            summary: p.summary,
+            error: p.error,
+            metadata: p.metadata,
+        }
+    }
+
     /// A detached shell that is still running: what the chat banner and the
     /// Shells tab list.
     pub fn is_running_shell(&self) -> bool {
@@ -197,9 +208,16 @@ impl BackgroundWorkOutput {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum AgentSessionEvent {
-    SessionStart,
+    SessionStart {
+        #[serde(default, rename = "startedAt")]
+        started_at: Option<String>,
+        #[serde(default, rename = "elapsedMs")]
+        elapsed_ms: Option<i64>,
+    },
     TurnStart {
         prompt: String,
+        #[serde(default)]
+        source: Option<String>,
     },
     ModelStreamStart {
         #[serde(rename = "turnId")]
@@ -217,11 +235,12 @@ pub enum AgentSessionEvent {
     ToolExecutionStart {
         calls: Vec<console_proto::ToolCall>,
     },
-    PermissionRequest {
-        request: console_proto::PermissionRequest,
-    },
     AskQuestion {
         request: console_proto::AskQuestionRequest,
+    },
+    QuestionResolved {
+        #[serde(default, rename = "requestId", alias = "request_id")]
+        request_id: String,
     },
     ToolExecutionResult {
         result: console_proto::ToolResult,
@@ -282,13 +301,22 @@ pub enum AgentSessionEvent {
     SessionTitleUpdated {
         title: String,
     },
+    SessionApprovalModeUpdated {
+        #[serde(default, rename = "approvalMode", alias = "approval_mode")]
+        approval_mode: String,
+    },
     Error {
         error: console_proto::ErrorPayload,
     },
-    /// The session's queued next-turn prompt changed (queued, replaced, or cleared).
+    /// The session's queue of next-turn prompts changed (queued, edited, removed, or cleared).
     QueueUpdated {
         #[serde(rename = "queuedPrompt")]
         queued_prompt: Option<QueuedPrompt>,
+        #[serde(default, rename = "queuedPrompts")]
+        queued_prompts: Option<Vec<QueuedPrompt>>,
+        /// Set when the queued prompt started running, not when it was cleared.
+        #[serde(default)]
+        drained: bool,
     },
     /// Estimated context-window occupancy after a turn.
     ContextUpdate {

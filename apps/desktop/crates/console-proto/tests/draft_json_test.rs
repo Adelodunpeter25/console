@@ -31,6 +31,7 @@ fn encodes_to_the_wire_shape_the_server_reads() {
     let response: PutDraftResponse =
         serde_json::from_str(fixture("put_response.json").trim()).unwrap();
     let encoded = serde_json::to_value(&response).unwrap();
-    let golden: serde_json::Value = serde_json::from_str(fixture("put_response.json").trim()).unwrap();
+    let golden: serde_json::Value =
+        serde_json::from_str(fixture("put_response.json").trim()).unwrap();
     assert_eq!(encoded, golden);
 }

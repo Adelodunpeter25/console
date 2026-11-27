@@ -7,9 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.SmallFloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -17,6 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,7 +26,6 @@ import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.ChatSessionState
 import com.console.mobile.core.chat.createChatSessionState
 import com.console.mobile.core.chat.projectForSession
-import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.core.chat.runningBackgroundShells
 import com.console.mobile.core.util.changeSummary
 import com.console.mobile.data.model.SessionStatus
@@ -43,7 +41,6 @@ import com.console.mobile.ui.components.common.new.ScrollThumb
 import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionFileChange
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.ArrowNarrowDown
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -63,8 +60,10 @@ fun ChatScreen(
     onBackToHome: () -> Unit,
     onOpenTab: (MobileTab) -> Unit,
     onAddProject: () -> Unit,
+    onConnectGithub: () -> Unit = {},
     onOpenPorts: () -> Unit,
     onOpenUrl: (String) -> Unit,
+    onOpenHtmlPreview: (com.console.mobile.data.model.HtmlArtifact) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
@@ -79,10 +78,15 @@ fun ChatScreen(
 
     var inspectingChange by remember { mutableStateOf<SessionFileChange?>(null) }
 
-    BackHandler {
+    val isNewChat = com.console.mobile.core.chat.isNewChatId(sessionId)
+    var sending by remember { mutableStateOf(false) }
+    fun leave() {
+        if (sessionId != null) AppContainer.sessionRepository.discardNewChat(sessionId)
         AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
         onBackToHome()
     }
+
+    BackHandler { leave() }
 
     if (sessionId == null) {
         Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
@@ -93,45 +97,101 @@ fun ChatScreen(
     }
 
     val chat: ChatSessionState = chatSessions[sessionId] ?: createChatSessionState()
-    var loadingMessages by remember(sessionId) { mutableStateOf(chat.messages.isEmpty()) }
+    // The instant worktree launch's live state rides on the header.
+    val launchHeader = projectState.sessions.firstOrNull { it.id == sessionId }
+    val worktreeLaunchState = launchHeader?.launch_state
+    val worktreeLaunchError = launchHeader?.launch_error
+    // The session-detail request owns the initial transcript load. Auxiliary
+    // requests may update the surrounding UI, but must not decide when the
+    // initial skeleton is replaced.
+    var sessionDetailLoaded by remember(sessionId) { mutableStateOf(false) }
+    var loadingMessages by remember(sessionId) { mutableStateOf(true) }
     var todoSheet by remember { mutableStateOf(false) }
     var subagentPanelOpen by remember(sessionId) { mutableStateOf(false) }
     var selectedSubagentId by remember(sessionId) { mutableStateOf<String?>(null) }
     var shellSheet by remember { mutableStateOf(false) }
+    var automationsSheet by remember { mutableStateOf(false) }
+    val allAutomations by AppContainer.automationsRepository.automations.collectAsStateWithLifecycle()
+    val allWebhooks by AppContainer.automationsRepository.webhooks.collectAsStateWithLifecycle()
+    val sessionAutomations = remember(allAutomations, sessionId) {
+        allAutomations.filter { it.sessionId == sessionId && it.status != "done" }
+    }
+    val sessionWebhooks = remember(allWebhooks, sessionId) {
+        allWebhooks.filter { it.sessionId == sessionId && it.status != "done" && it.status != "expired" }
+    }
 
     // Leaving the chat pushes the draft right away instead of waiting out the debounce.
     DisposableEffect(sessionId) {
         onDispose { AppContainer.chatRepository.flushDraft(sessionId) }
     }
+    val titleFallback = "Generating title…"
+
+    // Opening a chat is seeing it: clear its unread dot (and a seen needs-attention)
+    // on every device. Skipped for a chat already read, so reopening costs nothing.
+    LaunchedEffect(sessionId) {
+        if (isNewChat) return@LaunchedEffect
+        AppContainer.sessionRepository.markSessionRead(sessionId)
+    }
+
+    // A run that finishes while the chat is on screen is seen as it finishes, so it
+    // must not light up unread. The server marks the chat unread when the run ends,
+    // so report the read after a beat: a read that lands before that is overwritten
+    // by the run's own activity time and would leave the chat unread.
+    var wasRunning by remember(sessionId) { mutableStateOf(false) }
+    LaunchedEffect(sessionId, chat.running) {
+        if (isNewChat) return@LaunchedEffect
+        if (chat.running) {
+            wasRunning = true
+        } else if (wasRunning) {
+            wasRunning = false
+            delay(600)
+            AppContainer.sessionRepository.markSessionRead(sessionId, force = true)
+        }
+    }
 
     // Load detail + hydrate todos/subagents/changes on entry; attach to server run if working.
     LaunchedEffect(sessionId) {
-        loadingMessages = AppContainer.chatStateHolder.get(sessionId).messages.isEmpty()
-        val header = coroutineScope {
-            val detail = async { AppContainer.sessionRepository.loadDetail(sessionId) }
-            launch { AppContainer.chatRepository.loadDraft(sessionId) }
-            launch { AppContainer.chatRepository.loadTodos(sessionId) }
-            launch { AppContainer.chatRepository.loadSubagents(sessionId) }
-            launch { AppContainer.chatRepository.loadBackgroundWork(sessionId) }
-            launch { AppContainer.sessionRepository.loadSessionChanges(sessionId) }
-            detail.await()
+        if (isNewChat) {
+            sessionDetailLoaded = true
+            loadingMessages = false
+            return@LaunchedEffect
         }
+        val header = coroutineScope {
+            // Subagents are not in the bootstrap response, so they stay a separate call.
+            launch { AppContainer.chatRepository.loadSubagents(sessionId) }
+            AppContainer.sessionRepository.loadBootstrap(sessionId) ?: run {
+                // Older server without the endpoint, or a failed fetch: the per-panel calls.
+                val detail = async { AppContainer.sessionRepository.loadDetail(sessionId) }
+                launch { AppContainer.chatRepository.loadDraft(sessionId) }
+                launch { AppContainer.chatRepository.loadTodos(sessionId) }
+                launch { AppContainer.chatRepository.loadSuggestions(sessionId) }
+                launch { AppContainer.chatRepository.loadBackgroundWork(sessionId) }
+                launch { AppContainer.sessionRepository.loadSessionChanges(sessionId) }
+                detail.await()
+            }
+        }
+        // Do not infer completion from the shared chat state: loadDetail owns
+        // applying the initial page, while the other requests can update it in
+        // any order.
+        sessionDetailLoaded = true
         loadingMessages = false
         if (header?.status == "working") {
             AppContainer.chatRepository.attachServerRun(sessionId)
         }
     }
 
-    // Refresh file changes when an active run settles.
+    // Refresh file changes and background work when an active run settles.
     LaunchedEffect(chat.running) {
-        if (!chat.running) {
+        if (!chat.running && !isNewChat) {
             AppContainer.sessionRepository.loadSessionChanges(sessionId)
+            AppContainer.chatRepository.loadBackgroundWork(sessionId)
         }
     }
 
     // A run can also start after entry — the desktop app, another device, or a
     // queued prompt — and the chat screen is where its output belongs.
     LaunchedEffect(sessionId) {
+        if (isNewChat) return@LaunchedEffect
         AppContainer.sessionStateHolder.statuses
             .map { it[sessionId] }
             .distinctUntilChanged()
@@ -142,31 +202,16 @@ fun ChatScreen(
             }
     }
 
-    val messages = chat.messages
-    val displayMessages = visibleMessages(messages)
-    val runs = remember(messages, chat.runs) {
-        if (chat.runs.isNotEmpty()) chat.runs else reconstructRuns(messages)
+    val turns = chat.turns
+    val onReply = remember(sessionId) {
+        { quote: String -> AppContainer.chatRepository.appendQuote(sessionId, quote) }
     }
-    val userRunMap = remember(displayMessages, runs) {
-        val map = mutableMapOf<Int, Int>()
-        var userCount = 0
-        displayMessages.forEachIndexed { i, m ->
-            if (m is com.console.mobile.data.model.UserMessage) {
-                if (userCount < runs.size) map[i] = userCount
-                userCount++
-            }
-        }
-        map
-    }
-    val assistantTurnChanges = remember(displayMessages, sessionChanges) {
-        buildAssistantTurnChangesMap(displayMessages, sessionChanges)
-    }
-    val latestUserIndex = remember(displayMessages) {
-        displayMessages.indexOfLast { it is com.console.mobile.data.model.UserMessage }
+    val turnChanges = remember(turns, sessionChanges) {
+        buildTurnChangesMap(turns, sessionChanges)
     }
     val isStreaming = chat.running && (chat.streamingText.isNotEmpty() || chat.streamingThinking.isNotEmpty() || chat.activeToolCalls.isNotEmpty())
-    val hasPending = chat.pendingPermissions.isNotEmpty() || chat.pendingQuestions.isNotEmpty()
-    val hasMessages = messages.isNotEmpty()
+    val hasPending = chat.pendingQuestions.isNotEmpty()
+    val hasMessages = turns.isNotEmpty()
 
     val todos = chat.todoItems
     val (todoDone, todoTotal) = todoCounts(todos)
@@ -178,16 +223,20 @@ fun ChatScreen(
     // A detached shell outlives its run, so no SSE stream is attached while it
     // keeps running. Poll only while shells are live to keep the chip honest.
     LaunchedEffect(sessionId, hasLiveShells) {
-        if (!hasLiveShells) return@LaunchedEffect
+        if (!hasLiveShells || isNewChat) return@LaunchedEffect
         while (isActive) {
             delay(5_000)
             AppContainer.chatRepository.loadBackgroundWork(sessionId)
         }
     }
 
-    val chatTitle = remember(sessionId, messages, projectState.sessions) {
+    val chatTitle = remember(sessionId, turns, projectState.sessions) {
         val header = projectState.sessions.firstOrNull { it.id == sessionId }
-        header?.title?.ifBlank { "Chat" } ?: "Chat"
+        when {
+            isNewChat -> "New chat"
+            header != null && header.message_count != 0 && com.console.mobile.core.chat.isGenericTitle(header.title) -> titleFallback
+            else -> header?.title?.ifBlank { "Chat" } ?: "Chat"
+        }
     }
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -195,17 +244,19 @@ fun ChatScreen(
     val cwd = view?.sessionCwd
 
     // Run scripts: the chat's project (worktree chats keep their own checkout
-    // via cwd). The overflow menu's indicator reads the repository's live runs,
-    // so a script left running is visible without opening the sheet.
+    // via cwd).
     var scriptsSheet by remember { mutableStateOf(false) }
     val scriptProject = projectForSession(projectState.projects, view?.projectId, cwd)
-    val scriptRuns by AppContainer.scriptsRepository.runs.collectAsStateWithLifecycle()
-    val scriptsRunning = scriptProject != null && scriptRuns.any { (key, runView) ->
-        key.startsWith(ScriptsRepository.projectPrefix(scriptProject.id, cwd)) && runView.isRunning
+
+    // Prompt list for the pill's sheet: the server's full list, cached per chat
+    // and refetched only when a new prompt changes the newest user message.
+    var promptsSheet by remember { mutableStateOf(false) }
+    val promptList = AppContainer.sessionRepository.promptLists.collectAsStateWithLifecycle().value[sessionId]
+    val latestUserId = turns.lastOrNull { it.userMessage != null }?.userMessage?.id
+    LaunchedEffect(promptsSheet, sessionId, latestUserId) {
+        if (promptsSheet) AppContainer.sessionRepository.ensurePrompts(sessionId, latestUserId)
     }
-    LaunchedEffect(scriptProject?.id, cwd) {
-        scriptProject?.let { AppContainer.scriptsRepository.refreshRuns(it.id, cwd) }
-    }
+    val latestTurns by rememberUpdatedState(turns)
 
     fun jumpToProjectTab(tab: MobileTab) {
         if (cwd != null) {
@@ -217,19 +268,46 @@ fun ChatScreen(
         onOpenTab(tab)
     }
 
-    val displaySize = displayMessages.size
+    val displaySize = turns.size
     val transcriptScroll = rememberChatTranscriptScroll(
         sessionId = sessionId,
-        messagesLoaded = chat.messages.isNotEmpty(),
+        sessionReady = sessionDetailLoaded,
+        messagesLoaded = sessionDetailLoaded && chat.turns.isNotEmpty(),
         displaySize = displaySize,
         hasMoreMessages = chat.hasMoreMessages,
         loadingOlder = chat.loadingOlder,
         loadOlder = { AppContainer.sessionRepository.loadOlder(sessionId) },
+        running = chat.running,
+        isStreaming = isStreaming,
         onDragStarted = {
             keyboardController?.hide()
             focusManager.clearFocus()
         },
     )
+
+    // Scroll to the prompt that is `fromEnd` user messages back from the newest
+    // (0 = newest), paging older history in first when it is not loaded. Counting
+    // from the end needs no message id, which this session's own prompts lack.
+    fun jumpToPrompt(fromEnd: Int) {
+        scope.launch {
+            // Pause follow and older-page auto-loading so neither fights the jump.
+            transcriptScroll.stopFollowing()
+            transcriptScroll.blockAutoLoad()
+            if (!AppContainer.sessionRepository.loadUntilUserMessages(sessionId, fromEnd + 1)) return@launch
+            // The loaded messages reach the list a frame or two later.
+            repeat(10) { _ ->
+                val userIndexes = latestTurns.indices.filter {
+                    latestTurns[it].userMessage != null
+                }
+                val index = userIndexes.getOrNull(userIndexes.size - 1 - fromEnd) ?: -1
+                if (index >= 0 && userIndexes.size > fromEnd) {
+                    try { transcriptScroll.listState.scrollToItem(index) } catch (_: Exception) {}
+                    return@launch
+                }
+                withFrameNanos { }
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         when {
@@ -238,12 +316,9 @@ fun ChatScreen(
             else -> {
                 ChatTranscript(
                     sessionId = sessionId,
-                    messages = displayMessages,
+                    turns = turns,
                     listState = transcriptScroll.listState,
-                    runs = runs,
-                    userRunMap = userRunMap,
-                    assistantTurnChanges = assistantTurnChanges,
-                    latestUserIndex = latestUserIndex,
+                    turnChanges = turnChanges,
                     running = chat.running,
                     isStreaming = isStreaming,
                     streamingText = chat.streamingText,
@@ -253,11 +328,20 @@ fun ChatScreen(
                     onFork = { messageId ->
                         scope.launch {
                             try {
-                                val forked = AppContainer.projectRepository.forkSession(sessionId, messageId)
+                                val forked = AppContainer.sessionRepository.forkSession(sessionId, messageId)
                                 AppContainer.appStateHolder.setSelectedSessionId(forked.id)
                             } catch (_: Exception) {
                             }
                         }
+                    },
+                    onReply = onReply,
+                    onOpenHtmlPreview = onOpenHtmlPreview,
+                    onOpenHtmlEditor = { path ->
+                        AppContainer.appStateHolder.openFile(path, forceEditor = true)
+                        onOpenTab(MobileTab.Files)
+                    },
+                    onExpandToolCall = { messageId, callId ->
+                        AppContainer.chatRepository.fetchToolResult(sessionId, messageId, callId)
                     },
                 )
                 ScrollThumb(
@@ -269,45 +353,20 @@ fun ChatScreen(
 
         ChatHeader(
             title = chatTitle,
-            onBack = {
-                AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
-                onBackToHome()
-            },
+            onBack = { leave() },
             onOpenFiles = { jumpToProjectTab(MobileTab.Files) },
             onOpenChanges = { jumpToProjectTab(MobileTab.Changes) },
             onOpenPorts = onOpenPorts,
             onOpenScripts = { scriptsSheet = true },
             scriptsAvailable = scriptProject != null,
-            scriptsRunning = scriptsRunning,
             onOpenDevices = { jumpToProjectTab(MobileTab.Devices) },
+            onOpenComputer = { jumpToProjectTab(MobileTab.Computer) },
             onOpenTerminal = { jumpToProjectTab(MobileTab.Terminal) },
             modifier = Modifier.align(Alignment.TopCenter),
         )
 
         Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
             Column {
-                // Above the pills so it can never sit on them; it only shows
-                // while the reader is scrolled away from the latest message.
-                if (transcriptScroll.showScrollToBottom) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(end = 16.dp).padding(bottom = 8.dp),
-                        contentAlignment = Alignment.CenterEnd,
-                    ) {
-                        SmallFloatingActionButton(
-                            onClick = {
-                                transcriptScroll.scrollToBottom(scope)
-                            },
-                            containerColor = NewTheme.Raised,
-                            contentColor = NewTheme.TextPrimary,
-                        ) {
-                            Icon(
-                                TablerIcons.Outline.ArrowNarrowDown,
-                                contentDescription = "Scroll to bottom",
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
-                }
                 if (subagentPanelOpen && subagents.isNotEmpty()) {
                     SubagentFloatingPanel(subagents = subagents, onOpenDetails = { id ->
                         subagentPanelOpen = false
@@ -320,14 +379,42 @@ fun ChatScreen(
                     showTasks = hasActiveTodos,
                     subagents = subagents,
                     shellCount = liveShells.size,
+                    automationCount = sessionAutomations.size,
+                    webhookCount = sessionWebhooks.size,
+                    hasActiveAutomationOrWebhook = sessionAutomations.any { it.status == "active" } || sessionWebhooks.any { it.status == "active" },
                     changes = changeTotals,
                     onTasks = { todoSheet = true },
                     onSubagents = { subagentPanelOpen = !subagentPanelOpen },
                     onShells = { shellSheet = true },
+                    onAutomations = { automationsSheet = true },
                     onChanges = { jumpToProjectTab(MobileTab.Changes) },
+                    // Queued prompts have already been committed to, and chips are
+                    // meaningless mid-run, so both yield the row.
+                    suggestions = if (chat.running || chat.queuedPrompt != null) emptyList() else chat.suggestions,
+                    onSuggestion = { AppContainer.chatRepository.sendSuggestion(sessionId, it) },
+                    onEditSuggestion = { AppContainer.chatRepository.editSuggestion(sessionId, it) },
+                    // The arrow half only shows while the reader is scrolled away
+                    // from the latest message.
+                    trailing = if (hasMessages) {
+                        {
+                            ChatScrollPill(
+                                showScrollToBottom = transcriptScroll.showScrollToBottom,
+                                onOpenPrompts = { promptsSheet = true },
+                                onScrollToBottom = { transcriptScroll.scrollToBottom(scope) },
+                            )
+                        }
+                    } else null,
                 )
+                chat.queuedPrompt?.let { queued ->
+                    QueuedPromptCard(
+                        queued = queued,
+                        onSendNow = { AppContainer.chatRepository.steerQueuedPrompt(sessionId) },
+                        onEdit = { AppContainer.chatRepository.editQueuedPrompt(sessionId) },
+                        onDelete = { AppContainer.chatRepository.deleteQueuedPrompt(sessionId) },
+                    )
+                }
                 if (hasPending) {
-                    InteractionPanel(sessionId = sessionId, permissions = chat.pendingPermissions, questions = chat.pendingQuestions)
+                    InteractionPanel(sessionId = sessionId, questions = chat.pendingQuestions)
                 } else {
                     Composer(
                         sessionId = sessionId,
@@ -336,11 +423,47 @@ fun ChatScreen(
                         running = chat.running,
                         projectLocked = hasMessages,
                         onAddProject = onAddProject,
+                        onConnectGithub = onConnectGithub,
+                        topBanner = worktreeLaunchState?.let { state -> {
+                            WorktreeLaunchBanner(
+                                state = state,
+                                error = worktreeLaunchError,
+                                onRetry = { AppContainer.sessionRepository.retryWorktreeLaunch(sessionId) },
+                                onDiscard = {
+                                    scope.launch {
+                                        AppContainer.sessionRepository.deleteSession(sessionId)
+                                        leave()
+                                    }
+                                },
+                            )
+                        } },
                         onSend = {
                             subagentPanelOpen = false
                             keyboardController?.hide()
-                            AppContainer.chatRepository.sendMessage(sessionId)
-                            transcriptScroll.scrollToBottom(scope)
+                            if (isNewChat) {
+                                if (!sending) {
+                                    sending = true
+                                    scope.launch {
+                                        try {
+                                            val result = AppContainer.sessionRepository.commitNewChat(sessionId)
+                                            AppContainer.appStateHolder.setSelectedSessionId(result.sessionId)
+                                            // A worktree launch runs the prompt server-side
+                                            // once the worktree exists; only a plain chat
+                                            // sends its message from here.
+                                            if (!result.worktreeLaunched) {
+                                                AppContainer.chatRepository.sendMessage(result.sessionId)
+                                            }
+                                        } catch (_: Exception) {
+                                            com.console.mobile.ui.components.confirmAlert("Unable to start chat", "Check the backend connection and try again.")
+                                        } finally {
+                                            sending = false
+                                        }
+                                    }
+                                }
+                            } else {
+                                AppContainer.chatRepository.sendMessage(sessionId)
+                                transcriptScroll.scrollToBottom(scope)
+                            }
                         },
                         onStop = { AppContainer.chatRepository.abort(sessionId) },
                     )
@@ -349,6 +472,16 @@ fun ChatScreen(
         }
     }
 
+    if (promptsSheet) {
+        PromptsSheet(
+            prompts = promptList?.prompts,
+            onSelect = { fromEnd ->
+                promptsSheet = false
+                jumpToPrompt(fromEnd)
+            },
+            onDismiss = { promptsSheet = false },
+        )
+    }
     if (todoSheet) {
         TodoBottomSheet(items = todos, completed = todoDone, total = todoTotal, onDismiss = { todoSheet = false })
     }
@@ -362,6 +495,17 @@ fun ChatScreen(
             works = liveShells,
             onCancel = { workId -> AppContainer.chatRepository.cancelBackgroundWork(sessionId, workId) },
             onDismiss = { shellSheet = false },
+        )
+    }
+    if (automationsSheet) {
+        AutomationsBottomSheet(
+            automations = sessionAutomations,
+            webhooks = sessionWebhooks,
+            onPauseAutomation = { id -> AppContainer.automationsRepository.pauseAutomation(id) },
+            onResumeAutomation = { id -> AppContainer.automationsRepository.resumeAutomation(id) },
+            onDeleteAutomation = { id -> AppContainer.automationsRepository.deleteAutomation(id) },
+            onDeleteWebhook = { id -> AppContainer.automationsRepository.deleteWebhook(id) },
+            onDismiss = { automationsSheet = false },
         )
     }
 

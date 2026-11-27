@@ -1,11 +1,15 @@
 package com.console.mobile.data.api
 
 import com.console.mobile.data.model.AnswerQuestionDto
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.console.mobile.data.model.toUi
 import com.console.mobile.data.model.ApprovalModeOption
-import com.console.mobile.data.model.ApproveToolPermissionDto
+import com.console.mobile.data.model.Automation
 import com.console.mobile.data.model.BackgroundWork
+import com.console.mobile.data.model.WebhookSubscription
 import com.console.mobile.data.model.BackgroundWorkOutput
+import com.console.mobile.data.model.SessionBootstrapResponse
 import console.v1.AuthStatusResponse
 import console.v1.OAuthLoginUrlResponse
 import console.v1.SessionSettleResponse
@@ -22,7 +26,6 @@ import console.v1.FsDirectoryTree
 import console.v1.FsFileContent
 import console.v1.FsTreeEntry
 import console.v1.ForwardedPort
-import console.v1.WriteFileRequest
 import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
 import console.v1.McpServerStatus
@@ -84,6 +87,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
+import okio.ByteString.Companion.toByteString
 
 class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     // Moshi JSON layer for Wire types (shared protobuf schema). kotlinx stays
@@ -103,7 +107,8 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val sessionChangeAdapter by lazy { wireMoshi.adapter(SessionFileChange::class.java) }
     private val queuedPromptAdapter by lazy { wireMoshi.adapter(QueuedPrompt::class.java) }
     private val subagentAdapter by lazy { wireMoshi.adapter(SubagentInfo::class.java) }
-    private val messageMoshi by lazy { wireMoshi.adapter(console.v1.AgentMessage::class.java) }
+    private val turnMoshi by lazy { wireMoshi.adapter(console.v1.TranscriptTurn::class.java) }
+    private val toolResultMoshi by lazy { wireMoshi.adapter(console.v1.ToolResult::class.java) }
     private val todoAdapter by lazy { wireMoshi.adapter(TodoItem::class.java) }
     private val gitDiffAdapter by lazy { wireMoshi.adapter(GitDiffResponse::class.java) }
     private val gitStatusAdapter by lazy { wireMoshi.adapter(GitStatusSummary::class.java) }
@@ -121,6 +126,9 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val githubStatusAdapter by lazy { wireMoshi.adapter(console.v1.GitHubAuthStatus::class.java) }
     private val providerCredentialsAdapter by lazy { wireMoshi.adapter(console.v1.ProviderCredentialStatuses::class.java) }
     private val setProviderCredentialAdapter by lazy { wireMoshi.adapter(console.v1.SetProviderCredentialResponse::class.java) }
+    private val sttStatusAdapter by lazy { wireMoshi.adapter(console.v1.SttStatus::class.java) }
+    private val setSttConfigAdapter by lazy { wireMoshi.adapter(console.v1.SetSttConfigResponse::class.java) }
+    private val sttTranscriptAdapter by lazy { wireMoshi.adapter(console.v1.SttTranscript::class.java) }
     private val integrationsAdapter by lazy { wireMoshi.adapter(console.v1.IntegrationsResponse::class.java) }
     private val deviceAdapter by lazy { wireMoshi.adapter(DeviceDescriptor::class.java) }
     private val forwardedPortAdapter by lazy { wireMoshi.adapter(ForwardedPort::class.java) }
@@ -131,7 +139,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val deviceActionAdapter by lazy { wireMoshi.adapter(DeviceActionRequest::class.java) }
     private val assistSearchAdapter by lazy { wireMoshi.adapter(AssistFileSearchResponse::class.java) }
     private val fsFileContentAdapter by lazy { wireMoshi.adapter(FsFileContent::class.java) }
-    private val writeFileAdapter by lazy { wireMoshi.adapter(WriteFileRequest::class.java) }
     private val createDirAdapter by lazy { wireMoshi.adapter(CreateDirRequest::class.java) }
     private val pairDeviceAdapter by lazy { wireMoshi.adapter(console.v1.PairDeviceRequest::class.java) }
     private val pairDeviceResponseAdapter by lazy { wireMoshi.adapter(console.v1.PairDeviceResponse::class.java) }
@@ -140,11 +147,12 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val serverDevicesAdapter by lazy { wireMoshi.adapter(console.v1.ServerDevicesResponse::class.java) }
     private fun enc(v: String): String = URLEncoder.encode(v, "UTF-8")
 
-    override suspend fun getSessions(cwd: String?, projectId: String?, onlyDeleted: Boolean): List<SessionHeader> {
+    override suspend fun getSessions(cwd: String?, projectId: String?, onlyDeleted: Boolean, query: String?): List<SessionHeader> {
         val params = mutableMapOf<String, String?>()
         if (cwd != null) params["cwd"] = cwd
         if (projectId != null) params["projectId"] = projectId
         if (onlyDeleted) params["onlyDeleted"] = "true"
+        if (!query.isNullOrBlank()) params["query"] = query
         val raw = http.get("/api/sessions", params)
         val element = http.unwrap(raw, JsonElement.serializer(), "list sessions")
         val array = element as? JsonArray ?: throw ApiException("Failed to list sessions")
@@ -158,22 +166,89 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         val params = mutableMapOf<String, String?>()
         if (limit != null) params["limit"] = limit.toString()
         if (before != null) params["before"] = before.toString()
-        val raw = http.get("/api/sessions/${enc(id)}", params)
-        // Envelope stays kotlinx; header and messages decode through the
-        // shared schema, scalars read field by field.
-        val obj = http.unwrap(raw, JsonObject.serializer(), "load session")
+        val (contentType, bytes) = http.getRaw("/api/sessions/${enc(id)}", "application/x-protobuf", params)
+        if (contentType.startsWith("application/x-protobuf")) {
+            val page = console.v1.SessionMessagesPage.ADAPTER.decode(bytes.toByteString())
+            return SessionDetailResponse(
+                header = page.header_ ?: throw ApiException("Failed to load session"),
+                turns = page.turns.map { it.toUi() },
+                hasMore = page.has_more,
+                nextCursor = page.next_cursor,
+            )
+        }
+        return decodeSessionDetail(http.unwrap(bytes.toString(Charsets.UTF_8), JsonObject.serializer(), "load session"))
+    }
+
+    override suspend fun getToolResult(sessionId: String, messageId: String, callId: String): com.console.mobile.data.model.ToolResult {
+        val (contentType, bytes) = http.getRaw(
+            "/api/sessions/${enc(sessionId)}/messages/${enc(messageId)}/results/${enc(callId)}",
+            "application/x-protobuf",
+        )
+        if (contentType.startsWith("application/x-protobuf")) {
+            return console.v1.ToolResult.ADAPTER.decode(bytes.toByteString()).toUi()
+        }
+        val obj = http.unwrap(bytes.toString(Charsets.UTF_8), JsonObject.serializer(), "load tool result")
+        return toolResultMoshi.fromJson(obj.toString())?.toUi()
+            ?: throw ApiException("Failed to decode tool result")
+    }
+
+    private fun decodeSessionDetail(obj: JsonObject): SessionDetailResponse {
         val header = obj["header"]?.let { sessionAdapter.fromJson(it.toString()) }
             ?: throw ApiException("Failed to load session")
-        // Rows are the canonical oneof shape; unparseable rows are skipped.
-        val messages = obj["messages"]?.jsonArray?.mapNotNull { item ->
-            runCatching { messageMoshi.fromJson(item.toString())?.toUi() }.getOrNull()
+        val turns = obj["turns"]?.jsonArray?.mapNotNull { item ->
+            runCatching { turnMoshi.fromJson(item.toString())?.toUi() }.getOrNull()
         } ?: emptyList()
         return SessionDetailResponse(
             header = header,
-            messages = messages,
+            turns = turns,
             hasMore = obj["hasMore"]?.jsonPrimitive?.booleanOrNull ?: false,
             nextCursor = obj["nextCursor"]?.jsonPrimitive?.longOrNull,
         )
+    }
+
+    override suspend fun getSessionBootstrap(id: String): SessionBootstrapResponse {
+        val (contentType, bytes) = http.getRaw("/api/sessions/${enc(id)}/bootstrap", "application/x-protobuf")
+        if (contentType.startsWith("application/x-protobuf")) {
+            val wire = console.v1.SessionBootstrapResponse.ADAPTER.decode(bytes.toByteString())
+            return SessionBootstrapResponse(
+                detail = SessionDetailResponse(
+                    header = wire.header_ ?: throw ApiException("Session bootstrap is missing its header"),
+                    turns = wire.turns.map { it.toUi() },
+                    hasMore = wire.has_more,
+                    nextCursor = wire.next_cursor,
+                ),
+                changes = wire.changes,
+                todos = wire.todos,
+                suggestions = wire.suggestions,
+                queuedPrompts = wire.queued_prompts,
+                backgroundWork = wire.background_work.map { it.toUi() },
+                draft = wire.draft,
+                pendingQuestions = wire.pending_questions,
+            )
+        }
+        val raw = bytes.toString(Charsets.UTF_8)
+        val obj = http.unwrap(raw, JsonObject.serializer(), "load session bootstrap")
+        fun <T : Any> list(key: String, decode: (JsonElement) -> T?): List<T> =
+            (obj[key] as? JsonArray)?.mapNotNull { decode(it) } ?: emptyList()
+        return SessionBootstrapResponse(
+            detail = decodeSessionDetail(obj),
+            changes = list("changes") { sessionChangeAdapter.fromJson(it.toString()) },
+            todos = list("todos") { todoAdapter.fromJson(it.toString()) },
+            suggestions = list("suggestions") { it.jsonPrimitive.content },
+            queuedPrompts = list("queuedPrompts") { queuedPromptAdapter.fromJson(it.toString()) },
+            backgroundWork = list("backgroundWork") {
+                runCatching { ConsoleJson.decodeFromJsonElement(BackgroundWork.serializer(), it) }.getOrNull()
+            },
+            draft = obj["draft"]?.takeIf { it !is JsonNull }?.let { chatDraftAdapter.fromJson(it.toString()) },
+            pendingQuestions = list("pendingQuestions") {
+                wireMoshi.adapter(console.v1.AskQuestionRequest::class.java).fromJson(it.toString())
+            },
+        )
+    }
+
+    override suspend fun getSessionPrompts(id: String): List<com.console.mobile.data.model.SessionPrompt> {
+        val raw = http.get("/api/sessions/${enc(id)}/prompts")
+        return http.unwrap(raw, ListSerializer(com.console.mobile.data.model.SessionPrompt.serializer()), "list session prompts")
     }
 
     override suspend fun createSession(payload: CreateSessionDto): SessionHeader {
@@ -181,6 +256,18 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         val element = http.unwrap(raw, JsonElement.serializer(), "create session")
         return sessionAdapter.fromJson(element.toString())
             ?: throw ApiException("Failed to create session")
+    }
+
+    override suspend fun launchWorktreeSession(payload: com.console.mobile.data.model.LaunchWorktreeDto): SessionHeader {
+        val raw = http.post("/api/sessions/with-worktree", http.encodeBody(com.console.mobile.data.model.LaunchWorktreeDto.serializer(), payload))
+        val element = http.unwrap(raw, JsonElement.serializer(), "launch worktree session")
+        return sessionAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to launch worktree session")
+    }
+
+    override suspend fun retryWorktreeLaunch(id: String) {
+        val raw = http.post("/api/sessions/${enc(id)}/with-worktree/retry")
+        ensureOk(raw, "retry worktree launch")
     }
 
     override suspend fun updateSession(id: String, payload: UpdateSessionDto): SessionHeader {
@@ -219,6 +306,16 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             ?: throw ApiException("Failed to unsettle session")
     }
 
+    override suspend fun markSessionRead(id: String) {
+        val raw = http.post("/api/sessions/${enc(id)}/read")
+        ensureOk(raw, "mark session read")
+    }
+
+    override suspend fun markSessionUnread(id: String) {
+        val raw = http.post("/api/sessions/${enc(id)}/unread")
+        ensureOk(raw, "mark session unread")
+    }
+
     override suspend fun permanentlyDeleteSession(id: String) {
         val raw = http.delete("/api/sessions/${enc(id)}/permanent")
         ensureOk(raw, "permanently delete session")
@@ -240,6 +337,13 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             todoAdapter.fromJson(item.toString())
                 ?: throw ApiException("Failed to get session todos")
         }
+    }
+
+    override suspend fun getSuggestions(id: String): List<String> {
+        val raw = http.get("/api/sessions/${enc(id)}/suggestions")
+        val element = http.unwrap(raw, JsonElement.serializer(), "get session suggestions")
+        val array = element as? JsonArray ?: throw ApiException("Failed to get session suggestions")
+        return array.map { it.jsonPrimitive.content }
     }
 
     override suspend fun getSubagents(id: String): List<SubagentInfo> {
@@ -276,7 +380,8 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     }
 
     override suspend fun getChanges(id: String): List<SessionFileChange> {
-        val raw = http.get("/api/sessions/${enc(id)}/changes")
+        // Rows come without diff text; the diff sheet fetches it on demand.
+        val raw = http.get("/api/sessions/${enc(id)}/changes", mapOf("includeDiff" to "false"))
         val element = http.unwrap(raw, JsonElement.serializer(), "get session changes")
         val array = element as? JsonArray ?: throw ApiException("Failed to get session changes")
         return array.map { item ->
@@ -332,6 +437,12 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         return (element as? JsonObject)?.get("deleted")?.jsonPrimitive?.booleanOrNull ?: false
     }
 
+    override suspend fun deleteQueuedPrompt(id: String, queueId: String): Boolean {
+        val raw = http.delete("/api/sessions/${enc(id)}/queue/${enc(queueId)}")
+        val element = http.unwrap(raw, JsonElement.serializer(), "delete queued prompt")
+        return (element as? JsonObject)?.get("deleted")?.jsonPrimitive?.booleanOrNull ?: false
+    }
+
     override suspend fun steerRun(id: String, payload: RunPromptDto) {
         val raw = http.post("/api/sessions/${enc(id)}/steer", http.encodeBody(RunPromptDto.serializer(), payload))
         ensureOk(raw, "steer run")
@@ -348,15 +459,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             http.encodeBody(AnswerQuestionDto.serializer(), payload),
         )
         ensureOk(raw, "answer question")
-    }
-
-    override suspend fun approvePermission(sessionId: String, payload: ApproveToolPermissionDto): Boolean {
-        val raw = http.post(
-            "/api/sessions/${enc(sessionId)}/approve",
-            http.encodeBody(ApproveToolPermissionDto.serializer(), payload),
-        )
-        ensureOk(raw, "approve permission")
-        return payload.allow
     }
 
     override suspend fun getProjects(): List<ProjectInfo> {
@@ -435,12 +537,11 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             ?: throw ApiException("Failed to read file")
     }
 
-    override suspend fun writeFile(path: String, content: String) {
-        // Same bytes as the old hand-built object: path, content.
-        val body = writeFileAdapter.toJson(WriteFileRequest(path = path, content = content))
-        val raw = http.post("/api/fs/file", body)
-        http.unwrapOrRaw(raw, JsonElement.serializer(), "write file")
-    }
+    override suspend fun readFileRaw(path: String): ByteArray =
+        withContext(Dispatchers.IO) { http.getBytes("/api/fs/file/raw", mapOf("path" to path)) }
+
+    override fun fsMediaUrl(path: String): String = http.mediaUrl(path)
+    override fun fsHtmlUrl(path: String, theme: String): String = http.htmlUrl(path, theme)
 
     override suspend fun deleteFile(path: String) {
         val raw = http.delete("/api/fs/file", mapOf("path" to path))
@@ -599,13 +700,32 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         http.unwrapOrRaw(raw, JsonElement.serializer(), "disconnect GitHub")
     }
 
+    override suspend fun getGithubRepos(): List<com.console.mobile.data.model.GithubRepo> {
+        val raw = http.get("/api/github/repos")
+        return http.unwrapOrRaw(
+            raw,
+            ListSerializer(com.console.mobile.data.model.GithubRepo.serializer()),
+            "list GitHub repos",
+        )
+    }
+
+    override suspend fun cloneProject(url: String, parentDir: String, name: String?): ProjectInfo {
+        val body = buildJsonObject {
+            put("url", url)
+            put("parentDir", parentDir)
+            if (name != null) put("name", name)
+        }.toString()
+        val raw = http.post("/api/projects/clone", body)
+        return http.unwrapOrRawAdapter(raw, projectAdapter, "clone project")
+    }
+
     override suspend fun getProviderCredentials(): Map<String, ProviderCredentialStatus> {
         val raw = http.get("/api/providers/credentials")
         val statuses = http.unwrapOrRawAdapter(raw, providerCredentialsAdapter, "get provider credentials")
         // Wire synthesizes the map field as a nullable property even though
         // protojson omits an empty map entirely, so an absent map reads as
         // null rather than {}.
-        return statuses.providers ?: emptyMap()
+        return statuses.providers
     }
 
     override suspend fun setProviderCredential(provider: String, apiKey: String): SetProviderCredentialResponse {
@@ -621,14 +741,40 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         return http.unwrapOrRawAdapter(raw, setProviderCredentialAdapter, "clear provider credential")
     }
 
+    override suspend fun getSttStatus(): console.v1.SttStatus {
+        val raw = http.get("/api/stt/status")
+        return http.unwrapOrRawAdapter(raw, sttStatusAdapter, "get speech-to-text status")
+    }
+
+    override suspend fun setSttConfig(accountId: String, apiToken: String): console.v1.SetSttConfigResponse {
+        // The pair is sent once and dropped: the response reports only
+        // whether one is configured and where it came from.
+        val body = buildJsonObject {
+            put("accountId", accountId)
+            put("apiToken", apiToken)
+        }.toString()
+        val raw = http.put("/api/stt/config", body)
+        return http.unwrapOrRawAdapter(raw, setSttConfigAdapter, "set speech-to-text config")
+    }
+
+    override suspend fun clearSttConfig(): console.v1.SetSttConfigResponse {
+        val raw = http.delete("/api/stt/config")
+        return http.unwrapOrRawAdapter(raw, setSttConfigAdapter, "clear speech-to-text config")
+    }
+
+    override suspend fun transcribeStt(audio: ByteArray, fileName: String, contentType: String): console.v1.SttTranscript {
+        val raw = http.postMultipart("/api/stt/transcribe", "audio", fileName, audio, contentType)
+        return http.unwrapOrRawAdapter(raw, sttTranscriptAdapter, "transcribe recording")
+    }
+
     override suspend fun getIntegrations(): console.v1.IntegrationsResponse {
         val raw = http.get("/api/integrations")
         return http.unwrapOrRawAdapter(raw, integrationsAdapter, "get integrations")
     }
 
-    override suspend fun installGh(): console.v1.IntegrationsResponse {
-        val raw = http.post("/api/integrations/gh/install")
-        return http.unwrapOrRawAdapter(raw, integrationsAdapter, "install GitHub CLI")
+    override suspend fun installIntegration(id: String): console.v1.IntegrationsResponse {
+        val raw = http.post("/api/integrations/${enc(id)}/install")
+        return http.unwrapOrRawAdapter(raw, integrationsAdapter, "install integration")
     }
 
     override suspend fun saveProjectId(provider: String, projectId: String?) {
@@ -878,6 +1024,38 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         )
         val stopped = http.unwrapOrRawAdapter(raw, stopScriptRunAdapter, "stop script run")
         return stopped.stopped
+    }
+
+    // --- automations & webhooks ----------------------------------------------
+
+    override suspend fun getAutomations(sessionId: String?): List<Automation> {
+        val raw = http.get("/api/automations", mapOf("sessionId" to sessionId))
+        return http.unwrap(raw, ListSerializer(Automation.serializer()), "load automations")
+    }
+
+    override suspend fun pauseAutomation(id: String): Automation {
+        val raw = http.post("/api/automations/${enc(id)}/pause")
+        return http.unwrap(raw, Automation.serializer(), "pause automation")
+    }
+
+    override suspend fun resumeAutomation(id: String): Automation {
+        val raw = http.post("/api/automations/${enc(id)}/resume")
+        return http.unwrap(raw, Automation.serializer(), "resume automation")
+    }
+
+    override suspend fun deleteAutomation(id: String) {
+        val raw = http.delete("/api/automations/${enc(id)}")
+        ensureOk(raw, "delete automation")
+    }
+
+    override suspend fun getWebhooks(sessionId: String?): List<WebhookSubscription> {
+        val raw = http.get("/api/webhooks", mapOf("sessionId" to sessionId))
+        return http.unwrap(raw, ListSerializer(WebhookSubscription.serializer()), "load webhooks")
+    }
+
+    override suspend fun deleteWebhook(id: String) {
+        val raw = http.delete("/api/webhooks/${enc(id)}")
+        ensureOk(raw, "delete webhook")
     }
 
     private fun ensureOk(raw: String, action: String) {

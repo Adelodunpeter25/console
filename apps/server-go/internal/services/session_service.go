@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
@@ -23,6 +24,13 @@ type SessionService struct {
 
 func NewSessionService(manager *db.DB) *SessionService {
 	return &SessionService{inner: session.New(manager), wt: gitsvc.NewWorktreeService()}
+}
+
+func (s *SessionService) StorageDir() string {
+	if s != nil && s.inner != nil {
+		return s.inner.StorageDir()
+	}
+	return utils.ConsoleStorageDir()
 }
 
 // ErrWorktreeScratchpad rejects a worktree spec on a scratchpad session:
@@ -189,8 +197,37 @@ func (s *SessionService) Load(sessionID string, limit int64, before int64) (*typ
 	return loaded, err
 }
 
+// LoadTurns is the turn-paged read behind the transcript endpoints.
+func (s *SessionService) LoadTurns(sessionID string, limit int64, before int64, active bool) (*session.LoadedTurns, error) {
+	loaded, err := s.inner.LoadTurns(sessionID, limit, before, active)
+	if err == nil && loaded != nil && loaded.Header.Cwd != "" {
+		fssvc.PrewarmFff(loaded.Header.Cwd)
+	}
+	return loaded, err
+}
+
+func (s *SessionService) ToolResult(sessionID, messageID, callID string) (*consolev1.ToolResult, error) {
+	return s.inner.ToolResult(sessionID, messageID, callID)
+}
+
+func (s *SessionService) ListPrompts(sessionID string) ([]session.PromptEntry, error) {
+	return s.inner.ListPrompts(sessionID)
+}
+
 func (s *SessionService) Header(sessionID string) (*types.SessionHeader, error) {
 	return s.inner.Header(sessionID)
+}
+
+func (s *SessionService) HeaderIncludingDeleted(sessionID string) (*types.SessionHeader, error) {
+	return s.inner.HeaderIncludingDeleted(sessionID)
+}
+
+func (s *SessionService) LoadIncludingDeleted(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
+	return s.inner.LoadIncludingDeleted(sessionID, limit, before)
+}
+
+func (s *SessionService) LoadSplit(sessionID string) ([]session.StoredSplit, error) {
+	return s.inner.LoadSplit(sessionID)
 }
 
 // Cross-chat reference operations (see services/session/reference.go).
@@ -256,6 +293,10 @@ func (s *SessionService) Settle(sessionID string) (bool, error) {
 // Unsettle clears the settled mark. Succeeds for any known id.
 func (s *SessionService) Unsettle(sessionID string) (bool, error) {
 	return s.inner.Unsettle(sessionID)
+}
+
+func (s *SessionService) ExpiredSettledSessions(cutoffMillis int64) ([]string, error) {
+	return s.inner.ExpiredSettledSessions(cutoffMillis)
 }
 
 func (s *SessionService) ExpiredDeletedSessions(cutoffMillis int64) ([]string, error) {
@@ -353,6 +394,18 @@ func (s *SessionService) SetPinned(sessionID string, pinned bool) error {
 	return s.inner.SetPinned(sessionID, pinned)
 }
 
+func (s *SessionService) FinishRun(sessionID, status string) error {
+	return s.inner.FinishRun(sessionID, status)
+}
+
+func (s *SessionService) MarkRead(sessionID string) (bool, error) {
+	return s.inner.MarkRead(sessionID)
+}
+
+func (s *SessionService) MarkUnread(sessionID string) (bool, error) {
+	return s.inner.MarkUnread(sessionID)
+}
+
 func (s *SessionService) UpdateStatus(sessionID, status string) error {
 	return s.inner.UpdateStatus(sessionID, status)
 }
@@ -399,6 +452,19 @@ func (s *SessionService) ClearCompletedTodos(sessionID string) error {
 	return s.inner.ClearCompletedTodos(sessionID)
 }
 
+// Suggestion operations
+func (s *SessionService) SaveSessionSuggestions(sessionID string, items []string) error {
+	return s.inner.SaveSessionSuggestions(sessionID, items)
+}
+
+func (s *SessionService) GetSessionSuggestions(sessionID string) ([]string, error) {
+	return s.inner.GetSessionSuggestions(sessionID)
+}
+
+func (s *SessionService) ClearSessionSuggestions(sessionID string) error {
+	return s.inner.ClearSessionSuggestions(sessionID)
+}
+
 // File change operations
 func (s *SessionService) RecordFileChange(sessionID string, change types.SessionFileChange) error {
 	return s.inner.RecordFileChange(sessionID, change)
@@ -419,6 +485,22 @@ func (s *SessionService) SetFileChangeReviewed(sessionID, path string, turnIndex
 // Queued prompt operations
 func (s *SessionService) SaveQueuedPrompt(sessionID string, qp types.QueuedPrompt) error {
 	return s.inner.SaveQueuedPrompt(sessionID, qp)
+}
+
+func (s *SessionService) SaveQueuedPromptFirst(sessionID string, qp types.QueuedPrompt) error {
+	return s.inner.SaveQueuedPromptFirst(sessionID, qp)
+}
+
+func (s *SessionService) ListQueuedPrompts(sessionID string) ([]types.QueuedPrompt, error) {
+	return s.inner.ListQueuedPrompts(sessionID)
+}
+
+func (s *SessionService) PopQueuedPrompt(sessionID string) (*types.QueuedPrompt, error) {
+	return s.inner.PopQueuedPrompt(sessionID)
+}
+
+func (s *SessionService) DeleteQueuedPrompt(sessionID, queueID string) (bool, error) {
+	return s.inner.DeleteQueuedPrompt(sessionID, queueID)
 }
 
 func (s *SessionService) GetQueuedPrompt(sessionID string) (*types.QueuedPrompt, error) {

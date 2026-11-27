@@ -3,7 +3,8 @@
 # `console-android` (latest always wins), mirroring console-server.yml /
 # console-desktop.yml.
 #
-# Assets: app-release.apk (com.console.mobile)
+# Assets: app-release.apk (com.console.mobile), latest.json (version the
+# in-app updater compares against)
 #
 # Release only. The debug APK was a second artifact on the same job, and it
 # doubled the build for a variant nobody installs from a release tag — the
@@ -19,6 +20,13 @@ name: Build console-android
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/android/**"
+      - "apps/desktop/crates/**"
+      - "apps/desktop/Cargo.lock"
+      - "proto/**"
+      - "rust-toolchain.toml"
+      - ".github/workflows/console-android.yml"
   workflow_dispatch:
 
 permissions:
@@ -73,8 +81,8 @@ jobs:
         with:
           # Must match rust-toolchain.toml (source of truth), the same pin the
           # desktop workflow uses.
-          toolchain: 1.97.1
-          targets: aarch64-linux-android,x86_64-linux-android
+          toolchain: 1.98.1
+          targets: aarch64-linux-android
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -118,11 +126,11 @@ jobs:
             NDK_DIR="$SDK/ndk/$NDK_VERSION"
           fi
           echo "Staging the shared native library with NDK at $NDK_DIR"
-          ANDROID_NDK_HOME="$NDK_DIR" bash shared-native/build.sh
+          ANDROID_ABIS=arm64-v8a ANDROID_NDK_HOME="$NDK_DIR" bash shared-native/build.sh
 
       - name: Build the release APK
         working-directory: apps/android
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleRelease -PbuildNumber=${{ github.run_number }}
 
       # The app runs without the library (every shared function goes inert), so
       # a packaging mistake here is invisible on the device — only pairing,
@@ -138,6 +146,10 @@ jobs:
       - name: Collect the APK
         run: |
           cp apps/android/app/build/outputs/apk/release/app-release.apk app-release.apk
+          # Read by the in-app updater (Settings > App). versionCode matches
+          # the -PbuildNumber the APK was built with.
+          name=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' apps/android/app/build.gradle.kts)
+          printf '{"versionCode":%s,"versionName":"%s"}\n' "${{ github.run_number }}" "$name" > latest.json
 
       # Retried: the upload itself usually succeeds but the action's final
       # release API call occasionally times out (Headers Timeout Error).
@@ -156,3 +168,4 @@ jobs:
             make_latest: false
             files: |
               app-release.apk
+              latest.json

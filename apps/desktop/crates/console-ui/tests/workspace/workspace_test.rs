@@ -364,3 +364,231 @@ fn test_settings_tabs_are_dropped_from_a_restored_workspace() {
     // The chat is the active tab again, not the settings that were.
     assert_eq!(leaves[0].active_tab_id.as_deref(), Some("chat:session-123"));
 }
+
+#[test]
+fn test_workspace_is_empty_only_when_every_pane_is_empty() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    assert!(ops::is_workspace_empty(&root));
+
+    let right = ops::split_pane(
+        &mut root,
+        "pane-main",
+        console_core::SplitDirection::Vertical,
+    )
+    .expect("split");
+    assert!(
+        ops::is_workspace_empty(&root),
+        "two empty panes are still an empty workspace"
+    );
+
+    let chat = WorkspaceTabConfig::Chat {
+        session_id: "session-1".into(),
+        title: "Chat".into(),
+        provider: None,
+        project_id: Some("proj-a".into()),
+        last_active_at_ms: None,
+    };
+    ops::open_tab(&mut root, &right, chat);
+    assert!(
+        !ops::is_workspace_empty(&root),
+        "a tab in the second pane keeps the workspace non-empty"
+    );
+
+    ops::close_tab(&mut root, &right, "chat:session-1");
+    assert!(ops::is_workspace_empty(&root));
+}
+
+#[test]
+fn test_close_tab_prefers_most_recently_active_tab() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Chat {
+            session_id: "chat-1".into(),
+            title: "Chat 1".into(),
+            provider: None,
+            project_id: None,
+            last_active_at_ms: Some(100),
+        },
+    );
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Chat {
+            session_id: "chat-2".into(),
+            title: "Chat 2".into(),
+            provider: None,
+            project_id: None,
+            last_active_at_ms: Some(500),
+        },
+    );
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Chat {
+            session_id: "chat-3".into(),
+            title: "Chat 3".into(),
+            provider: None,
+            project_id: None,
+            last_active_at_ms: Some(200),
+        },
+    );
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::File {
+            path: "/a/file.rs".into(),
+            title: "file.rs".into(),
+            project_id: None,
+            last_active_at_ms: Some(1000),
+        },
+    );
+
+    let next = ops::close_tab(&mut root, "pane-main", "file:/a/file.rs");
+    assert_eq!(next, Some("chat:chat-2".to_string()));
+}
+
+// Leaving a chat for another and coming back must return the desk exactly as
+// it was left: the split and every side pane tab (browser, file, terminal)
+// survive. The old per-chat "subtab sidecar" used to close the side pane
+// whenever it had no chat tab, which silently destroyed those tabs.
+#[test]
+fn test_desk_round_trip_keeps_the_side_pane_tabs() {
+    use std::collections::HashMap;
+
+    let key_a = Some("proj-a::session::chat-a".to_string());
+    let key_b = Some("proj-a::session::chat-b".to_string());
+    let mut desks = HashMap::new();
+
+    let mut desk_a = WorkspaceNode::leaf(console_core::desk_leaf_id(&key_a));
+    let chat_pane = desk_a.first_leaf().expect("leaf").id.clone();
+    ops::open_tab(
+        &mut desk_a,
+        &chat_pane,
+        WorkspaceTabConfig::Chat {
+            session_id: "chat-a".into(),
+            title: "Chat A".into(),
+            provider: None,
+            project_id: Some(key_a.clone().unwrap()),
+            last_active_at_ms: None,
+        },
+    );
+    let side = ops::split_pane(
+        &mut desk_a,
+        &chat_pane,
+        console_core::SplitDirection::Horizontal,
+    )
+    .expect("split");
+    ops::open_tab(
+        &mut desk_a,
+        &side,
+        WorkspaceTabConfig::Browser {
+            browser_id: "browser-1".into(),
+            url: "https://waku.sh".into(),
+            title: "Waku".into(),
+            session_id: None,
+            project_id: Some(key_a.clone().unwrap()),
+            last_active_at_ms: None,
+        },
+    );
+    ops::open_tab(
+        &mut desk_a,
+        &side,
+        WorkspaceTabConfig::File {
+            path: "/a/.gitignore".into(),
+            title: ".gitignore".into(),
+            project_id: Some(key_a.clone().unwrap()),
+            last_active_at_ms: None,
+        },
+    );
+
+    let desk_b = ops::switch_desk(&mut desks, &desk_a, &key_a, &key_b);
+    let desk_a_again = ops::switch_desk(&mut desks, &desk_b, &key_b, &key_a);
+
+    assert_eq!(desk_a_again, desk_a, "the desk comes back unchanged");
+    assert_eq!(desk_a_again.leaves().len(), 2, "the split survives");
+    let side_tabs: Vec<String> = desk_a_again.leaves()[1]
+        .tabs
+        .iter()
+        .map(|tab| tab.id())
+        .collect();
+    assert!(side_tabs.contains(&"browser:browser-1".to_string()));
+    assert!(side_tabs.contains(&"file:/a/.gitignore".to_string()));
+}
+
+// A desk that has never been visited starts on a pane of its own, so its
+// state never shares with another desk's.
+#[test]
+fn test_a_new_desk_starts_on_its_own_pane() {
+    use std::collections::HashMap;
+
+    let key_a = Some("proj-a::session::chat-a".to_string());
+    let key_b = Some("proj-a::session::chat-b".to_string());
+    let mut desks = HashMap::new();
+
+    let desk_a = WorkspaceNode::leaf(console_core::desk_leaf_id(&key_a));
+    let desk_b = ops::switch_desk(&mut desks, &desk_a, &key_a, &key_b);
+
+    assert_eq!(desk_b.leaves().len(), 1);
+    assert_ne!(
+        desk_a.leaves()[0].id,
+        desk_b.leaves()[0].id,
+        "two desks must not share a pane id"
+    );
+    assert!(desk_b.leaves()[0].tabs.is_empty());
+}
+
+fn chat_tab(session_id: &str) -> WorkspaceTabConfig {
+    WorkspaceTabConfig::Chat {
+        session_id: session_id.into(),
+        title: "Chat".into(),
+        provider: None,
+        project_id: None,
+        last_active_at_ms: None,
+    }
+}
+
+fn review_tab(session_id: &str) -> WorkspaceTabConfig {
+    WorkspaceTabConfig::ChangesReview {
+        session_id: session_id.into(),
+        scope: console_core::types::ChangesScope::AllTurns,
+        title: "Changes: All Turns".into(),
+        project_id: None,
+        last_active_at_ms: None,
+    }
+}
+
+#[test]
+fn changes_review_is_visible_only_while_it_is_the_active_tab() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(&mut root, "pane-main", chat_tab("s1"));
+    assert!(!ops::changes_review_visible(&root, "s1"));
+
+    ops::open_tab(&mut root, "pane-main", review_tab("s1"));
+    assert!(ops::changes_review_visible(&root, "s1"));
+
+    // Switching back to the chat leaves the review open but out of sight.
+    ops::open_tab(&mut root, "pane-main", chat_tab("s1"));
+    assert_eq!(root.leaves()[0].tabs.len(), 2);
+    assert!(!ops::changes_review_visible(&root, "s1"));
+}
+
+#[test]
+fn changes_review_visibility_is_per_session() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(&mut root, "pane-main", review_tab("s1"));
+
+    assert!(ops::changes_review_visible(&root, "s1"));
+    assert!(!ops::changes_review_visible(&root, "s2"));
+}
+
+#[test]
+fn changes_review_in_another_pane_counts_as_visible() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(&mut root, "pane-main", chat_tab("s1"));
+    ops::move_tab_to_horizontal_split(&mut root, None, "pane-main", review_tab("s1"), false)
+        .expect("split creates new pane");
+
+    assert!(ops::changes_review_visible(&root, "s1"));
+}

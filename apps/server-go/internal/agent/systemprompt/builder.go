@@ -3,11 +3,11 @@
 //
 // The prompt has two parts. StableSystem holds what never changes within a
 // session and is sent as the system prompt: identity/SYSTEM.md,
-// approval-mode instructions, what skills are for, tool inventory, the
+// what skills are for, the
 // <critical> block, and any appended prompt. Setup holds the per-session
 // context sent as a leading user message: skills list, rules, slash
-// commands, repo context files (AGENTS.md, …), workspace tree, and
-// workstation info (date/cwd/OS/git/model).
+// commands, repo context files (AGENTS.md, …), and workstation info
+// (date/cwd/OS/git/model).
 package systemprompt
 
 import (
@@ -21,23 +21,12 @@ import (
 type ApprovalMode string
 
 const (
-	AlwaysAsk   ApprovalMode = "always-ask"
-	AcceptEdits ApprovalMode = "accept-edits"
-	PlanMode    ApprovalMode = "plan-mode"
-	FullAccess  ApprovalMode = "full-access"
+	PlanMode   ApprovalMode = "plan-mode"
+	FullAccess ApprovalMode = "full-access"
 )
 
 const defaultIdentity = `You are a coding agent.
-Use the available tools to explore the codebase, edit files, run shell commands, and accomplish user tasks correctly and concisely.`
-
-// DefaultToolNames lists the built-in tool inventory shown when the caller
-// doesn't supply an explicit set.
-var DefaultToolNames = []string{
-	"read_file", "readSkill", "list_dir", "glob", "grep",
-	"write_file", "editFile", "batchWrite", "bash", "bashJob", "webSearch", "webFetch",
-	"todo", "subagent", "ask", "askMany", "memory", "console", "console_reset", "browser",
-	"browser_reset",
-}
+Use the available tools to explore the codebase, edit files, run shell commands, and accomplish user tasks.`
 
 // DiscoveredContext is everything discovery found for one build.
 type DiscoveredContext struct {
@@ -46,24 +35,18 @@ type DiscoveredContext struct {
 	Rules            []Rule
 	Skills           []Skill
 	Commands         []SlashCommand
-	WorkspaceTree    WorkspaceTree
 	Environment      EnvironmentInfo
 }
 
-// BuildOptions configures one discovery + prompt-assembly run. The
-// workspace tree section is included by default; set SkipWorkspaceTree to
-// omit it.
+// BuildOptions configures one discovery + prompt-assembly run.
 type BuildOptions struct {
-	Cwd               string
-	Home              string
-	StopAt            string
-	Model             string
-	ToolNames         []string
-	ApprovalMode      ApprovalMode
-	CustomPrompt      string
-	AppendPrompt      string
-	SkipWorkspaceTree bool
-	Identity          string
+	Cwd          string
+	Home         string
+	StopAt       string
+	Model        string
+	CustomPrompt string
+	AppendPrompt string
+	Identity     string
 }
 
 // Result is the outcome of BuildSystemPrompt.
@@ -101,18 +84,12 @@ func section(name, content string) *Section {
 func DiscoverContext(opts BuildOptions) DiscoveredContext {
 	roots := ResolveRoots(opts.Cwd, opts.Home, opts.StopAt)
 
-	tree := WorkspaceTree{RootPath: roots.Cwd}
-	if !opts.SkipWorkspaceTree {
-		tree = BuildWorkspaceTree(roots.Cwd)
-	}
-
 	return DiscoveredContext{
 		ContextFiles:     DiscoverContextFiles(roots),
 		SystemPromptFile: DiscoverSystemPromptFile(roots),
 		Rules:            DiscoverRules(roots),
 		Skills:           DiscoverSkills(roots),
 		Commands:         DiscoverCommands(roots),
-		WorkspaceTree:    tree,
 		Environment:      CollectEnvironmentInfo(roots.Cwd, opts.Model),
 	}
 }
@@ -203,52 +180,24 @@ func renderDomainRules(rules []Rule) string {
 	return strings.Join(out, "\n")
 }
 
-func renderTools(names []string) string {
-	if len(names) == 0 {
-		return ""
-	}
-	lines := []string{"# Tool inventory"}
-	for _, n := range names {
-		lines = append(lines, fmt.Sprintf("- `%s`", n))
-	}
-	return strings.Join(lines, "\n")
-}
-
 func renderContextFiles(files []ContextFile) string {
 	if len(files) == 0 {
 		return ""
 	}
-	lines := []string{"# Repo rules", "You MUST follow the context files below for all tasks:", "<repo-rules>"}
+	lines := []string{"# Repo rules", "Project rules from AGENTS.md and similar files:", "<repo-rules>"}
 	for _, f := range files {
 		lines = append(lines, fmt.Sprintf("<file path=%q>\n%s\n</file>", f.Path, strings.TrimSpace(f.Content)))
 	}
 	lines = append(lines, "</repo-rules>",
-		"Context files above are loaded automatically. Do not waste tools grepping for AGENTS.md / CLAUDE.md unless the user asks.")
+		"These files are already loaded.")
 	return strings.Join(lines, "\n")
-}
-
-func renderWorkspaceTree(tree WorkspaceTree, skip bool) string {
-	if skip || strings.TrimSpace(tree.Rendered) == "" {
-		return ""
-	}
-	return strings.Join([]string{
-		"# Workspace tree",
-		"<workspace-tree>",
-		"Working directory layout (depth-limited):",
-		tree.Rendered,
-		"</workspace-tree>",
-	}, "\n")
 }
 
 func renderWorkstation(env EnvironmentInfo) string {
 	lines := []string{
-		fmt.Sprintf("Date: %s", env.Date),
 		fmt.Sprintf("CWD: %s", env.Cwd),
 		fmt.Sprintf("OS: %s", env.OS),
 		fmt.Sprintf("Arch: %s", env.Arch),
-	}
-	if env.GitBranch != "" {
-		lines = append(lines, fmt.Sprintf("Git branch: %s", env.GitBranch))
 	}
 	if env.Model != "" {
 		lines = append(lines, fmt.Sprintf("Model: %s", env.Model))
@@ -258,23 +207,15 @@ func renderWorkstation(env EnvironmentInfo) string {
 	for _, l := range lines {
 		out = append(out, "- "+l)
 	}
-	out = append(out, "</workstation>", fmt.Sprintf("Today is %s. Working directory is '%s'.", env.Date, env.Cwd))
+	out = append(out, "</workstation>")
 	return strings.Join(out, "\n")
 }
 
-func renderCritical(mode ApprovalMode) string {
-	if mode == PlanMode {
-		return strings.Join([]string{
-			"<critical>",
-			"- Each response MUST advance the task.",
-			"- Default to discussion and questions; do not write files or implement features.",
-			"</critical>",
-		}, "\n")
-	}
+func renderCritical() string {
 	return strings.Join([]string{
 		"<critical>",
-		"- Each response MUST advance the task.",
-		"- Default to informed action; do not ask for confirmation when tools or repo context can answer.",
+		"- When tools or the repo can answer a question, use them instead of asking the user.",
+		"- Search with grep(), glob() and list(). Never run grep, rg, find or ls in the shell; the built-ins are much faster.",
 		"</critical>",
 	}, "\n")
 }
@@ -293,49 +234,15 @@ func renderCommands(commands []SlashCommand) string {
 	return strings.Join(out, "\n")
 }
 
-func renderApprovalModeInstruction(mode ApprovalMode) string {
-	if mode == "" {
-		return ""
-	}
-	heading := "# Approval Mode Active"
-	tag := "<approval-mode-instructions>"
-
+// ModeNotice is the short instruction for a permission mode. It is attached to
+// the user message where the mode starts or changes, never to the system
+// prompt, so a mode change does not rewrite the cached prefix.
+func ModeNotice(mode ApprovalMode) string {
 	switch mode {
-	case AlwaysAsk:
-		return strings.Join([]string{
-			heading, tag,
-			"You are in Normal mode. Use tools freely, including writes, edits, and command execution.",
-			"Restricted actions trigger an approval dialog for the user automatically; never use the ask tool to request permission and never pause to ask permission yourself.",
-			"Do not claim a restricted action was performed until it is approved.",
-			"If approval is denied, stop and report the denial rather than retrying silently.",
-			"</approval-mode-instructions>",
-		}, "\n")
-	case AcceptEdits:
-		return strings.Join([]string{
-			heading, tag,
-			"You are in Accept Edits mode. Read, write, and edit files directly without pausing for each edit.",
-			"Commands and higher-risk operations trigger an automatic approval dialog; never pause to ask permission yourself.",
-			"Proceed efficiently through multi-file edits; do not stop to ask permission for routine file writes.",
-			"</approval-mode-instructions>",
-		}, "\n")
 	case PlanMode:
-		return strings.Join([]string{
-			heading, tag,
-			"Plan mode is ACTIVE. Read-only by default:",
-			"- You may read files, search the codebase, and ask clarifying questions to shape the design.",
-			"- You MUST NOT create, edit, or delete files; run build/install/migration/test commands; commit, push, or spawn implementation subagents.",
-			"- Plans live in chat. When the user asks for a plan file, save it with the writePlan tool (it writes docs/plan/<name>.md and never overwrites an existing file); it is the only way to write a file in this mode.",
-			"- If the user asks you to implement, tell them to switch agents. Do not silently start implementing.",
-			"</approval-mode-instructions>",
-		}, "\n")
+		return "You're in Plan mode: read-only. Discuss and ask questions; don't write files or implement. Shell runs sandboxed read-only. writePlan in code (docs/plan/<name>.md) is the only file write allowed; use it only when the user explicitly asks for a plan file. When the user asks to implement, first call await requestFullAccess(\"short reason\") in code and wait for approval."
 	case FullAccess:
-		return strings.Join([]string{
-			heading, tag,
-			"You are in Bypass Permissions mode. Execute all necessary tools directly without asking for approval.",
-			"You remain responsible for avoiding unrelated or destructive work; freedom is not a license to be careless.",
-			"Report every action you take accurately so the user can audit what happened.",
-			"</approval-mode-instructions>",
-		}, "\n")
+		return "You're in Full Access mode. Execute all necessary tools without asking. File writes are limited to the project folder, so don't retry paths outside it."
 	default:
 		return ""
 	}
@@ -343,12 +250,6 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 
 // BuildSystemPrompt runs discovery then assembles the final prompt string.
 func BuildSystemPrompt(opts BuildOptions) Result {
-	if opts.ToolNames == nil {
-		opts.ToolNames = DefaultToolNames
-		if opts.ApprovalMode == PlanMode {
-			opts.ToolNames = append(append([]string(nil), DefaultToolNames...), "writePlan")
-		}
-	}
 	context := DiscoverContext(opts)
 	identity := renderIdentity(opts, systemMdContent(context.SystemPromptFile))
 
@@ -359,10 +260,8 @@ func BuildSystemPrompt(opts BuildOptions) Result {
 		}
 	}
 	add(&stable, section("identity", identity))
-	add(&stable, section("approval-mode", renderApprovalModeInstruction(opts.ApprovalMode)))
 	add(&stable, section("skills-guide", renderSkillsGuide(context.Skills)))
-	add(&stable, section("tools", renderTools(opts.ToolNames)))
-	add(&stable, section("critical", renderCritical(opts.ApprovalMode)))
+	add(&stable, section("critical", renderCritical()))
 	add(&stable, section("append", opts.AppendPrompt))
 
 	add(&setup, section("skills", renderSkills(context.Skills)))
@@ -370,7 +269,6 @@ func BuildSystemPrompt(opts BuildOptions) Result {
 	add(&setup, section("domain-rules", renderDomainRules(context.Rules)))
 	add(&setup, section("commands", renderCommands(context.Commands)))
 	add(&setup, section("repo-rules", renderContextFiles(context.ContextFiles)))
-	add(&setup, section("workspace-tree", renderWorkspaceTree(context.WorkspaceTree, opts.SkipWorkspaceTree)))
 	add(&setup, section("workstation", renderWorkstation(context.Environment)))
 	for i := range setup {
 		setup[i].Setup = true

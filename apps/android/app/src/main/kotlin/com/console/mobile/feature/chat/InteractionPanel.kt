@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,11 +21,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,14 +34,13 @@ import androidx.compose.ui.unit.sp
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.HelpCircle
-import io.github.lyxnx.compose.ui.tablericons.outline.Shield
-import io.github.lyxnx.compose.ui.tablericons.outline.ShieldCheck
-import io.github.lyxnx.compose.ui.tablericons.outline.ShieldX
 import com.console.mobile.AppContainer
-import com.console.mobile.core.chat.PendingPermission
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.ExperimentalFoundationApi
 import com.console.mobile.core.chat.PendingQuestion
 import com.console.mobile.data.model.AskQuestionRequest
-import com.console.mobile.data.model.PermissionRequest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -56,7 +52,6 @@ import com.console.mobile.ui.components.common.new.InlineTextInput
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.heightIn
@@ -68,20 +63,15 @@ import kotlinx.coroutines.delay
 
 /**
  * Port of components/chat/interactions/interaction-panel.tsx + question-panel.tsx.
- * Permission allow/deny card; question wizard (single/multi select + custom text).
+ * Question wizard (single/multi select + custom text).
  */
 @Composable
-fun InteractionPanel(sessionId: String, permissions: List<PendingPermission>, questions: List<PendingQuestion>) {
-    if (permissions.isEmpty() && questions.isEmpty()) return
-    if (permissions.isNotEmpty()) {
-        val first = permissions.first()
-        PermissionPanel(request = first.request, sessionId = sessionId)
-        return
-    }
+fun InteractionPanel(sessionId: String, questions: List<PendingQuestion>) {
+    if (questions.isEmpty()) return
     QuestionWizard(questions = questions.map { it.request }, sessionId = sessionId)
 }
 
-/** The raised card both panels sit in. */
+/** The raised card the question panel sits in. */
 @Composable
 private fun PanelCard(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     Column(
@@ -89,62 +79,6 @@ private fun PanelCard(modifier: Modifier = Modifier, content: @Composable androi
             .clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card).padding(18.dp),
         content = content,
     )
-}
-
-@Composable
-private fun PermissionPanel(request: PermissionRequest, sessionId: String) {
-    val scope = rememberCoroutineScope()
-    var busy by remember(request.requestId) { mutableStateOf<String?>(null) }
-    val argsString = request.args?.toString() ?: ""
-    PanelCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(TablerIcons.Outline.Shield, contentDescription = null, tint = NewTheme.Warning, modifier = Modifier.size(22.dp))
-            Text(
-                buildString {
-                    append(if (request.requiresUpgrade) "Upgrade permission required: " else "Permission required: ")
-                    append(request.toolName)
-                },
-                color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f).padding(start = 12.dp),
-            )
-        }
-        if (!request.reason.isNullOrBlank()) {
-            Text(request.reason, color = NewTheme.TextSecondary, fontSize = 14.sp, lineHeight = 21.sp, modifier = Modifier.padding(top = 10.dp))
-        }
-        if (argsString.isNotEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(NewTheme.FieldRadius)).background(NewTheme.Background).padding(12.dp)) {
-                Text(argsString.take(1200), color = NewTheme.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, lineHeight = 18.sp, modifier = Modifier.verticalScroll(rememberScrollState()))
-            }
-        }
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            val approve = { allow: Boolean ->
-                busy = if (allow) "allow" else "deny"
-                scope.launch {
-                    AppContainer.chatRepository.approvePermission(sessionId, request.requestId, allow)
-                    busy = null
-                }
-            }
-            ActionButton(
-                text = "Deny",
-                onClick = { approve(false) },
-                kind = ActionButtonKind.Danger,
-                icon = TablerIcons.Outline.ShieldX,
-                loading = busy == "deny",
-                enabled = busy == null,
-                surface = NewTheme.Raised,
-                modifier = Modifier.weight(1f),
-            )
-            ActionButton(
-                text = if (request.requiresUpgrade) "Allow once" else "Allow",
-                onClick = { approve(true) },
-                kind = ActionButtonKind.Primary,
-                icon = TablerIcons.Outline.ShieldCheck,
-                loading = busy == "allow",
-                enabled = busy == null,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
 }
 
 @Composable
@@ -158,6 +92,9 @@ private fun QuestionWizard(questions: List<AskQuestionRequest>, sessionId: Strin
     fun submit(answer: kotlinx.serialization.json.JsonElement) {
         submitting = true
         scope.launch {
+            if (answer is JsonPrimitive && (answer.content.equals("approve", ignoreCase = true) || answer.content.equals("allow", ignoreCase = true)) && current.question.contains("Full Access", ignoreCase = true)) {
+                AppContainer.sessionRepository.updateLocalApprovalMode(sessionId, com.console.mobile.data.model.ApprovalMode.FullAccess.value)
+            }
             AppContainer.chatRepository.answerQuestion(sessionId, current.requestId, answer)
             submitting = false
             if (!isLast) index += 1
@@ -190,6 +127,20 @@ private fun QuestionPanel(
     var selected by remember(request.requestId) { mutableStateOf(setOf<String>()) }
     var custom by remember(request.requestId) { mutableStateOf("") }
     val hasOptions = request.options.isNotEmpty()
+    val isApproveDeny = !request.isMultiSelect && request.options.size == 2 &&
+        request.options.any { it.equals("approve", ignoreCase = true) || it.equals("allow", ignoreCase = true) } &&
+        request.options.any { it.equals("deny", ignoreCase = true) || it.equals("decline", ignoreCase = true) }
+
+    val positiveOpt = if (isApproveDeny) {
+        if (request.options[0].equals("approve", ignoreCase = true) || request.options[0].equals("allow", ignoreCase = true)) {
+            request.options[0]
+        } else {
+            request.options[1]
+        }
+    } else ""
+    val negativeOpt = if (isApproveDeny) {
+        if (positiveOpt == request.options[0]) request.options[1] else request.options[0]
+    } else ""
     val hasAnswer = custom.trim().isNotEmpty() || selected.isNotEmpty()
 
     // --- Keyboard avoiding ---------------------------------------------------
@@ -226,7 +177,7 @@ private fun QuestionPanel(
                         Text("$index of $total", color = NewTheme.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily)
                     }
                 }
-                if (hasOptions) {
+                if (hasOptions && !isApproveDeny) {
                     Column(modifier = Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         request.options.forEach { option ->
                             val isSelected = selected.contains(option)
@@ -263,29 +214,49 @@ private fun QuestionPanel(
                 InlineTextInput(
                     value = custom,
                     onValueChange = { custom = it },
-                    placeholder = if (hasOptions) "Or type your own answer…" else "Type your answer…",
+                    placeholder = if (isApproveDeny) "Optional: reason or feedback…" else if (hasOptions) "Or type your own answer…" else "Type your answer…",
                     modifier = Modifier.padding(top = 12.dp)
                         .bringIntoViewRequester(fieldRequester)
                         .onFocusChanged { fieldFocused = it.isFocused },
                 )
             }
             Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (request.skippable) {
-                    ActionButton(text = "Skip", onClick = onSkip, enabled = !submitting, surface = NewTheme.Raised, modifier = Modifier.weight(1f))
+                if (isApproveDeny) {
+                    val denyText = if (custom.trim().isNotEmpty()) "$negativeOpt: ${custom.trim()}" else negativeOpt
+                    val denyLabel = if (custom.trim().isNotEmpty()) "$negativeOpt with feedback" else negativeOpt
+                    ActionButton(
+                        text = denyLabel,
+                        onClick = { onAnswerText(denyText) },
+                        surface = NewTheme.Raised,
+                        enabled = !submitting,
+                        modifier = Modifier.weight(1f),
+                    )
+                    ActionButton(
+                        text = positiveOpt,
+                        onClick = { onAnswerText(positiveOpt) },
+                        kind = ActionButtonKind.Primary,
+                        enabled = !submitting,
+                        loading = submitting,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    if (request.skippable) {
+                        ActionButton(text = "Skip", onClick = onSkip, enabled = !submitting, surface = NewTheme.Raised, modifier = Modifier.weight(1f))
+                    }
+                    ActionButton(
+                        text = if (isLast) (if (total > 1) "Submit all" else "Submit") else "Next",
+                        onClick = {
+                            if (custom.trim().isNotEmpty()) onAnswerText(custom.trim())
+                            else if (selected.isNotEmpty()) {
+                                if (request.isMultiSelect) onAnswerList(selected.toList()) else onAnswerText(selected.first())
+                            }
+                        },
+                        kind = ActionButtonKind.Primary,
+                        enabled = hasAnswer && !submitting,
+                        loading = submitting,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
-                ActionButton(
-                    text = if (isLast) (if (total > 1) "Submit all" else "Submit") else "Next",
-                    onClick = {
-                        if (custom.trim().isNotEmpty()) onAnswerText(custom.trim())
-                        else if (selected.isNotEmpty()) {
-                            if (request.isMultiSelect) onAnswerList(selected.toList()) else onAnswerText(selected.first())
-                        }
-                    },
-                    kind = ActionButtonKind.Primary,
-                    enabled = hasAnswer && !submitting,
-                    loading = submitting,
-                    modifier = Modifier.weight(1f),
-                )
             }
         }
     }

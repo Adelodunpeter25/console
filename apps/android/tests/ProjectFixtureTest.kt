@@ -11,8 +11,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Golden-fixture tests for the projects migration
- * (docs/plan/shared-protobuf-schema.md §8). Fixtures live in
+ * Golden-fixture tests for the projects migration. Fixtures live in
  * proto/testdata/projects and are shared by Go, Rust, and Kotlin.
  *
  * Timestamps arrive as protojson strings. The number-form test below locks

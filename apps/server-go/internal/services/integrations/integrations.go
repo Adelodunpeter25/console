@@ -12,10 +12,10 @@ package integrations
 import (
 	"context"
 	"errors"
+	"github.com/MoeForge/moego/regexp"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -38,11 +38,14 @@ type IntegrationInfo struct {
 	InstallHint string
 }
 
-// ListIntegrations reports every known binary integration. One row today
-// (gh); new binaries append here and the endpoint, clients, and tests pick
-// them up with no other changes.
+// ListIntegrations reports every known binary integration. gh is universal;
+// the Linux desktop row only exists where the Computer tab needs it.
 func ListIntegrations() []IntegrationInfo {
-	return []IntegrationInfo{CheckGhCLI()}
+	items := []IntegrationInfo{CheckGhCLI()}
+	if runtime.GOOS == "linux" {
+		items = append(items, CheckDesktop(), CheckBrowser())
+	}
+	return items
 }
 
 // ghFirstLine is `gh version 2.75.0 (2025-11-19)` — the group after

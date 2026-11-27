@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Speech-to-text (/api/stt). The Cloudflare account ID and API token live on
+// the server; this schema reports whether one is configured, never the token.
+//
+// `configured` has explicit presence because protojson drops an implicit
+// false, and a client must be able to tell "not configured" from "the server
+// did not report it" (the same trap ProviderCredentialStatus documents).
+message SttStatus {
+  optional bool configured = 1;
+  // "stored" or "env"; absent when not configured.
+  optional string source = 2;
+  // The Cloudflare account ID. Not a secret; useful for confirming which
+  // account a machine is spending against.
+  optional string account_id = 3;
+  string model = 4;
+  // RFC 3339 timestamp of the stored credential; absent for env.
+  optional string updated_at = 5;
+  uint32 max_audio_bytes = 6;
+}
+
+message SetSttConfigResponse {
+  SttStatus status = 1;
+  bool removed = 2;
+}
+
+message SttTranscript {
+  string text = 1;
+  string model = 2;
+}

@@ -1,6 +1,7 @@
 //! Small, reusable, side-effect-free helpers (time formatting, grouping, …).
 
 pub use console_shared::path;
+pub mod compact_count;
 pub mod session_groups;
 pub use console_shared::throughput;
 pub mod time;
@@ -9,9 +10,7 @@ pub use path::{
     ParentDirDisplay, format_folder_display_name, join_path_lexical, parent_dir, short_parent_dir,
     short_parent_dir_with,
 };
-pub use session_groups::{
-    ProjectSectionKey, SessionDateGroup, SidebarSortMode, group_by_date, group_indices_by_date,
-    group_indices_by_project, partition_settled, session_date_group,
-};
+pub use compact_count::format_compact_count;
+pub use session_groups::{ProjectSectionKey, group_indices_by_project, partition_settled};
 pub use throughput::format_tokens_per_second;
 pub use time::{format_message_time, format_time_ago, format_working_elapsed};

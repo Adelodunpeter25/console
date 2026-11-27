@@ -3,7 +3,7 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -278,13 +278,13 @@ func TestPermissionMatrix(t *testing.T) {
 		want permissions.Policy
 	}{
 		{permissions.FullAccess, tools.TierExec, permissions.Allow},
-		{permissions.AcceptEdits, tools.TierWrite, permissions.Allow},
-		{permissions.AcceptEdits, tools.TierExec, permissions.Prompt},
+		{permissions.FullAccess, tools.TierWrite, permissions.Allow},
 		{permissions.PlanMode, tools.TierExec, permissions.Deny},
 		{permissions.PlanMode, tools.TierWrite, permissions.Deny},
 		{permissions.PlanMode, tools.TierRead, permissions.Allow},
-		{permissions.AlwaysAsk, tools.TierRead, permissions.Allow},
-		{permissions.AlwaysAsk, tools.TierWrite, permissions.Prompt},
+		{permissions.Normalize("always-ask"), tools.TierWrite, permissions.Deny},
+		{permissions.Normalize("accept-edits"), tools.TierExec, permissions.Deny},
+		{permissions.Normalize(""), tools.TierExec, permissions.Deny},
 	}
 	for _, c := range cases {
 		if got := permissions.Resolve(c.mode, c.tier); got != c.want {
@@ -300,6 +300,9 @@ func TestAgentLoopToolRoundTrip(t *testing.T) {
 	}
 	t.Cleanup(manager.Close)
 	sessions := services.NewSessionService(manager)
+	if err := os.MkdirAll("/tmp/agent-test", 0o755); err != nil {
+		t.Fatal(err)
+	}
 	header, err := sessions.Create(types.CreateSessionOptions{
 		Cwd: "/tmp/agent-test", ModelID: "mock", Provider: "mock",
 	})
@@ -325,7 +328,7 @@ func TestAgentLoopToolRoundTrip(t *testing.T) {
 		},
 	}}
 	registry := tools.NewRegistry(tools.DefaultTools()...)
-	executor := loop.NewExecutor(registry, permissions.FullAccess, helpers.AutoApprover{})
+	executor := loop.NewExecutor(registry, permissions.FullAccess)
 	agent := loop.New(provider, executor, sessions)
 
 	events, err := agent.Run(context.Background(), header.ID, "please write hi", registry.Definitions())
@@ -378,6 +381,9 @@ func TestContextFilesMaterializeForAgentButPersistClean(t *testing.T) {
 	}
 	t.Cleanup(manager.Close)
 	sessions := services.NewSessionService(manager)
+	if err := os.MkdirAll("/tmp/context-files-test", 0o755); err != nil {
+		t.Fatal(err)
+	}
 	header, err := sessions.Create(types.CreateSessionOptions{
 		Cwd: "/tmp/context-files-test", ModelID: "mock", Provider: "mock",
 	})
@@ -387,7 +393,7 @@ func TestContextFilesMaterializeForAgentButPersistClean(t *testing.T) {
 
 	provider := &contextRecordingProvider{}
 	registry := tools.NewRegistry()
-	executor := loop.NewExecutor(registry, permissions.FullAccess, helpers.AutoApprover{})
+	executor := loop.NewExecutor(registry, permissions.FullAccess)
 	agent := loop.New(provider, executor, sessions)
 	user := loop.UserMessage{
 		Role:         loop.RoleUser,
@@ -472,7 +478,7 @@ func TestStreamNoEventLoss(t *testing.T) {
 
 func TestExecutorDeniesWriteInPlanMode(t *testing.T) {
 	registry := tools.NewRegistry(tools.WriteFile)
-	executor := loop.NewExecutor(registry, permissions.PlanMode, helpers.AutoApprover{})
+	executor := loop.NewExecutor(registry, permissions.PlanMode)
 	target := filepath.Join(t.TempDir(), "x.txt")
 	result, err := executor.Execute(context.Background(), tools.ToolCall{
 		ID: "c1", Name: "write_file",

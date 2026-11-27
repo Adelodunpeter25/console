@@ -18,7 +18,6 @@ fn decodes_golden_subagents_fixture() {
     assert_eq!(items.len(), 1);
     let sub = &items[0];
     assert_eq!(sub.subagent_id, "sub1");
-    assert_eq!(sub.max_turns, 5);
     assert_eq!(sub.current_turn, 2);
     assert_eq!(sub.created_at, 1700000000000);
     assert_eq!(sub.activities.len(), 1);
@@ -32,7 +31,7 @@ fn decodes_golden_subagents_fixture() {
 #[test]
 fn ignores_unknown_fields() {
     let items: Vec<SubagentInfo> = serde_json::from_str(
-        r#"[{"subagentId":"s","parentToolCallId":"c","name":"n","role":"r","prompt":"p","maxTurns":1,"currentTurn":1,"status":"running","createdAt":"1","updatedAt":"2","futureField":1}]"#,
+        r#"[{"subagentId":"s","parentToolCallId":"c","name":"n","role":"r","prompt":"p","currentTurn":1,"status":"running","createdAt":"1","updatedAt":"2","futureField":1}]"#,
     )
     .expect("unknown fields must be ignored");
     assert_eq!(items[0].name, "n");

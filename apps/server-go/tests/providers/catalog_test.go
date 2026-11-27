@@ -15,7 +15,7 @@ import (
 
 func TestCatalogListsCodex(t *testing.T) {
 	entries := providers.ListProviders()
-	if len(entries) != 4 {
+	if len(entries) != 5 {
 		t.Fatalf("entries: %+v", entries)
 	}
 	var codexEntry *types.ProviderEntry

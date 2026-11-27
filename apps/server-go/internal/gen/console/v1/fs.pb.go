@@ -348,28 +348,34 @@ func (x *FsFileContent) GetContent() string {
 	return ""
 }
 
-type WriteFileRequest struct {
+// Atomic, conflict-checked save for the desktop editor (POST /api/fs/save).
+// `content` is the exact text to persist: the editor has already applied the
+// file's own line endings, so the server never rewrites CRLF/LF. `base_etag`
+// is the ETag the buffer was loaded at; when it is set and no longer matches,
+// the save is refused with 409 FILE_CHANGED.
+type SaveFileRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
 	Content       string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	BaseEtag      *string                `protobuf:"bytes,3,opt,name=base_etag,json=baseEtag,proto3,oneof" json:"base_etag,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *WriteFileRequest) Reset() {
-	*x = WriteFileRequest{}
+func (x *SaveFileRequest) Reset() {
+	*x = SaveFileRequest{}
 	mi := &file_console_v1_fs_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WriteFileRequest) String() string {
+func (x *SaveFileRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WriteFileRequest) ProtoMessage() {}
+func (*SaveFileRequest) ProtoMessage() {}
 
-func (x *WriteFileRequest) ProtoReflect() protoreflect.Message {
+func (x *SaveFileRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_console_v1_fs_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -381,47 +387,56 @@ func (x *WriteFileRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WriteFileRequest.ProtoReflect.Descriptor instead.
-func (*WriteFileRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use SaveFileRequest.ProtoReflect.Descriptor instead.
+func (*SaveFileRequest) Descriptor() ([]byte, []int) {
 	return file_console_v1_fs_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *WriteFileRequest) GetPath() string {
+func (x *SaveFileRequest) GetPath() string {
 	if x != nil {
 		return x.Path
 	}
 	return ""
 }
 
-func (x *WriteFileRequest) GetContent() string {
+func (x *SaveFileRequest) GetContent() string {
 	if x != nil {
 		return x.Content
 	}
 	return ""
 }
 
-type FileWriteResponse struct {
+func (x *SaveFileRequest) GetBaseEtag() string {
+	if x != nil && x.BaseEtag != nil {
+		return *x.BaseEtag
+	}
+	return ""
+}
+
+type SaveFileResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Etag          string                 `protobuf:"bytes,2,opt,name=etag,proto3" json:"etag,omitempty"`
+	SizeBytes     uint64                 `protobuf:"varint,3,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	MtimeMs       int64                  `protobuf:"varint,4,opt,name=mtime_ms,json=mtimeMs,proto3" json:"mtime_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *FileWriteResponse) Reset() {
-	*x = FileWriteResponse{}
+func (x *SaveFileResponse) Reset() {
+	*x = SaveFileResponse{}
 	mi := &file_console_v1_fs_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *FileWriteResponse) String() string {
+func (x *SaveFileResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*FileWriteResponse) ProtoMessage() {}
+func (*SaveFileResponse) ProtoMessage() {}
 
-func (x *FileWriteResponse) ProtoReflect() protoreflect.Message {
+func (x *SaveFileResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_console_v1_fs_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -433,23 +448,37 @@ func (x *FileWriteResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use FileWriteResponse.ProtoReflect.Descriptor instead.
-func (*FileWriteResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use SaveFileResponse.ProtoReflect.Descriptor instead.
+func (*SaveFileResponse) Descriptor() ([]byte, []int) {
 	return file_console_v1_fs_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *FileWriteResponse) GetPath() string {
+func (x *SaveFileResponse) GetPath() string {
 	if x != nil {
 		return x.Path
 	}
 	return ""
 }
 
-func (x *FileWriteResponse) GetMessage() string {
+func (x *SaveFileResponse) GetEtag() string {
 	if x != nil {
-		return x.Message
+		return x.Etag
 	}
 	return ""
+}
+
+func (x *SaveFileResponse) GetSizeBytes() uint64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *SaveFileResponse) GetMtimeMs() int64 {
+	if x != nil {
+		return x.MtimeMs
+	}
+	return 0
 }
 
 type FileDeleteResponse struct {
@@ -947,13 +976,19 @@ const file_console_v1_fs_proto_rawDesc = "" +
 	"\x05score\x18\x04 \x01(\x01R\x05score\"=\n" +
 	"\rFsFileContent\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\"@\n" +
-	"\x10WriteFileRequest\x12\x12\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\"o\n" +
+	"\x0fSaveFileRequest\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\"A\n" +
-	"\x11FileWriteResponse\x12\x12\n" +
-	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"B\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\x12 \n" +
+	"\tbase_etag\x18\x03 \x01(\tH\x00R\bbaseEtag\x88\x01\x01B\f\n" +
+	"\n" +
+	"_base_etag\"t\n" +
+	"\x10SaveFileResponse\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
+	"\x04etag\x18\x02 \x01(\tR\x04etag\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x03 \x01(\x04R\tsizeBytes\x12\x19\n" +
+	"\bmtime_ms\x18\x04 \x01(\x03R\amtimeMs\"B\n" +
 	"\x12FileDeleteResponse\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
 	"\adeleted\x18\x02 \x01(\bR\adeleted\"&\n" +
@@ -1011,8 +1046,8 @@ var file_console_v1_fs_proto_goTypes = []any{
 	(*FsDirectoryTree)(nil),    // 2: console.v1.FsDirectoryTree
 	(*FileSearchResult)(nil),   // 3: console.v1.FileSearchResult
 	(*FsFileContent)(nil),      // 4: console.v1.FsFileContent
-	(*WriteFileRequest)(nil),   // 5: console.v1.WriteFileRequest
-	(*FileWriteResponse)(nil),  // 6: console.v1.FileWriteResponse
+	(*SaveFileRequest)(nil),    // 5: console.v1.SaveFileRequest
+	(*SaveFileResponse)(nil),   // 6: console.v1.SaveFileResponse
 	(*FileDeleteResponse)(nil), // 7: console.v1.FileDeleteResponse
 	(*CreateDirRequest)(nil),   // 8: console.v1.CreateDirRequest
 	(*DirCreateResponse)(nil),  // 9: console.v1.DirCreateResponse
@@ -1041,6 +1076,7 @@ func file_console_v1_fs_proto_init() {
 	}
 	file_console_v1_fs_proto_msgTypes[0].OneofWrappers = []any{}
 	file_console_v1_fs_proto_msgTypes[1].OneofWrappers = []any{}
+	file_console_v1_fs_proto_msgTypes[5].OneofWrappers = []any{}
 	file_console_v1_fs_proto_msgTypes[11].OneofWrappers = []any{}
 	file_console_v1_fs_proto_msgTypes[14].OneofWrappers = []any{}
 	type x struct{}

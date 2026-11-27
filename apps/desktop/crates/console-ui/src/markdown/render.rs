@@ -30,7 +30,7 @@ use gpui::{
     relative, size,
 };
 
-use super::file_links::{is_file_link, is_http_url, strip_line_suffix};
+use super::file_links::{is_file_link, is_html_link, is_http_url, strip_line_suffix};
 use super::highlight::TokenClass;
 use super::math::{self, MathMode};
 use super::mend::PENDING_LINK_URL;
@@ -395,17 +395,15 @@ pub fn flatten_sized(
                 links.last(),
                 Some((range, last)) if range.end == start && last == url
             );
-            if !continues {
-                if let Some(kind) = link_icon_kind(url) {
-                    text.push_str(ICON_GAP);
-                    gap = ICON_GAP.len();
-                    icons.push(IconSlot {
-                        range: start..start + gap,
-                        kind,
-                        tint: palette.tertiary,
-                        wants_title,
-                    });
-                }
+            if !continues && let Some(kind) = link_icon_kind(url) {
+                text.push_str(ICON_GAP);
+                gap = ICON_GAP.len();
+                icons.push(IconSlot {
+                    range: start..start + gap,
+                    kind,
+                    tint: palette.tertiary,
+                    wants_title,
+                });
             }
         }
         let gap_start = start;
@@ -541,7 +539,7 @@ pub fn highlighted_code(code: impl Into<SharedString>, lang_tag: &str, ctx: &Ctx
         .for_name(lang_tag)
         .or_else(|| reg.for_extension(lang_tag));
     let key = ctx.next_key();
-    let flat = ctx.flat(key.index, || flatten_code(code.into(), lang, &ctx.palette));
+    let flat = ctx.flat(key.index, || flatten_code(code.into(), lang, ctx.palette));
     text_element(&flat, key, ctx)
 }
 
@@ -575,6 +573,12 @@ pub struct MarkdownView {
     /// outside the parsed/flattened caches so a three-second icon change never
     /// invalidates text shaping.
     copied_code_blocks: Rc<RefCell<HashMap<usize, u64>>>,
+    /// Markdown-fence ordinals the reader flipped to raw source. Absent means
+    /// rendered, the default.
+    source_code_blocks: Rc<RefCell<std::collections::HashSet<usize>>>,
+    /// Rendered bodies of markdown fences, keyed by ordinal and rebuilt only
+    /// when the fence text changes.
+    nested_markdown: RefCell<HashMap<usize, (u64, Rc<RefCell<MarkdownView>>)>>,
     streaming: Cell<bool>,
 }
 
@@ -595,6 +599,8 @@ impl MarkdownView {
             titles: Cell::new(page_title_generation()),
             veil: RefCell::new(RowVeil::default()),
             copied_code_blocks: Rc::new(RefCell::new(HashMap::new())),
+            source_code_blocks: Rc::new(RefCell::new(std::collections::HashSet::new())),
+            nested_markdown: RefCell::new(HashMap::new()),
             streaming: Cell::new(false),
         }
     }
@@ -631,6 +637,8 @@ impl MarkdownView {
             *self.veil.borrow_mut() = RowVeil::seeded();
         }
         let changed = self.parser.text() != text;
+        let is_append =
+            changed && !self.parser.text().is_empty() && text.starts_with(self.parser.text());
         if changed {
             self.parser.set_text(text);
         }
@@ -645,7 +653,12 @@ impl MarkdownView {
             } else {
                 Vec::new()
             };
-            if changed || tail != self.tail {
+            if changed && !is_append {
+                self.tail = tail;
+                self.flats.borrow_mut().clear();
+                self.nested_markdown.borrow_mut().clear();
+                self.volatile_from.set(0);
+            } else if changed || tail != self.tail {
                 self.tail = tail;
                 // Markdown block structure only ever extends the final block,
                 // so every element before it is still valid. A streamed delta
@@ -670,7 +683,26 @@ impl MarkdownView {
             self.style.set(Some(current));
             self.titles.set(titles);
             self.flats.borrow_mut().clear();
+            self.nested_markdown.borrow_mut().clear();
         }
+    }
+
+    fn nested_view(&self, ordinal: usize, code: &str) -> Rc<RefCell<MarkdownView>> {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        code.hash(&mut hasher);
+        let hash = hasher.finish();
+        let mut nested = self.nested_markdown.borrow_mut();
+        if let Some((cached, view)) = nested.get(&ordinal)
+            && *cached == hash
+        {
+            return view.clone();
+        }
+        let mut view = MarkdownView::new();
+        view.set_text(code, false);
+        let view = Rc::new(RefCell::new(view));
+        nested.insert(ordinal, (hash, view.clone()));
+        view
     }
 
     /// Flattened inline content for the element at `ordinal`, built on miss.
@@ -742,6 +774,9 @@ pub struct Ctx<'a> {
     starts_block: Cell<bool>,
     animate_streaming: bool,
     now: Instant,
+    /// Session working directory for resolving workspace-relative image
+    /// paths in `![alt](path)`.
+    cwd: Option<String>,
 }
 
 impl<'a> Ctx<'a> {
@@ -762,6 +797,7 @@ impl<'a> Ctx<'a> {
             starts_block: Cell::new(true),
             animate_streaming: true,
             now: Instant::now(),
+            cwd: None,
         }
     }
 
@@ -779,6 +815,13 @@ impl<'a> Ctx<'a> {
         self
     }
 
+    /// The session working directory workspace-relative image paths resolve
+    /// against.
+    pub fn with_cwd(mut self, cwd: Option<String>) -> Self {
+        self.cwd = cwd.filter(|c| !c.is_empty());
+        self
+    }
+
     fn with_cache(&self, view: &'a MarkdownView) -> Self {
         Self {
             row: self.row.clone(),
@@ -791,6 +834,7 @@ impl<'a> Ctx<'a> {
             starts_block: Cell::new(self.starts_block.get()),
             animate_streaming: self.animate_streaming,
             now: Instant::now(),
+            cwd: self.cwd.clone(),
         }
     }
 
@@ -836,6 +880,7 @@ fn text_element_with_selection(
     let styled = StyledText::new(flat.text.clone()).with_runs(runs);
     let layout = styled.layout().clone();
 
+    let menu_browser = link_handler.clone();
     let body: AnyElement = if flat.links.is_empty() {
         styled.into_any_element()
     } else {
@@ -913,7 +958,106 @@ fn text_element_with_selection(
     if !flat.icons.is_empty() {
         container = container.child(icon_overlay(flat.icons.clone(), layout.clone()));
     }
-    container.into_any_element()
+    let html_links: Vec<(Range<usize>, String)> = flat
+        .links
+        .iter()
+        .filter(|(_, url)| !is_http_url(url) && is_file_link(url) && is_html_link(url))
+        .cloned()
+        .collect();
+    let Some(open_browser) = menu_browser.filter(|_| !html_links.is_empty()) else {
+        return container.into_any_element();
+    };
+    HtmlLinkMenu {
+        container,
+        id: SharedString::from(format!("html-link-menu-{}-t{}", key.row, key.index)),
+        layout,
+        links: html_links,
+        open_browser,
+    }
+    .into_any_element()
+}
+
+thread_local! {
+    static HTML_LINK_EDITOR: std::cell::RefCell<Option<Rc<dyn Fn(String, &mut Window, &mut gpui::App)>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Registers what "Open in editor" does for an HTML link in the transcript.
+pub fn set_html_link_editor(handler: Rc<dyn Fn(String, &mut Window, &mut gpui::App)>) {
+    HTML_LINK_EDITOR.with(|slot| *slot.borrow_mut() = Some(handler));
+}
+
+/// Paragraph with a right-click menu (browser / editor) on its HTML links.
+#[derive(IntoElement)]
+struct HtmlLinkMenu {
+    container: gpui::Div,
+    id: SharedString,
+    layout: TextLayout,
+    links: Vec<(Range<usize>, String)>,
+    open_browser: LinkHandler,
+}
+
+impl gpui::RenderOnce for HtmlLinkMenu {
+    fn render(self, window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
+        use crate::primitives::menu::{ContextMenuHandle, MenuItem, context_menu_where};
+        let id: gpui::ElementId = self.id.clone().into();
+        let handle: ContextMenuHandle = window
+            .use_keyed_state(id.clone(), cx, |_, cx| ContextMenuHandle::new(cx))
+            .read(cx)
+            .clone();
+        // Kept across frames: the click records the link in one frame and the
+        // open menu reads it back in a later one.
+        let target: Rc<std::cell::RefCell<Option<String>>> = window
+            .use_keyed_state(
+                SharedString::from(format!("{}-target", self.id)),
+                cx,
+                |_, _| Rc::<std::cell::RefCell<Option<String>>>::default(),
+            )
+            .read(cx)
+            .clone();
+        let hit_target = target.clone();
+        let layout = self.layout;
+        let links = self.links;
+        let open_browser = self.open_browser;
+        context_menu_where(
+            self.container,
+            id,
+            &handle,
+            move |position| {
+                let index = layout.index_for_position(position).unwrap_or_else(|i| i);
+                let found = links
+                    .iter()
+                    .find(|(range, _)| range.contains(&index))
+                    .map(|(_, url)| url.clone());
+                let hit = found.is_some();
+                *hit_target.borrow_mut() = found;
+                hit
+            },
+            move |_| {
+                let Some(url) = target.borrow().clone() else {
+                    return Vec::new();
+                };
+                let browser_url = url.clone();
+                let browser = open_browser.clone();
+                let mut items = Vec::new();
+                if let Some(editor) = HTML_LINK_EDITOR.with(|slot| slot.borrow().clone()) {
+                    items.push(
+                        MenuItem::new("Open in editor", move |window, cx| {
+                            editor(url.clone(), window, cx)
+                        })
+                        .icon(crate::primitives::IconName::File.path()),
+                    );
+                }
+                items.push(
+                    MenuItem::new("Open in browser", move |window, cx| {
+                        browser(&browser_url, window, cx)
+                    })
+                    .icon(crate::primitives::IconName::Globe.path()),
+                );
+                items
+            },
+        )
+    }
 }
 
 /// The icon for one slot. A favicon that has not arrived (or never will)
@@ -969,10 +1113,10 @@ fn icon_overlay(icons: Vec<IconSlot>, layout: TextLayout) -> impl IntoElement {
                 };
                 if slot.wants_title {
                     // Keeps frames coming until the title lands (or fails).
-                    if let IconKind::Favicon(url) = &slot.kind {
-                        if page_title_state(url) == TitleState::Loading {
-                            window.request_animation_frame();
-                        }
+                    if let IconKind::Favicon(url) = &slot.kind
+                        && page_title_state(url) == TitleState::Loading
+                    {
+                        window.request_animation_frame();
                     }
                 }
                 // A formula is painted at its own size from the gap's left edge;
@@ -1417,16 +1561,20 @@ pub fn install_selection_input(
                             .unwrap_or(false),
                         _ => text.is_some(),
                     };
-                if inside && cite_ready {
+                if inside
+                    && cite_ready
+                    && let Some(text) = text
+                {
                     state.selection.borrow_mut().clear();
                     window.refresh();
                     match action {
                         PressAction::Copy => {
-                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text.unwrap()));
+                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
                         }
                         PressAction::Cite => {
-                            let quote = format_cite_quote(&text.unwrap()).unwrap();
-                            if let Some(handler) = state.cite_handler() {
+                            if let Some(quote) = format_cite_quote(&text)
+                                && let Some(handler) = state.cite_handler()
+                            {
                                 (handler)(quote, window, cx);
                             }
                         }
@@ -1759,7 +1907,14 @@ fn checkbox(checked: bool, ctx: &Ctx) -> AnyElement {
 /// An inline image. Data URLs decode in place; anything else is handed to GPUI
 /// to load. The alt text renders beneath as a caption when there is one, so a
 /// failed or slow load still says what it was.
+/// Workspace-local image targets (`![alt](path)` without a scheme) go through
+/// the authenticated fs endpoint; everything else keeps GPUI's own loaders.
 fn render_image(url: &str, alt: &str, ctx: &Ctx) -> AnyElement {
+    if let Some(image) =
+        crate::chat::image::workspace_chat_image(url, alt, ctx.cwd.as_deref(), None)
+    {
+        return image;
+    }
     const MAX_HEIGHT: f32 = 320.0;
 
     let key = ctx.next_key();
@@ -1889,8 +2044,28 @@ pub fn decode_data_url(url: &str) -> Option<std::sync::Arc<gpui::Image>> {
     (!bytes.is_empty()).then(|| std::sync::Arc::new(gpui::Image::from_bytes(format, bytes)))
 }
 
+fn is_markdown_fence(language: Option<&str>) -> bool {
+    language.is_some_and(|tag| {
+        matches!(
+            tag.trim().to_ascii_lowercase().as_str(),
+            "markdown" | "md" | "mdx"
+        )
+    })
+}
+
 fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElement {
     let key = ctx.next_key();
+    // A fence still streaming is shown as source: half-parsed markdown would
+    // reflow on every delta.
+    let rendered_markdown = is_markdown_fence(language)
+        && ctx.cache.is_some_and(|view| {
+            !view.streaming.get() && !view.source_code_blocks.borrow().contains(&key.index)
+        });
+    let mode_toggle = is_markdown_fence(language)
+        .then_some(ctx.cache)
+        .flatten()
+        .filter(|view| !view.streaming.get())
+        .map(|view| (view.source_code_blocks.clone(), rendered_markdown));
     // Tokenizing is the most expensive flatten in the document, so a settled
     // code block is exactly the case the cache exists for.
     let flat = ctx.flat(key.index, || {
@@ -1961,6 +2136,28 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
             }
         });
 
+    let nested_body = if rendered_markdown {
+        ctx.cache.and_then(|view| {
+            let nested = view.nested_view(key.index, code);
+            let nested = nested.borrow();
+            let palette = ctx.palette;
+            let inner = Ctx::new(
+                format!("{}/md{}", key.row, key.index),
+                palette,
+                ctx.metrics,
+                ctx.selection.clone(),
+            );
+            let inner = inner.with_cwd(ctx.cwd.clone());
+            let inner = match &ctx.link_handler {
+                Some(handler) => inner.with_link_handler(handler.clone()),
+                None => inner,
+            };
+            markdown(&nested, &inner)
+        })
+    } else {
+        None
+    };
+
     div()
         .id(SharedString::from(format!(
             "code-block-{}-{}",
@@ -2006,6 +2203,41 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
                             }
                         }),
                 )
+                .when_some(mode_toggle, |header, (modes, rendered)| {
+                    let ordinal = key.index;
+                    header.child(
+                        div()
+                            .id(SharedString::from(format!(
+                                "code-mode-{}-{}",
+                                key.row, key.index
+                            )))
+                            .h(px(20.0))
+                            .px(px(7.0))
+                            .mr(px(4.0))
+                            .flex()
+                            .items_center()
+                            .rounded(px(5.0))
+                            .text_size(px(10.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(ctx.palette.ghost)
+                            .cursor_default()
+                            .hover(|style| style.bg(ctx.palette.overlay))
+                            .tooltip(Tooltip::text(if rendered {
+                                "Show source"
+                            } else {
+                                "Show preview"
+                            }))
+                            .on_click(move |_, _, cx| {
+                                let mut modes = modes.borrow_mut();
+                                if !modes.remove(&ordinal) {
+                                    modes.insert(ordinal);
+                                }
+                                drop(modes);
+                                cx.refresh_windows();
+                            })
+                            .child(if rendered { "Source" } else { "Preview" }),
+                    )
+                })
                 .child(copy_button),
         )
         .child(
@@ -2018,16 +2250,18 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
                 .min_w_0()
                 .px(px(10.0))
                 .py(px(8.0))
-                .child(
-                    div()
+                .child(match nested_body {
+                    Some(body) => body,
+                    None => div()
                         .w_full()
                         .min_w_0()
                         .whitespace_normal()
                         .text_size(px(ctx.metrics.code_text_size))
                         .line_height(px(ctx.metrics.code_line_height))
                         .text_color(ctx.palette.secondary)
-                        .child(text_element(&flat, key, ctx)),
-                ),
+                        .child(text_element(&flat, key, ctx))
+                        .into_any_element(),
+                }),
         )
         .into_any_element()
 }

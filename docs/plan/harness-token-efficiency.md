@@ -1,7 +1,11 @@
 # Harness Token Efficiency
 
-Status: **in progress** (paused 2026-10-02). Phase 1 done, Task 3.0 done,
-`sparse_line_numbers` A/B done (keep off). See "Next steps" under Results log.
+Status: **in progress** (paused 2026-10-02; state and paths refreshed
+2026-11-13). Phase 1 done, Task 3.0 done, `sparse_line_numbers` A/B done
+(keep off), Phase 2 Tasks 2.1–2.2 done. See "Next steps" under Results log.
+
+Note: since the audit below was written, the tools/providers/agent packages
+moved under `internal/`. Paths in this doc reflect the current layout.
 
 ## Goal
 
@@ -40,23 +44,23 @@ size, not as targets.
 6. **One change per commit, and every change can be rolled back.** Risky
    changes go behind a flag.
 
-## Current state (audit, 2026-09-24)
+## Current state (audit, 2026-09-24; cache row updated 2026-11-13)
 
 | Area | Where | Finding |
 |---|---|---|
-| Prompt assembly | `internal/agent/systemprompt/builder.go`, called from `internal/run/turns.go:215` | One flat string: identity → approval mode → skills → rules → **tool inventory** → slash commands → AGENTS.md → **workspace tree** → **workstation (date, cwd, branch, model)** → `<critical>`. Things that change (date, branch, tree, model) sit inside the cached prefix. |
-| Tool inventory | `renderTools` | Repeats the tool names that are already in the tool schemas. Pure duplication. |
-| Emphasis | `renderContextFiles`, `renderWorkstation` | "You MUST follow…", "Do not waste tools…", `<critical>` "MUST advance the task". |
-| Workspace tree | `workspacetree.go` | Depth-limited tree on every request, even though `glob`/`list_dir` exist. |
-| Claude cache | `providers/claude/convert.go:251,316`, `stream.go:150` | Breakpoints on the system block, the last tool, and the last message. The system block is one big string, so any change in date/branch/tree throws away the cache for everything after the tools. |
-| OpenCode cache | `providers/opencode/stream.go` | Responses path sends `prompt_cache_key`. **The Chat path (`runChat`, used by `space-bunny-free`) sends no cache key.** |
-| Usage telemetry | `loop.TurnUsage` (`agent/loop/message.go:66`), each provider's `NormalizeUsage` | Per-turn input, cache read/write and output are recorded on the assistant message, but never added up per task, per tool, or per context source. `run/turns.go:380` swallows `EventUsage`. |
-| File reads | `tools/file_tools.go:120–123` | Every line is numbered (`%*d: `). |
-| Bash output | `tools/bash_tools.go:17,30–34` | Keeps the first 50 KB and drops the rest. Errors usually show up at the **end**, which is the part that gets thrown away. |
-| Firecrawl / webFetch | `tools/firecrawl.go:22–29` | Also cuts off the head without saving the rest. |
-| Tools shipped | `tools.DefaultTools()` + memory | 17 tools with full schemas on every request (`webSearch`, `webFetch`, `bashJob`, `askMany`, `memory`, `batchWrite` are rarely used). OpenCode adds 6 compatibility marker tools on top. |
-| Compaction | `agent/compaction/llm.go:24` | Summary prompt is already short. The full history isn't saved anywhere the agent can search. |
-| Subagent | `agent/loop/subagent.go:129` | Adds a fixed preamble to the parent's **whole** system prompt (tree included). Returns the child's entire streamed text as its "summary". |
+| Prompt assembly | `internal/agent/systemprompt/builder.go`, called from `internal/run/turns.go` | Was one flat string. Tasks 2.1/2.2 split it into a stable `StableSystem` and a per-session `Setup` sent as a leading user message, so volatile values (date, branch, tree, model) no longer sit in the cached system prefix. |
+| Tool inventory | **removed (2026-11-13)** | The `renderTools` name list duplicated the tool schemas; it is gone from the stable prompt. |
+| Emphasis | `renderContextFiles`, `renderWorkstation` | Prompt-side Task 4.1 lines landed 2026-11-13: MUST/scolding lines rewritten or deleted. Remaining: tool-description tightening. |
+| Workspace tree | **removed (2026-11-13)** | The tree section and `workspacetree.go` are gone; the model discovers structure with `glob`/`list_dir`. Watch turns on the next bench run. |
+| Claude cache | `internal/providers/claude/convert.go` (last message, last tool), `stream.go` (stable system block) | Breakpoints on the stable system block, the last tool, and the last message. The setup user message still has **no** breakpoint (Task 2.3). |
+| OpenCode cache | `internal/providers/opencode/stream.go` | Responses path sends `prompt_cache_key`. **The Chat path (`runChat`) sends no cache key.** |
+| Usage telemetry | `loop.TurnUsage` (`internal/agent/loop/message.go`), each provider's `NormalizeUsage` | Per-turn input, cache read/write and output are recorded on the assistant message, and Phase 1 added per-run totals and a breakdown; per-tool cost share is still partial. |
+| File reads | `internal/agent/tools/file_tools.go` | Task 3.0 capped default reads at 300 lines; every kept line is still numbered (`%*d: `). |
+| Bash output | `internal/agent/tools/bash_tools.go` | Task 3.1 (2026-11-13): over the 50 KB cap the full output is spilled to a file and the **tail** is shown. bashJob ring-buffer drops are spilled too (2026-11-13). |
+| Firecrawl / webFetch | `internal/agent/tools/firecrawl.go`, `web_fetch_tool.go` | Task 3.1 (2026-11-13): webFetch spills bodies over 512 KB (reads up to 5 MB) and keeps the head; Firecrawl scrape spills markdown over 25 KB. |
+| Tools shipped | `internal/agent/tools` + memory | 17 tools with full schemas on every request (`webSearch`, `webFetch`, `bashJob`, `askMany`, `memory`, `batchWrite` are rarely used). |
+| Compaction | `internal/agent/compaction/llm.go` | Summary prompt is already short. The full history isn't saved anywhere the agent can search. |
+| Subagent | `internal/agent/loop/subagent.go` | Adds a fixed preamble to the parent's **whole** system prompt (tree included). Returns the child's entire streamed text as its "summary". |
 
 ## Test setup: Claude Haiku on the Claude Code provider
 
@@ -64,11 +68,11 @@ All cost measurements use the `claude` provider (Claude Code OAuth
 subscription) with **`claude-haiku-4-5`**. That's the model with remaining
 usage on the account.
 
-Why Haiku instead of the OpenCode free model:
+Why Haiku instead of OpenCode:
 
 - **Real cache numbers.** Anthropic reports `cache_read_input_tokens` and
   `cache_creation_input_tokens` on every response, and `NormalizeUsage`
-  (`providers/claude/stream.go:228`) already maps them into `TurnUsage`.
+  (`internal/providers/claude/stream.go`) already maps them into `TurnUsage`.
   We don't need to estimate caching locally.
 - **Explicit cache breakpoints** are already wired up
   (`claude/convert.go:251,316`, `stream.go:150`), so the Phase 2 work is
@@ -77,7 +81,7 @@ Why Haiku instead of the OpenCode free model:
   input $1.00, cache read $0.10, cache write (5 min) $1.25, output $5.00.
   The bench reports weighted cost in real dollars using these prices, kept
   as a table in the bench tool so it's easy to add other models.
-- More consistent quality than free models, so each run is less noisy.
+- More consistent quality, so each run is less noisy.
 
 Things to know about Haiku and the subscription:
 
@@ -100,11 +104,11 @@ Things to know about Haiku and the subscription:
 - **Required identity line.** `ClaudeCodeSystemInstruction` stays as the
   first system block. Prompt trimming (4.1) never touches it.
 
-OpenCode's free model (`space-bunny-free`) is an optional **second check**,
-useful to see whether prompt changes still work on a weaker, non-Anthropic
-model. Zen does report some cached tokens on the Chat path. If we want better
-cache numbers there, sending `prompt_cache_key` on the Chat path (as the
-Responses path already does) is a small optional follow-up.
+OpenCode Go (API key) is an optional **second check** to see whether prompt
+changes also work on a non-Anthropic model. The Responses path reports some
+cached tokens. If we want better cache numbers on the Chat path, sending
+`prompt_cache_key` there (as the Responses path already does) is a small
+optional follow-up.
 
 ---
 
@@ -154,7 +158,8 @@ Everything after this depends on it.
   provider's `postJSON` or equivalent.
 
 ### Task 1.5: Bench tool and task set
-- **Files:** new `apps/server-go/cmd/bench/main.go`, and task files in
+- **Files:** `apps/server-go/cmd/bench/main.go` (done; the runner itself
+  lives in `internal/bench/`), and task files in
   `apps/server-go/bench/tasks/*.toml`.
 - **Task set:** 12 realistic tasks written the way the user really writes
   (short, slightly vague), against a copy of this repo at a pinned commit
@@ -193,7 +198,7 @@ Everything after this depends on it.
   error rate. Rank the rest of the work with it.
 
 ### Task 1.7: Usage budget guard for the Claude subscription
-- **Files:** `cmd/bench/budget.go`, reusing `providers/usage`
+- **Files:** `internal/bench/budget.go`, reusing `providers/usage`
   (`Service.GetUsage(ctx, "claude")` → `Report.Limits[].Amount`, which is a
   utilization percentage).
 - **Change:**
@@ -258,38 +263,45 @@ What it tells us:
 Keep the reusable prefix byte-for-byte identical across turns, and as long
 as possible:
 
-`tools → stable system prompt → [breakpoint] → setup message (env, tree, skills, rules, AGENTS.md) → [breakpoint] → conversation`
+`tools → stable system prompt → [breakpoint] → setup message (skills, rules, commands, AGENTS.md, workstation) → [breakpoint] → conversation`
 
-### Task 2.1: Split the system prompt into stable and volatile parts
-- **File:** `builder.go`.
+### Task 2.1: Split the system prompt into stable and volatile parts — **done**
+- **File:** `internal/agent/systemprompt/builder.go`.
 - **Change:** `Result` gets `StableSystem` and `Setup`.
   - **Stable:** identity, approval-mode instructions, what skills are for,
     and the `<critical>` block (rewritten in Phase 4).
   - **Setup** (moved out of the system prompt): skills list, rules, slash
-    commands, AGENTS.md / context files, workspace tree, and workstation
-    info (date, cwd, OS, arch, branch, model).
+    commands, AGENTS.md / context files, and workstation info (cwd, OS,
+    arch, model — date and branch were removed on 2026-11-13; the model
+    runs `date` / `git branch` when needed).
   - Keep `SystemPrompt` as the joined string, so callers that haven't been
     changed keep working.
 - **Test:** `tests/agent/systemprompt_test.go`. Check that the stable part
   contains no date, cwd or branch, and is identical across two builds with
   different dates and branches.
 
-### Task 2.2: Send setup as a leading user message
-- **Files:** `agent/loop/loop.go` (`TurnRequest` gets a `Setup string`),
-  `run/turns.go`, and each provider's message converter.
+### Task 2.2: Send setup as a leading user message — **done**
+- **Files:** `internal/agent/loop/loop.go` (`TurnRequest` gets a `Setup string`,
+  `SetupMessage` builds the leading user message), `internal/run/turns.go`,
+  and each provider's message converter.
 - **Change:** providers put `Setup` in a first user message
   (`<setup>…</setup>`) before the conversation. It's built once when the
   session starts and saved with the session, so it stays the same across
   turns and is only rebuilt when cwd, model or approval mode changes, or on
-  compaction. Rebuilding the date every turn would break the cache; a date
-  that's a few hours old is fine.
+  compaction. (Since 2026-11-13 the setup holds no volatile values at all —
+  date and branch are gone — so nothing invalidates it mid-day.)
 - **Where to cache it:** reuse the session header, or add an in-memory map
   keyed by session ID in `run`.
 - **Test:** provider tests check the order: system, then setup, then
   history. A run test checks that setup stays the same across two turns.
 
-### Task 2.3: Explicit breakpoints (Claude)
-- **File:** `providers/claude/stream.go:146–150`.
+### Task 2.3: Explicit breakpoints (Claude) — **resume here**
+- **File:** `internal/providers/claude/stream.go` and `convert.go`.
+- **Current state (2026-11-13):** three breakpoints exist — the last tool
+  definition (`ConvertTools`), the stable system block (`BuildRequestBody`),
+  and the last message (`ConvertMessages`). The setup user message gets
+  **none**, so any mid-conversation prefix edit falls back to re-reading
+  from the stable system block.
 - **Change:** the system prompt becomes two blocks: the Claude Code identity
   plus the stable part, with `cache_control` on the stable block. Put a
   second breakpoint on the setup user message, and keep the existing one on
@@ -312,7 +324,7 @@ as possible:
   identical. Use the Task 1.4 dumps to confirm between real turns.
 
 ### Task 2.5: Don't switch models mid-conversation
-- **Change:** the vision fallback in `run/turns.go:203` swaps the model for
+- **Change:** the vision fallback in `internal/run/turns.go` swaps the model for
   the whole turn, which throws away the cache. Run it as a one-off subagent
   call (describe the image, return text) instead of switching the main
   model. **Proposal only** until measured, because it changes behavior.
@@ -345,8 +357,17 @@ results (26.7%) are handled before bash output (9.2%).
   per task, and the `read_file` share. If turns go up a lot, raise the cap.
 - **Test:** `tests/tools/read_file_test.go`.
 
-### Task 3.1: Save large output to a file instead of cutting it off
-- **Files:** `tools/bash_tools.go`, new `tools/spill.go`.
+### Task 3.1: Save large output to a file instead of cutting it off — **done (2026-11-13)**
+- **Files:** `internal/agent/tools/bash_tools.go`,
+  `internal/agent/tools/spill.go` (new), `web_fetch_tool.go`, `firecrawl.go`.
+- **What landed:** output over the cap is written to
+  `<tmp>/console-tool-output/<session>/...` and the result keeps the **tail**
+  (50 KB) with a "full output saved to <path>" notice; webFetch keeps the
+  **head** (512 KB of a 5 MB read) and spills the rest; Firecrawl scrape
+  spills full markdown over 25 KB. Secrets are redacted before spilling.
+  Tests: `tests/tools/spill_test.go`.
+- **Validate:** one bench run against the baseline. Watch success rate, turns
+  per task, and the `bash`/`read_file` shares.
 - **Change:** when stdout or stderr is over the limit (keep 50 KB for now,
   and consider lowering it to about 16 KB after measuring), write the full
   stream to `<session-tmp>/tool-output/<callID>.<stdout|stderr>.log`, and
@@ -358,24 +379,32 @@ results (26.7%) are handled before bash output (9.2%).
   ```
   The model can then `grep`, or use `read_file` with a line range, on the
   saved file. Keep the tail, not the head.
-- Do the same for `firecrawl.go` / `webFetch` and for `bashJob` output
-  pages.
+- bashJob pages: done (2026-11-13) — the job manager's ring buffers spill
+  whatever they drop to `<tmp>/console-tool-output/<session>/<jobID>.<stream>.log`,
+  and output pages report the dropped char count and spill path instead of a
+  bare `truncated: true`.
 - **Test:** `tests/tools/spill_test.go`. Check large output gives a file
   with the full contents, a tail, and the stated size; small output is
   unchanged.
 
-### Task 3.2: Strip noise from command output
-- **Change:** in bash results, remove ANSI escape codes and collapse
-  carriage-return progress bars (keep only the last frame of each `\r`
-  sequence). This is just a transform before the text reaches the model.
-  The spill file keeps the raw bytes.
-- **Test:** add to the spill test file.
+### Task 3.2: Strip noise from command output — **done (2026-11-13)**
+- **Change (landed):** bash results are cleaned before they reach the model:
+  ANSI escape sequences (CSI/OSC) are stripped and carriage-return progress
+  redraws collapse to the last frame of each line. The spill file keeps the
+  raw bytes. Tests: `tests/tools/edit_errors_test.go`.
 
-### Task 3.3: Fix recurring tool errors
-- Using the Task 1.3 stats from the baseline, fix the top 3 error causes
-  (for example, `editFile` "must match exactly once" failures: return the
-  closest candidate lines; invalid-argument messages: name the bad field).
-  Each fix is its own commit with its own test.
+### Task 3.3: Fix recurring tool errors — **done (2026-11-13)**
+- **editFile not-found** now diagnoses the near-miss: it reports a
+  whitespace-insensitive match (with the line number) when only indentation
+  or line endings differ, CRLF mismatches, and otherwise the 3 closest
+  matching lines by similarity.
+- **editFile ambiguous** now lists the line numbers of every occurrence.
+- **Required fields are enforced** in the generic tool executor: a call
+  omitting a schema-required field fails with "Missing required fields for
+  <tool>: …" instead of a confusing failure deeper in the tool (an omitted
+  `oldContent` used to match the empty string everywhere).
+- **Next check:** after the next bench run, see whether the `editFile` error
+  rate (18/76 in baseline-v2) drops.
 
 ---
 
@@ -388,34 +417,47 @@ behavior until bench shows no drop in success and lower cost. Then flip the
 default in a separate commit.
 
 Put flag loading in a new `internal/agent/flags` package with a `Flags`
-struct. `bench --flags` sets it directly.
+struct. `bench --flags` sets it directly. **Package exists (2026-11-13):**
+`Flags` lives in `internal/agent/flags` with `FromEnv`; `sparse_line_numbers`
+already reads through it, and the bench keeps recording active
+`CONSOLE_HARNESS_*` vars into results `flags`. Future Phase 4 flags get a
+struct field + a `FromEnv` entry, and read through their tool constructors.
 
 ### Task 4.1: `prompt_trim`: rewrite the system prompt
+**Prompt-side changes landed 2026-11-13 (no flag, direct change):** identity
+no longer asks for brevity; "Each response MUST advance the task" deleted;
+informed-action line rewritten as a plain fact; plan-mode critical compressed
+to one line (still names writePlan/docs/plan via the approval-mode section);
+full-access lecturing removed; repo-rules header and grep line rewritten;
+workstation duplicate "Today is / Working directory" line deleted.
+
 Label every line: **keep / rewrite / delete / move**. Planned changes:
 
 | Line / section | Action | Reason |
 |---|---|---|
 | `defaultIdentity` | keep, tighten | Product identity. Drop "correctly and concisely" (asks for brevity). |
-| `# Tool inventory` list | **delete** | Repeats the tool schemas. |
+| `# Tool inventory` list | **deleted (2026-11-13)** | Repeated the tool schemas. |
 | "You MUST follow the context files below for all tasks:" | rewrite | → "Project rules from AGENTS.md and similar files:" |
 | "Context files above are loaded automatically. Do not waste tools grepping for AGENTS.md…" | rewrite | → "These files are already loaded." (a quirk we've seen, so keep it as a fact) |
 | `<critical>` "Each response MUST advance the task." | delete | Capable models do this already; emphasis. |
 | `<critical>` "Default to informed action; do not ask for confirmation…" | rewrite, keep | Real quirk (stopping to ask permission). → "When tools or the repo can answer a question, use them instead of asking the user." |
 | Plan-mode `<critical>` | keep, rewrite | The mode depends on it. → "Plan mode: discuss and ask questions; no file writes." |
-| "Today is X. Working directory is Y." | delete | Repeats the workstation block (which moves to setup in Phase 2). |
+| "Today is X. Working directory is Y." | **deleted (2026-11-13)** | Repeated the workstation block. The workstation block itself now holds only session-stable facts: **date and git branch were removed too** (2026-11-13) — they went stale in the cached prompt over multi-day sessions, and the model can run `date` / `git branch` when a task needs them. No midnight cache invalidation needed. |
 | Skills header sentence | keep | Tells the model the skill lookup exists. |
-| Approval-mode text (`approvalModeInstructions`) | audit, rewrite | Remove emphasis; keep what each mode allows. |
-| Tool descriptions (`jsonschema` tags) | tighten | Describe behavior and arguments; remove usage lectures (for example, bash's "not for reading or editing files" → keep one short line, since that's a real quirk). |
+| Approval-mode text (`approvalModeInstructions`) | **done (2026-11-13)** | Full-access lecturing ("freedom is not a license…") removed; plan-mode text compressed, still names writePlan/docs/plan. |
+| Tool descriptions (`jsonschema` tags) | **done (2026-11-13)** — bash, bashJob and editFile tightened; bash's false-timeout line replaced with the real promotion behavior. Everything else was already tight; `todo` stays as expanded in 31158ec9. |
 
 Also audit `SYSTEM.md` handling and the subagent preamble in the same pass.
 **Measure:** static tokens per request, success, turns.
 
-### Task 4.2: `no_workspace_tree`
-- Skip the workspace tree (`SkipWorkspaceTree` already exists; connect it to
-  the flag). Keep OS, git branch and repo status (dirty/clean, as one line).
-- **Watch:** turns per task and `list_dir`/`glob` calls on the
-  code-question tasks. Kill the flag if turns go up enough to cancel out the
-  savings.
+### Task 4.2: `no_workspace_tree` — **done (2026-11-13), tree removed outright**
+- The workspace tree section was removed from the prompt (and
+  `workspacetree.go` deleted) instead of being flag-gated: the model has
+  `list_dir`/`glob` for discovery. Workstation info (OS, git branch, cwd)
+  stays.
+- **Watch:** turns per task and `list_dir`/`glob` calls on the code-question
+  tasks in the next bench run. If turns go up enough to cancel out the
+  savings, restore a minimal one-line directory hint instead of the tree.
 
 ### Task 4.3: `sparse_line_numbers`
 - `read_file` numbers only line 1, every line that's a multiple of 10, and
@@ -448,26 +490,24 @@ The Factory article reinforces several principles for this plan:
   codemode requirements. Bounded autonomy and model-specific tuning are also
   later validation work.
 
-### Task 4.4: `lazy_tools`: load rarely used tools on demand
+### Task 4.4: `lazy_tools`: load rarely used tools on demand — **superseded (codemode is now the default; deferred built-ins and the flag were removed). Kept here for historical context.**
 - **Always sent:** `read_file`, `list_dir`, `glob`, `grep`, `editFile`,
-  `write_file`, `bash`, `todo`, `ask` (models call it even when it's
-  missing), `subagent`, `readSkill`.
-- **Loaded when needed:** `webSearch`, `webFetch`, `bashJob`, `askMany`,
-  `memory`, `batchWrite`. Future MCP tools also go here, one group per
-  server.
-- **How:** add a `loadTools` tool (`{names: string[]}` or `{group}`), and a
-  one-line list of the deferred tool names in the setup message ("More tools
-  available through loadTools: webSearch, webFetch, …"). After a call, the
-  loaded definitions are added to the tool list for **the rest of the run**,
-  appended at the end so the earlier tool prefix stays cached. Status notes
-  (for example, "firecrawl key missing") go on that list line.
-- `bashJob` exception: when `bash` starts a background job, load `bashJob`
-  automatically, so the model never calls a tool it can't see.
-- **Files:** `run/turns.go` (tool list), `agent/loop/loop.go` (tool list
-  can change during a run), new `tools/load_tools.go`.
-- **Watch:** calls to unknown tools (count them in Task 1.3), turns, and
-  cost. Try 2 configurations (the list above, and the list above with
-  `webFetch` always sent).
+  `write_file`, `bash`, `todo`, `ask`, `subagent`, `readSkill`.
+- **Held back:** `webSearch`, `webFetch`, `bashJob`, `askMany`, `memory`,
+  `batchWrite`.
+- **What landed** (`internal/run/lazy_tools.go`, wired in `turns.go`): one
+  combined `loadTools` tool — `names` loads deferred built-ins, `group`
+  delegates to the standard MCP loader (the registry can't hold two tools
+  with the same name, so MCP's own loadTools is not added under the flag).
+  Loads append at the end of the tool list; the cached prefix never changes.
+  Loads persist per session (`s.lazyLoaded`, mirroring the MCP group
+  restore) and subagents get their own combined loader. The setup message
+  lists the deferred tools. `bashJob` auto-load: a bash tool wrapper loads
+  it the moment a job starts (background=true) or a foreground command is
+  promoted at timeout. Tests: `tests/agent/lazy_tools_test.go`.
+- **Validate:** bench A/B against baseline-v2 before flipping the default.
+  Watch calls to unknown tools, turns, and cost. Try a second configuration
+  with `webFetch` always sent.
 
 ### Task 4.5: `compaction_v2`
 - Before compacting, save the full history to
@@ -478,7 +518,7 @@ The Factory article reinforces several principles for this plan:
 - Keep the summary prompt short. Try the current prompt against a
   one-liner, and measure summary size and success after compaction on the
   multi-step tasks (force compaction with a low threshold in bench).
-- **Files:** `agent/compaction/compact.go`, `summary.go`, `files.go`.
+- **Files:** `internal/agent/compaction/compact.go`, `summary.go`, `files.go`.
 
 ### Task 4.6: `subagent_lean`
 - A subagent gets the **stable** system prompt plus a short setup (cwd, OS,
@@ -489,7 +529,7 @@ The Factory article reinforces several principles for this plan:
 - Keep the subagent tool description neutral. Don't push the model toward
   delegating. No model choice in the arguments (subagents always use the
   parent's model unless the harness says otherwise).
-- **Files:** `agent/loop/subagent.go`, `tools/subagent_tool.go`.
+- **Files:** `internal/agent/loop/subagent.go`, `internal/agent/tools/subagent_tool.go`.
 - **Watch:** cost of the whole tree (parent plus subagents, from Task 1.1).
 
 ---
@@ -523,8 +563,8 @@ The Factory article reinforces several principles for this plan:
 - Record null and negative results in the Results log below. Don't delete
   them.
 - Before flipping any Phase 4 default: one run of the full 12-task set on
-  Haiku. Optionally, a second check on the OpenCode free model to see that
-  the change also works on a non-Anthropic model.
+  Haiku. Optionally, a second check on OpenCode Go to see that the change
+  also works on a non-Anthropic model.
 
 ## Traps to avoid
 
@@ -567,10 +607,31 @@ task 09, which was already flaky. Per-task swings (e.g. 12 −53%, 08 +32%) are
 noise. The flag stays available via `CONSOLE_HARNESS_SPARSE_LINE_NUMBERS=1`.
 Results now record active `CONSOLE_HARNESS_*` vars in `flags`.
 
-### Next steps (resume here)
-- Phase 2 (cache layout): split the system prompt into a stable part and a
-  per-session part, then add explicit Claude cache breakpoints. This doesn't
-  change what the model sees, so it carries little quality risk.
+### Next steps (resume here, revised 2026-11-13)
+
+Tasks 2.1 (stable/setup split) and 2.2 (setup as leading user message) are
+**done** — `StableSystem`/`Setup` in `builder.go`, `SetupMessage` in
+`internal/agent/loop/loop.go`, covered by `tests/agent/systemprompt_test.go`.
+
+Suggested order, ranked against the baseline-v2 token shares:
+
+1. **Task 4.4 lazy_tools** (tool definitions ~32% of tokens — the biggest
+   single lever). Extend the existing MCP `loadTools` to built-in tools,
+   behind a flag.
+2. **Task 2.3 setup breakpoint.** Three breakpoints exist (last tool,
+   stable system block, last message); the setup message has none.
+3. **Bench validation run** for the 2026-11-13 batch (tool inventory and
+   workspace tree removed, output spill, prompt trim + date/branch removal,
+   tightened tool descriptions) against `bench/results/baseline-v2.json` —
+   watch success rate, turns, and `list_dir`/`glob` call counts (tree
+   removal).
+
+Also deferred from 2026-11-13: hardening bash file-edit tracking (bash
+edits bypass the session change log; plan is a conservative write-target
+parser feeding the existing snapshot/diff machinery) and the SYSTEM.md /
+subagent-preamble audit from Task 4.1.
+
 - Use `bench/results/baseline-v2.json` as the baseline (3 runs per task).
+- ~~Build the `internal/agent/flags` package~~ done (2026-11-13).
 - The usage guard is off by default; don't pass `--max-usage-pct` unless you
   want it on. Use `--yes` to skip the cost prompt.

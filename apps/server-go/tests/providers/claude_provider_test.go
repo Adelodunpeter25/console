@@ -5,8 +5,8 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -353,6 +353,46 @@ func TestClaudeLoggedOutIsEmpty(t *testing.T) {
 	}
 	if string(raw) != "[]" {
 		t.Fatalf("snapshot serializes as %s; want []", raw)
+	}
+}
+
+func TestConvertMessages_OrphanToolUseSynthesizesErrorResult(t *testing.T) {
+	// An assistant turn with a tool call followed directly by a user turn without tool_result.
+	msgs := claude.ConvertMessages([]any{
+		loop.UserMessage{Role: loop.RoleUser, Content: "run something"},
+		loop.AssistantMessage{
+			Role: loop.RoleAssistant,
+			ID:   "a1",
+			Content: []any{
+				loop.TextPart{Text: "Running now"},
+				loop.ToolCallPart{
+					Type: "toolCall",
+					Call: tools.ToolCall{ID: "toolu_01interrupted", Name: "bash", Arguments: json.RawMessage(`{"command":"sleep 10"}`)},
+				},
+			},
+			StopReason: loop.StopToolUse,
+		},
+		loop.UserMessage{Role: loop.RoleUser, Content: "what happened?"},
+	}, loop.CacheShort)
+
+	if len(msgs) != 3 {
+		t.Fatalf("expected 3 turns, got %d: %+v", len(msgs), msgs)
+	}
+	userTurn := msgs[2]
+	if userTurn.Role != "user" {
+		t.Fatalf("turn 2 role = %s, want user", userTurn.Role)
+	}
+	foundToolResult := false
+	for _, block := range userTurn.Content {
+		if block["type"] == "tool_result" && block["tool_use_id"] == "toolu_01interrupted" {
+			foundToolResult = true
+			if block["is_error"] != true {
+				t.Errorf("expected is_error: true, got %v", block["is_error"])
+			}
+		}
+	}
+	if !foundToolResult {
+		t.Fatalf("expected synthesized tool_result in user turn: %+v", userTurn.Content)
 	}
 }
 

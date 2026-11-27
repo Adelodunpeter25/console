@@ -32,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -74,6 +76,8 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
     var showHidden by remember { mutableStateOf(false) }
+    var footerHeightPx by remember { mutableStateOf(0) }
+    val footerHeightDp = with(LocalDensity.current) { footerHeightPx.toDp() }
 
     fun browse(path: String?, hidden: Boolean = showHidden) {
         loading = true
@@ -114,7 +118,7 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                 }
                 else -> Column(
                     modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp).padding(top = PageHeaderHeight, bottom = 16.dp),
+                        .padding(horizontal = 16.dp).padding(top = PageHeaderHeight, bottom = footerHeightDp + 16.dp),
                 ) {
                     // "Up one level" must stay reachable when there is nothing
                     // else to tap: in a folder with no subfolders it is the only
@@ -145,6 +149,7 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
         // Footer: current folder + use-it button. No typing anywhere.
         Column(
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .onSizeChanged { footerHeightPx = it.height }
                 .clip(RoundedCornerShape(topStart = NewTheme.CardRadius, topEnd = NewTheme.CardRadius))
                 .background(NewTheme.Card).padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 24.dp),
         ) {

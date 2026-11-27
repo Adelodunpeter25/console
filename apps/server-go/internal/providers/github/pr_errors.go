@@ -4,15 +4,13 @@
 package github
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"fmt"
 	"net/http"
 	"time"
 )
 
 var (
-	// ErrNotConnected means no usable stored token at all.
-	ErrNotConnected = fmt.Errorf("GitHub is not connected on this server. Connect it in Settings.")
 	// ErrTokenRejected is 401 from GitHub.
 	ErrTokenRejected = fmt.Errorf("GitHub rejected the stored token. Reconnect in Settings.")
 	// ErrMissingScope is a 403 that is not rate limiting.

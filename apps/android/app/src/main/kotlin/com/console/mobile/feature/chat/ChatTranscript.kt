@@ -6,27 +6,29 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.console.mobile.core.chat.RunActivityState
-import com.console.mobile.data.model.AgentMessage
+import androidx.compose.ui.unit.sp
+import com.console.mobile.core.chat.ActivityEvent
+import com.console.mobile.core.chat.RunStatus
+import com.console.mobile.core.chat.TranscriptTurn
 import com.console.mobile.ui.components.common.new.PageHeaderHeight
+import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionFileChange
 
 /**
- * The scrolling chat transcript: message bubbles with the run activity that
- * followed each user turn, plus the in-flight assistant footer.
+ * The scrolling chat transcript: server-assembled turns (prompt or wake
+ * divider, run activity, and final assistant replies), plus the in-flight
+ * assistant footer.
  */
 @Composable
 internal fun ChatTranscript(
     sessionId: String,
-    messages: List<AgentMessage>,
+    turns: List<TranscriptTurn>,
     listState: LazyListState,
-    runs: List<RunActivityState>,
-    userRunMap: Map<Int, Int>,
-    assistantTurnChanges: Map<Int, List<SessionFileChange>>,
-    latestUserIndex: Int,
+    turnChanges: Map<Int, List<SessionFileChange>>,
     running: Boolean,
     isStreaming: Boolean,
     streamingText: String,
@@ -34,23 +36,62 @@ internal fun ChatTranscript(
     cwd: String?,
     onOpenChange: (SessionFileChange) -> Unit,
     onFork: (String) -> Unit,
+    onReply: ((String) -> Unit)? = null,
+    onOpenHtmlPreview: (com.console.mobile.data.model.HtmlArtifact) -> Unit = {},
+    onOpenHtmlEditor: (String) -> Unit = {},
+    onExpandToolCall: (messageId: String, callId: String) -> Unit = { _, _ -> },
 ) {
     LazyColumn(
         state = listState,
         contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 120.dp),
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
     ) {
-        itemsIndexed(messages, key = { _, m -> m.id ?: "${m.createdAt}-$sessionId" }) { index, msg ->
-            MessageBubbleItem(
-                item = msg,
-                fileChanges = assistantTurnChanges[index].orEmpty(),
-                onOpenChange = onOpenChange,
-                onFork = onFork,
-            )
-            val runIdx = userRunMap[index]
-            if (runIdx != null && runIdx < runs.size) {
-                RunActivity(activity = runs[runIdx], running = running && index == latestUserIndex, cwd = cwd)
-                RunVisuals(runs[runIdx])
+        itemsIndexed(turns, key = { _, t -> "${t.id}-$sessionId" }) { index, turn ->
+            val isLastTurn = index == turns.lastIndex
+            turn.userMessage?.let { userMsg ->
+                MessageBubbleItem(
+                    item = userMsg,
+                    fileChanges = emptyList(),
+                    onOpenChange = onOpenChange,
+                    onFork = onFork,
+                    onReply = onReply,
+                )
+            } ?: turn.wakeLabel?.let { label ->
+                Text(
+                    text = label,
+                    color = NewTheme.TextSecondary,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp),
+                )
+            }
+
+            val run = turn.run
+            val hasToolCalls = run?.events?.any { it is ActivityEvent.ToolCallEvent } == true
+            if (run != null && hasToolCalls) {
+                val runWorking = isLastTurn && (running || run.status == RunStatus.Working)
+                RunActivity(
+                    activity = run,
+                    running = runWorking,
+                    cwd = cwd,
+                    onExpandToolCall = onExpandToolCall,
+                )
+                RunVisuals(
+                    activity = run,
+                    onOpenHtmlPreview = onOpenHtmlPreview,
+                    onOpenHtmlEditor = onOpenHtmlEditor,
+                )
+            }
+
+            val changesForTurn = turnChanges[index].orEmpty()
+            turn.responses.forEachIndexed { respIdx, resp ->
+                val isLastResp = respIdx == turn.responses.lastIndex
+                MessageBubbleItem(
+                    item = resp,
+                    fileChanges = if (isLastResp) changesForTurn else emptyList(),
+                    onOpenChange = onOpenChange,
+                    onFork = onFork,
+                    onReply = onReply,
+                )
             }
         }
         if (isStreaming && (streamingText.isNotEmpty() || streamingThinking.isNotEmpty())) {
@@ -60,12 +101,8 @@ internal fun ChatTranscript(
                     thinkingContent = streamingThinking.ifBlank { null },
                     isStreaming = true,
                     createdAt = null,
+                    onReply = onReply,
                 )
-            }
-        } else if (latestUserIndex == -1 && runs.isNotEmpty() && running) {
-            item(key = "unattached-run") {
-                RunActivity(activity = runs.last(), running = true, cwd = cwd)
-                RunVisuals(runs.last())
             }
         }
     }

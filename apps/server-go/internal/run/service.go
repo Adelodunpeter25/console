@@ -10,16 +10,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/codemode"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/memory"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/browseruse"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -30,6 +33,10 @@ var (
 	ErrActive = errors.New("session already has an active run")
 	// ErrNoSession is returned when the session does not exist.
 	ErrNoSession = errors.New("session not found")
+	// Cancel causes distinguish a user Stop (queued prompts are discarded)
+	// from a steer (the staged prompt intentionally drains as the next turn).
+	errRunAborted = errors.New("run aborted")
+	errRunSteered = errors.New("run steered")
 )
 
 // Attachment is a base64 image sent with a run prompt.
@@ -51,6 +58,9 @@ type Prompt struct {
 	// Synthetic marks a server-initiated wake turn (finished background work
 	// continuing an idle session). Its text is built from the claimed work.
 	Synthetic bool
+	// Source tags server-initiated turns (e.g. "automation", "webhook") so
+	// transcripts distinguish them from user-typed prompts.
+	Source string
 	// woken lists the work that triggered a synthetic turn (wire event only).
 	woken []background.Work
 }
@@ -58,7 +68,7 @@ type Prompt struct {
 type activeRun struct {
 	runID  string
 	hub    *Hub
-	cancel context.CancelFunc
+	cancel context.CancelCauseFunc
 	done   chan struct{}
 }
 
@@ -74,11 +84,19 @@ type Service struct {
 	memories   *memory.Registry
 	bashJobs   *terminalsvc.BashJobManager
 	background *background.Manager
-	ports      *terminalsvc.PortRegistry
-	scripts    *projectssvc.ProjectScriptsService
-	mcp        *mcp.Manager
-	prompts    promptCache
-	groups     toolGroups
+	// automations backs the console.automation.* tools and the fire scanner
+	// (nil-safe: tools report unavailable and the scanner does nothing).
+	automations *automations.Service
+	// webhooks backs the console.webhooks.* tools and public webhook ingress.
+	webhooks *webhooks.Service
+	ports       *terminalsvc.PortRegistry
+	scripts     *projectssvc.ProjectScriptsService
+	mcp         *mcp.Manager
+	prompts     promptCache
+	// compactions holds each session's compaction checkpoint so a compacted
+	// prefix is reused across turns and runs instead of recomputed.
+	compactions compactionStore
+	groups      toolGroups
 	// cuaManager owns the computer-use driver runtime (nil-safe when the
 	// library is absent: runs simply never activate computer use).
 	cuaManager *cua.Manager
@@ -86,6 +104,8 @@ type Service struct {
 	consoleManager *console.Manager
 	// browseruseManager owns the /browser-use kernels and their owned tabs.
 	browseruseManager *browseruse.Manager
+	// codemodeManager owns the codemode REPL runtimes.
+	codemodeManager *codemode.Manager
 	// ctxCache holds the last context-window snapshot per session, keyed
 	// by message count so the footer ring never recomputes a walk it
 	// already did. Has its own mutex: read on the request path while a
@@ -97,23 +117,28 @@ type Service struct {
 	// recorded, since by then the tool has already written the file. Dropped
 	// when the run settles.
 	snapshots *writeSnapshots
+	// suggestCancel aborts a session's in-flight suggestion generation.
+	suggestCancel map[string]context.CancelFunc
 	// Lookup resolves a provider id to a backend (overridable in tests).
 	Lookup func(id string) (loop.Provider, error)
 	// WatchdogTimeout overrides defaultWatchdogTimeout. Zero uses the
 	// default; negative disables the watchdog (tests only).
 	WatchdogTimeout time.Duration
+	// AbortSettleTimeout overrides defaultAbortSettleTimeout. Zero uses the
+	// default; negative disables the post-abort force-settle (tests only).
+	AbortSettleTimeout time.Duration
 }
 
 func NewService(sessions *services.SessionService) *Service {
-	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager(), consoleManager: console.NewManager(), browseruseManager: browseruse.NewManager(), background: background.NewManager()}
+	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager(), consoleManager: console.NewManager(), browseruseManager: browseruse.NewManager(), codemodeManager: codemode.NewManager(nil, nil), background: background.NewManager()}
 	s.background.SetListener(s.backgroundWorkListener)
 	s.decisions.Notify = func(ctx context.Context, sessionID string, event loop.Event) {
 		s.notifyEvent(ctx, sessionID, event)
-		// A pending question/approval pauses the run until the user
+		// A pending question pauses the run until the user
 		// answers, so the session reads as needing attention rather than
 		// working. It flips back on resolve — see resolveDecision.
-		if event.Kind == loop.EventAskQuestion || event.Kind == loop.EventPermissionRequest {
-			s.setStatus(sessionID, "needs_attention")
+		if event.Kind == loop.EventAskQuestion {
+			s.finishRun(sessionID, "needs_attention")
 		}
 	}
 	return s
@@ -176,8 +201,11 @@ func (s *Service) backgroundWorkListener(event background.Event) {
 	if ar != nil {
 		ar.hub.Broadcast(loop.Event{Kind: loop.EventBackgroundWork, Message: event})
 	}
+	if bus := s.notifier(); bus != nil {
+		bus.Push(BackgroundWorkNotification(event.Work.SessionID))
+	}
 	switch event.Work.Status {
-	case background.StatusCompleted, background.StatusFailed, background.StatusTimedOut:
+	case background.StatusCompleted, background.StatusFailed, background.StatusTimedOut, background.StatusCancelled:
 		s.wakeIfIdle(event.Work.SessionID)
 	}
 }
@@ -197,6 +225,15 @@ func (s *Service) BashJobs() *terminalsvc.BashJobManager {
 func (s *Service) bashJobManager() *terminalsvc.BashJobManager {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.bashJobs == nil {
+		// Self-healing default: a service nobody wired with SetBashJobs
+		// still gets working background jobs, so background=true and the
+		// lazy bashJob auto-load behave the same everywhere. The daemon
+		// always sets a manager (with the port registry) before the first
+		// run; this fallback only covers bare constructions. nil ports just
+		// disables live dev-server detection.
+		s.bashJobs = terminalsvc.NewBashJobManager(nil)
+	}
 	return s.bashJobs
 }
 
@@ -230,6 +267,9 @@ func (s *Service) SetConsoleServices(projects *projectssvc.ProjectService) {
 	s.mu.Unlock()
 	if manager != nil {
 		manager.SetSessions(sessions, projects, s.IsActive, s.abortAndClear, s.startConsoleSession, s.promptSession, console.QueueControl{Get: s.consoleQueued, Clear: s.ClearQueuedPrompt})
+		manager.SetBackgroundWork(s.BackgroundWorkManager)
+		manager.SetAutomations(s.automationStore())
+		manager.SetWebhooks(s.webhookStore())
 	}
 }
 
@@ -273,6 +313,13 @@ func (s *Service) notifier() *services.NotificationService {
 	return s.notify
 }
 
+// CodemodeManager returns the codemode session runtime manager.
+func (s *Service) CodemodeManager() *codemode.Manager {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.codemodeManager
+}
+
 // IsActive reports whether the session has an in-flight run.
 // SessionExists reports whether the session is live (present and not
 // soft-deleted). Used by routes that only need existence, not content.
@@ -299,6 +346,13 @@ func (s *Service) Hub(sessionID string) *Hub {
 		return ar.hub
 	}
 	return nil
+}
+
+// Broadcast sends an event to the session's active run hub, if any.
+func (s *Service) Broadcast(sessionID string, event loop.Event) {
+	if hub := s.Hub(sessionID); hub != nil {
+		hub.Broadcast(event)
+	}
 }
 
 // unsettleOnSend clears the settled mark when a prompt arrives (decision 3 of
@@ -328,22 +382,23 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	}
 	s.mu.Unlock()
 
-	loaded, err := s.sessions.Load(sessionID, 0, 0)
+	header, err := s.sessions.Header(sessionID)
 	if err != nil {
 		return nil, err
 	}
-	if loaded == nil {
+	if header == nil {
 		return nil, ErrNoSession
 	}
 	// The send itself is the un-settle: it happens before the run starts, so
 	// the event stream that follows already reflects the chat as active.
 	s.unsettleOnSend(sessionID)
+	s.cancelSuggestions(sessionID)
 	// Fail fast on an unknown provider before streaming starts. The
 	// validated instance is reused for the first turn; later turns
 	// re-resolve only when the staged prompt switches provider.
 	providerID := dto.Provider
 	if providerID == "" {
-		providerID = loaded.Header.Provider
+		providerID = header.Provider
 	}
 	firstProvider, err := s.Lookup(providerID)
 	if err != nil {
@@ -351,14 +406,14 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	}
 
 	hub := NewHub()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancelCause(context.Background())
 	done := make(chan struct{})
 	runID := "run_" + randomHex(16)
 	s.mu.Lock()
 	// Re-check under lock: a concurrent StartRun may have won the race.
 	if _, ok := s.active[sessionID]; ok {
 		s.mu.Unlock()
-		cancel()
+		cancel(errRunAborted)
 		return nil, ErrActive
 	}
 	s.active[sessionID] = &activeRun{runID: runID, hub: hub, cancel: cancel, done: done}
@@ -371,11 +426,12 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 
 // Abort cancels the active run. The run goroutine owns hub/session
 // lifecycle, so the entry is removed when it settles — never here, or a
-// second run could start on a still-draining session. Stop means stop
-// everything: any background bash jobs the session started are killed too,
-// not just the in-flight turn.
+// second run could start on a still-draining session. Stop ends this run
+// and its background bash jobs, but queued prompts survive: each starts as
+// its own run once the slot frees.
 func (s *Service) Abort(sessionID string) bool {
-	if !s.cancelActive(sessionID) {
+	ar := s.cancelActive(sessionID, errRunAborted)
+	if ar == nil {
 		return false
 	}
 	// Stop is terminal, and the settled run goroutine can be slow to reach
@@ -391,22 +447,32 @@ func (s *Service) Abort(sessionID string) bool {
 	if work := s.BackgroundWorkManager(); work != nil {
 		work.CancelOwnedBy(sessionID)
 	}
+	s.armAbortSettle(sessionID, ar)
 	slog.Info("run aborted", "session", sessionID)
 	return true
 }
 
-// AbortAll cancels every active run (server shutdown). Best-effort: it
-// signals cancellation and returns immediately without waiting for the
-// runs to settle.
+// AbortAll cancels every active run (server shutdown). It signals cancellation
+// and waits briefly for in-flight runs to settle and persist cancelled tool results.
 func (s *Service) AbortAll() {
 	s.mu.Lock()
 	ids := make([]string, 0, len(s.active))
-	for id := range s.active {
+	dones := make([]chan struct{}, 0, len(s.active))
+	for id, ar := range s.active {
 		ids = append(ids, id)
+		dones = append(dones, ar.done)
 	}
 	s.mu.Unlock()
 	for _, id := range ids {
 		s.Abort(id)
+	}
+	timeout := time.After(2 * time.Second)
+	for _, done := range dones {
+		select {
+		case <-done:
+		case <-timeout:
+			return
+		}
 	}
 }
 
@@ -429,13 +495,9 @@ func (s *Service) resolveDecision(sessionID string) {
 	}
 }
 
-// ApprovePermission resolves a pending tool approval for a session.
-func (s *Service) ApprovePermission(sessionID, requestID string, allow bool) bool {
-	if !s.decisions.ApprovePermission(sessionID, requestID, allow) {
-		return false
-	}
-	s.resolveDecision(sessionID)
-	return true
+// PendingQuestions returns all currently unanswered ask-questions for a session.
+func (s *Service) PendingQuestions(sessionID string) []tools.AskQuestionRequest {
+	return s.decisions.PendingQuestionsForSession(sessionID)
 }
 
 // AnswerQuestion resolves a pending ask-question for a session.
@@ -444,6 +506,7 @@ func (s *Service) AnswerQuestion(sessionID, requestID string, answer tools.AskAn
 		return false
 	}
 	s.resolveDecision(sessionID)
+	s.Broadcast(sessionID, loop.Event{Kind: loop.EventQuestionResolved, Text: requestID})
 	return true
 }
 

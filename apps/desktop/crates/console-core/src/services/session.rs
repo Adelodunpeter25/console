@@ -1,7 +1,10 @@
 use crate::types::*;
 use crate::utils::HttpTransport;
 use anyhow::{Context, Result, anyhow};
+use prost::Message;
 use std::time::Duration;
+
+const PROTO_CONTENT_TYPE: &str = "application/x-protobuf";
 
 #[derive(Clone)]
 pub struct SessionService {
@@ -18,17 +21,33 @@ impl SessionService {
         cwd: Option<&str>,
         project_id: Option<&str>,
     ) -> Result<Vec<SessionHeader>> {
+        self.list_filtered(cwd, project_id, None).await
+    }
+
+    pub async fn search_by_title(&self, query: &str) -> Result<Vec<SessionHeader>> {
+        self.list_filtered(None, None, Some(query)).await
+    }
+
+    pub async fn list_filtered(
+        &self,
+        cwd: Option<&str>,
+        project_id: Option<&str>,
+        query: Option<&str>,
+    ) -> Result<Vec<SessionHeader>> {
         let mut url = self.transport.url("/api/sessions").await;
-        let mut query = Vec::new();
+        let mut params = Vec::new();
         if let Some(c) = cwd {
-            query.push(format!("cwd={}", urlencoding::encode(c)));
+            params.push(format!("cwd={}", urlencoding::encode(c)));
         }
         if let Some(p) = project_id {
-            query.push(format!("projectId={}", urlencoding::encode(p)));
+            params.push(format!("projectId={}", urlencoding::encode(p)));
         }
-        if !query.is_empty() {
+        if let Some(q) = query {
+            params.push(format!("query={}", urlencoding::encode(q)));
+        }
+        if !params.is_empty() {
             url.push('?');
-            url.push_str(&query.join("&"));
+            url.push_str(&params.join("&"));
         }
 
         let resp = self
@@ -71,7 +90,8 @@ impl SessionService {
             .transport
             .client()
             .get(&url)
-            .headers(self.transport.build_headers().await);
+            .headers(self.transport.build_headers().await)
+            .header(reqwest::header::ACCEPT, PROTO_CONTENT_TYPE);
         if let Some(opts) = options {
             if let Some(limit) = opts.limit {
                 req = req.query(&[("limit", limit)]);
@@ -81,6 +101,18 @@ impl SessionService {
             }
         }
         let resp = req.send().await.context("Failed to get session")?;
+
+        let binary = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.starts_with(PROTO_CONTENT_TYPE));
+        if binary {
+            let bytes = resp.bytes().await.context("Failed to read session page")?;
+            let page = console_proto::SessionMessagesPage::decode(&bytes[..])
+                .context("Failed to decode session page protobuf")?;
+            return Ok(SessionDetailResponse::from_proto_page(page));
+        }
 
         let body: ApiResponse<SessionDetailResponse> = self
             .transport
@@ -93,6 +125,53 @@ impl SessionService {
             Err(anyhow!(
                 body.error.unwrap_or_else(|| "Failed to get session".into())
             ))
+        }
+    }
+
+    /// `GET /api/sessions/:id/bootstrap` — header, first page of messages and
+    /// the rest of a freshly opened chat's state in a single round-trip.
+    pub async fn get_bootstrap(&self, id: &str) -> Result<SessionBootstrapResponse> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{id}/bootstrap"))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .header(reqwest::header::ACCEPT, PROTO_CONTENT_TYPE)
+            .send()
+            .await
+            .context("Failed to get session bootstrap")?;
+
+        let binary = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.starts_with(PROTO_CONTENT_TYPE));
+        if binary {
+            let bytes = resp
+                .bytes()
+                .await
+                .context("Failed to read session bootstrap")?;
+            let proto = console_proto::SessionBootstrapResponse::decode(&bytes[..])
+                .context("Failed to decode session bootstrap protobuf")?;
+            return Ok(SessionBootstrapResponse::from_proto(proto));
+        }
+
+        let body: ApiResponse<SessionBootstrapResponse> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse session bootstrap response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Session bootstrap data is missing"))
+        } else {
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to get session bootstrap".into()
+            })))
         }
     }
 
@@ -110,6 +189,37 @@ impl SessionService {
             }),
         )
         .await
+    }
+
+    /// `GET /api/sessions/:id/prompts` — every user prompt of the chat,
+    /// oldest first, including ones not yet paged into the transcript.
+    pub async fn prompts(&self, id: &str) -> Result<Vec<SessionPrompt>> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/prompts", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to list session prompts")?;
+
+        let body: ApiResponse<Vec<SessionPrompt>> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse session prompts response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to list session prompts".into())
+            ))
+        }
     }
 
     /// `GET /api/sessions/:id/context` — estimated context-window
@@ -153,12 +263,35 @@ impl SessionService {
         id: &str,
         turn_index: Option<u64>,
     ) -> Result<Vec<SessionFileChange>> {
+        self.fetch_changes(id, turn_index, true).await
+    }
+
+    /// Same as `get_changes` but rows carry no `diff_text`; fetch a file's
+    /// diff on demand with `get_change_diff`.
+    pub async fn get_changes_without_diff(&self, id: &str) -> Result<Vec<SessionFileChange>> {
+        self.fetch_changes(id, None, false).await
+    }
+
+    async fn fetch_changes(
+        &self,
+        id: &str,
+        turn_index: Option<u64>,
+        include_diff: bool,
+    ) -> Result<Vec<SessionFileChange>> {
         let mut url = self
             .transport
             .url(&format!("/api/sessions/{}/changes", id))
             .await;
+        let mut params = Vec::new();
         if let Some(turn) = turn_index {
-            url.push_str(&format!("?turnIndex={}", turn));
+            params.push(format!("turnIndex={}", turn));
+        }
+        if !include_diff {
+            params.push("includeDiff=false".to_string());
+        }
+        if !params.is_empty() {
+            url.push('?');
+            url.push_str(&params.join("&"));
         }
         let resp = self
             .transport
@@ -182,6 +315,45 @@ impl SessionService {
                 body.error
                     .unwrap_or_else(|| "Failed to load session changes".into())
             ))
+        }
+    }
+
+    /// `GET /api/sessions/:id/messages/:messageId/results/:callId` — the full
+    /// body of a tool result that history pages leave out.
+    pub async fn get_tool_result(
+        &self,
+        id: &str,
+        message_id: &str,
+        call_id: &str,
+    ) -> Result<ToolResult> {
+        let url = self
+            .transport
+            .url(&format!(
+                "/api/sessions/{}/messages/{}/results/{}",
+                id,
+                urlencoding::encode(message_id),
+                urlencoding::encode(call_id)
+            ))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get tool result")?;
+        let body: ApiResponse<console_proto::ToolResult> =
+            self.transport
+                .decode_json(resp)
+                .await
+                .context("Failed to parse tool result response")?;
+        match (body.success, body.data) {
+            (true, Some(data)) => Ok(ToolResult::from_proto(&data)),
+            (_, _) => Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to load tool result".into())
+            )),
         }
     }
 
@@ -264,6 +436,36 @@ impl SessionService {
         })))
     }
 
+    /// `GET /api/sessions/:id/suggestions` — follow-up prompts kept for a
+    /// session until its next run starts.
+    pub async fn get_suggestions(&self, id: &str) -> Result<Vec<String>> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/suggestions", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get session suggestions")?;
+
+        let body: ApiResponse<Vec<String>> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse session suggestions response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to load session suggestions".into()
+            })))
+        }
+    }
+
     /// `GET /api/sessions/:id/todos` — persisted todo checklist for a session.
     pub async fn get_todos(&self, id: &str) -> Result<Vec<TodoItem>> {
         let url = self
@@ -337,6 +539,67 @@ impl SessionService {
                 body.error
                     .unwrap_or_else(|| "Failed to create session".into())
             ))
+        }
+    }
+
+    /// `POST /api/sessions/with-worktree` — instant worktree launch: the
+    /// server creates the session immediately and provisions the worktree +
+    /// runs the prompt in the background. The returned header carries
+    /// launchState until the prompt is running.
+    pub async fn launch_with_worktree(&self, payload: LaunchWorktreeDto) -> Result<SessionHeader> {
+        let url = self.transport.url("/api/sessions/with-worktree").await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&payload)
+            .send()
+            .await
+            .context("Failed to launch worktree session")?;
+
+        let body: ApiResponse<SessionHeader> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse worktree launch response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Launched session data is missing"))
+        } else {
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to launch worktree session".into()
+            })))
+        }
+    }
+
+    /// `POST /api/sessions/:id/with-worktree/retry` — re-run a failed
+    /// worktree launch from the payload the server stored.
+    pub async fn retry_worktree_launch(&self, id: &str) -> Result<()> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/with-worktree/retry", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to retry worktree launch")?;
+
+        let body: ApiResponse<Option<serde_json::Value>> =
+            self.transport
+                .decode_json(resp)
+                .await
+                .context("Failed to parse worktree retry response")?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to retry worktree launch".into()
+            })))
         }
     }
 
@@ -591,6 +854,45 @@ impl SessionService {
                 body.error
                     .unwrap_or_else(|| "Failed to unsettle session".into())
             ))
+        }
+    }
+
+    /// `POST /api/sessions/:id/read` — a client showed this chat. Idempotent;
+    /// also clears a lingering "needs attention" the user has now seen.
+    pub async fn mark_read(&self, id: &str) -> Result<()> {
+        self.post_read_state(id, "read").await
+    }
+
+    /// `POST /api/sessions/:id/unread` — make a read chat unread again. The
+    /// server refuses a running or settled chat; the caller shows the message.
+    pub async fn mark_unread(&self, id: &str) -> Result<()> {
+        self.post_read_state(id, "unread").await
+    }
+
+    async fn post_read_state(&self, id: &str, action: &str) -> Result<()> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{id}/{action}"))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .with_context(|| format!("Failed to mark session {action}"))?;
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .with_context(|| format!("Failed to parse mark {action} response"))?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(body.error.unwrap_or_else(|| format!(
+                "Failed to mark session {action}"
+            ))))
         }
     }
 

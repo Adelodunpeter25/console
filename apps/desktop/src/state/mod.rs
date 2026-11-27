@@ -8,6 +8,7 @@
 mod attachments;
 mod auth;
 mod autocomplete;
+mod automations;
 mod background_shells;
 mod bootstrap;
 mod browser_actions;
@@ -21,39 +22,42 @@ mod environments;
 mod errors;
 mod execution;
 mod file_comments;
+mod file_saves;
 mod floating_composer;
 mod github;
 mod global_actions;
 mod integrations;
 mod layout;
 mod macos_notifications;
-mod onboarding;
-mod provider_credentials;
-pub(crate) use macos_notifications::clear_all as clear_all_notifications;
 mod notifications;
+mod onboarding;
 mod pagination;
 mod port_forward;
 mod project_scripts;
 mod projects;
+mod provider_credentials;
 mod providers;
-mod right_sidebar;
+mod repo_tasks;
 mod run;
 mod server_auth;
 mod session_titles;
 mod sessions;
 mod settings;
+mod stt;
 mod transcript_scroll;
 mod transcript_wiring;
+pub mod updates;
 mod usage;
+mod workspace_context;
 mod workspace_panes;
+mod workspace_snapshot;
 mod workspace_tabs;
 
 mod app;
 pub mod types;
 
-pub use types::{ConsoleDesktopApp, ImageFileState};
+pub use types::{ConsoleDesktopApp, FileMediaDetails, ImageFileState};
+pub(crate) use workspace_snapshot::PaneChatSnapshot;
+pub(crate) use workspace_tabs::new_tab_menu::new_tab_menu_items;
 // Shared by the sibling handler modules (`layout`, `sessions`, `run`).
-pub(crate) use app::{
-    RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT, RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT, RIGHT_SIDEBAR_MAX_WIDTH,
-    RIGHT_SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, user_prompt_history,
-};
+pub(crate) use app::{SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, user_prompt_history};

@@ -49,7 +49,7 @@ class EventSubagentsFixtureTest {
         assertEquals("w", start.name)
         assertEquals("tester", start.role)
         assertEquals("do it", start.prompt)
-        assertEquals(10, start.max_turns)
+        assertEquals("codex-gpt", start.model)
     }
 
     @Test

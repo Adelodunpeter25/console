@@ -7,8 +7,8 @@ use std::rc::Rc;
 use console_core::types::{FsTreeEntry, GitFileEntry};
 use gpui::Hsla;
 use gpui::{
-    App, InteractiveElement, IntoElement, ParentElement, RenderOnce, StatefulInteractiveElement,
-    Styled, Window, div, prelude::FluentBuilder, px,
+    App, InteractiveElement, IntoElement, ParentElement, RenderOnce, ScrollHandle,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
 use crate::primitives::file_icon;
@@ -16,93 +16,36 @@ use crate::primitives::file_icons::file_icon_for_name;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 
-/// A file's Git state, reduced to what the tree paints. Variants are ordered
-/// by how loudly a folder should report them: a folder holding a deleted file
-/// and a new one shows the deletion.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum GitBadge {
-    Untracked,
-    Added,
-    Renamed,
-    Modified,
-    Deleted,
-    Conflict,
-}
+// The badge rules live in console-shared, which the Android client reaches
+// over JNI, so a file cannot be green on one client and grey on the other.
+// Only the palette is the desktop's own.
+pub use console_shared::git_badges::{GitBadge, GitBadgeRole};
 
-impl GitBadge {
-    /// Maps the server's status code (`M`/`A`/`D`/`R`/`U`/`?`); anything else
-    /// gets no badge rather than a guess.
-    pub fn from_code(code: &str) -> Option<Self> {
-        Some(match code {
-            "?" => Self::Untracked,
-            "A" => Self::Added,
-            "R" | "C" => Self::Renamed,
-            "M" => Self::Modified,
-            "D" => Self::Deleted,
-            "U" => Self::Conflict,
-            _ => return None,
-        })
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Untracked => "U",
-            Self::Added => "A",
-            Self::Renamed => "R",
-            Self::Modified => "M",
-            Self::Deleted => "D",
-            Self::Conflict => "!",
-        }
-    }
-
-    pub fn color(self, theme: &Theme) -> Hsla {
-        match self {
-            Self::Untracked | Self::Added => theme.success,
-            Self::Renamed => theme.text_tertiary,
-            Self::Modified => theme.warning,
-            Self::Deleted | Self::Conflict => theme.danger,
-        }
+/// The color a badge is drawn in: the desktop's theme, by the role the shared
+/// rules give it.
+pub fn git_badge_color(badge: GitBadge, theme: &Theme) -> Hsla {
+    match badge.role() {
+        GitBadgeRole::Success => theme.success,
+        GitBadgeRole::Warning => theme.warning,
+        GitBadgeRole::Danger => theme.danger,
+        GitBadgeRole::Muted => theme.text_tertiary,
     }
 }
 
 /// Git badge per absolute path, with every changed file's ancestors carrying
 /// the strongest badge beneath them (VS Code's folder tinting).
 ///
-/// Built once per status update, not per frame. The walk up from a file stops
-/// at the first ancestor already showing an equal or stronger badge: that
-/// ancestor's own ancestors were raised to at least that level when it was
-/// set, so the rest of the chain cannot change. A thousand files in one
-/// folder therefore cost one walk, not a thousand.
+/// A thin adapter over the shared rules: the desktop's own type becomes the
+/// shared one, and the rules run unchanged.
 pub fn aggregate_git_badges(changes: &[GitFileEntry]) -> HashMap<String, GitBadge> {
-    let mut badges: HashMap<String, GitBadge> = HashMap::with_capacity(changes.len() * 2);
-    for change in changes {
-        let Some(badge) = GitBadge::from_code(&change.status) else {
-            continue;
-        };
-        raise(&mut badges, &change.path, badge);
-        for ancestor in Path::new(&change.path).ancestors().skip(1) {
-            if ancestor.file_name().is_none() {
-                break;
-            }
-            let Some(path) = ancestor.to_str() else {
-                break;
-            };
-            if badges.get(path).is_some_and(|existing| *existing >= badge) {
-                break;
-            }
-            raise(&mut badges, path, badge);
-        }
-    }
-    badges
-}
-
-fn raise(badges: &mut HashMap<String, GitBadge>, path: &str, badge: GitBadge) {
-    match badges.get_mut(path) {
-        Some(existing) => *existing = (*existing).max(badge),
-        None => {
-            badges.insert(path.to_owned(), badge);
-        }
-    }
+    let files: Vec<console_shared::git_badges::ChangedFile<'_>> = changes
+        .iter()
+        .map(|change| console_shared::git_badges::ChangedFile {
+            path: &change.path,
+            status: &change.status,
+        })
+        .collect();
+    console_shared::git_badges::aggregate_git_badges(&files)
 }
 
 #[derive(Clone, Debug)]
@@ -115,18 +58,20 @@ pub struct FileTreeNode {
 
 #[derive(IntoElement)]
 pub struct FileTreeView {
-    tree: Rc<Vec<FileTreeNode>>,
+    tree: Rc<[FileTreeNode]>,
     expanded_folders: HashSet<String>,
     selected_path: Option<String>,
     search_query: String,
     on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     git_badges: Rc<HashMap<String, GitBadge>>,
     on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_open_browser: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    scroll_handle: Option<ScrollHandle>,
 }
 
 impl FileTreeView {
     pub fn new(
-        tree: Rc<Vec<FileTreeNode>>,
+        tree: Rc<[FileTreeNode]>,
         expanded_folders: HashSet<String>,
         selected_path: Option<String>,
         search_query: String,
@@ -142,7 +87,22 @@ impl FileTreeView {
             on_toggle_folder,
             git_badges,
             on_select_file,
+            on_open_browser: None,
+            scroll_handle: None,
         }
+    }
+
+    pub fn on_open_browser(
+        mut self,
+        handler: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    ) -> Self {
+        self.on_open_browser = handler;
+        self
+    }
+
+    pub fn track_scroll(mut self, scroll_handle: ScrollHandle) -> Self {
+        self.scroll_handle = Some(scroll_handle);
+        self
     }
 
     fn render_node(
@@ -152,9 +112,12 @@ impl FileTreeView {
         selected_path: &Option<String>,
         on_toggle_folder: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_select_file: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+        on_open_browser: &Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
         theme: &Theme,
         search_query: &str,
         git_badges: &HashMap<String, GitBadge>,
+        window: &mut Window,
+        cx: &mut App,
     ) -> Vec<gpui::AnyElement> {
         let mut elements = Vec::new();
         let query_lower = search_query.to_lowercase();
@@ -167,12 +130,14 @@ impl FileTreeView {
 
         if matches_filter || node.is_dir {
             let badge = git_badges.get(&node.path).copied();
-            let status_color = badge.map(|badge| badge.color(theme));
+            let status_color = badge.map(|badge| git_badge_color(badge, theme));
             let on_toggle = on_toggle_folder.clone();
             let on_select = on_select_file.clone();
             let node_path = path.clone();
             let is_dir = node.is_dir;
+            let click_path = path.clone();
 
+            let on_select_click = on_select.clone();
             let row =
                 div()
                     .id(format!("file-tree-item-{}", path))
@@ -188,9 +153,9 @@ impl FileTreeView {
                     .when(is_selected, |s| s.bg(theme.overlay_strong))
                     .on_click(move |_, window, cx| {
                         if is_dir {
-                            (on_toggle)(node_path.clone(), window, cx);
+                            (on_toggle)(click_path.clone(), window, cx);
                         } else {
-                            (on_select)(node_path.clone(), window, cx);
+                            (on_select_click)(click_path.clone(), window, cx);
                         }
                     })
                     .child(
@@ -248,12 +213,44 @@ impl FileTreeView {
                                 .flex_none()
                                 .text_size(px(11.0))
                                 .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(badge.color(theme))
+                                .text_color(git_badge_color(badge, theme))
                                 .child(badge.label()),
                         )
                     });
 
-            elements.push(row.into_any_element());
+            let is_html = !is_dir
+                && std::path::Path::new(&node_path)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|ext| {
+                        ext.eq_ignore_ascii_case("html") || ext.eq_ignore_ascii_case("htm")
+                    });
+            let element: gpui::AnyElement = if is_html {
+                let p_browser = node_path.clone();
+                let p_editor = node_path;
+                let on_browser = on_open_browser.clone();
+                let on_editor_for_browser = on_select.clone();
+                let on_editor_direct = on_select.clone();
+                crate::primitives::html_file_context_menu(
+                    row,
+                    format!("html-tree-item-{}", path),
+                    window,
+                    cx,
+                    move |w, cx| {
+                        if let Some(h) = &on_browser {
+                            h(p_browser.clone(), w, cx);
+                        } else {
+                            on_editor_for_browser(p_browser.clone(), w, cx);
+                        }
+                    },
+                    move |w, cx| {
+                        on_editor_direct(p_editor.clone(), w, cx);
+                    },
+                )
+            } else {
+                row.into_any_element()
+            };
+            elements.push(element);
         }
 
         if node.is_dir && (is_expanded || !search_query.is_empty()) {
@@ -265,9 +262,12 @@ impl FileTreeView {
                     selected_path,
                     on_toggle_folder,
                     on_select_file,
+                    on_open_browser,
                     theme,
                     search_query,
                     git_badges,
+                    window,
+                    cx,
                 );
                 elements.append(&mut child_els);
             }
@@ -282,11 +282,11 @@ pub fn build_tree_from_entries(entries: &[FsTreeEntry]) -> Vec<FileTreeNode> {
         return Vec::new();
     }
 
-    let mut all_paths = HashSet::new();
+    let mut all_paths: HashSet<&str> = HashSet::new();
     let mut children_by_parent: HashMap<String, Vec<FsTreeEntry>> = HashMap::new();
 
     for entry in entries {
-        all_paths.insert(entry.path.clone());
+        all_paths.insert(&entry.path);
         if let Some(parent) = Path::new(&entry.path).parent() {
             children_by_parent
                 .entry(parent.to_string_lossy().to_string())
@@ -310,7 +310,8 @@ pub fn build_tree_from_entries(entries: &[FsTreeEntry]) -> Vec<FileTreeNode> {
         .filter(|e| {
             Path::new(&e.path)
                 .parent()
-                .map(|p| !all_paths.contains(&p.to_string_lossy().to_string()))
+                .and_then(|p| p.to_str())
+                .map(|p| !all_paths.contains(p))
                 .unwrap_or(true)
         })
         .cloned()
@@ -327,11 +328,11 @@ pub fn build_tree_from_entries(entries: &[FsTreeEntry]) -> Vec<FileTreeNode> {
         children_by_parent: &HashMap<String, Vec<FsTreeEntry>>,
     ) -> FileTreeNode {
         let mut children = Vec::new();
-        if entry.is_dir {
-            if let Some(child_entries) = children_by_parent.get(&entry.path) {
-                for child in child_entries {
-                    children.push(assemble(child.clone(), children_by_parent));
-                }
+        if entry.is_dir
+            && let Some(child_entries) = children_by_parent.get(&entry.path)
+        {
+            for child in child_entries {
+                children.push(assemble(child.clone(), children_by_parent));
             }
         }
         FileTreeNode {
@@ -361,42 +362,50 @@ impl RenderOnce for FileTreeView {
                 &self.selected_path,
                 &self.on_toggle_folder,
                 &self.on_select_file,
+                &self.on_open_browser,
                 &theme,
                 &self.search_query,
                 &self.git_badges,
+                _window,
+                cx,
             );
             children.append(&mut els);
         }
 
-        div()
+        let mut container = div()
             .id("file-tree-container")
             .flex_1()
             .w_full()
             .h_full()
             .min_h_0()
             .overflow_y_scroll()
-            .p(px(6.0))
-            .child(if children.is_empty() {
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .py(px(24.0))
-                    .text_size(px(12.0))
-                    .text_color(theme.text_tertiary)
-                    .child(if self.search_query.is_empty() {
-                        "No files found"
-                    } else {
-                        "No matching files"
-                    })
-                    .into_any_element()
-            } else {
-                div()
-                    .flex()
-                    .flex_col()
-                    .children(children)
-                    .into_any_element()
-            })
+            .p(px(6.0));
+
+        if let Some(scroll_handle) = self.scroll_handle {
+            container = container.track_scroll(&scroll_handle);
+        }
+
+        container.child(if children.is_empty() {
+            div()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .py(px(24.0))
+                .text_size(px(12.0))
+                .text_color(theme.text_tertiary)
+                .child(if self.search_query.is_empty() {
+                    "No files found"
+                } else {
+                    "No matching files"
+                })
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_col()
+                .children(children)
+                .into_any_element()
+        })
     }
 }

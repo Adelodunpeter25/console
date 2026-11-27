@@ -51,7 +51,7 @@ impl PlayerConfig {
             .unwrap_or_default();
         Self {
             stream_url: format!(
-                "{ws_base}/api/devices/{}/stream?platform={}{token}",
+                "{ws_base}/api/devices/{}/stream?platform={}&bitrate=6000000{token}",
                 urlencoding_component(id),
                 urlencoding_component(platform)
             ),

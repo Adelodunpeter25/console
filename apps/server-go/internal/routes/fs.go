@@ -9,12 +9,14 @@
 package routes
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/htmlrender"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -192,7 +194,11 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		maxMatches := clampInt(c.QueryInt("limit", 200), 1, 2000)
+		// No limit param means "everything": the service pages through the index.
+		maxMatches := 0
+		if c.Query("limit") != "" {
+			maxMatches = clampInt(c.QueryInt("limit", 200), 1, 2000)
+		}
 		result, err := fs.Grep(root, query, fssvc.GrepOptions{
 			Mode:         mode,
 			Case:         caseMode,
@@ -216,6 +222,7 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		if dirPath == "" {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'path' is required."))
 		}
+		dirPath = fssvc.ResolvePath(dirPath)
 		maxDepth := c.QueryInt("depth", 6)
 		if maxDepth < 1 || maxDepth > 25 {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'depth' must be an integer between 1 and 25."))
@@ -262,6 +269,7 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		if dirPath == "" {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'path' is required."))
 		}
+		dirPath = fssvc.ResolvePath(dirPath)
 		maxDepth := c.QueryInt("depth", 3)
 		if maxDepth < 1 || maxDepth > 10 {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'depth' must be an integer between 1 and 10."))
@@ -279,6 +287,7 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		if filePath == "" {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'path' is required."))
 		}
+		filePath = fssvc.ResolvePath(filePath)
 		meta, err := fs.GetImageMeta(filePath)
 		if err != nil {
 			return fail(c, previewStatus(err), err)
@@ -298,12 +307,114 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		return c.Send(data)
 	})
 
+	// GET /api/fs/file/media — video/audio/PDF bytes with Range support so
+	// players can scrub. Images stay on /file/raw.
+	h.Get("/file/media", func(c *fiber.Ctx) error {
+		filePath := c.Query("path")
+		if filePath == "" {
+			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'path' is required."))
+		}
+		filePath = fssvc.ResolvePath(filePath)
+		meta, err := fs.GetMediaMeta(filePath)
+		if err != nil {
+			return fail(c, previewStatus(err), err)
+		}
+		etag := fssvc.BuildFileETag(meta.SizeBytes, meta.MtimeMs)
+		if c.Get("If-None-Match") == etag {
+			return c.Status(fiber.StatusNotModified).Send(nil)
+		}
+
+		// Parse the Range header up front so an unsatisfiable request never
+		// opens the file.
+		start, end := int64(0), meta.SizeBytes-1
+		ranged := false
+		if rangeHeader := c.Get("Range"); rangeHeader != "" {
+			s, e, ok := parseMediaRange(rangeHeader, meta.SizeBytes)
+			if !ok {
+				c.Set("Content-Range", fmt.Sprintf("bytes */%d", meta.SizeBytes))
+				return c.Status(fiber.StatusRequestedRangeNotSatisfiable).Send(nil)
+			}
+			start, end, ranged = s, e, true
+		}
+
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return fail(c, fiber.StatusBadRequest, err)
+		}
+		payload := data
+		status := fiber.StatusOK
+		if ranged {
+			// The file could have shrunk between Stat and ReadFile.
+			if start >= int64(len(data)) {
+				c.Set("Content-Range", fmt.Sprintf("bytes */%d", meta.SizeBytes))
+				return c.Status(fiber.StatusRequestedRangeNotSatisfiable).Send(nil)
+			}
+			if end >= int64(len(data)) {
+				end = int64(len(data)) - 1
+			}
+			payload = data[start : end+1]
+			status = fiber.StatusPartialContent
+			c.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, meta.SizeBytes))
+		}
+		c.Set("Content-Type", meta.MimeType)
+		c.Set("Content-Length", strconv.Itoa(len(payload)))
+		c.Set("Accept-Ranges", "bytes")
+		c.Set("Cache-Control", "private, max-age=30")
+		c.Set("ETag", etag)
+		return c.Status(status).Send(payload)
+	})
+
+	// GET /api/fs/file/html — sandboxed HTML page with serve-time theme/bridge
+	// bootstrap. CSP sandbox gives the page an opaque origin (no cookies,
+	// storage, or API access) while allowing scripts and forms.
+	h.Get("/file/html", func(c *fiber.Ctx) error {
+		filePath := c.Query("path")
+		if filePath == "" {
+			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'path' is required."))
+		}
+		filePath = fssvc.ResolvePath(filePath)
+		if !htmlrender.IsHTMLPath(filePath) {
+			return fail(c, fiber.StatusForbidden, fmt.Errorf("%q is not an HTML file.", filePath))
+		}
+		info, err := os.Stat(filePath)
+		if err != nil {
+			return fail(c, previewStatus(err), err)
+		}
+		if info.IsDir() {
+			return fail(c, fiber.StatusBadRequest, fmt.Errorf("%q is a directory.", filePath))
+		}
+		if info.Size() > htmlrender.MaxFileBytes {
+			return fail(c, fiber.StatusRequestEntityTooLarge, fmt.Errorf("HTML file exceeds %d bytes.", htmlrender.MaxFileBytes))
+		}
+		etag := fssvc.BuildFileETag(info.Size(), info.ModTime().UnixMilli()) + "-" + c.Query("theme", "dark")
+		if c.Get("If-None-Match") == etag {
+			return c.Status(fiber.StatusNotModified).Send(nil)
+		}
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return fail(c, fiber.StatusBadRequest, err)
+		}
+		raw := string(data)
+		if !htmlrender.LooksLikeDocument(raw) {
+			return fail(c, fiber.StatusForbidden, fmt.Errorf("%q does not look like an HTML document.", filePath))
+		}
+		theme := htmlrender.ThemeFor(c.Query("theme", "dark"))
+		body := htmlrender.InjectBootstrap(raw, htmlrender.BootstrapMarkup(theme))
+		c.Set("Content-Type", "text/html; charset=utf-8")
+		c.Set("Content-Security-Policy", "sandbox allow-scripts allow-forms allow-popups allow-downloads")
+		c.Set("X-Content-Type-Options", "nosniff")
+		c.Set("Cache-Control", "private, max-age=30")
+		c.Set("ETag", etag)
+		return c.SendString(body)
+	})
+
 	// GET /api/fs/file
 	h.Get("/file", func(c *fiber.Ctx) error {
 		filePath := c.Query("path")
 		if filePath == "" {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'path' is required."))
 		}
+		filePath = fssvc.ResolvePath(filePath)
 		result, err := fs.ReadFileContentWithMeta(filePath, c.QueryInt("startLine", 0), c.QueryInt("endLine", 0))
 		if err != nil {
 			return fail(c, previewStatus(err), err)
@@ -317,17 +428,35 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		return okProto(c, &consolev1.FsFileContent{Path: filePath, Content: result.Content})
 	})
 
-	// POST /api/fs/file
-	h.Post("/file", func(c *fiber.Ctx) error {
-		var body consolev1.WriteFileRequest
+	// POST /api/fs/save
+	// Separate from POST /api/fs/file above, which stays a plain truncating
+	// write for the mobile clients. This one is atomic, keeps the target's
+	// permissions, and refuses a stale buffer via the ETag conflict check.
+	h.Post("/save", func(c *fiber.Ctx) error {
+		var body consolev1.SaveFileRequest
 		if err := protoUnmarshal.Unmarshal(c.Body(), &body); err != nil || body.Path == "" {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Field 'path' is required."))
 		}
-		msg, err := fs.WriteFileContent(body.Path, body.Content)
+		result, err := fs.SaveFileContent(body.Path, body.Content, body.GetBaseEtag())
 		if err != nil {
+			var changed *fssvc.FileChangedError
+			if asErrAlias(err, &changed) {
+				resp := fiber.Map{
+					"success": false,
+					"error":   err.Error(),
+					"code":    "FILE_CHANGED",
+					"etag":    changed.CurrentEtag,
+				}
+				return c.Status(fiber.StatusConflict).JSON(resp)
+			}
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		return okProto(c, &consolev1.FileWriteResponse{Path: body.Path, Message: msg})
+		return okProto(c, &consolev1.SaveFileResponse{
+			Path:      result.Path,
+			Etag:      result.Etag,
+			SizeBytes: uint64(result.SizeBytes),
+			MtimeMs:   result.MtimeMs,
+		})
 	})
 
 	// DELETE /api/fs/file
@@ -404,6 +533,57 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 	})
 }
 
+// parseMediaRange parses a single `bytes=start-end` Range header against
+// total size. Returns (start, end, ok); ok=false means the header was
+// malformed or unsatisfiable and the caller should answer 416.
+func parseMediaRange(header string, total int64) (int64, int64, bool) {
+	if !strings.HasPrefix(header, "bytes=") {
+		return 0, 0, false
+	}
+	spec := strings.TrimPrefix(header, "bytes=")
+	if strings.Contains(spec, ",") {
+		return 0, 0, false // multi-range unsupported
+	}
+	startStr, endStr, found := strings.Cut(spec, "-")
+	if !found {
+		return 0, 0, false
+	}
+	if total <= 0 {
+		return 0, 0, false
+	}
+	var start, end int64
+	if startStr == "" {
+		// Suffix range: last N bytes.
+		n, err := strconv.ParseInt(endStr, 10, 64)
+		if err != nil || n <= 0 {
+			return 0, 0, false
+		}
+		start = total - n
+		if start < 0 {
+			start = 0
+		}
+		end = total - 1
+	} else {
+		var err error
+		start, err = strconv.ParseInt(startStr, 10, 64)
+		if err != nil || start < 0 || start >= total {
+			return 0, 0, false
+		}
+		if endStr == "" {
+			end = total - 1
+		} else {
+			end, err = strconv.ParseInt(endStr, 10, 64)
+			if err != nil || end < start {
+				return 0, 0, false
+			}
+			if end >= total {
+				end = total - 1
+			}
+		}
+	}
+	return start, end, true
+}
+
 func clampInt(v, min, max int) int {
 	if v < min {
 		return min
@@ -418,6 +598,15 @@ func asErr(err error, target **fssvc.PreviewBlocked) bool {
 	var b *fssvc.PreviewBlocked
 	if ok := errorsAs(err, &b); ok {
 		*target = b
+		return true
+	}
+	return false
+}
+
+func asErrAlias[T any](err error, target **T) bool {
+	var typed *T
+	if ok := errorsAs(err, &typed); ok {
+		*target = typed
 		return true
 	}
 	return false

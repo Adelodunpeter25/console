@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 default = []
 
@@ -11,7 +14,6 @@ default = []
 gpui = { workspace = true }
 gpui_macros = { workspace = true }
 gpui_platform = { workspace = true }
-gpui-component = { workspace = true }
 console-core = { workspace = true }
 console-shared = { workspace = true }
 syntax = { workspace = true }
@@ -45,18 +47,15 @@ wry = { version = "0.56", features = ["devtools"] }
 # Same major version gpui/wry use, so `HasWindowHandle` impls interoperate.
 raw-window-handle = "0.6"
 objc2 = { workspace = true }
+urlencoding = { workspace = true }
 objc2-foundation = { workspace = true, features = ["NSDictionary", "NSKeyValueObserving", "NSValue", "NSProcessInfo", "NSString", "NSURL", "NSURLRequest", "NSError", "NSData", "NSDictionary", "NSValue", "NSTimer", "NSDate", "NSGeometry", "block2", "NSHTTPCookie", "objc2-core-foundation"] }
-objc2-app-kit = { workspace = true, features = ["NSView", "NSWindow", "NSApplication", "NSEvent", "NSAppearance", "NSImage", "NSImageRep", "NSBitmapImageRep"] }
+objc2-app-kit = { workspace = true, features = ["NSView", "NSWindow", "NSApplication", "NSEvent", "NSAppearance", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSMenu", "NSMenuItem"] }
 block2 = { workspace = true }
 objc2-web-kit = { workspace = true, features = ["WKWebView", "WKWebViewConfiguration", "WKNavigation", "WKNavigationDelegate", "WKSnapshotConfiguration", "WKWebsiteDataStore", "WKHTTPCookieStore", "block2"] }
 
 [[test]]
 name = "composer_mention_test"
 path = "tests/composer/composer_mention_test.rs"
-
-[[test]]
-name = "input_test"
-path = "tests/composer/input_test.rs"
 
 [[test]]
 name = "floating_composer_test"
@@ -79,12 +78,32 @@ name = "partition_settled_test"
 path = "tests/sidebar/partition_settled_test.rs"
 
 [[test]]
-name = "keybindings_page_test"
-path = "tests/settings/keybindings_page_test.rs"
+name = "scroll_persistence_test"
+path = "tests/sidebar/scroll_persistence_test.rs"
+
+[[test]]
+name = "row_status_test"
+path = "tests/sidebar/row_status_test.rs"
+
+[[test]]
+name = "settle_tooltip_test"
+path = "tests/sidebar/settle_tooltip_test.rs"
 
 [[test]]
 name = "api_key_section_test"
 path = "tests/settings/api_key_section_test.rs"
+
+[[test]]
+name = "time_ago_test"
+path = "tests/time_ago_test.rs"
+
+[[test]]
+name = "ring_split_test"
+path = "tests/primitives/ring_split_test.rs"
+
+[[test]]
+name = "compact_count_test"
+path = "tests/utils/compact_count_test.rs"
 
 [[test]]
 name = "workspace_test"
@@ -123,8 +142,16 @@ name = "tool_icon_test"
 path = "tests/chat/tool_icon_test.rs"
 
 [[test]]
+name = "transcript_anchor_test"
+path = "tests/chat/transcript_anchor_test.rs"
+
+[[test]]
 name = "user_fold_test"
 path = "tests/chat/user_fold_test.rs"
+
+[[test]]
+name = "run_blocks_test"
+path = "tests/chat/run_blocks_test.rs"
 
 [[test]]
 name = "browser_agent_script_test"
@@ -143,12 +170,12 @@ name = "git_badges_test"
 path = "tests/inspector/git_badges_test.rs"
 
 [[test]]
-name = "watch_streams_test"
-path = "tests/inspector/watch_streams_test.rs"
-
-[[test]]
 name = "chat_ref_autocomplete_test"
 path = "tests/composer/chat_ref_autocomplete_test.rs"
+
+[[test]]
+name = "autocomplete_placement_test"
+path = "tests/composer/autocomplete_placement_test.rs"
 
 [[test]]
 name = "hidden_prefix_test"

@@ -1,0 +1,323 @@
+// Devin (Codeium Cascade) wire schema, trimmed to the fields the Console
+// server consumes. Field numbers mirror the upstream exa.* protobufs exactly;
+// messages/fields the client never reads are omitted (protobuf skips unknown
+// fields on decode, and unset optional fields are simply not encoded).
+//
+// Source of truth for the trimmed surface:
+// oh-my-pi packages/catalog/src/discovery/devin-proto.ts. Regenerate with:
+//
+//	protoc -I apps/server-go/internal/providers/devin/proto \
+//	  --go_out=apps/server-go/internal/gen --go_opt=paths=source_relative \
+//	  apps/server-go/internal/providers/devin/proto/exa/v1/exa.proto
+syntax = "proto3";
+
+package exa.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/exa/v1;exav1";
+
+import "google/protobuf/timestamp.proto";
+
+enum ChatMessageSource {
+  CHAT_MESSAGE_SOURCE_UNSPECIFIED = 0;
+  CHAT_MESSAGE_SOURCE_USER = 1;
+  CHAT_MESSAGE_SOURCE_SYSTEM = 2;
+  CHAT_MESSAGE_SOURCE_UNKNOWN = 3;
+  CHAT_MESSAGE_SOURCE_TOOL = 4;
+  CHAT_MESSAGE_SOURCE_SYSTEM_PROMPT = 5;
+}
+
+enum ChatMessageRequestType {
+  CHAT_MESSAGE_REQUEST_TYPE_UNSPECIFIED = 0;
+  CHAT_MESSAGE_REQUEST_TYPE_GENERAL = 1;
+  CHAT_MESSAGE_REQUEST_TYPE_CONTEXT_CHECK = 2;
+  CHAT_MESSAGE_REQUEST_TYPE_PLAN = 3;
+  CHAT_MESSAGE_REQUEST_TYPE_COMMAND = 4;
+  CHAT_MESSAGE_REQUEST_TYPE_CASCADE = 5;
+  CHAT_MESSAGE_REQUEST_TYPE_EVAL = 6;
+  CHAT_MESSAGE_REQUEST_TYPE_WINDSURF_REVIEW = 7;
+  CHAT_MESSAGE_REQUEST_TYPE_VIBE_AND_REPLACE = 8;
+  CHAT_MESSAGE_REQUEST_TYPE_DEEPWIKI = 9;
+  CHAT_MESSAGE_REQUEST_TYPE_DEVSTRAL = 10;
+  CHAT_MESSAGE_REQUEST_TYPE_CODEMAP_GENERATION = 11;
+  CHAT_MESSAGE_REQUEST_TYPE_CODEMAP_SUGGESTIONS = 12;
+  CHAT_MESSAGE_REQUEST_TYPE_SMART_FRIEND = 13;
+  CHAT_MESSAGE_REQUEST_TYPE_LIFEGUARD = 14;
+  CHAT_MESSAGE_REQUEST_TYPE_CHECKPOINT = 15;
+}
+
+enum ConversationalPlannerMode {
+  CONVERSATIONAL_PLANNER_MODE_UNSPECIFIED = 0;
+  CONVERSATIONAL_PLANNER_MODE_DEFAULT = 1;
+  CONVERSATIONAL_PLANNER_MODE_READ_ONLY = 2;
+  CONVERSATIONAL_PLANNER_MODE_NO_TOOL = 3;
+  CONVERSATIONAL_PLANNER_MODE_EXPLORE = 4;
+  CONVERSATIONAL_PLANNER_MODE_PLANNING = 5;
+  CONVERSATIONAL_PLANNER_MODE_AUTO = 6;
+}
+
+enum CacheControlType {
+  CACHE_CONTROL_TYPE_UNSPECIFIED = 0;
+  CACHE_CONTROL_TYPE_EPHEMERAL = 1;
+}
+
+enum StopReason {
+  STOP_REASON_UNSPECIFIED = 0;
+  STOP_REASON_INCOMPLETE = 1;
+  STOP_REASON_STOP_PATTERN = 2;
+  STOP_REASON_MAX_TOKENS = 3;
+  STOP_REASON_MIN_LOG_PROB = 4;
+  STOP_REASON_MAX_NEWLINES = 5;
+  STOP_REASON_EXIT_SCOPE = 6;
+  STOP_REASON_NONFINITE_LOGIT_OR_PROB = 7;
+  STOP_REASON_FIRST_NON_WHITESPACE_LINE = 8;
+  STOP_REASON_PARTIAL = 9;
+  STOP_REASON_FUNCTION_CALL = 10;
+  STOP_REASON_CONTENT_FILTER = 11;
+  STOP_REASON_NON_INSERTION = 12;
+  STOP_REASON_ERROR = 13;
+}
+
+// Display slots the server uses to gate catalog visibility. Values 6-8 are
+// not named in the upstream enum; the native client sends them and the
+// server returns the matching configs (oh-my-pi casts the same numbers).
+enum DisplayOption {
+  DISPLAY_OPTION_UNSPECIFIED = 0;
+  DISPLAY_OPTION_ARENA = 1;
+  DISPLAY_OPTION_BATTLE_GROUP_ONLY = 2;
+  DISPLAY_OPTION_MODEL_ROUTER = 3;
+  DISPLAY_OPTION_QUICK_REVIEW = 4;
+  DISPLAY_OPTION_INTERNAL_DEFAULT = 6;
+  DISPLAY_OPTION_UNCLASSIFIED = 7;
+  DISPLAY_OPTION_NORMAL = 8;
+}
+
+enum AuthSource {
+  AUTH_SOURCE_CODEIUM = 0;
+  AUTH_SOURCE_DEEPNOTE = 1;
+  AUTH_SOURCE_CODESANDBOX = 2;
+  AUTH_SOURCE_STACKBLITZ = 3;
+  AUTH_SOURCE_VALTOWN = 4;
+  AUTH_SOURCE_HEX = 5;
+  AUTH_SOURCE_ZAPIER = 6;
+  AUTH_SOURCE_SUPERBLOCKS = 7;
+  AUTH_SOURCE_EMBARCADERO = 8;
+}
+
+message Metadata {
+  string ide_name = 1;
+  string extension_version = 2;
+  string api_key = 3;
+  string locale = 4;
+  string os = 5;
+  bool disable_telemetry = 6;
+  string ide_version = 7;
+  string hardware = 8;
+  uint64 request_id = 9;
+  string session_id = 10;
+  string source_address = 11;
+  string extension_name = 12;
+  string user_agent = 13;
+  string url = 14;
+  AuthSource auth_source = 15;
+  google.protobuf.Timestamp ls_timestamp = 16;
+  string extension_path = 17;
+  string user_id = 20;
+  string user_jwt = 21;
+  string force_team_id = 22;
+  string device_fingerprint = 24;
+  string trigger_id = 25;
+  string plan_name = 26;
+  string id = 27;
+  string ide_type = 28;
+  string impersonate_tier = 29;
+  repeated DisplayOption supported_model_displays = 30;
+  string f = 31;
+  string team_id = 32;
+}
+
+message GetUserJwtRequest {
+  Metadata metadata = 1;
+}
+
+message GetUserJwtResponse {
+  string user_jwt = 1;
+  string custom_api_server_url = 2;
+}
+
+message ChatToolCall {
+  string id = 1;
+  string name = 2;
+  string arguments_json = 3;
+}
+
+message ImageData {
+  string base64_data = 1;
+  string mime_type = 2;
+}
+
+message PromptCacheOptions {
+  CacheControlType type = 1;
+}
+
+message ChatMessagePrompt {
+  string message_id = 1;
+  ChatMessageSource source = 2;
+  string prompt = 3;
+  repeated ChatToolCall tool_calls = 6;
+  string tool_call_id = 7;
+  PromptCacheOptions prompt_cache_options = 8;
+  bool tool_result_is_error = 9;
+  repeated ImageData images = 10;
+  string thinking = 11;
+  string signature = 12;
+}
+
+message ChatToolDefinition {
+  string name = 1;
+  string description = 2;
+  string json_schema_string = 3;
+  bool strict = 12;
+}
+
+message ChatToolChoice {
+  oneof choice {
+    string option_name = 1;
+    string tool_name = 2;
+  }
+}
+
+message CompletionConfiguration {
+  uint64 num_completions = 1;
+  uint64 max_tokens = 2;
+  uint64 max_newlines = 3;
+  double temperature = 5;
+  double first_temperature = 6;
+  uint64 top_k = 7;
+  double top_p = 8;
+  repeated string stop_patterns = 9;
+  double fim_eot_prob_threshold = 11;
+}
+
+message ModelAssignment {
+  string assignment_jwt = 1;
+  string model_uid = 2;
+  repeated string harness_uids = 3;
+}
+
+message AssignModelRequest {
+  Metadata metadata = 1;
+  string model_router_uid = 2;
+  string cascade_id = 3;
+  ChatMessagePrompt chat_message_prompt = 5;
+}
+
+message AssignModelResponse {
+  ModelAssignment assignment = 1;
+}
+
+message GetChatMessageRequest {
+  Metadata metadata = 1;
+  string prompt = 2;
+  repeated ChatMessagePrompt chat_message_prompts = 3;
+  ChatMessageRequestType request_type = 7;
+  CompletionConfiguration configuration = 8;
+  repeated ChatToolDefinition tools = 10;
+  bool disable_parallel_tool_calls = 11;
+  ChatToolChoice tool_choice = 12;
+  PromptCacheOptions system_prompt_cache_options = 13;
+  string chat_model_uid = 21;
+  string cascade_id = 16;
+  ConversationalPlannerMode planner_mode = 20;
+  string execution_id = 22;
+  string model_assignment_jwt = 26;
+}
+
+message ModelUsageStats {
+  uint64 input_tokens = 2;
+  uint64 output_tokens = 3;
+  uint64 cache_write_tokens = 4;
+  uint64 cache_read_tokens = 5;
+  string message_id = 7;
+  string model_uid = 9;
+  string billing_model_uid = 10;
+  string requested_model_uid = 11;
+}
+
+message GetChatMessageResponse {
+  string message_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string delta_text = 3;
+  uint32 delta_tokens = 4;
+  StopReason stop_reason = 5;
+  repeated ChatToolCall delta_tool_calls = 6;
+  ModelUsageStats usage = 7;
+  bool redact = 8;
+  string delta_thinking = 9;
+  string delta_signature = 10;
+  bool thinking_redacted = 11;
+  double latency = 12;
+  int32 credit_cost = 14;
+  string output_id = 15;
+  string thinking_id = 16;
+  string request_id = 17;
+  int32 committed_credit_cost = 18;
+  string prompt = 19;
+  bytes gemini_thought_signature = 20;
+  string delta_signature_type = 21;
+  double committed_acu_cost = 22;
+  optional string actual_model_uid = 23;
+  bool arena_invocation_cap_reached = 24;
+  string phase = 25;
+  optional int64 committed_quota_cost_basis_points = 26;
+  optional int64 committed_overage_cost_cents = 27;
+}
+
+message ModelFeatures {
+  bool supports_thinking = 15;
+  bool supports_images = 11;
+  bool supports_tool_calls = 12;
+  bool supports_parallel_tool_calls = 21;
+}
+
+message ModelInfo {
+  ModelFeatures model_features = 6;
+  int32 max_output_tokens = 13;
+  repeated string harness_uids = 20;
+  DisplayOption display_option = 22;
+  bool is_model_router = 25;
+}
+
+message ClientModelConfig {
+  string label = 1;
+  bool disabled = 4;
+  bool supports_images = 5;
+  int32 max_tokens = 18;
+  ModelInfo model_info = 23;
+  string model_uid = 22;
+  ModelFamilyMetadata model_family_metadata = 30;
+  bool is_default_model_in_family = 31;
+}
+
+message ModelFamilyMetadata {
+  string model_family_label = 1;
+  repeated ModelFamilyMetadataEntry entries = 2;
+  bool is_default_model_in_family = 3;
+}
+
+message ModelFamilyMetadataEntry {
+  string key = 1;
+  ModelFamilyMetadataValue value = 2;
+}
+
+message ModelFamilyMetadataValue {
+  int32 order = 1;
+  string name = 2;
+}
+
+message GetCliModelConfigsRequest {
+  Metadata metadata = 1;
+}
+
+message GetCliModelConfigsResponse {
+  repeated ClientModelConfig client_model_configs = 1;
+}

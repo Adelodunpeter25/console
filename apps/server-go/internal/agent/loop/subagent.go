@@ -6,9 +6,9 @@ package loop
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
@@ -30,19 +30,24 @@ type SubagentContext struct {
 	ToolSource func() []tools.Tool
 	// NestedTools, when set, receives the subagent's own registry and may
 	// add tools bound to it (e.g. a loadTools that loads into the subagent).
-	NestedTools  func(registry *tools.Registry)
+	NestedTools func(registry *tools.Registry)
+	// ToolDefs, when set, overrides the provider tool list exposed to the
+	// subagent (used by codemode to expose only the REPL tools).
+	ToolDefs     func() []tools.Definition
 	SystemPrompt string
 	// Setup is the parent's per-session setup, sent as a leading message.
 	Setup string
 	// ApprovalMode is the parent run's permission mode. A subagent inherits its
 	// parent's tools, so it must inherit the parent's authority too: it may not
 	// act with more permission than the run that spawned it. Zero value means
-	// always-ask, which is the safe default for a run that did not say.
+	// plan mode, which is the safe default for a run that did not say.
 	ApprovalMode permissions.Mode
+	// CurrentMode, when set, supplies the parent's mode at spawn time, so a
+	// mid-run upgrade reaches subagents started afterwards.
+	CurrentMode func() permissions.Mode
 	// Guard is the parent run's path guard. A subagent holds the same tools,
 	// so it must be confined to the same project root; nil means unguarded.
-	Guard    *permissions.Guard
-	Approver Approver
+	Guard *permissions.Guard
 	// OnEvent receives subagent lifecycle events (start/activity/end).
 	OnEvent func(Event)
 	// Usage, when set, receives each finished subagent run's token usage.
@@ -65,8 +70,9 @@ type SubagentStartInfo struct {
 	Name           string `json:"name"`
 	Role           string `json:"role"`
 	Prompt         string `json:"prompt"`
-	// MaxTurns is the nested run's turn limit (default 10); the desktop requires it.
-	MaxTurns int `json:"maxTurns"`
+	// Model the subagent runs on when the caller overrode the parent's;
+	// empty means the parent run's model.
+	Model string `json:"model,omitempty"`
 }
 
 // SubagentActivityInfo tracks one nested tool call.
@@ -94,6 +100,7 @@ type subagentInput struct {
 	Name       string `json:"name" jsonschema:"required,description=Name or identifier for the subagent to help differentiate it from other instances"`
 	Role       string `json:"role,omitempty" jsonschema:"description=Role or job title for the subagent (e.g. 'Codebase Inspector', 'Test Runner')"`
 	Background bool   `json:"background,omitempty" jsonschema:"description=Start the subagent in the background and continue immediately. The result is delivered through the background-work completion callback and the next parent model turn."`
+	Model      string `json:"model,omitempty" jsonschema:"description=Model ID the subagent runs on, from the same provider as the parent run (see the model catalog). Omit to use the parent run's model."`
 }
 
 // NewSubagentTool builds the "subagent" tool. With a nil context it
@@ -133,20 +140,21 @@ func (t *subagentTool) ExecuteCall(ctx context.Context, call tools.ToolCall) (an
 	if t.context == nil {
 		return textResult(fmt.Sprintf("Subagent [%s] simulated run for: %q\n(No active provider attached to task tool context)", displayName, in.Prompt)), nil
 	}
+	model := strings.TrimSpace(in.Model)
 	if in.Background {
-		return t.context.startBackground(ctx, call.ID, in.Prompt, displayName, role)
+		return t.context.startBackground(ctx, call.ID, in.Prompt, displayName, role, model)
 	}
-	return t.context.run(ctx, call.ID, in.Prompt, displayName, role)
+	return t.context.run(ctx, call.ID, in.Prompt, displayName, role, model)
 }
 
-func (c *SubagentContext) startBackground(ctx context.Context, parentCallID, prompt, name, role string) (any, error) {
+func (c *SubagentContext) startBackground(ctx context.Context, parentCallID, prompt, name, role, model string) (any, error) {
 	if c.BackgroundWork == nil || c.SessionID == "" {
 		return nil, tools.NewToolError("Background subagents are not available in this context.")
 	}
 	work, err := c.BackgroundWork.Register(background.Options{
 		SessionID: c.SessionID, ParentRunID: c.ParentRunID, ParentCallID: parentCallID,
 		Kind:     background.KindSubagent,
-		Metadata: map[string]string{"name": name, "role": role},
+		Metadata: metadataWithModel(name, role, model),
 	})
 	if err != nil {
 		return nil, tools.NewToolError("Could not start background subagent: %v", err)
@@ -157,7 +165,7 @@ func (c *SubagentContext) startBackground(ctx context.Context, parentCallID, pro
 		return nil, tools.NewToolError("Could not start background subagent: %v", err)
 	}
 	go func() {
-		result, runErr := c.run(childCtx, parentCallID, prompt, name, role)
+		result, runErr := c.run(childCtx, parentCallID, prompt, name, role, model)
 		status := background.StatusCompleted
 		summary := subagentSummary(result)
 		failure := ""
@@ -179,7 +187,16 @@ func (c *SubagentContext) startBackground(ctx context.Context, parentCallID, pro
 	return textResult(fmt.Sprintf("Started background subagent [%s].\nBackground work: %s\nThe result will be delivered when the parent is ready for a later turn.", name, work.ID)), nil
 }
 
-func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, role string) (any, error) {
+// metadataWithModel returns the background-work metadata for a subagent,
+// carrying the model override only when one was requested.
+func metadataWithModel(name, role, model string) map[string]string {
+	if model == "" {
+		return map[string]string{"name": name, "role": role}
+	}
+	return map[string]string{"name": name, "role": role, "model": model}
+}
+
+func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, role, model string) (any, error) {
 	subagentID := "subagent-" + newMessageID()[4:]
 	emit := func(kind EventKind, subagent any) {
 		if c.OnEvent != nil {
@@ -188,7 +205,7 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	}
 	emit(EventSubagentStart, SubagentStartInfo{
 		SubagentID: subagentID, ParentToolCall: parentCallID,
-		Name: name, Role: role, Prompt: prompt, MaxTurns: 10,
+		Name: name, Role: role, Prompt: prompt, Model: model,
 	})
 
 	source := c.Tools
@@ -208,22 +225,33 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 		c.NestedTools(registry)
 	}
 	mode := c.ApprovalMode
-	if mode == "" {
-		mode = permissions.AlwaysAsk
+	if c.CurrentMode != nil {
+		mode = c.CurrentMode()
 	}
-	executor := NewExecutor(registry, mode, c.Approver)
+	if mode == "" {
+		mode = permissions.PlanMode
+	}
+	executor := NewExecutor(registry, mode)
 	executor.Guard = c.Guard
 	agent := New(c.Provider, executor, nil)
 	agent.SystemPrompt = fmt.Sprintf("You are a specialized subagent (%s). Execute the task thoroughly and summarize your findings cleanly.\n%s", role, c.SystemPrompt)
 	agent.Setup = c.Setup
+	// An explicit per-call model overrides the parent run's; the provider
+	// stays the parent's, so the request rides the same credential.
 	agent.Model = c.Model
+	if model != "" {
+		agent.Model = model
+	}
 	agent.AccountID = c.AccountID
 
 	if c.Usage != nil {
 		defer func() { c.Usage.AddSubagent(agent.Usage.Snapshot()) }()
 	}
 	agent.ToolDefs = registry.Definitions
-	events, err := agent.Run(ctx, randomSubSession(), prompt, registry.Definitions())
+	if c.ToolDefs != nil {
+		agent.ToolDefs = c.ToolDefs
+	}
+	events, err := agent.Run(ctx, randomSubSession(), prompt, agent.ToolDefs())
 	if err != nil {
 		emit(EventSubagentEnd, SubagentEndInfo{SubagentID: subagentID, Status: "error", Error: err.Error()})
 		return nil, err

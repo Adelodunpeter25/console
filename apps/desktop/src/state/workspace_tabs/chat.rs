@@ -26,7 +26,7 @@ impl ConsoleDesktopApp {
             return;
         }
 
-        let transcript_view = cx.new(|cx| TranscriptView::new(cx));
+        let transcript_view = cx.new(TranscriptView::new);
         let composer_input = cx.new(|cx| {
             ComposerInput::new(window, cx)
                 .enable_large_paste_chip()
@@ -54,9 +54,8 @@ impl ConsoleDesktopApp {
                         let pane_id = pane_id_owned.clone();
                         cx.defer(move |cx| {
                             if let Some(window) = cx.active_window() {
-                                let _ = window.update(cx, |_, window, cx| {
+                                let _ = window.update(cx, |_, _window, cx| {
                                     app.update(cx, |this, cx| {
-                                        this.approval_menu.close(window, cx);
                                         if let PickerTab::Provider(name) =
                                             this.pane_picker_tab(&pane_id)
                                         {
@@ -84,26 +83,56 @@ impl ConsoleDesktopApp {
                 }
             }
         });
-        let approval_menu = ContextMenuHandle::new(cx);
-        let project_menu = ContextMenuHandle::new(cx);
-        let branch_menu = ContextMenuHandle::new(cx);
+        // Opening the project menu fetches the GitHub repo list if it was
+        // never loaded for this server, so a token connected elsewhere (or
+        // after boot) still shows the repos without a restart.
+        let project_menu = {
+            let entity = entity.clone();
+            ContextMenuHandle::new(cx).on_toggle(move |open, _window, cx| {
+                if open && let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.ensure_github_repos(cx));
+                }
+            })
+        };
+        let branch_pane_id = pane_id.to_string();
+        let branch_menu = ContextMenuHandle::new(cx).on_toggle({
+            let entity = entity.clone();
+            move |open, _window, cx| {
+                if open && let Some(app) = entity.upgrade() {
+                    let pane_id = branch_pane_id.clone();
+                    app.update(cx, |this, cx| {
+                        let session_cwd = this
+                            .active_session_for_pane(&pane_id)
+                            .and_then(|sid| this.sessions.iter().find(|s| s.id == sid))
+                            .map(|s| s.cwd.clone())
+                            .filter(|cwd| !cwd.is_empty());
+                        let target_cwd = session_cwd.or_else(|| {
+                            this.selected_project_for_pane(&pane_id)
+                                .map(|project| project.path)
+                        });
+                        if let Some(cwd) = target_cwd {
+                            this.reload_branches_for_pane(pane_id, cwd, cx);
+                        }
+                    });
+                }
+            }
+        });
+        let thinking_menu = ContextMenuHandle::new(cx);
         let tasks_menu = ContextMenuHandle::new(cx);
         let subagents_menu = ContextMenuHandle::new(cx);
         let shells_menu = ContextMenuHandle::new(cx);
+        let automations_menu = ContextMenuHandle::new(cx);
         let usage_pane_id = pane_id.to_string();
         let usage_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
             move |open, _window, cx| {
-                if open {
-                    if let Some(app) = entity.upgrade() {
-                        let pane_id = usage_pane_id.clone();
-                        app.update(cx, |this, cx| {
-                            let session_id =
-                                this.active_session_for_pane(&pane_id).unwrap_or_default();
-                            this.maybe_fetch_usage(&session_id, cx);
-                            this.fetch_context_usage(&session_id, cx);
-                        });
-                    }
+                if open && let Some(app) = entity.upgrade() {
+                    let pane_id = usage_pane_id.clone();
+                    app.update(cx, |this, cx| {
+                        let session_id = this.active_session_for_pane(&pane_id).unwrap_or_default();
+                        this.maybe_fetch_usage(&session_id, cx);
+                        this.fetch_context_usage(&session_id, cx);
+                    });
                 }
             }
         });
@@ -115,6 +144,11 @@ impl ConsoleDesktopApp {
                 pane_id_owned.clone(),
             );
             super::super::transcript_wiring::wire_open_change_for_pane(
+                transcript,
+                entity.clone(),
+                pane_id_owned.clone(),
+            );
+            super::super::transcript_wiring::wire_tool_result_for_pane(
                 transcript,
                 entity.clone(),
                 pane_id_owned.clone(),
@@ -142,24 +176,31 @@ impl ConsoleDesktopApp {
                     if prompt.trim().is_empty() {
                         return;
                     }
+                    this.reveal_chat_for_pane(&submit_pane_id, cx);
                     if this.is_active_session_running_for_pane(&submit_pane_id) {
-                        let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
-                        let annotations = (*this.annotations_for_pane(&submit_pane_id)).clone();
+                        let attachments = this.attachments_for_pane(&submit_pane_id).to_vec();
+                        let annotations = this.annotations_for_pane(&submit_pane_id).to_vec();
                         this.queue_prompt_for_pane(
                             submit_pane_id.clone(),
-                            prompt.clone(),
+                            prompt,
                             attachments,
                             annotations,
-                            context_files.clone(),
+                            context_files,
                             cx,
                         );
                         return;
                     }
                     this.active_pane_id = Some(submit_pane_id.clone());
                     this.selected_session_id = this.active_session_for_pane(&submit_pane_id);
-                    let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
-                    let annotations = (*this.annotations_for_pane(&submit_pane_id)).clone();
-                    this.submit_prompt_with_context(prompt.clone(), attachments, annotations, context_files, cx);
+                    let attachments = this.attachments_for_pane(&submit_pane_id).to_vec();
+                    let annotations = this.annotations_for_pane(&submit_pane_id).to_vec();
+                    this.submit_prompt_with_context(
+                        prompt,
+                        attachments,
+                        annotations,
+                        context_files,
+                        cx,
+                    );
                 }
                 ComposerEvent::SubmitSteer(prompt, context_files) => {
                     let prompt = this.prompt_with_staged_comments(&steer_pane_id, prompt, cx);
@@ -220,6 +261,20 @@ impl ConsoleDesktopApp {
                 this.stage_clipboard_attachments(&paste_pane_id, event.0.clone(), cx);
             },
         ));
+        let removed_pane_id = pane_id.to_string();
+        self._subscriptions.push(cx.subscribe(
+            &composer_input,
+            move |this, _input, event: &console_ui::input::ComposerImagesRemoved, cx| {
+                this.remove_images_by_number(&removed_pane_id, &event.0, cx);
+            },
+        ));
+        let preview_pane_id = pane_id.to_string();
+        self._subscriptions.push(cx.subscribe(
+            &composer_input,
+            move |this, _input, event: &console_ui::input::ComposerImagePreview, cx| {
+                this.preview_attachment(&preview_pane_id, event.0 - 1, cx);
+            },
+        ));
         let large_paste_pane_id = pane_id.to_string();
         self._subscriptions.push(cx.subscribe(
             &composer_input,
@@ -254,29 +309,34 @@ impl ConsoleDesktopApp {
                 selected_model: self.selected_model.clone(),
                 active_picker_tab: self.active_picker_tab.clone(),
                 approval_mode: self.approval_mode,
-                approval_mode_history: Vec::new(),
                 thinking_level: self.thinking_level,
                 model_menu,
-                approval_menu,
+                thinking_menu,
                 usage_menu,
                 tasks_menu,
                 subagents_menu,
                 shells_menu,
+                automations_menu,
                 selected_project_id: self.selected_project_id.clone(),
                 branches: self.branches.clone(),
                 branch_loaded: self.branch_loaded,
                 branch_is_git_repository: self.branch_is_git_repository,
                 branch_cwd: None,
+                branch_request_seq: 0,
                 branch_pending: self.branch_pending,
                 project_menu,
                 branch_menu,
                 model_search,
                 loaded_session_id: None,
+                comments_project: None,
                 file_comments: Vec::new(),
+                pending_staged_comments: Vec::new(),
                 next_file_comment_id: 1,
                 tab_strip_follow: console_ui::workspace::TabStripFollow::new(),
             },
         );
+        let active_session = self.active_session_for_pane(pane_id);
+        self.restore_draft_for_pane(pane_id, active_session.as_deref(), cx);
     }
 
     pub(crate) fn transcript_for_pane(&self, pane_id: &str) -> Entity<TranscriptView> {
@@ -288,6 +348,23 @@ impl ConsoleDesktopApp {
                 .map(|state| state.transcript_view.clone())
                 .unwrap_or_else(|| self.transcript_view.clone())
         }
+    }
+
+    /// The transcript of a pane that exists, or `None`.
+    ///
+    /// [`Self::transcript_for_pane`] falls back to the main transcript, which
+    /// is right for rendering but wrong for a scroll snapshot: it would
+    /// record the main pane's position under a pane that has none.
+    pub(crate) fn transcript_for_pane_checked(
+        &self,
+        pane_id: &str,
+    ) -> Option<Entity<TranscriptView>> {
+        if pane_id == "pane-main" {
+            return Some(self.transcript_view.clone());
+        }
+        self.workspace_pane_states
+            .get(pane_id)
+            .map(|state| state.transcript_view.clone())
     }
 
     pub(crate) fn composer_for_pane(&self, pane_id: &str) -> Entity<ComposerInput> {
@@ -409,14 +486,14 @@ impl ConsoleDesktopApp {
             .unwrap_or(self.approval_mode)
     }
 
-    pub(crate) fn pane_project_id(&self, pane_id: &str) -> Option<String> {
+    pub(crate) fn pane_workspace_key(&self, pane_id: &str) -> Option<String> {
         self.workspace_pane_states
             .get(pane_id)
             .and_then(|state| state.selected_project_id.clone())
             .or_else(|| self.selected_project_id.clone())
     }
 
-    pub(crate) fn pane_branches(&self, pane_id: &str) -> Rc<Vec<GitBranchInfo>> {
+    pub(crate) fn pane_branches(&self, pane_id: &str) -> Rc<[GitBranchInfo]> {
         self.workspace_pane_states
             .get(pane_id)
             .map(|state| state.branches.clone())
@@ -451,6 +528,13 @@ impl ConsoleDesktopApp {
             .unwrap_or_else(|| self.model_menu.clone())
     }
 
+    pub(crate) fn pane_thinking_menu(&self, pane_id: &str) -> ContextMenuHandle {
+        self.workspace_pane_states
+            .get(pane_id)
+            .map(|state| state.thinking_menu.clone())
+            .unwrap_or_else(|| self.thinking_menu.clone())
+    }
+
     /// The model picker search field for a pane. Always present: the main pane
     /// and every additional pane each own a `ComposerInput` entity so the query
     /// and focus survive the dropdown's per-frame rebuild.
@@ -461,13 +545,6 @@ impl ConsoleDesktopApp {
             .or_else(|| self.workspace_pane_states.values().next())
             .map(|state| state.model_search.clone())
             .expect("model search field is always present in workspace pane states")
-    }
-
-    pub(crate) fn pane_approval_menu(&self, pane_id: &str) -> ContextMenuHandle {
-        self.workspace_pane_states
-            .get(pane_id)
-            .map(|state| state.approval_menu.clone())
-            .unwrap_or_else(|| self.approval_menu.clone())
     }
 
     pub(crate) fn pane_project_menu(&self, pane_id: &str) -> ContextMenuHandle {
@@ -515,6 +592,14 @@ impl ConsoleDesktopApp {
             .unwrap_or_else(|| self.shells_menu.clone())
     }
 
+    /// The menu anchoring this pane's automations & webhooks popover to its pill.
+    pub(crate) fn pane_automations_menu(&self, pane_id: &str) -> ContextMenuHandle {
+        self.workspace_pane_states
+            .get(pane_id)
+            .map(|state| state.automations_menu.clone())
+            .unwrap_or_else(|| self.automations_menu.clone())
+    }
+
     pub(crate) fn set_pane_model(&mut self, pane_id: &str, model: Option<SelectedModel>) {
         if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
             state.selected_model = model;
@@ -539,16 +624,14 @@ impl ConsoleDesktopApp {
         }
 
         // Check active session header
-        if let Some(session_id) = self.active_session_for_pane(pane_id) {
-            if let Some(session) = self.sessions.iter().find(|s| s.id == session_id) {
-                if let Some(level) = session
-                    .thinking_level
-                    .as_deref()
-                    .and_then(ThinkingLevel::from_str)
-                {
-                    return Some(level);
-                }
-            }
+        if let Some(session_id) = self.active_session_for_pane(pane_id)
+            && let Some(session) = self.sessions.iter().find(|s| s.id == session_id)
+            && let Some(level) = session
+                .thinking_level
+                .as_deref()
+                .and_then(ThinkingLevel::from_str)
+        {
+            return Some(level);
         }
 
         // Default based on active model
@@ -586,22 +669,22 @@ impl ConsoleDesktopApp {
 
         // Check live fetched models first. Levels cross as plain strings;
         // unknown values are skipped (console_core::model_thinking_levels).
-        if let Some(models) = self.models_by_provider.get(&selected.provider) {
-            if let Some(m) = models.iter().find(|m| m.id == selected.model_id) {
-                let levels = console_core::model_thinking_levels(m);
-                if !levels.is_empty() {
-                    return levels;
-                }
+        if let Some(models) = self.models_by_provider.get(&selected.provider)
+            && let Some(m) = models.iter().find(|m| m.id == selected.model_id)
+        {
+            let levels = console_core::model_thinking_levels(m);
+            if !levels.is_empty() {
+                return levels;
             }
         }
 
         // Check static catalog models
-        if let Some(entry) = self.providers.iter().find(|p| p.name == selected.provider) {
-            if let Some(m) = entry.models.iter().find(|m| m.id == selected.model_id) {
-                let levels = console_core::model_thinking_levels(m);
-                if !levels.is_empty() {
-                    return levels;
-                }
+        if let Some(entry) = self.providers.iter().find(|p| p.name == selected.provider)
+            && let Some(m) = entry.models.iter().find(|m| m.id == selected.model_id)
+        {
+            let levels = console_core::model_thinking_levels(m);
+            if !levels.is_empty() {
+                return levels;
             }
         }
 
@@ -637,22 +720,14 @@ impl ConsoleDesktopApp {
         }
     }
 
-    /// Step to the next supported thinking level for the pane's active model.
-    pub fn cycle_thinking_level_for_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
-        let supported = self.supported_thinking_levels_for_pane(pane_id);
-        if supported.is_empty() {
-            return;
-        }
-
-        let current = self.pane_thinking_level(pane_id).unwrap_or(supported[0]);
-
-        let current_index = supported
-            .iter()
-            .position(|&lvl| lvl == current)
-            .unwrap_or(0);
-
-        let next_level = supported[(current_index + 1) % supported.len()];
-        self.set_pane_thinking_level(pane_id, Some(next_level));
+    /// Set a specific thinking level for the pane's active model.
+    pub fn choose_thinking_level_for_pane(
+        &mut self,
+        pane_id: &str,
+        level: ThinkingLevel,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_pane_thinking_level(pane_id, Some(level));
 
         self.update_session_settings_for_pane(
             pane_id.to_string(),
@@ -663,7 +738,7 @@ impl ConsoleDesktopApp {
                 model_id: None,
                 provider: None,
                 approval_mode: None,
-                thinking_level: Some(next_level),
+                thinking_level: Some(level),
                 pinned: None,
             },
             cx,
@@ -672,63 +747,28 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// Set a pane's approval mode, recording the outgoing mode in the MRU
-    /// history first. No-ops on identical modes so history only reflects real
-    /// changes. History is capped so it stays a navigation aid, not a log.
-    /// Derived entirely from observed changes — never hardcoded.
     pub(crate) fn set_pane_approval_mode(&mut self, pane_id: &str, mode: ApprovalMode) {
-        const HISTORY_CAP: usize = 8;
         if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
-            if state.approval_mode != mode {
-                push_approval_history(&mut state.approval_mode_history, state.approval_mode);
-                state.approval_mode = mode;
-            }
-        } else if self.approval_mode != mode {
-            push_approval_history(&mut self.approval_mode_history, self.approval_mode);
+            state.approval_mode = mode;
+        } else {
             self.approval_mode = mode;
         }
-
-        fn push_approval_history(history: &mut Vec<ApprovalMode>, outgoing: ApprovalMode) {
-            history.retain(|m| *m != outgoing);
-            history.push(outgoing);
-            if history.len() > HISTORY_CAP {
-                history.remove(0);
-            }
-        }
     }
 
-    /// The pane's approval-mode MRU history, newest last. Empty until the
-    /// first mode change; falls back to the global history for panes without
-    /// a state entry.
-    pub(crate) fn pane_approval_mode_history(&self, pane_id: &str) -> &[ApprovalMode] {
-        self.workspace_pane_states
-            .get(pane_id)
-            .map(|state| state.approval_mode_history.as_slice())
-            .unwrap_or(self.approval_mode_history.as_slice())
-    }
-
-    /// Shift+Tab from the composer: jump to the most recently used mode that
-    /// isn't current (a toggle between the last two modes in practice). When
-    /// history is empty or exhausted, advance one step in `ApprovalMode::ALL`
-    /// order — no mode is ever hardcoded or skipped.
+    /// Shift+Tab from the composer: flip between Plan and Full Access. While
+    /// the floating composer is open it flips that card's mode instead — the
+    /// session it creates is the one the keypress is about.
     pub fn cycle_approval_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.floating_composer.open {
+            self.floating_composer.approval_mode = self.floating_composer.approval_mode.toggled();
+            cx.notify();
+            return;
+        }
         let pane_id = self
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
-        let current = self.pane_approval_mode(&pane_id);
-        let next = self
-            .pane_approval_mode_history(&pane_id)
-            .iter()
-            .rev()
-            .copied()
-            .find(|m| *m != current)
-            .or_else(|| {
-                let all = ApprovalMode::ALL;
-                let pos = all.iter().position(|m| *m == current)?;
-                Some(all[(pos + 1) % all.len()])
-            });
-        let Some(next) = next else { return };
+        let next = self.pane_approval_mode(&pane_id).toggled();
         self.set_pane_approval_mode(&pane_id, next);
         self.update_session_settings_for_pane(
             pane_id,
@@ -744,8 +784,7 @@ impl ConsoleDesktopApp {
             },
             cx,
         );
-        // Keep focus in the composer; the dropdown label re-renders with the
-        // new mode on the next frame.
+        // Keep focus in the composer; the stripes re-render with the new mode.
         let composer = self.active_composer_input();
         composer.update(cx, |input, cx| {
             window.focus(&input.focus_handle(cx), cx);
@@ -830,6 +869,7 @@ impl ConsoleDesktopApp {
         &mut self,
         session_id: impl Into<String>,
         title: impl Into<String>,
+        cx: &mut Context<Self>,
     ) -> String {
         let session_id = session_id.into();
         let tab_id = format!("chat:{session_id}");
@@ -845,6 +885,7 @@ impl ConsoleDesktopApp {
         }) {
             workspace_ops::select_tab(&mut self.workspace_root, &existing_pane_id, &tab_id);
             self.active_pane_id = Some(existing_pane_id);
+            self.sync_workspace_webviews(cx);
             self.persist_workspaces();
             return tab_id;
         }
@@ -853,7 +894,7 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".into());
-        self.open_chat_tab_in_pane(&pane_id, session_id, title)
+        self.open_chat_tab_in_pane(&pane_id, session_id, title, cx)
     }
 
     pub fn open_chat_tab_in_pane(
@@ -861,6 +902,7 @@ impl ConsoleDesktopApp {
         pane_id: &str,
         session_id: impl Into<String>,
         title: impl Into<String>,
+        cx: &mut Context<Self>,
     ) -> String {
         let session_id = session_id.into();
         let tab_id = format!("chat:{session_id}");
@@ -870,13 +912,13 @@ impl ConsoleDesktopApp {
             .leaves()
             .iter()
             .find(|l| l.id == pane_id)
+            && leaf.tabs.iter().any(|t| t.id() == tab_id)
         {
-            if leaf.tabs.iter().any(|t| t.id() == tab_id) {
-                workspace_ops::select_tab(&mut self.workspace_root, pane_id, &tab_id);
-                self.active_pane_id = Some(pane_id.to_string());
-                self.persist_workspaces();
-                return tab_id;
-            }
+            workspace_ops::select_tab(&mut self.workspace_root, pane_id, &tab_id);
+            self.active_pane_id = Some(pane_id.to_string());
+            self.sync_workspace_webviews(cx);
+            self.persist_workspaces();
+            return tab_id;
         }
 
         // A known session stamps its project and provider verbatim — including explicit
@@ -886,12 +928,12 @@ impl ConsoleDesktopApp {
         let known_project_id = known_session.map(|s| self.workspace_key_for_header(s));
         let project_id = known_project_id
             .clone()
-            .unwrap_or_else(|| self.pane_project_id(pane_id));
+            .unwrap_or_else(|| self.pane_workspace_key(pane_id));
         let provider = known_session.map(|s| s.provider.clone());
-        if known_project_id.is_some() {
-            if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
-                state.selected_project_id = project_id.clone();
-            }
+        if known_project_id.is_some()
+            && let Some(state) = self.workspace_pane_states.get_mut(pane_id)
+        {
+            state.selected_project_id = project_id.clone();
         }
 
         let tab = WorkspaceTabConfig::Chat {
@@ -903,6 +945,7 @@ impl ConsoleDesktopApp {
         };
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
         self.active_pane_id = Some(pane_id.to_string());
+        self.sync_workspace_webviews(cx);
         self.persist_workspaces();
         format!("chat:{session_id}")
     }

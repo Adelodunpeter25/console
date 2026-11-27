@@ -9,8 +9,8 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use console_core::{
-    ApprovalMode, GitBranchInfo, ImageAttachment, Model, ProjectInfo, ProviderCatalogEntry,
-    SelectedModel, ThinkingLevel,
+    ApprovalMode, GitBranchInfo, GithubRepo, ImageAttachment, Model, ProjectInfo,
+    ProviderCatalogEntry, SelectedModel, ThinkingLevel,
 };
 use gpui::{
     App, Entity, ExternalPaths, FontWeight, InteractiveElement, IntoElement, ParentElement,
@@ -18,8 +18,7 @@ use gpui::{
 };
 
 use super::BranchChoice;
-use crate::common::composer_view::composer_attachment_row;
-use crate::common::{ApprovalModeDropdown, ApprovalModeIconExt};
+use crate::common::plan_mode_stripes;
 use crate::common::{
     AutocompleteConfirm, AutocompleteDismiss, AutocompleteNext, AutocompletePrevious,
     AutocompleteView, ModelDropdownMenu, PickerTab, format_model_name, provider_svg_path,
@@ -30,22 +29,44 @@ use crate::primitives::{
 };
 use crate::theme::Theme;
 
+use super::super::github_menu::github_menu_section;
+use super::super::picker_menus::{
+    BranchModeRow, ProjectMenuExtras, branch_menu_section, project_menu_section,
+};
+
 /// One frame of state to paint.
 pub struct Data {
-    pub projects: Rc<Vec<ProjectInfo>>,
+    pub projects: Rc<[ProjectInfo]>,
     pub selected_project_id: Option<String>,
-    pub branches: Rc<Vec<GitBranchInfo>>,
+    /// The connected GitHub account's repos for the project menu's GitHub
+    /// section, with load/error flags (None error + None repos = not
+    /// connected). Mirrored from app state on every frame, so a refresh from
+    /// any menu reaches an open card.
+    pub github_repos: Option<Rc<[GithubRepo]>>,
+    pub github_repos_loading: bool,
+    pub github_repos_error: Option<String>,
+    pub branches: Rc<[GitBranchInfo]>,
     pub branch: BranchChoice,
-    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub worktree_base: Option<String>,
+    pub providers: Rc<[ProviderCatalogEntry]>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
     pub favorites: Rc<HashSet<String>>,
     pub selected_model: Option<SelectedModel>,
     pub picker_tab: PickerTab,
     pub model_search_query: String,
+    /// The repo a GitHub tap is cloning right now, if any. Painted as a
+    /// "Cloning <name>…" line because the card's menu closes on tap.
+    pub repo_cloning: Option<String>,
     pub thinking_level: Option<ThinkingLevel>,
     pub supported_thinking_levels: Vec<ThinkingLevel>,
     pub approval_mode: ApprovalMode,
-    pub attachments: Rc<Vec<ImageAttachment>>,
+    pub attachments: Rc<[ImageAttachment]>,
+    /// Dictation state mirrored from the app (see FloatingComposerState).
+    pub mic_enabled: bool,
+    pub mic_recording: bool,
+    pub mic_elapsed_secs: u32,
+    pub mic_transcribing: bool,
+    pub mic_error: Option<String>,
     pub autocomplete: Option<AutocompleteView>,
     pub submitting: bool,
     pub error: Option<String>,
@@ -55,18 +76,24 @@ pub struct FloatingComposerView {
     input: Entity<ComposerInput>,
     project_menu: ContextMenuHandle,
     branch_menu: ContextMenuHandle,
+    worktree_base_menu: ContextMenuHandle,
     model_menu: ContextMenuHandle,
     thinking_menu: ContextMenuHandle,
-    approval_menu: ContextMenuHandle,
     model_dropdown: ModelDropdownMenu,
     data: Data,
     on_dismiss: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_choose_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_no_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_new_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_choose_github_repo: Rc<dyn Fn(GithubRepo, &mut Window, &mut App) + 'static>,
+    on_refresh_github_repos: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_connect_github: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_choose_branch: Rc<dyn Fn(BranchChoice, &mut Window, &mut App) + 'static>,
+    on_choose_worktree_base: Rc<dyn Fn(Option<String>, &mut Window, &mut App) + 'static>,
     on_choose_model: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     on_choose_thinking: Rc<dyn Fn(ThinkingLevel, &mut Window, &mut App) + 'static>,
-    on_choose_approval: Rc<dyn Fn(ApprovalMode, &mut Window, &mut App) + 'static>,
     on_submit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_toggle_mic: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_pick_image: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_drop_files: Rc<dyn Fn(&ExternalPaths, &mut Window, &mut App) + 'static>,
     on_remove_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
@@ -83,45 +110,61 @@ impl FloatingComposerView {
         input: Entity<ComposerInput>,
         project_menu: ContextMenuHandle,
         branch_menu: ContextMenuHandle,
+        worktree_base_menu: ContextMenuHandle,
         model_menu: ContextMenuHandle,
         thinking_menu: ContextMenuHandle,
-        approval_menu: ContextMenuHandle,
         model_dropdown: ModelDropdownMenu,
     ) -> Self {
         Self {
             input,
             project_menu,
             branch_menu,
+            worktree_base_menu,
             model_menu,
             thinking_menu,
-            approval_menu,
             model_dropdown,
             data: Data {
-                projects: Rc::new(Vec::new()),
+                projects: Rc::from([]),
                 selected_project_id: None,
-                branches: Rc::new(Vec::new()),
+                github_repos: None,
+                github_repos_loading: false,
+                github_repos_error: None,
+                branches: Rc::from([]),
                 branch: BranchChoice::default(),
-                providers: Rc::new(Vec::new()),
+                worktree_base: None,
+                providers: Rc::from([]),
                 models_by_provider: Rc::new(HashMap::new()),
                 favorites: Rc::new(HashSet::new()),
                 selected_model: None,
                 picker_tab: PickerTab::Favorites,
                 model_search_query: String::new(),
+                repo_cloning: None,
                 thinking_level: None,
                 supported_thinking_levels: Vec::new(),
                 approval_mode: ApprovalMode::default(),
-                attachments: Rc::new(Vec::new()),
+                attachments: Rc::from([]),
+                mic_enabled: false,
+                mic_recording: false,
+                mic_elapsed_secs: 0,
+                mic_transcribing: false,
+                mic_error: None,
                 autocomplete: None,
                 submitting: false,
                 error: None,
             },
             on_dismiss: Rc::new(|_, _| {}),
             on_choose_project: Rc::new(|_, _, _| {}),
+            on_no_project: Rc::new(|_, _| {}),
+            on_new_project: Rc::new(|_, _| {}),
+            on_choose_github_repo: Rc::new(|_, _, _| {}),
+            on_refresh_github_repos: Rc::new(|_, _| {}),
+            on_connect_github: Rc::new(|_, _| {}),
             on_choose_branch: Rc::new(|_, _, _| {}),
+            on_choose_worktree_base: Rc::new(|_, _, _| {}),
             on_choose_model: Rc::new(|_, _, _, _| {}),
             on_choose_thinking: Rc::new(|_, _, _| {}),
-            on_choose_approval: Rc::new(|_, _, _| {}),
             on_submit: Rc::new(|_, _, _| {}),
+            on_toggle_mic: Rc::new(|_, _| {}),
             on_pick_image: Rc::new(|_, _| {}),
             on_drop_files: Rc::new(|_, _, _| {}),
             on_remove_attachment: Rc::new(|_, _, _| {}),
@@ -155,11 +198,49 @@ impl FloatingComposerView {
         self
     }
 
+    pub fn on_no_project(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_no_project = Rc::new(f);
+        self
+    }
+
+    pub fn on_new_project(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_new_project = Rc::new(f);
+        self
+    }
+
+    /// A GitHub repo row was clicked: clone it (server-side) and select the
+    /// resulting project for this card's submit.
+    pub fn on_choose_github_repo(
+        mut self,
+        f: impl Fn(GithubRepo, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_choose_github_repo = Rc::new(f);
+        self
+    }
+
+    pub fn on_refresh_github_repos(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_refresh_github_repos = Rc::new(f);
+        self
+    }
+
+    pub fn on_connect_github(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_connect_github = Rc::new(f);
+        self
+    }
+
     pub fn on_choose_branch(
         mut self,
         f: impl Fn(BranchChoice, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_choose_branch = Rc::new(f);
+        self
+    }
+
+    pub fn on_choose_worktree_base(
+        mut self,
+        f: impl Fn(Option<String>, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_choose_worktree_base = Rc::new(f);
         self
     }
 
@@ -179,16 +260,15 @@ impl FloatingComposerView {
         self
     }
 
-    pub fn on_choose_approval(
-        mut self,
-        f: impl Fn(ApprovalMode, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        self.on_choose_approval = Rc::new(f);
+    pub fn on_submit(mut self, f: impl Fn(String, &mut Window, &mut App) + 'static) -> Self {
+        self.on_submit = Rc::new(f);
         self
     }
 
-    pub fn on_submit(mut self, f: impl Fn(String, &mut Window, &mut App) + 'static) -> Self {
-        self.on_submit = Rc::new(f);
+    /// Mic click: start a take when idle, stop + transcribe when recording.
+    /// Inert while transcribing — the callback checks that on the app side.
+    pub fn on_toggle_mic(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_toggle_mic = Rc::new(f);
         self
     }
 
@@ -251,57 +331,81 @@ impl FloatingComposerView {
         // Cloned out of `self` so the menu closures below can be `'static`
         // without borrowing the view.
         let data = self.data;
+        let plan_mode = data.approval_mode == ApprovalMode::PlanMode;
 
         // Pulled out before the menu closures below, which move the `Rc`s.
         let selected_project_id = data.selected_project_id.clone();
         let has_project = selected_project_id.is_some();
         let submitting = data.submitting;
         let error = data.error.clone();
+        let repo_cloning = data.repo_cloning.clone();
 
         // ---- header: project + branch selectors on the left ----
         // Both answer "where does this work happen", so they sit together
         // above the prompt; the footer keeps the behavioural choices.
-        let project_label = data
+        let (project_label, project_is_none) = match data
             .projects
             .iter()
             .find(|p| Some(&p.id) == selected_project_id.as_ref())
-            .map(|p| p.name.clone())
-            .unwrap_or_else(|| "Select project".to_owned());
+        {
+            Some(p) => (p.name.clone(), false),
+            None => match selected_project_id.as_ref() {
+                Some(_) => ("Select project".to_owned(), false),
+                None => ("No project".to_owned(), true),
+            },
+        };
         let project_trigger = MenuChip::new("floating-project-chip")
             .height(px(28.0))
-            .icon(IconName::Folder.path(), theme.text_tertiary)
-            .label(project_label)
-            .disabled(data.projects.is_empty());
-        let on_choose_project = self.on_choose_project.clone();
-        let has_projects = !data.projects.is_empty();
-        let project_control: gpui::AnyElement = if has_projects {
-            dropdown_menu(
-                project_trigger,
-                "floating-project-menu",
-                &self.project_menu,
-                MenuAlign::AboveLeft,
-                move |_| {
-                    let projects = data.projects.clone();
-                    let selected = selected_project_id.clone();
-                    let on_choose_project = on_choose_project.clone();
-                    projects
-                        .iter()
-                        .map(|project| {
-                            let id = project.id.clone();
-                            let name = project.name.clone();
-                            let on_choose_project = on_choose_project.clone();
-                            MenuItem::new(name, move |window, cx| {
-                                on_choose_project(id.clone(), window, cx);
-                            })
-                            .icon(IconName::Folder.path())
-                            .selected(selected.as_deref() == Some(project.id.as_str()))
-                        })
-                        .collect()
-                },
+            .icon(
+                if project_is_none {
+                    IconName::X
+                } else {
+                    IconName::Folder
+                }
+                .path(),
+                theme.text_tertiary,
             )
-        } else {
-            project_trigger.into_any_element()
-        };
+            .label(project_label);
+        let on_choose_project = self.on_choose_project.clone();
+        let on_no_project = self.on_no_project.clone();
+        let on_new_project = self.on_new_project.clone();
+        let on_choose_github_repo = self.on_choose_github_repo.clone();
+        let on_refresh_github_repos = self.on_refresh_github_repos.clone();
+        let on_connect_github = self.on_connect_github.clone();
+        let project_control: gpui::AnyElement = dropdown_menu(
+            project_trigger,
+            "floating-project-menu",
+            &self.project_menu,
+            MenuAlign::AboveLeft,
+            move |_| {
+                // The GitHub section needs no local projects to make sense —
+                // cloning from GitHub is how the list grows in the first
+                // place — so the menu always offers it.
+                let mut items = project_menu_section(
+                    data.projects.clone(),
+                    selected_project_id.clone(),
+                    true,
+                    &on_choose_project,
+                    Some(&ProjectMenuExtras {
+                        on_new_project: on_new_project.clone(),
+                        on_no_project: on_no_project.clone(),
+                        none_selected: selected_project_id.is_none(),
+                    }),
+                );
+                let github_repos = data.github_repos.clone();
+                let github_repos_loading = data.github_repos_loading;
+                let github_repos_error = data.github_repos_error.clone();
+                items.extend(github_menu_section(
+                    github_repos,
+                    github_repos_loading,
+                    github_repos_error.is_some(),
+                    &on_choose_github_repo,
+                    &on_refresh_github_repos,
+                    &on_connect_github,
+                ));
+                items
+            },
+        );
 
         // ---- branch selector, painted in the header beside the project ----
         // Same treatment as the project chip beside it: no outline, no filled
@@ -314,51 +418,113 @@ impl FloatingComposerView {
             // branch name is capped rather than pushing the card wider.
             .max_w(px(220.0));
         let on_choose_branch = self.on_choose_branch.clone();
-        let branches = data.branches.clone();
-        let current = data.branch.clone();
+        // Pulled out before the branch menu's `move` closure consumes them —
+        // the cut-point chip below still reads both.
+        let branch_choice = data.branch.clone();
+        let branch_rows = data.branches.clone();
         let branch_control = dropdown_menu(
             branch_trigger,
             "floating-branch-menu",
             &self.branch_menu,
             MenuAlign::AboveLeft,
             move |_| {
-                let mut items = vec![
-                    MenuItem::new("Project branch", {
-                        let on_choose_branch = on_choose_branch.clone();
-                        move |window, cx| {
-                            on_choose_branch(BranchChoice::Project, window, cx);
-                        }
+                let current = branch_choice.clone();
+                let current_for_check = current.clone();
+                let is_choice: Rc<dyn Fn(&GitBranchInfo) -> bool> =
+                    Rc::new(move |info: &GitBranchInfo| {
+                        current_for_check == BranchChoice::FromBranch(info.name.clone())
+                    });
+                let on_pick_branch: Rc<dyn Fn(String, &mut Window, &mut App)> = {
+                    let on_choose_branch = on_choose_branch.clone();
+                    Rc::new(move |name, window, cx| {
+                        on_choose_branch(BranchChoice::FromBranch(name), window, cx);
                     })
-                    .selected(current == BranchChoice::Project),
-                    MenuItem::new("New worktree", {
-                        let on_choose_branch = on_choose_branch.clone();
-                        move |window, cx| {
-                            on_choose_branch(BranchChoice::NewWorktree, window, cx);
-                        }
-                    })
-                    .selected(current == BranchChoice::NewWorktree),
-                ];
-                if !branches.is_empty() {
-                    items.push(MenuItem::Separator);
-                    for info in branches.iter() {
+                };
+                let mode = |label: &'static str, choice: BranchChoice, selected: bool| {
+                    let on_choose_branch = on_choose_branch.clone();
+                    BranchModeRow {
+                        label,
+                        selected,
+                        on_choose: Rc::new(move |window, cx| {
+                            on_choose_branch(choice.clone(), window, cx);
+                        }),
+                    }
+                };
+                branch_menu_section(
+                    branch_rows.clone(),
+                    &is_choice,
+                    &on_pick_branch,
+                    true,
+                    &[
+                        mode(
+                            "Project branch",
+                            BranchChoice::Project,
+                            current == BranchChoice::Project,
+                        ),
+                        mode(
+                            "New worktree",
+                            BranchChoice::NewWorktree,
+                            current == BranchChoice::NewWorktree,
+                        ),
+                    ],
+                    None,
+                )
+            },
+        );
+
+        // ---- worktree cut-point selector, painted when "New worktree" is ----
+        // the chosen mode. A worktree launch cuts its branch from a base: the
+        // repo default (server-resolved) or any local/remote branch. A remote
+        // base never becomes a checkout — it is only a cut point — so the rows
+        // here differ from the branch menu's checkout rows.
+        let worktree_base_control = if data.branch == BranchChoice::NewWorktree {
+            let base_branches = data.branches.clone();
+            let base_worktree = data.worktree_base.clone();
+            let base_label = base_worktree
+                .clone()
+                .unwrap_or_else(|| "Cut from default".to_owned());
+            let base_trigger = MenuChip::new("floating-worktree-base-chip")
+                .height(px(28.0))
+                .icon(IconName::GitBranch.path(), theme.text_tertiary)
+                .label(base_label)
+                .max_w(px(220.0));
+            let on_choose_worktree_base = self.on_choose_worktree_base.clone();
+            dropdown_menu(
+                base_trigger,
+                "floating-worktree-base-menu",
+                &self.worktree_base_menu,
+                MenuAlign::AboveLeft,
+                move |_| {
+                    let base = base_worktree.clone();
+                    let mut items = Vec::with_capacity(base_branches.len() + 2);
+                    let on_pick_default = on_choose_worktree_base.clone();
+                    items.push(
+                        MenuItem::new("Default branch", move |window, cx| {
+                            on_pick_default(None, window, cx);
+                        })
+                        .selected(base.is_none()),
+                    );
+                    if !base_branches.is_empty() {
+                        items.push(MenuItem::Separator);
+                    }
+                    for info in base_branches.iter() {
                         let name = info.name.clone();
-                        let on_choose_branch = on_choose_branch.clone();
-                        // Two clones: one for the click handler, one for the
-                        // selected-check below the move.
-                        let choice = BranchChoice::FromBranch(name.clone());
-                        let chosen = choice.clone();
+                        let on_pick = on_choose_worktree_base.clone();
+                        let is_base = base.as_deref() == Some(name.as_str());
                         items.push(
-                            MenuItem::new(name, move |window, cx| {
-                                on_choose_branch(choice.clone(), window, cx);
+                            MenuItem::new(name.clone(), move |window, cx| {
+                                on_pick(Some(name.clone()), window, cx);
                             })
-                            .selected(current == chosen)
+                            .selected(is_base)
                             .icon(IconName::GitBranch.path()),
                         );
                     }
-                }
-                items
-            },
-        );
+                    items
+                },
+            )
+        } else {
+            div().into_any_element()
+        };
 
         let (model_label, model_provider) = data
             .selected_model
@@ -381,40 +547,6 @@ impl FloatingComposerView {
             &self.model_menu,
             MenuAlign::AboveLeft,
             move |_handle, _window, _cx| model_dropdown.clone().into_any_element(),
-        );
-
-        // ---- footer: approval + model + thinking selectors ----
-        // Approval mode is a real choice at launch time: the session the card
-        // creates would otherwise silently inherit whatever the focused pane
-        // was set to. Full access is tinted with the warning colour, as in the
-        // docked composer.
-        let approval_is_open = self.approval_menu.is_open();
-        let approval_trigger = MenuChip::new("floating-approval-chip")
-            .height(px(26.0))
-            .outlined()
-            .background(theme.composer)
-            .selected(approval_is_open)
-            .icon(
-                data.approval_mode.icon().path(),
-                if data.approval_mode == ApprovalMode::FullAccess {
-                    theme.warning
-                } else {
-                    theme.text_tertiary
-                },
-            )
-            .label(data.approval_mode.label());
-        let on_choose_approval = self.on_choose_approval.clone();
-        let approval_control = popover(
-            approval_trigger,
-            &self.approval_menu,
-            MenuAlign::AboveLeft,
-            move |_handle, _window, _cx| {
-                ApprovalModeDropdown::new(data.approval_mode, {
-                    let on_choose_approval = on_choose_approval.clone();
-                    move |mode, window, cx| on_choose_approval(mode, window, cx)
-                })
-                .into_any_element()
-            },
         );
 
         let thinking_control = if data.supported_thinking_levels.is_empty() {
@@ -461,8 +593,7 @@ impl FloatingComposerView {
         // The prompt is read at click time rather than captured here, so the
         // button reflects the live input even though this struct is built
         // per frame.
-        let can_submit =
-            has_project && !submitting && !self.input.read(cx).content().trim().is_empty();
+        let can_submit = !submitting && !self.input.read(cx).content().trim().is_empty();
         let on_submit = self.on_submit.clone();
         // Captured so the click reads the live text instead of a per-frame copy.
         let submit_input = self.input.clone();
@@ -515,14 +646,6 @@ impl FloatingComposerView {
             .child(div().text_size(px(11.0)).text_color(hint_color).child("↵"));
 
         // ---- staged images ----
-        let attachments = (!data.attachments.is_empty()).then(|| {
-            composer_attachment_row(
-                data.attachments.clone(),
-                self.on_remove_attachment.clone(),
-                self.on_preview_attachment.clone(),
-                theme,
-            )
-        });
 
         // ---- attach button ----
         let on_pick = self.on_pick_image.clone();
@@ -536,6 +659,21 @@ impl FloatingComposerView {
                 on_pick(window, cx);
             })
             .child(app_icon(IconName::Plus, 13.0, theme.text_tertiary));
+
+        // ---- dictation mic ----
+        // The shared three-state control; the card passes its callback and
+        // the mirrored STT state (see FloatingComposerState).
+        let mic_control = super::super::mic_button::mic_button(
+            "floating",
+            super::super::mic_button::MicState {
+                enabled: data.mic_enabled,
+                recording: data.mic_recording,
+                elapsed_secs: data.mic_elapsed_secs,
+                transcribing: data.mic_transcribing,
+            },
+            Some(self.on_toggle_mic.clone()),
+            &theme,
+        );
 
         // ---- assemble ----
         let on_dismiss = self.on_dismiss.clone();
@@ -553,11 +691,15 @@ impl FloatingComposerView {
         div()
             .absolute()
             .inset_0()
-            .bg(gpui::black().opacity(0.35))
+            .bg(theme.backdrop)
             .flex()
             .justify_center()
+            // Nudged left of center so it clears the eye-line of the sidebar.
+            .pr(px(64.0))
+            // Aligned to the top so the suggestion list has the whole window
+            // below it to unfold into.
             .items_start()
-            .pt(px(96.0))
+            .pt(px(72.0))
             .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
                 on_dismiss(window, cx);
             })
@@ -571,7 +713,7 @@ impl FloatingComposerView {
                             on_cancel(window, cx)
                         },
                     )
-                    .w(px(560.0))
+                    .w(px(680.0))
                     .rounded(px(13.0))
                     .bg(theme.composer)
                     .border_1()
@@ -591,6 +733,7 @@ impl FloatingComposerView {
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
                     })
+                    .when(plan_mode, |el| el.child(plan_mode_stripes(theme)))
                     // header
                     .child(
                         div()
@@ -602,26 +745,19 @@ impl FloatingComposerView {
                             .border_b_1()
                             .border_color(theme.border)
                             .child(project_control)
-                            .child(branch_control)
+                            .when(has_project, |el| el.child(branch_control))
+                            .when(has_project, |el| el.child(worktree_base_control))
                             .child(div().flex_1()),
                     )
                     // staged images
-                    .when_some(attachments, |el, attachments| el.child(attachments))
                     // prompt
                     .child(
                         div()
                             .w_full()
-                            .min_h(px(72.0))
+                            .min_h(px(92.0))
                             .px(px(14.0))
                             .pt(px(10.0))
                             .pb(px(6.0))
-                            .relative()
-                            // The suggestion popup is anchored to the caret via
-                            // a bounds probe, so it needs this element to be
-                            // the positioning parent.
-                            .when_some(autocomplete_anchor, |el, anchor_bounds| {
-                                el.child(AutocompleteView::bounds_probe(anchor_bounds))
-                            })
                             .when(autocomplete_open, |el| {
                                 el.key_context(crate::common::AUTOCOMPLETE_CONTEXT)
                                     .on_action(move |_: &AutocompleteNext, window, cx| {
@@ -641,10 +777,32 @@ impl FloatingComposerView {
                                         cx.stop_propagation();
                                     })
                             })
-                            .child(input.clone()),
+                            // The suggestion popup opens under the text field
+                            // itself, so the probe measures the field rather
+                            // than this padded row.
+                            .child(
+                                div()
+                                    .relative()
+                                    .when_some(autocomplete_anchor, |el, anchor_bounds| {
+                                        el.child(AutocompleteView::bounds_probe(anchor_bounds))
+                                    })
+                                    .child(input),
+                            ),
                     )
                     // suggestion popup
                     .when_some(autocomplete, |el, popup| el.child(popup))
+                    // cloning — the GitHub section's tap starts a clone that
+                    // outlives the menu, so this keeps it visible in the card.
+                    .when_some(repo_cloning, |el, name| {
+                        el.child(
+                            div()
+                                .px(px(14.0))
+                                .pb(px(6.0))
+                                .text_size(px(11.5))
+                                .text_color(theme.text_secondary)
+                                .child(format!("Cloning {name}…")),
+                        )
+                    })
                     // error — a failed launch keeps the card open with the
                     // prompt intact, so this is the retry affordance.
                     .when_some(error, |el, message| {
@@ -668,17 +826,25 @@ impl FloatingComposerView {
                             .gap(px(6.0))
                             .child(attach_button)
                             .child(model_control)
-                            .child(approval_control)
                             .child(thinking_control)
                             .child(div().flex_1())
+                            .when_some(data.mic_error, |el, message| {
+                                el.child(
+                                    div()
+                                        .text_size(px(11.5))
+                                        .text_color(theme.danger)
+                                        .child(message),
+                                )
+                            })
+                            .child(mic_control)
                             // Spinner replaces nothing — it sits just before
                             // Create, which reads as the in-flight action.
                             .when(submitting, |el| {
-                                el.child(crate::primitives::motion::spin(app_icon(
+                                el.child(crate::primitives::motion::spin(
                                     IconName::LoaderCircle,
                                     13.0,
                                     theme.text_secondary,
-                                )))
+                                ))
                             })
                             .child(create_button),
                     ),

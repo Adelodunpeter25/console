@@ -13,6 +13,18 @@ pub(crate) fn wire_preview_image(
     transcript: &mut TranscriptView,
     entity: WeakEntity<ConsoleDesktopApp>,
 ) {
+    let preview_entity = entity.clone();
+    let handler = move |image: std::sync::Arc<gpui::Image>,
+                        _window: &mut gpui::Window,
+                        cx: &mut gpui::App| {
+        if let Some(app) = preview_entity.upgrade() {
+            app.update(cx, |this, cx| {
+                this.preview_image_data(image, cx);
+            });
+        }
+    };
+    // Workspace images in markdown/visual cards zoom through the same modal.
+    console_ui::chat::set_workspace_image_preview(Some(std::sync::Arc::new(handler)));
     transcript.set_on_preview_image(move |image, _window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {
@@ -28,10 +40,19 @@ pub(crate) fn wire_open_change_for_pane(
     entity: WeakEntity<ConsoleDesktopApp>,
     pane_id: String,
 ) {
-    transcript.set_on_open_change(move |path, diff_text, _window, cx| {
+    let load_entity = entity.clone();
+    let load_pane_id = pane_id;
+    transcript.set_load_diff(move |path, turn_index, cx| {
+        load_change_diff(&load_entity, &load_pane_id, path, turn_index, cx)
+    });
+    transcript.set_on_open_change(move |path, turn_index, diff_text, _window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {
-                this.open_diff_tab_with_text(&pane_id, path, diff_text, cx);
+                // The diff belongs beside the chat, like every other open, not
+                // in the chat's own pane. The chat's session is still resolved
+                // from `pane_id`.
+                let target = this.target_subtab_pane_id();
+                this.open_diff_tab_with_text(&target, path, Some(turn_index), diff_text, cx);
             });
         }
     });
@@ -41,17 +62,49 @@ pub(crate) fn wire_open_change_for_active_pane(
     transcript: &mut TranscriptView,
     entity: WeakEntity<ConsoleDesktopApp>,
 ) {
-    transcript.set_on_open_change(move |path, diff_text, _window, cx| {
+    let load_entity = entity.clone();
+    transcript.set_load_diff(move |path, turn_index, cx| {
+        let pane_id = load_entity
+            .upgrade()
+            .and_then(|app| app.read(cx).active_pane_id.clone())
+            .unwrap_or_else(|| "pane-main".to_string());
+        load_change_diff(&load_entity, &pane_id, path, turn_index, cx)
+    });
+    transcript.set_on_open_change(move |path, turn_index, diff_text, _window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {
-                let pane_id = this
-                    .active_pane_id
-                    .clone()
-                    .unwrap_or_else(|| "pane-main".to_string());
-                this.open_diff_tab_with_text(&pane_id, path, diff_text, cx);
+                // Route beside the pinned chat like every other open, not
+                // into whichever pane happens to be active.
+                let pane_id = this.target_subtab_pane_id();
+                this.open_diff_tab_with_text(&pane_id, path, Some(turn_index), diff_text, cx);
             });
         }
     });
+}
+
+/// Fetch one changed file's diff for the pane's session; `None` when the
+/// pane has no session or the request fails.
+fn load_change_diff(
+    entity: &WeakEntity<ConsoleDesktopApp>,
+    pane_id: &str,
+    path: &str,
+    turn_index: u32,
+    cx: &mut gpui::App,
+) -> gpui::Task<Option<String>> {
+    let target = entity.upgrade().and_then(|app| {
+        let app = app.read(cx);
+        app.active_session_for_pane(pane_id)
+            .map(|session_id| (app.client.clone(), session_id))
+    });
+    let path = path.to_string();
+    cx.spawn(async move |_cx| {
+        let (client, session_id) = target?;
+        client
+            .sessions
+            .get_change_diff(&session_id, &path, u64::from(turn_index))
+            .await
+            .ok()
+    })
 }
 
 /// Fork the pane's session through the clicked assistant message.
@@ -154,6 +207,15 @@ pub(crate) fn wire_open_file_for_active_pane(
 }
 
 fn wire_open_url(transcript: &mut TranscriptView, entity: WeakEntity<ConsoleDesktopApp>) {
+    let app_html_editor = entity.clone();
+    transcript.set_on_open_html_editor(move |path, _window, cx| {
+        if let Some(app) = app_html_editor.upgrade() {
+            app.update(cx, |this, cx| {
+                let target_pane = this.target_subtab_pane_id();
+                this.open_file_tab_in_pane_force_editor(&target_pane, path, cx);
+            });
+        }
+    });
     transcript.set_on_open_url(move |url, window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {
@@ -163,10 +225,53 @@ fn wire_open_url(transcript: &mut TranscriptView, entity: WeakEntity<ConsoleDesk
     });
 }
 
+/// Fetch the body of a tool result that history pages omit.
+pub(crate) fn wire_tool_result_for_pane(
+    transcript: &mut TranscriptView,
+    entity: WeakEntity<ConsoleDesktopApp>,
+    pane_id: String,
+) {
+    transcript.set_load_tool_result(move |message_id, call_id, cx| {
+        let target = entity.upgrade().and_then(|app| {
+            let app = app.read(cx);
+            app.active_session_for_pane(&pane_id)
+                .map(|session_id| (app.client.clone(), session_id))
+        });
+        cx.spawn(async move |_cx| {
+            let (client, session_id) = target?;
+            client
+                .sessions
+                .get_tool_result(&session_id, &message_id, &call_id)
+                .await
+                .ok()
+        })
+    });
+}
+
 pub(crate) fn wire_view_subagent(
     transcript: &mut TranscriptView,
     entity: WeakEntity<ConsoleDesktopApp>,
 ) {
+    let tool_entity = entity.clone();
+    transcript.set_load_tool_result(move |message_id, call_id, cx| {
+        let target = tool_entity.upgrade().and_then(|app| {
+            let app = app.read(cx);
+            let pane_id = app
+                .active_pane_id
+                .clone()
+                .unwrap_or_else(|| "pane-main".to_string());
+            app.active_session_for_pane(&pane_id)
+                .map(|session_id| (app.client.clone(), session_id))
+        });
+        cx.spawn(async move |_cx| {
+            let (client, session_id) = target?;
+            client
+                .sessions
+                .get_tool_result(&session_id, &message_id, &call_id)
+                .await
+                .ok()
+        })
+    });
     transcript.set_on_view_subagent(move |_call_id, window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {

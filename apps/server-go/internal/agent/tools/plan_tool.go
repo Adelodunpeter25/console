@@ -12,9 +12,9 @@ package tools
 import (
 	"context"
 	"fmt"
+	"github.com/MoeForge/moego/regexp"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
@@ -63,7 +63,12 @@ func (sandboxedBash) PlanSafe() bool { return true }
 // has none it runs commands normally, which is a deliberate choice by the
 // owner, not an oversight.
 func NewPlanModeBashTool(jobs *terminal.BashJobManager, ownerSessionID string, parentIDs ...string) Tool {
-	return sandboxedBash{Tool: NewSandboxedBashTool(SandboxReadOnly, jobs, ownerSessionID, parentIDs...)}
+	return NewPlanModeBashToolWithCwd(jobs, "", ownerSessionID, parentIDs...)
+}
+
+// NewPlanModeBashToolWithCwd is NewPlanModeBashTool with a default working directory fallback.
+func NewPlanModeBashToolWithCwd(jobs *terminal.BashJobManager, defaultCwd, ownerSessionID string, parentIDs ...string) Tool {
+	return sandboxedBash{Tool: NewSandboxedBashToolWithCwd(SandboxReadOnly, jobs, defaultCwd, ownerSessionID, parentIDs...)}
 }
 
 // NewWritePlanTool builds writePlan, bound to one session's working directory.

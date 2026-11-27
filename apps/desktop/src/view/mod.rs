@@ -7,10 +7,7 @@ use console_core::ProjectInfoExt;
 use console_ui::workspace::{
     ContentRenderer, WorkspaceDrag, WorkspaceDropAction, WorkspacePane, cancel_workspace_drags,
 };
-use console_ui::{
-    ImageViewerModal, RightSidebar, RightSidebarBottomSplit, RunPanel, RunScriptRow, SidebarView,
-    TerminalTabInfo, Theme, TitleBar,
-};
+use console_ui::{ImageViewerModal, SidebarView, Theme, TitleBar};
 use gpui::{
     App, Context, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
     MouseUpEvent, ParentElement, Render, Styled, Window, div, prelude::FluentBuilder,
@@ -49,19 +46,20 @@ impl Render for ConsoleDesktopApp {
 
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
-        let client = self.client.clone();
 
         let workspace_root = self.workspace_root.clone();
         let active_pane = self.active_pane_id.clone();
         let sessions = self.sessions.clone();
-        // Shared "New Chat" action: used by the sidebar's New Task row, the
-        // empty state's New Chat button, and the palette. The logic lives on
-        // the entity (`create_new_chat`) so the ⌘N shortcut shares it.
+        let (automation_sessions, webhook_sessions) = self.scheduled_session_sets();
+        // Shared "New Chat" action for the empty state's New Chat button. Opens
+        // the floating composer, like ⌘N and the sidebar's New Task row, so the
+        // project is picked in the card rather than inherited from the pane
+        // (which is empty after the last tab closes).
         let on_new_chat: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
-            Rc::new(move |_w, cx| {
+            Rc::new(move |window, cx| {
                 if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| this.create_new_chat(cx));
+                    app.update(cx, |this, cx| this.open_floating_composer(window, cx));
                 }
             })
         };
@@ -98,12 +96,16 @@ impl Render for ConsoleDesktopApp {
                 move |pane_id: String, tab_id: String, _w: &mut Window, cx: &mut App| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            this.close_tab_and_sync_pane(&pane_id, &tab_id, cx);
+                            this.request_close_tab(&pane_id, &tab_id, cx);
                         });
                     }
                 },
             )
         };
+        // File paths whose buffer has unsaved edits; their tab shows a dot in
+        // place of the close X. Computed each render, and an observer on each
+        // editor state repaints the app when dirtiness changes.
+        let dirty_file_paths = self.dirty_file_paths(cx);
         let on_drop_tab: Rc<
             dyn Fn(String, WorkspaceDrag, WorkspaceDropAction, &mut Window, &mut App) + 'static,
         > = {
@@ -218,6 +220,15 @@ impl Render for ConsoleDesktopApp {
                 })
                 | Some(console_core::WorkspaceTabConfig::ChangesReview {
                     title, project_id, ..
+                })
+                | Some(console_core::WorkspaceTabConfig::FileTree {
+                    title, project_id, ..
+                })
+                | Some(console_core::WorkspaceTabConfig::Device {
+                    title, project_id, ..
+                })
+                | Some(console_core::WorkspaceTabConfig::Computer {
+                    title, project_id, ..
                 }) => {
                     let folder = project_id
                         .as_deref()
@@ -282,9 +293,14 @@ impl Render for ConsoleDesktopApp {
                                 }
                             })
                     });
+                    let clean_title = title
+                        .lines()
+                        .find(|l| !l.trim().is_empty())
+                        .unwrap_or(title)
+                        .trim();
                     match folder {
-                        Some(f) if !f.is_empty() => Some(format!("{} — {}", title, f)),
-                        _ => Some(title.clone()),
+                        Some(f) if !f.is_empty() => Some(format!("{} — {}", clean_title, f)),
+                        _ => Some(clean_title.to_string()),
                     }
                 }
                 None => None,
@@ -296,221 +312,6 @@ impl Render for ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.toggle_left_sidebar(cx);
-                    });
-                }
-            })
-        };
-        let on_toggle_right_sidebar: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |_w, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.toggle_right_sidebar(cx);
-                    });
-                }
-            })
-        };
-        let on_select_inspector_tab: Rc<
-            dyn Fn(console_ui::InspectorTab, &mut Window, &mut App) + 'static,
-        > = {
-            let entity = entity.clone();
-            Rc::new(move |tab, _w, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.set_inspector_tab(tab, cx);
-                    });
-                }
-            })
-        };
-        let on_open_auxiliary_tab: Rc<
-            dyn Fn(console_ui::AuxiliaryTab, &mut Window, &mut App) + 'static,
-        > = {
-            let entity = entity.clone();
-            Rc::new(move |tab, _w, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| this.open_auxiliary_tab(tab, cx));
-                }
-            })
-        };
-        let on_close_auxiliary_tab: Rc<
-            dyn Fn(console_ui::AuxiliaryTab, &mut Window, &mut App) + 'static,
-        > = {
-            let entity = entity.clone();
-            Rc::new(move |tab, _w, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| this.close_auxiliary_tab(tab, cx));
-                }
-            })
-        };
-        let on_toggle_inspector_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |path, _w, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.toggle_inspector_folder(path, cx);
-                    });
-                }
-            })
-        };
-        let on_select_inspector_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |path, _w, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| match this.inspector_active_tab {
-                        console_ui::InspectorTab::Primary(console_ui::PrimaryTab::AllFiles) => {
-                            this.open_file_tab(path, cx);
-                        }
-                        console_ui::InspectorTab::Primary(console_ui::PrimaryTab::Changes) => {
-                            this.open_diff_tab(path, cx);
-                        }
-                        console_ui::InspectorTab::Auxiliary(_) => {}
-                    });
-                }
-            })
-        };
-        let on_refresh_inspector: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |_w, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.refresh_inspector(cx);
-                    });
-                }
-            })
-        };
-        let on_select_changes_scope: Rc<
-            dyn Fn(console_core::types::ChangesScope, &mut Window, &mut App) + 'static,
-        > = {
-            let entity = entity.clone();
-            Rc::new(move |scope, _w, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.set_inspector_changes_scope(scope, cx);
-                    });
-                }
-            })
-        };
-        let on_view_all_changes: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |_w, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        let Some(session_id) = this.active_inspector_target().0 else {
-                            return;
-                        };
-                        let scope = this.inspector_changes_scope;
-                        this.open_changes_review_tab(session_id, scope, cx);
-                    });
-                }
-            })
-        };
-        let on_begin_right_sidebar_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |start_x, _w, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.begin_right_sidebar_resize(start_x);
-                        cx.notify();
-                    });
-                }
-            })
-        };
-        let on_begin_right_sidebar_bottom_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |start_y, _w, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.begin_right_sidebar_bottom_resize(start_y);
-                        cx.notify();
-                    });
-                }
-            })
-        };
-        let on_select_right_sidebar_bottom_tab: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |tab_idx, _w, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        // Index 0 is the pinned Run tab; terminals shift by one.
-                        if tab_idx == 0 {
-                            this.select_bottom_run_tab(cx);
-                        } else {
-                            this.select_right_sidebar_bottom_tab(tab_idx - 1, cx);
-                        }
-                    });
-                }
-            })
-        };
-        let on_close_right_sidebar_bottom_tab: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |tab_idx, _w, cx| {
-                if tab_idx == 0 {
-                    // The Run tab is never closable.
-                    return;
-                }
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.close_right_sidebar_bottom_tab(tab_idx - 1, cx);
-                    });
-                }
-            })
-        };
-        let on_new_right_sidebar_terminal: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |window, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.add_right_sidebar_terminal(window, cx);
-                    });
-                }
-            })
-        };
-        let on_toggle_right_sidebar_bottom_collapsed: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |_window, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.toggle_right_sidebar_bottom_collapsed(cx);
-                    });
-                }
-            })
-        };
-        let on_run_project_script: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |script_id, _window, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.run_project_script(&script_id, cx);
-                    });
-                }
-            })
-        };
-        let on_stop_project_script: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |script_id, _window, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.stop_project_script(&script_id, cx);
-                    });
-                }
-            })
-        };
-        let on_open_project_script_log: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |script_id, _window, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.open_project_script_log(&script_id, cx);
-                    });
-                }
-            })
-        };
-        let on_refresh_project_scripts: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |_window, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.refresh_project_scripts(cx);
                     });
                 }
             })
@@ -527,33 +328,65 @@ impl Render for ConsoleDesktopApp {
             .on_action(cx.listener(Self::copy_selection_action))
             .on_key_down({
                 let entity = entity.clone();
-                move |event: &KeyDownEvent, _, cx| {
+                move |event: &KeyDownEvent, window, cx| {
                     if event.keystroke.key == "escape" {
                         // Close the image preview first — it sits above
                         // everything else, so it owns Escape while open.
                         if let Some(app) = entity.upgrade() {
-                            let had_preview = app.update(cx, |this, cx| {
+                            let handled = app.update(cx, |this, cx| {
                                 if this.zoomed_image.is_some() {
                                     this.zoomed_image = None;
                                     cx.notify();
-                                    true
-                                } else {
-                                    false
+                                    return true;
                                 }
+                                let transcript = this.active_transcript_view();
+                                transcript.update(cx, |trans, cx| {
+                                    if trans.is_prompts_open() {
+                                        trans.close_prompts(cx);
+                                        true
+                                    } else if trans.has_active_cite_popup() {
+                                        trans.clear_selection(window);
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                })
                             });
-                            if had_preview {
+                            if handled {
                                 return;
                             }
                         }
                         cancel_workspace_drags();
+                    } else if (event.keystroke.key == "r" || event.keystroke.key == "R")
+                        && !event.keystroke.modifiers.control
+                        && !event.keystroke.modifiers.alt
+                        && !event.keystroke.modifiers.platform
+                    {
+                        // Read the transcript handle and release the app first: the
+                        // cite callback updates the app, and nesting that inside an
+                        // app update panics.
+                        if let Some(app) = entity.upgrade() {
+                            let transcript = app.read(cx).active_transcript_view();
+                            if transcript.update(cx, |trans, cx| trans.trigger_cite(window, cx)) {
+                                cx.stop_propagation();
+                            }
+                        }
+                    } else if (event.keystroke.key == "c" || event.keystroke.key == "C")
+                        && (!event.keystroke.modifiers.control && !event.keystroke.modifiers.alt)
+                    {
+                        if let Some(app) = entity.upgrade() {
+                            let transcript = app.read(cx).active_transcript_view();
+                            if transcript.update(cx, |trans, cx| trans.trigger_copy(window, cx)) {
+                                cx.stop_propagation();
+                            }
+                        }
                     } else if event.keystroke.modifiers.platform
                         && event.keystroke.modifiers.shift
                         && event.keystroke.key.eq_ignore_ascii_case("n")
                     {
                         let environment_id = entity
                             .upgrade()
-                            .map(|app| app.read(cx).active_env_id.clone())
-                            .flatten();
+                            .and_then(|app| app.read(cx).active_env_id.clone());
                         crate::window::open_workspace_window(
                             cx,
                             crate::window::WindowLaunchTarget::Fresh { environment_id },
@@ -586,16 +419,8 @@ impl Render for ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             let sidebar_changed = this.resize_sidebar(f32::from(event.position.x));
-                            let right_sidebar_changed =
-                                this.resize_right_sidebar(f32::from(event.position.x));
-                            let right_sidebar_bottom_changed =
-                                this.resize_right_sidebar_bottom(f32::from(event.position.y));
                             let split_changed = this.resize_split_drag(event.position);
-                            if sidebar_changed
-                                || right_sidebar_changed
-                                || right_sidebar_bottom_changed
-                                || split_changed
-                            {
+                            if sidebar_changed || split_changed {
                                 cx.notify();
                             }
                         });
@@ -608,15 +433,8 @@ impl Render for ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             let sidebar_changed = this.finish_sidebar_resize();
-                            let right_sidebar_changed = this.finish_right_sidebar_resize();
-                            let right_sidebar_bottom_changed =
-                                this.finish_right_sidebar_bottom_resize();
                             let split_changed = this.finish_split_resize();
-                            if sidebar_changed
-                                || right_sidebar_changed
-                                || right_sidebar_bottom_changed
-                                || split_changed
-                            {
+                            if sidebar_changed || split_changed {
                                 cx.notify();
                             }
                         });
@@ -643,7 +461,6 @@ impl Render for ConsoleDesktopApp {
                 );
 
                 TitleBar::new(titlebar_text, self.sidebar_width, on_toggle_sidebar)
-                    .with_right_sidebar_toggle(self.right_sidebar_visible, on_toggle_right_sidebar)
                     .with_ports(Some(ports_popover.into_any_element()))
             })
             // In-window menu bar on platforms without a native app menu
@@ -660,349 +477,282 @@ impl Render for ConsoleDesktopApp {
                     .min_h_0()
                     .flex()
                     .overflow_hidden()
-                    .child(SidebarView::new(
-                        self.sidebar_visible,
-                        self.sidebar_width,
-                        sessions,
-                        self.projects.clone(),
-                        self.selected_session_id.clone(),
-                        self.collapsed_groups.clone(),
-                        self.sidebar_sort_mode,
-                        self.collapsed_projects.clone(),
-                        self.running_sessions_snapshot(),
-                        self.waiting_sessions_snapshot(),
-                        self.draft_summaries(),
-                        self.drafts_collapsed,
-                        self.pinned_collapsed,
-                        self.settled_collapsed,
-                        self.sidebar_list_state.clone(),
-                        self.environment_rows(),
-                        self.server_menu.clone(),
-                        {
-                            let entity = entity.clone();
-                            move |id: String, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.select_and_open_session(id, cx);
-                                    });
+                    .child(
+                        SidebarView::new(
+                            self.sidebar_visible,
+                            self.sidebar_width,
+                            sessions,
+                            self.projects.clone(),
+                            self.selected_session_id
+                                .clone()
+                                // A workspace with just one chat keeps it
+                                // highlighted while a terminal, file, or
+                                // browser tab is in front.
+                                .or_else(|| self.focused_chat().map(|(_, sid)| sid.to_string())),
+                            self.collapsed_projects.clone(),
+                            self.running_sessions_snapshot(),
+                            self.waiting_sessions_snapshot(),
+                            self.draft_summaries(),
+                            self.pinned_collapsed,
+                            self.workspaces_collapsed,
+                            self.settled_collapsed,
+                            self.sidebar_list_state.clone(),
+                            self.environment_rows(),
+                            self.server_menu.clone(),
+                            {
+                                let entity = entity.clone();
+                                move |id: String, _w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.select_and_open_session(id, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            move |id: String, _w, cx: &mut App| {
-                                crate::window::open_workspace_window(
-                                    cx,
-                                    crate::window::WindowLaunchTarget::Session(id),
-                                );
-                            }
-                        },
-                        {
-                            let on_new = on_new_chat.clone();
-                            move |window: &mut Window, cx: &mut App| (on_new)(window, cx)
-                        },
-                        {
-                            // Sidebar search button opens the command palette.
-                            let entity = entity.clone();
-                            move |window: &mut Window, cx: &mut App| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.open_command_palette(window, cx);
-                                    });
+                            },
+                            {
+                                move |id: String, _w, cx: &mut App| {
+                                    crate::window::open_workspace_window(
+                                        cx,
+                                        crate::window::WindowLaunchTarget::Session(id),
+                                    );
                                 }
-                            }
-                        },
-                        {
-                            // Sidebar "Add Project" opens the directory browser
-                            // palette (works against remote backends, where a
-                            // native dialog can't see the host filesystem).
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.open_project_browse(window, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window: &mut Window, cx: &mut App| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.open_floating_composer(window, cx)
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |group: console_ui::utils::SessionDateGroup, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| this.toggle_sidebar_group(group, cx));
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |key: String, window: &mut Window, cx: &mut App| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.open_floating_composer_for_project(
+                                                &key, window, cx,
+                                            )
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |key: String, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.toggle_sidebar_project(key, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window: &mut Window, cx: &mut App| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.start_sidebar_search(window, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.toggle_sidebar_sort_mode(cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |key: String, _w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_sidebar_project(key, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.drafts_collapsed = !this.drafts_collapsed;
-                                        cx.notify();
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |_w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_sidebar_pinned(cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.pinned_collapsed = !this.pinned_collapsed;
-                                        cx.notify();
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |_w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_sidebar_workspaces(cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.settled_collapsed = !this.settled_collapsed;
-                                        cx.notify();
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |_w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.settled_collapsed = !this.settled_collapsed;
+                                            cx.notify();
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |id: String, window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.begin_session_rename(id, window, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |id: String, window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.begin_session_rename(id, window, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |_window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| this.commit_session_rename(cx));
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |_window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| this.commit_session_rename(cx));
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.cancel_session_rename(window, cx)
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.cancel_session_rename(window, cx)
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |id: String, _window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.toggle_pin_session(id, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |id: String, _window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_pin_session(id, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |id: String, _window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.settle_session(id, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |id: String, _window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.settle_session(id, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |id: String, _window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.unsettle_session(id, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |id: String, _window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.unsettle_session(id, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            let client = client.clone();
-                            move |id: String, _w, cx| {
-                                let client = client.clone();
-                                let del_id = id.clone();
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.save_transcript_scroll_position(cx);
-                                        Rc::make_mut(&mut this.sessions).retain(|s| s.id != id);
-                                        this.close_matching_workspace_tabs(
-                                            |t| t.id() == format!("chat:{}", id),
-                                            cx,
-                                        );
-                                        for root in this.project_workspace_roots.values_mut() {
-                                            console_ui::workspace::ops::close_matching_tabs(
-                                                root,
-                                                |t| t.id() == format!("chat:{}", id),
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |id: String, _window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_session_read(id, cx);
+                                        });
+                                    }
+                                }
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |id: String, _w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.delete_session(id, cx);
+                                        });
+                                    }
+                                }
+                            },
+                            self.session_rename_id.clone(),
+                            Some(self.session_rename_input.clone()),
+                            {
+                                let entity = entity.clone();
+                                move |start_x, _w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.begin_sidebar_resize(start_x);
+                                            cx.notify();
+                                        });
+                                    }
+                                }
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.open_settings(window, cx);
+                                        });
+                                    }
+                                }
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.open_settings_tab(
+                                                console_ui::settings::SettingsTab::Servers,
+                                                window,
+                                                cx,
                                             );
-                                        }
-                                        // Deleting a worktree's last chat removes the
-                                        // worktree's workspace with it.
-                                        this.sweep_dead_worktree_workspaces(cx);
-                                        // The chat's agent browser tabs go with it.
-                                        this.close_session_browser_tabs(&id, cx);
-                                        // Drop all run-derived state for the deleted
-                                        // session, now keyed by session id.
-                                        this.running_sessions.remove(&id);
-                                        this.pending_permissions.remove(&id);
-                                        this.pending_questions.remove(&id);
-                                        this.question_selected.remove(&id);
-                                        this.todo_items.remove(&id);
-                                        this.agent_notices.remove(&id);
-                                        if this.selected_session_id.as_deref() == Some(&id) {
-                                            this.selected_session_id =
-                                                this.active_pane_id.as_deref().and_then(
-                                                    |pane_id| this.active_session_for_pane(pane_id),
-                                                );
-                                            let pane_id = this
-                                                .active_pane_id
-                                                .clone()
-                                                .unwrap_or_else(|| "pane-main".to_string());
-                                            let composer = this.composer_for_pane(&pane_id);
-                                            let transcript = this.transcript_for_pane(&pane_id);
-                                            composer.update(cx, |input, cx| {
-                                                input.set_prompt_history(Vec::new(), cx);
-                                            });
-                                            transcript.update(cx, |t, cx| {
-                                                t.set_messages(Vec::new(), cx);
-                                            });
-                                            if let Some(next_id) = this.selected_session_id.clone()
-                                            {
-                                                this.load_session_messages_for_pane(
-                                                    pane_id, next_id, cx,
-                                                );
-                                            }
-                                        }
-                                        this.maybe_refresh_inspector(cx);
-                                        cx.notify();
-
-                                        cx.spawn(async move |entity, cx| {
-                                            if let Err(error) =
-                                                client.sessions.delete(&del_id).await
-                                            {
-                                                let message = format!(
-                                                    "Unable to delete the session: {error}"
-                                                );
-                                                cx.update(|cx| {
-                                                    if let Some(app) = entity.upgrade() {
-                                                        app.update(cx, |this, cx| {
-                                                            this.set_error(message, cx)
-                                                        });
-                                                    }
-                                                });
-                                            }
-                                        })
-                                        .detach();
-                                    });
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |key: String, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        let is_new_chat = key == "new_chat";
-                                        this.discard_draft(&key, cx);
-                                        // If the discarded draft is currently shown in the
-                                        // active composer, clear the input so stale text
-                                        // doesn't remain.
-                                        let active_sid = this
-                                            .active_pane_id
-                                            .as_deref()
-                                            .and_then(|pane_id| {
-                                                this.active_session_for_pane(pane_id)
-                                            })
-                                            .map(|s| s.to_string());
-                                        let should_clear = if is_new_chat {
-                                            active_sid.is_none()
-                                        } else {
-                                            active_sid.as_deref() == Some(key.as_str())
-                                        };
-                                        if should_clear {
-                                            let composer = this.active_composer_input();
-                                            composer.update(cx, |input, cx| input.clear(cx));
-                                        }
-                                        cx.notify();
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |env_id: String, _w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.activate_environment(env_id, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        self.session_rename_id.clone(),
-                        Some(self.session_rename_input.clone()),
-                        {
-                            let entity = entity.clone();
-                            move |start_x, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.begin_sidebar_resize(start_x);
-                                        cx.notify();
-                                    });
+                            },
+                        )
+                        .scheduled_sessions(automation_sessions, webhook_sessions)
+                        .search(
+                            self.sidebar_search_active,
+                            self.sidebar_search_query.clone(),
+                            Some(self.sidebar_search_input.clone()),
+                            {
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.start_sidebar_search(window, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.open_settings(window, cx);
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.reset_or_close_sidebar_search(window, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.open_settings_tab(
-                                            console_ui::settings::SettingsTab::Servers,
-                                            window,
-                                            cx,
-                                        );
-                                    });
+                            },
+                            {
+                                let entity = entity.clone();
+                                move |window, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.clear_sidebar_search(window, cx);
+                                        });
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            let entity = entity.clone();
-                            move |env_id: String, _w, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.activate_environment(env_id, cx);
-                                    });
-                                }
-                            }
-                        },
-                    ))
+                            },
+                        ),
+                    )
                     // The workspace pane is a sibling of the sidebar, inside
                     // the same row, so it sits to the right of it.
                     .child(
@@ -1014,13 +764,22 @@ impl Render for ConsoleDesktopApp {
                             .overflow_hidden()
                             .child({
                                 let entity_for_split = entity.clone();
+                                self.ensure_new_tab_menus(cx);
+                                // Handed over once: a later render of the same
+                                // split must not animate it again.
+                                let new_split_pane = self.new_split_pane.take();
+                                let new_tab_menus = self.new_tab_menus.clone();
                                 let tab_follows: std::collections::HashMap<
                                     String,
                                     console_ui::workspace::TabStripFollow,
-                                > = self
-                                    .workspace_pane_states
-                                    .iter()
-                                    .map(|(k, v)| (k.clone(), v.tab_strip_follow.clone()))
+                                > = workspace_root
+                                    .leaves()
+                                    .into_iter()
+                                    .filter_map(|leaf| {
+                                        self.workspace_pane_states.get(&leaf.id).map(|state| {
+                                            (leaf.id.clone(), state.tab_strip_follow.clone())
+                                        })
+                                    })
                                     .collect();
                                 WorkspacePane::new(
                                     workspace_root,
@@ -1033,14 +792,20 @@ impl Render for ConsoleDesktopApp {
                                     on_focus_pane,
                                 )
                                 .with_tab_follow(move |pane_id| tab_follows.get(pane_id).cloned())
-                                .with_new_tab({
+                                .with_dirty_paths(dirty_file_paths)
+                                .with_new_pane(new_split_pane)
+                                .with_new_tab_menu({
                                     let entity = entity.clone();
-                                    move |_pane_id, _window, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.create_new_chat(cx);
-                                            });
-                                        }
+                                    let menus = new_tab_menus;
+                                    move |pane_id| {
+                                        let handle = menus.get(pane_id)?.clone();
+                                        Some((
+                                            handle,
+                                            crate::state::new_tab_menu_items(
+                                                entity.clone(),
+                                                pane_id.to_string(),
+                                            ),
+                                        ))
                                     }
                                 })
                                 .with_resize_split(
@@ -1056,421 +821,34 @@ impl Render for ConsoleDesktopApp {
                                     },
                                 )
                             }),
-                    )
-                    // Conductor-style Right Sidebar Inspector (All files & Changes & Subagents + Terminal bottom split)
-                    .when(self.right_sidebar_visible, |el| {
-                        self.ensure_right_sidebar_terminal(window, cx);
-                        self.ensure_project_scripts(cx);
-
-                        let (_, active_cwd) = self.active_inspector_target();
-                        let active_term_state = active_cwd
-                            .as_ref()
-                            .and_then(|cwd| self.right_sidebar_terminals_by_cwd.get(cwd));
-
-                        let scripts_project_id_for_tabs = self.active_scripts_project_id();
-                        let script_label_by_id: std::collections::HashMap<String, String> =
-                            scripts_project_id_for_tabs
-                                .as_ref()
-                                .and_then(|pid| self.project_scripts_by_project.get(pid))
-                                .map(|state| {
-                                    state
-                                        .scripts
-                                        .iter()
-                                        .map(|s| (s.id.clone(), s.label.clone()))
-                                        .collect()
-                                })
-                                .unwrap_or_default();
-
-                        let script_log_ids: Vec<String> = active_term_state
-                            .map(|state| state.script_logs.clone())
-                            .unwrap_or_default();
-                        let active_script_log_id: Option<String> =
-                            active_term_state.and_then(|state| state.active_script_log.clone());
-                        let active_script_running = active_script_log_id
-                            .as_ref()
-                            .and_then(|id| {
-                                scripts_project_id_for_tabs
-                                    .as_ref()
-                                    .and_then(|pid| self.project_scripts_by_project.get(pid))
-                                    .and_then(|state| state.runs.get(id))
-                            })
-                            .is_some_and(|v| {
-                                v.starting || v.run.as_ref().is_some_and(|r| r.status == "running")
-                            });
-
-                        let mut tabs: Vec<TerminalTabInfo> = script_log_ids
-                            .iter()
-                            .map(|id| TerminalTabInfo {
-                                id: 0,
-                                title: script_label_by_id
-                                    .get(id)
-                                    .cloned()
-                                    .unwrap_or_else(|| id.clone()),
-                                script_id: Some(id.clone()),
-                            })
-                            .collect();
-                        tabs.extend(
-                            active_term_state
-                                .map(|state| {
-                                    state
-                                        .terminals
-                                        .iter()
-                                        .enumerate()
-                                        .map(|(idx, (_, entity))| {
-                                            let dynamic_title =
-                                                entity.read(cx).title().map(|t| t.to_string());
-                                            TerminalTabInfo {
-                                                id: idx,
-                                                title: dynamic_title
-                                                    .filter(|t| !t.is_empty())
-                                                    .unwrap_or_else(|| {
-                                                        format!("Terminal {}", idx + 1)
-                                                    }),
-                                                script_id: None,
-                                            }
-                                        })
-                                        .collect::<Vec<_>>()
-                                })
-                                .unwrap_or_default(),
-                        );
-
-                        let active_idx = if let Some(active_id) = active_script_log_id.as_ref() {
-                            script_log_ids
-                                .iter()
-                                .position(|id| id == active_id)
-                                .unwrap_or(0)
-                        } else {
-                            script_log_ids.len()
-                                + active_term_state.map(|s| s.active_idx).unwrap_or(0)
-                        };
-
-                        let terminal_element = if let Some(active_id) = active_script_log_id.clone()
-                        {
-                            let script_state = scripts_project_id_for_tabs
-                                .as_ref()
-                                .and_then(|pid| self.project_scripts_by_project.get(pid));
-                            let label = script_label_by_id
-                                .get(&active_id)
-                                .cloned()
-                                .unwrap_or_else(|| active_id.clone());
-                            let command = script_state
-                                .and_then(|state| state.scripts.iter().find(|s| s.id == active_id))
-                                .map(|s| s.command.clone())
-                                .unwrap_or_default();
-                            let run_view =
-                                script_state.and_then(|state| state.runs.get(&active_id));
-                            let status =
-                                run_view.and_then(|v| v.run.as_ref().map(|r| r.status.clone()));
-                            let exit_code =
-                                run_view.and_then(|v| v.run.as_ref().and_then(|r| r.exit_code));
-                            let starting = run_view.is_some_and(|v| v.starting);
-                            let output = run_view.map(|v| v.output.clone()).unwrap_or_default();
-
-                            let view = if !output.is_empty() {
-                                let lines: Rc<Vec<String>> =
-                                    Rc::new(output.lines().map(|line| line.to_string()).collect());
-                                let count = lines.len().max(1);
-                                let key = format!("log:{}", active_id);
-                                let prev_count = self
-                                    .viewer_list_states
-                                    .get(&key)
-                                    .map(|state| state.item_count());
-                                let list_state = self
-                                    .viewer_list_states
-                                    .entry(key.clone())
-                                    .or_insert_with(|| {
-                                        gpui::ListState::new(
-                                            count,
-                                            gpui::ListAlignment::Top,
-                                            gpui::px(console_ui::ESTIMATED_LOG_ROW_HEIGHT),
-                                        )
-                                    });
-                                if list_state.item_count() != count {
-                                    list_state.reset(count);
-                                }
-                                let list_state = list_state.clone();
-                                let selection = self
-                                    .viewer_markdown_selections
-                                    .entry(key.clone())
-                                    .or_default()
-                                    .clone();
-                                let scrollbar_state = self.viewer_scrollbar_state(&key);
-                                if prev_count != Some(count) {
-                                    let selecting = !selection.selection.borrow().is_empty();
-                                    if !selecting {
-                                        list_state.scroll_to_end();
-                                    }
-                                }
-                                Some(console_ui::RunOutputView {
-                                    lines,
-                                    list_state,
-                                    selection,
-                                    scrollbar_state,
-                                })
-                            } else {
-                                None
-                            };
-
-                            Some(
-                                console_ui::ScriptLogTab {
-                                    label,
-                                    command,
-                                    status,
-                                    exit_code,
-                                    starting,
-                                    output,
-                                    view,
-                                }
-                                .into_any_element(),
-                            )
-                        } else {
-                            active_term_state
-                                .and_then(|state| state.terminals.get(state.active_idx))
-                                .map(|(_, term)| term.clone().into_any_element())
-                        };
-
-                        let run_panel_element = {
-                            let scripts_project_id = self.active_scripts_project_id();
-                            let (has_project, loading, error, source_missing, rows) =
-                                match scripts_project_id.as_ref().and_then(|pid| {
-                                    self.project_scripts_by_project
-                                        .get(pid)
-                                        .map(|state| (pid, state))
-                                }) {
-                                    None => (
-                                        scripts_project_id.is_some(),
-                                        scripts_project_id.is_some(),
-                                        None,
-                                        false,
-                                        Vec::new(),
-                                    ),
-                                    Some((_pid, state)) => (
-                                        true,
-                                        state.loading,
-                                        state.error.clone(),
-                                        state.source == "missing",
-                                        state
-                                            .scripts
-                                            .iter()
-                                            .map(|script| {
-                                                let view = state.runs.get(&script.id);
-                                                // Badges come from the stored
-                                                // conflict set so never-run
-                                                // scripts warn too.
-                                                let conflict = script
-                                                    .shortcut
-                                                    .as_deref()
-                                                    .and_then(console_core::canonicalize_shortcut)
-                                                    .filter(|canonical| {
-                                                        state.shortcut_conflicts.contains(canonical)
-                                                    })
-                                                    .and_then(|_| script.shortcut.clone());
-                                                RunScriptRow {
-                                                    script_id: script.id.clone(),
-                                                    label: script.label.clone(),
-                                                    command: script.command.clone(),
-                                                    shortcut: script.shortcut.clone(),
-                                                    status: view.and_then(|view| {
-                                                        view.run
-                                                            .as_ref()
-                                                            .map(|run| run.status.clone())
-                                                    }),
-                                                    exit_code: view.and_then(|view| {
-                                                        view.run
-                                                            .as_ref()
-                                                            .and_then(|run| run.exit_code)
-                                                    }),
-                                                    starting: view
-                                                        .is_some_and(|view| view.starting),
-                                                    output: view
-                                                        .map(|view| view.output.clone())
-                                                        .unwrap_or_default(),
-                                                    expanded: state.expanded.contains(&script.id),
-                                                    output_view: None,
-                                                    shortcut_conflict: conflict,
-                                                }
-                                            })
-                                            .collect(),
-                                    ),
-                                };
-                            // Attach selectable output views to expanded rows
-                            // with output. State is app-owned so selection and
-                            // scroll survive re-renders and live appends.
-                            let rows = rows
-                                .into_iter()
-                                .map(|row| {
-                                    if !row.expanded || row.output.is_empty() {
-                                        return row;
-                                    }
-                                    let lines: Rc<Vec<String>> = Rc::new(
-                                        row.output.lines().map(|line| line.to_string()).collect(),
-                                    );
-                                    let count = lines.len().max(1);
-                                    let key = format!("run:{}", row.script_id);
-                                    let prev_count = self
-                                        .viewer_list_states
-                                        .get(&key)
-                                        .map(|state| state.item_count());
-                                    // Measured (non-uniform) list: rows wrap,
-                                    // so heights vary. Reset only on count
-                                    // change, mirroring the transcript list.
-                                    let list_state = self
-                                        .viewer_list_states
-                                        .entry(key.clone())
-                                        .or_insert_with(|| {
-                                            gpui::ListState::new(
-                                                count,
-                                                gpui::ListAlignment::Top,
-                                                gpui::px(console_ui::ESTIMATED_LOG_ROW_HEIGHT),
-                                            )
-                                        });
-                                    if list_state.item_count() != count {
-                                        list_state.reset(count);
-                                    }
-                                    let list_state = list_state.clone();
-                                    let selection = self
-                                        .viewer_markdown_selections
-                                        .entry(key.clone())
-                                        .or_default()
-                                        .clone();
-                                    let scrollbar_state = self.viewer_scrollbar_state(&key);
-                                    if prev_count != Some(count) {
-                                        // New or changed content: reveal the
-                                        // tail unless the user is mid-select,
-                                        // so live logs follow without yanking
-                                        // an active selection.
-                                        let selecting = !selection.selection.borrow().is_empty();
-                                        if !selecting {
-                                            list_state.scroll_to_end();
-                                        }
-                                    }
-                                    row.with_output_view(
-                                        lines,
-                                        list_state,
-                                        selection,
-                                        scrollbar_state,
-                                    )
-                                })
-                                .collect();
-                            RunPanel {
-                                has_project,
-                                loading,
-                                error,
-                                source_missing,
-                                rows,
-                                on_run: on_run_project_script.clone(),
-                                on_stop: on_stop_project_script.clone(),
-                                on_open_log: on_open_project_script_log,
-                            }
-                            .into_any_element()
-                        };
-
-                        let script_action = active_script_log_id.as_ref().map(|id| {
-                            let id = id.clone();
-                            let on_run = on_run_project_script.clone();
-                            let on_stop = on_stop_project_script.clone();
-                            let running = active_script_running;
-                            console_ui::ScriptTabAction {
-                                running,
-                                on_click: Rc::new(move |window, cx| {
-                                    if running {
-                                        (on_stop)(id.clone(), window, cx);
-                                    } else {
-                                        (on_run)(id.clone(), window, cx);
-                                    }
-                                }),
-                            }
-                        });
-
-                        let bottom_split = RightSidebarBottomSplit::new(
-                            self.right_sidebar_bottom_height,
-                            self.right_sidebar_bottom_collapsed,
-                            tabs,
-                            active_idx,
-                            terminal_element,
-                            on_select_right_sidebar_bottom_tab,
-                            on_begin_right_sidebar_bottom_resize,
-                        )
-                        .with_run_tab(self.right_sidebar_bottom_run_selected, run_panel_element)
-                        .with_refresh_run(on_refresh_project_scripts)
-                        .when_some(script_action, |el, action| el.with_script_action(action))
-                        .with_close_tab(on_close_right_sidebar_bottom_tab)
-                        .with_new_terminal(on_new_right_sidebar_terminal)
-                        .with_toggle_collapsed(on_toggle_right_sidebar_bottom_collapsed);
-
-                        let device_visible = self.right_sidebar_visible
-                            && self.inspector_active_tab
-                                == console_ui::InspectorTab::Auxiliary(
-                                    console_ui::AuxiliaryTab::Devices,
-                                );
-                        let device_element = if device_visible {
-                            let device = self.device_view_for_inspector(window, cx);
-                            let is_overlay_open = self.any_palette_open(cx);
-                            device.update(cx, |view, cx| {
-                                view.sync_native_state(true, is_overlay_open, cx);
-                            });
-                            Some(device.into_any_element())
-                        } else {
-                            if let Some(ref device) = self.device_view {
-                                device.update(cx, |view, cx| {
-                                    view.sync_native_state(false, false, cx);
+                    ),
+            )
+            // Palette overlays (each renders nothing while closed).
+            .child(gpui::deferred(self.command_palette.clone()))
+            .child(gpui::deferred(self.tab_palette.clone()))
+            .child(gpui::deferred(self.quick_open_palette.clone()))
+            .child(gpui::deferred(self.project_browse_palette.clone()))
+            .when_some(self.floating_composer_view(window, cx), |el, card| {
+                el.child(gpui::deferred(card))
+            })
+            .when_some(self.zoomed_image.clone(), |el, image| {
+                el.child(gpui::deferred(ImageViewerModal::new(
+                    image,
+                    "Image preview",
+                    {
+                        let entity = entity.clone();
+                        move |_w, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.zoomed_image = None;
+                                    cx.notify();
                                 });
                             }
-                            None
-                        };
-
-                        el.child(
-                            RightSidebar::new(
-                                self.right_sidebar_width,
-                                self.inspector_active_tab,
-                                self.inspector_search_query.clone(),
-                                self.inspector_tree.clone(),
-                                self.inspector_working_changes.clone(),
-                                self.inspector_session_changes.clone(),
-                                self.inspector_changes_scope,
-                                self.inspector_changes_scope_menu.clone(),
-                                (*self.inspector_expanded_folders).clone(),
-                                self.inspector_selected_path.clone(),
-                                self.inspector_open_auxiliary_tabs.clone(),
-                                self.inspector_add_tab_menu.clone(),
-                                on_select_inspector_tab,
-                                on_open_auxiliary_tab,
-                                on_close_auxiliary_tab,
-                                on_toggle_inspector_folder,
-                                on_select_inspector_file,
-                                on_select_changes_scope,
-                                on_view_all_changes,
-                                on_refresh_inspector,
-                                on_begin_right_sidebar_resize,
-                            )
-                            .with_git_badges(self.inspector_git_badges.clone())
-                            .with_bottom_split(Some(bottom_split))
-                            .with_device_view(device_element),
-                        )
-                    }),
-            )
-            .when_some(self.zoomed_image.clone(), |el, image| {
-                el.child(ImageViewerModal::new(image, "Image preview", {
-                    let entity = entity.clone();
-                    move |_w, cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.zoomed_image = None;
-                                cx.notify();
-                            });
                         }
-                    }
-                }))
+                    },
+                )))
             })
-            // Palette overlays (each renders nothing while closed).
-            .child(self.command_palette.clone())
-            .child(self.tab_palette.clone())
-            .child(self.quick_open_palette.clone())
-            .child(self.project_browse_palette.clone())
-            .when_some(self.floating_composer_view(window, cx), |el, card| {
-                el.child(card)
-            })
-            .child(self.global_search_panel.clone())
+            .child(gpui::deferred(self.global_search_panel.clone()))
             // Boxed so both render paths share a single return type — the
             // first-run setup branch above returns an AnyElement.
             .into_any_element()

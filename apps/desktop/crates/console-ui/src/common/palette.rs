@@ -1,31 +1,92 @@
-//! Central command palette modal, built on `gpui_component::command`.
+//! Central command palette modal.
 //!
-//! [`CommandPaletteModal`] is the shared, app-agnostic shell: it owns the
-//! `CommandState` entity, renders the dimmed modal overlay with the search
-//! field and item list, and exposes the small API every palette surface needs
-//! — show/hide, replace the item list, and react to query changes. Feature
+//! [`CommandPaletteModal`] is the shared, app-agnostic shell: a dimmed overlay
+//! with one card — a search field, optional section tabs and a scrolling list
+//! of rows — drawn from the same pieces as the context menu so it matches the
+//! rest of the app. It exposes the small API every palette surface needs:
+//! show/hide, replace the entry list, and react to query changes. Feature
 //! surfaces (the ⌘K command palette, ⌘P quick file open, ⌘O project browser)
 //! are thin wrappers in this crate that feed it [`PaletteEntry`]s and handle
 //! confirmation.
 //!
 //! [`PaletteEntry`] is a plain row: a stable id, a display label, an optional
-//! leading icon (built as a custom row so file-type icons work), and the
-//! action to run on Enter. `keep_open` marks entries that navigate (e.g.
-//! drilling into a folder) instead of dismissing the palette.
+//! leading icon, and the action to run on Enter. `keep_open` marks entries
+//! that navigate (e.g. drilling into a folder) instead of dismissing the
+//! palette.
 
 use std::rc::Rc;
-
 use std::sync::Arc;
 
 use gpui::{
-    AnyElement, App, Context, Entity, Focusable, Image, IntoElement, ParentElement, Render,
-    SharedString, Styled, Window, div, prelude::*, px,
+    AnyElement, App, Context, ElementId, Entity, FocusHandle, Focusable, FontWeight, Image,
+    InteractiveElement, IntoElement, KeyBinding, ParentElement, Render, ScrollHandle, SharedString,
+    StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
-use gpui_component::command::{Command, CommandItem, CommandState};
 
 use crate::IconName;
 use crate::Theme;
-use crate::primitives::{app_icon, file_type_icon, provider_app_icon, provider_color};
+use crate::input::{ComposerEvent, ComposerInput};
+use crate::primitives::{
+    app_icon, file_type_icon, provider_app_icon, provider_color, provider_color_icon,
+};
+
+const CONTEXT: &str = "ConsolePalette";
+const FIELD_CONTEXT: &str = "ConsolePalette > ComposerInput";
+
+gpui::actions!(
+    console_palette,
+    [
+        PaletteNext,
+        PalettePrev,
+        PaletteConfirm,
+        PaletteCancel,
+        PaletteNextTab,
+        PalettePrevTab,
+        PaletteSelectAction,
+        PaletteNavBack
+    ]
+);
+
+/// Bind the palette's keys inside its search field. Called once at startup,
+/// after the composer bindings, so these win inside the palette.
+pub fn init_palette_keybindings(cx: &mut App) {
+    let context = Some(FIELD_CONTEXT);
+    cx.bind_keys([
+        KeyBinding::new("down", PaletteNext, context),
+        KeyBinding::new("up", PalettePrev, context),
+        KeyBinding::new("ctrl-n", PaletteNext, context),
+        KeyBinding::new("ctrl-p", PalettePrev, context),
+        KeyBinding::new("enter", PaletteConfirm, context),
+        KeyBinding::new("cmd-enter", PaletteSelectAction, context),
+        KeyBinding::new("escape", PaletteCancel, context),
+        KeyBinding::new("tab", PaletteNextTab, context),
+        KeyBinding::new("shift-tab", PalettePrevTab, context),
+        KeyBinding::new("alt-left", PaletteNavBack, context),
+    ]);
+}
+
+/// An interactive breadcrumb pill displayed above the search input or results.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PaletteBreadcrumb {
+    pub label: SharedString,
+    pub path: Option<String>,
+    pub icon: Option<IconName>,
+}
+
+impl PaletteBreadcrumb {
+    pub fn new(label: impl Into<SharedString>, path: Option<String>) -> Self {
+        Self {
+            label: label.into(),
+            path,
+            icon: None,
+        }
+    }
+
+    pub fn icon(mut self, icon: IconName) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+}
 
 /// How a palette row draws its leading icon.
 #[derive(Clone)]
@@ -54,6 +115,17 @@ pub struct PaletteEntry {
     /// into that path (via the browse callback) without confirming the row —
     /// so Enter can mean "use this folder" while the chevron means "open it".
     pub drill_path: Option<SharedString>,
+    /// Heading the row is listed under. Rows sharing a heading are grouped;
+    /// rows without one stay ungrouped at the top.
+    pub section: Option<SharedString>,
+    /// Muted text on the row's right edge, such as a last-modified time.
+    pub detail: Option<SharedString>,
+    /// Keyboard shortcut shown on the row's right edge.
+    pub shortcut: Option<SharedString>,
+    /// Muted text right after the label, such as a file's directory.
+    pub subtitle: Option<SharedString>,
+    /// Hidden search keywords matched against the query but never painted in the UI.
+    pub keywords: Vec<String>,
     #[allow(clippy::type_complexity)]
     pub handler: Rc<dyn Fn(&mut Window, &mut App)>,
 }
@@ -70,8 +142,47 @@ impl PaletteEntry {
             icon: None,
             keep_open: false,
             drill_path: None,
+            section: None,
+            detail: None,
+            shortcut: None,
+            subtitle: None,
+            keywords: Vec::new(),
             handler: Rc::new(handler),
         }
+    }
+
+    /// List the row under a section heading.
+    pub fn section(mut self, section: impl Into<SharedString>) -> Self {
+        self.section = Some(section.into());
+        self
+    }
+
+    /// Muted text right after the label.
+    pub fn subtitle(mut self, subtitle: impl Into<SharedString>) -> Self {
+        self.subtitle = Some(subtitle.into());
+        self
+    }
+
+    /// Add hidden keywords matched during search but never displayed.
+    pub fn keywords<I, S>(mut self, keywords: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.keywords.extend(keywords.into_iter().map(Into::into));
+        self
+    }
+
+    /// Keyboard shortcut for the row's action.
+    pub fn shortcut(mut self, shortcut: impl Into<SharedString>) -> Self {
+        self.shortcut = Some(shortcut.into());
+        self
+    }
+
+    /// Muted text on the row's right edge.
+    pub fn detail(mut self, detail: impl Into<SharedString>) -> Self {
+        self.detail = Some(detail.into());
+        self
     }
 
     /// Leading monochrome app icon (Folder, commands, …).
@@ -115,73 +226,251 @@ impl PaletteEntry {
     }
 }
 
-/// Build the full row content (icon + label [+ optional drill chevron]).
-///
-/// gpui-component's `CommandItem::child()` *replaces* the default icon+label
-/// row, so callers must render both. Using `.icon()` alone only accepts the
-/// library's monochrome `Icon` type — file-type SVGs need this path.
-fn render_entry_row(
-    entry: &PaletteEntry,
-    palette: gpui::WeakEntity<CommandPaletteModal>,
-    cx: &App,
-) -> AnyElement {
-    let theme = Theme::current(cx);
-    let icon_el = match &entry.icon {
-        Some(PaletteIcon::App(name)) => {
-            app_icon(*name, 15.0, theme.text_secondary).into_any_element()
-        }
-        Some(PaletteIcon::FileType(path)) => file_type_icon(path.as_ref(), 15.0).into_any_element(),
-        Some(PaletteIcon::Image(image)) => gpui::img(image.clone())
-            .h(px(15.0))
-            .w(px(15.0))
-            .into_any_element(),
-        Some(PaletteIcon::Provider(provider)) => provider_app_icon(
-            provider.as_ref(),
-            15.0,
-            provider_color(&theme, provider.as_ref()),
-        )
-        .into_any_element(),
-        None => div().size(px(15.0)).into_any_element(),
-    };
+/// One flattened list row: a section heading or an entry.
+enum Row {
+    Heading(SharedString),
+    Item { entry: usize, visible: usize },
+}
 
+/// What the list shows for the current query and tab.
+struct Layout {
+    rows: Vec<Row>,
+    /// Entry indexes in display order — what the selection moves through.
+    visible: Vec<usize>,
+    /// Row index of each visible entry, for scrolling it into view.
+    row_of_visible: Vec<usize>,
+    /// Section names, in order of first appearance.
+    sections: Vec<SharedString>,
+}
+
+/// Rank `text` against a lowercase query: prefix, then substring, then
+/// in-order letters. `None` means no match.
+fn match_rank(text: &str, query: &str) -> Option<u32> {
+    let text = text.to_lowercase();
+    if text.starts_with(query) {
+        return Some(0);
+    }
+    if let Some(pos) = text.find(query) {
+        return Some(1 + pos as u32);
+    }
+    let mut letters = text.chars();
+    if query.chars().all(|q| letters.any(|c| c == q)) {
+        return Some(10_000);
+    }
+    None
+}
+
+fn compute_layout(
+    entries: &[PaletteEntry],
+    query: &str,
+    filterable: bool,
+    tab: Option<&SharedString>,
+) -> Layout {
+    let mut sections: Vec<SharedString> = Vec::new();
+    for entry in entries {
+        if let Some(section) = &entry.section
+            && !sections.contains(section)
+        {
+            sections.push(section.clone());
+        }
+    }
+
+    let query = query.trim().to_lowercase();
+    let filtering = filterable && !query.is_empty();
+    let mut candidates: Vec<(usize, u32)> = Vec::new();
+    for (ix, entry) in entries.iter().enumerate() {
+        if tab.is_some_and(|tab| entry.section.as_ref() != Some(tab)) {
+            continue;
+        }
+        let rank = if filtering {
+            match match_rank(&entry.label, &query)
+                .or_else(|| {
+                    entry
+                        .subtitle
+                        .as_ref()
+                        .and_then(|subtitle| match_rank(subtitle, &query))
+                        .map(|rank| rank + 20_000)
+                })
+                .or_else(|| {
+                    entry
+                        .keywords
+                        .iter()
+                        .filter_map(|kw| match_rank(kw, &query))
+                        .min()
+                        .map(|rank| rank + 40_000)
+                }) {
+                Some(rank) => rank,
+                None => continue,
+            }
+        } else {
+            0
+        };
+        candidates.push((ix, rank));
+    }
+    if filtering {
+        candidates.sort_by_key(|&(_, rank)| rank);
+    }
+
+    let mut layout = Layout {
+        rows: Vec::new(),
+        visible: Vec::new(),
+        row_of_visible: Vec::new(),
+        sections: Vec::new(),
+    };
+    let push_item = |layout: &mut Layout, entry: usize| {
+        let visible = layout.visible.len();
+        layout.row_of_visible.push(layout.rows.len());
+        layout.visible.push(entry);
+        layout.rows.push(Row::Item { entry, visible });
+    };
+    for &(ix, _) in candidates
+        .iter()
+        .filter(|&&(ix, _)| entries[ix].section.is_none())
+    {
+        push_item(&mut layout, ix);
+    }
+    for section in &sections {
+        let mut heading_pending = true;
+        for &(ix, _) in candidates
+            .iter()
+            .filter(|&&(ix, _)| entries[ix].section.as_ref() == Some(section))
+        {
+            if heading_pending {
+                layout.rows.push(Row::Heading(section.clone()));
+                heading_pending = false;
+            }
+            push_item(&mut layout, ix);
+        }
+    }
+    layout.sections = sections;
+    layout
+}
+
+fn leading_icon(entry: &PaletteEntry, theme: &Theme) -> AnyElement {
+    match &entry.icon {
+        Some(PaletteIcon::App(name)) => {
+            app_icon(*name, 16.0, theme.text_secondary).into_any_element()
+        }
+        Some(PaletteIcon::FileType(path)) => file_type_icon(path.as_ref(), 16.0).into_any_element(),
+        Some(PaletteIcon::Image(image)) => gpui::img(image.clone())
+            .h(px(16.0))
+            .w(px(16.0))
+            .into_any_element(),
+        Some(PaletteIcon::Provider(provider)) => {
+            match provider_color_icon(provider.as_ref(), 16.0) {
+                Some(logo) => logo.into_any_element(),
+                None => provider_app_icon(
+                    provider.as_ref(),
+                    16.0,
+                    match provider.as_ref() {
+                        "claude" | "anthropic" | "deepseek" => {
+                            provider_color(theme, provider.as_ref())
+                        }
+                        _ => theme.text_secondary,
+                    },
+                )
+                .into_any_element(),
+            }
+        }
+        None => div().size(px(16.0)).into_any_element(),
+    }
+}
+
+/// One entry row: icon, label, optional subtitle, then the trailing detail,
+/// shortcut, drill chevron and — on the selected row — the Enter hint.
+fn entry_row(
+    entry: &PaletteEntry,
+    ix: usize,
+    selected: bool,
+    theme: &Theme,
+    palette: gpui::WeakEntity<CommandPaletteModal>,
+) -> AnyElement {
+    let has_subtitle = entry.subtitle.is_some();
     let mut row = div()
+        .id(("palette-row", ix))
+        .w_full()
+        .flex_none()
+        .h(px(32.0))
+        .px(px(10.0))
+        .rounded(px(7.0))
         .flex()
-        .flex_1()
         .items_center()
-        .gap(px(8.0))
-        .min_w(px(0.0))
+        .gap(px(10.0))
+        .cursor_pointer()
+        .when(selected, |row| row.bg(theme.overlay_strong))
+        .on_mouse_move({
+            let palette = palette.clone();
+            move |_, _, cx| {
+                if let Some(palette) = palette.upgrade() {
+                    palette.update(cx, |palette, cx| {
+                        if palette.selected != ix {
+                            palette.selected = ix;
+                            cx.notify();
+                        }
+                    });
+                }
+            }
+        })
         .child(
             div()
                 .flex_none()
+                .size(px(18.0))
                 .flex()
                 .items_center()
                 .justify_center()
-                .size(px(16.0))
-                .child(icon_el),
+                .child(leading_icon(entry, theme)),
         )
         .child(
             div()
-                .flex_1()
-                .min_w(px(0.0))
+                .min_w_0()
                 .truncate()
                 .text_size(px(13.0))
                 .text_color(theme.text)
+                .when(!has_subtitle, |label| label.flex_1())
+                .when(has_subtitle, |label| label.flex_none().max_w(px(280.0)))
                 .child(entry.label.clone()),
-        );
+        )
+        .when_some(entry.subtitle.clone(), |row, subtitle| {
+            row.child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_ghost)
+                    .child(subtitle),
+            )
+        })
+        .when_some(entry.detail.clone(), |row, detail| {
+            row.child(
+                div()
+                    .flex_none()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_ghost)
+                    .child(detail),
+            )
+        })
+        .when_some(entry.shortcut.clone(), |row, shortcut| {
+            row.child(
+                div()
+                    .flex_none()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_ghost)
+                    .child(shortcut),
+            )
+        });
 
     if let Some(drill_path) = entry.drill_path.clone() {
-        let path_for_click = drill_path.clone();
         row = row.child(
             div()
-                .id(format!("palette-drill-{}", drill_path.as_ref()))
+                .id(("palette-drill", ix))
                 .flex_none()
+                .size(px(24.0))
                 .flex()
                 .items_center()
                 .justify_center()
-                .size(px(24.0))
                 .rounded(px(6.0))
-                .cursor_pointer()
-                .hover(|s| s.bg(theme.raised))
+                .hover(|chevron| chevron.bg(theme.raised))
                 .on_mouse_down(gpui::MouseButton::Left, {
                     let palette = palette.clone();
                     move |_, window, cx| {
@@ -190,7 +479,7 @@ fn render_entry_row(
                         if let Some(palette) = palette.upgrade() {
                             let callback = palette.read(cx).browse_callback.clone();
                             if let Some(callback) = callback {
-                                callback(path_for_click.as_ref(), window, cx);
+                                callback(drill_path.as_ref(), window, cx);
                             }
                         }
                     }
@@ -198,8 +487,23 @@ fn render_entry_row(
                 .child(app_icon(IconName::ChevronRight, 14.0, theme.text_tertiary)),
         );
     }
+    if selected {
+        row = row.child(div().flex_none().child(app_icon(
+            IconName::Return,
+            14.0,
+            theme.text_tertiary,
+        )));
+    }
 
-    row.into_any_element()
+    let entry = entry.clone();
+    row.on_click(move |_, window, cx| {
+        if let Some(palette) = palette.upgrade() {
+            palette.update(cx, |palette, cx| {
+                palette.confirm_entry(entry.clone(), window, cx)
+            });
+        }
+    })
+    .into_any_element()
 }
 
 /// The shared command palette modal shell.
@@ -209,58 +513,225 @@ fn render_entry_row(
 /// search-driven modes, a query handler via [`Self::set_query_handler`] that
 /// runs with the trimmed query whenever it changes.
 pub struct CommandPaletteModal {
-    state: Entity<CommandState>,
-    entries: Rc<Vec<PaletteEntry>>,
+    input: Entity<ComposerInput>,
+    entries: Rc<[PaletteEntry]>,
     open: bool,
-    placeholder: SharedString,
     /// Whether the query locally filters the item list. Set to `false` when an
     /// external source already answers the query (e.g. server-side file search).
     filterable: bool,
+    /// Index into the visible entries.
+    selected: usize,
+    /// The section tab in front; `None` is "All".
+    tab: Option<SharedString>,
+    /// Whether the section tab bar shows when there are two or more sections.
+    show_tabs: bool,
+    /// Placeholder when no tab-specific one applies.
+    placeholder: SharedString,
+    /// Placeholder per section, shown while that section's tab is in front.
+    section_placeholders: Vec<(SharedString, SharedString)>,
+    scroll: ScrollHandle,
     /// Async search hook: called with the current query whenever it changes.
     query_handler: Option<Rc<dyn Fn(&str, &mut Window, &mut App)>>,
     /// Navigation hook for `keep_open` rows (e.g. drilling into a folder):
     /// called with the entry's id instead of dismissing the palette.
     browse_callback: Option<Rc<dyn Fn(&str, &mut Window, &mut App)>>,
+    /// Action hook for ⌘Enter (e.g. Add project for the currently selected or browsed folder).
+    select_action_callback: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
+    /// Optional breadcrumbs for folder hierarchy navigation.
+    breadcrumbs: Vec<PaletteBreadcrumb>,
+    /// Optional parent path for the header back button.
+    back_path: Option<String>,
     /// Monotonic token for debounced async searches: a result is applied only
     /// while its generation is still the latest (see [`Self::set_entries`]).
     search_generation: u64,
+    _subscription: gpui::Subscription,
 }
 
 impl CommandPaletteModal {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let state = cx.new(|cx| CommandState::new(window, cx));
+        let input = cx.new(|cx| {
+            ComposerInput::new(window, cx)
+                .search_field()
+                .placeholder("Type a command or search…")
+        });
+        let subscription = cx.subscribe_in(
+            &input,
+            window,
+            |this, input, event: &ComposerEvent, window, cx| match event {
+                ComposerEvent::Edited => {
+                    this.selected = 0;
+                    this.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+                    let query = input.read(cx).content().trim().to_string();
+                    if let Some(handler) = this.query_handler.clone() {
+                        handler(&query, window, cx);
+                    }
+                    cx.notify();
+                }
+                ComposerEvent::BackspaceOnEmpty => {
+                    if let Some(parent) = this.back_path.clone()
+                        && let Some(callback) = this.browse_callback.clone()
+                    {
+                        window.defer(cx, move |window, cx| callback(&parent, window, cx));
+                    }
+                }
+                _ => {}
+            },
+        );
         Self {
-            state,
-            entries: Rc::new(Vec::new()),
+            input,
+            entries: Rc::from([]),
             open: false,
-            placeholder: "Type a command or search…".into(),
             filterable: true,
+            selected: 0,
+            tab: None,
+            show_tabs: true,
+            placeholder: "Type a command or search…".into(),
+            section_placeholders: Vec::new(),
+            scroll: ScrollHandle::new(),
             query_handler: None,
             browse_callback: None,
+            select_action_callback: None,
+            breadcrumbs: Vec::new(),
+            back_path: None,
             search_generation: 0,
+            _subscription: subscription,
         }
     }
 
-    /// Reset query and command state to a fresh empty input.
-    pub fn reset_state(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.state = cx.new(|cx| CommandState::new(window, cx));
+    fn query(&self, cx: &App) -> String {
+        self.input.read(cx).content().to_string()
+    }
+
+    fn layout(&self, cx: &App) -> Layout {
+        compute_layout(
+            &self.entries,
+            &self.query(cx),
+            self.filterable,
+            self.tab.as_ref(),
+        )
+    }
+
+    /// Reset query, tab and selection to a fresh empty palette.
+    pub fn reset_state(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.input.update(cx, |input, cx| input.clear(cx));
+        self.selected = 0;
+        self.tab = None;
+        self.select_action_callback = None;
+        self.breadcrumbs.clear();
+        self.back_path = None;
         self.search_generation = 0;
+        self.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+        self.apply_tab_placeholder(cx);
         cx.notify();
     }
 
-    /// Clear the search query without recreating state, so navigation keeps
-    /// focus. Re-filters and resets selection via `CommandState::set_query`.
-    pub fn clear_query(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.state.update(cx, |state, cx| {
-            state.set_query("", window, cx);
-        });
+    /// Set breadcrumb trail and back-path for folder navigation palettes.
+    pub fn set_navigation_crumbs(
+        &mut self,
+        crumbs: Vec<PaletteBreadcrumb>,
+        back_path: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.breadcrumbs = crumbs;
+        self.back_path = back_path;
+        cx.notify();
+    }
+
+    /// Set callback for ⌘Enter (e.g. "Add project" on current folder).
+    pub fn set_select_action_callback(
+        &mut self,
+        callback: impl Fn(&mut Window, &mut App) + 'static,
+        _cx: &mut Context<Self>,
+    ) {
+        self.select_action_callback = Some(Rc::new(callback));
+    }
+
+    fn on_select_action(
+        &mut self,
+        _: &PaletteSelectAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(cb) = self.select_action_callback.clone() {
+            cb(window, cx);
+        } else {
+            // Fallback: if there is an action entry (like "Use this folder"), trigger it
+            if let Some(entry) = self.entries.iter().find(|e| !e.keep_open).cloned() {
+                self.confirm_entry(entry, window, cx);
+            }
+        }
+    }
+
+    fn on_nav_back(&mut self, _: &PaletteNavBack, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(parent) = self.back_path.clone()
+            && let Some(callback) = self.browse_callback.clone()
+        {
+            window.defer(cx, move |window, cx| callback(&parent, window, cx));
+        }
+    }
+
+    /// Show the placeholder for the tab in front, or the default one.
+    fn apply_tab_placeholder(&self, cx: &mut Context<Self>) {
+        let text = self
+            .tab
+            .as_ref()
+            .and_then(|tab| {
+                self.section_placeholders
+                    .iter()
+                    .find(|(section, _)| section == tab)
+            })
+            .map(|(_, placeholder)| placeholder.clone())
+            .unwrap_or_else(|| self.placeholder.clone());
+        self.input
+            .update(cx, |input, cx| input.set_placeholder(text, cx));
+    }
+
+    /// Bring a section tab (or "All" for `None`) to the front.
+    fn select_tab(&mut self, tab: Option<SharedString>, cx: &mut Context<Self>) {
+        self.tab = tab;
+        self.selected = 0;
+        self.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+        self.apply_tab_placeholder(cx);
+        cx.notify();
+    }
+
+    /// Show or hide the section tab bar. On by default.
+    pub fn set_show_tabs(&mut self, show_tabs: bool, cx: &mut Context<Self>) {
+        self.show_tabs = show_tabs;
+        cx.notify();
+    }
+
+    /// Placeholder text per section, shown while that section's tab is in
+    /// front. Sections without one use the default placeholder.
+    pub fn set_section_placeholders(
+        &mut self,
+        placeholders: Vec<(SharedString, SharedString)>,
+        cx: &mut Context<Self>,
+    ) {
+        self.section_placeholders = placeholders;
+        self.apply_tab_placeholder(cx);
+    }
+
+    /// Clear the search query so navigation keeps focus.
+    pub fn clear_query(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.input.update(cx, |input, cx| input.clear(cx));
+        self.selected = 0;
         cx.notify();
     }
 
     /// Replace the entry list. Safe to call from async contexts — notifies so
     /// the modal re-renders with the fresh rows.
     pub fn set_entries(&mut self, entries: Vec<PaletteEntry>, cx: &mut Context<Self>) {
-        self.entries = Rc::new(entries);
+        self.entries = Rc::from(entries);
+        if let Some(tab) = &self.tab
+            && !self
+                .entries
+                .iter()
+                .any(|entry| entry.section.as_ref() == Some(tab))
+        {
+            self.tab = None;
+            self.apply_tab_placeholder(cx);
+        }
         cx.notify();
     }
 
@@ -290,7 +761,7 @@ impl CommandPaletteModal {
         cx: &mut Context<Self>,
     ) {
         self.placeholder = placeholder.into();
-        cx.notify();
+        self.apply_tab_placeholder(cx);
     }
 
     /// Turn local query filtering on or off. Defaults to `true`; turn it off
@@ -323,7 +794,8 @@ impl CommandPaletteModal {
 
     pub fn show(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.open = true;
-        self.state.update(cx, |state, cx| state.focus(window, cx));
+        let focus = self.input.read(cx).focus();
+        window.focus(&focus, cx);
         cx.notify();
     }
 
@@ -343,11 +815,83 @@ impl CommandPaletteModal {
     pub fn is_open(&self) -> bool {
         self.open
     }
+
+    /// Run an entry. Its action runs after the current update finishes: the
+    /// action may open or toggle palettes, including this one.
+    fn confirm_entry(&mut self, entry: PaletteEntry, window: &mut Window, cx: &mut Context<Self>) {
+        if entry.keep_open {
+            // Navigation row: hand the id to the browse hook and keep the
+            // palette up.
+            if let Some(callback) = self.browse_callback.clone() {
+                let id = entry.id;
+                window.defer(cx, move |window, cx| callback(id.as_ref(), window, cx));
+            }
+        } else {
+            self.hide(cx);
+            let handler = entry.handler.clone();
+            window.defer(cx, move |window, cx| handler(window, cx));
+        }
+    }
+
+    fn move_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let layout = self.layout(cx);
+        let len = layout.visible.len() as isize;
+        if len == 0 {
+            return;
+        }
+        let current = self.selected.min(layout.visible.len() - 1) as isize;
+        self.selected = (current + delta).rem_euclid(len) as usize;
+        if let Some(&row) = layout.row_of_visible.get(self.selected) {
+            self.scroll.scroll_to_item(row);
+        }
+        cx.notify();
+    }
+
+    fn step_tab(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let layout = self.layout(cx);
+        if !self.show_tabs || layout.sections.len() < 2 {
+            return;
+        }
+        // Position 0 is "All"; sections follow.
+        let current = self
+            .tab
+            .as_ref()
+            .and_then(|tab| layout.sections.iter().position(|section| section == tab))
+            .map_or(0, |ix| ix + 1) as isize;
+        let next = (current + delta).rem_euclid(layout.sections.len() as isize + 1) as usize;
+        self.select_tab(
+            next.checked_sub(1).map(|ix| layout.sections[ix].clone()),
+            cx,
+        );
+    }
+
+    fn on_confirm(&mut self, _: &PaletteConfirm, window: &mut Window, cx: &mut Context<Self>) {
+        let layout = self.layout(cx);
+        let Some(&entry_ix) = layout
+            .visible
+            .get(self.selected.min(layout.visible.len().saturating_sub(1)))
+        else {
+            return;
+        };
+        if let Some(entry) = self.entries.get(entry_ix).cloned() {
+            self.confirm_entry(entry, window, cx);
+        }
+    }
+
+    /// Escape clears a non-empty query first; once it is empty the palette
+    /// closes.
+    fn on_cancel(&mut self, _: &PaletteCancel, window: &mut Window, cx: &mut Context<Self>) {
+        if self.query(cx).is_empty() {
+            self.hide(cx);
+        } else {
+            self.clear_query(window, cx);
+        }
+    }
 }
 
 impl Focusable for CommandPaletteModal {
-    fn focus_handle(&self, cx: &App) -> gpui::FocusHandle {
-        self.state.read(cx).focus_handle(cx)
+    fn focus_handle(&self, cx: &App) -> FocusHandle {
+        self.input.read(cx).focus()
     }
 }
 
@@ -357,68 +901,291 @@ impl Render for CommandPaletteModal {
             return div().into_any_element();
         }
 
-        let entries = self.entries.clone();
-        let palette_handle = cx.entity().downgrade();
-        let command = Command::new(&self.state)
-            .filterable(self.filterable)
-            .max_h(px(360.0))
-            .items(entries.iter().map(|entry| {
-                let entry = entry.clone();
-                let palette_handle = palette_handle.clone();
-                // Keep label for local filtering / accessibility, but draw the
-                // full icon+label row ourselves — `.child()` replaces default content.
-                CommandItem::new()
-                    .label(entry.label.clone())
-                    .child(move |_window, cx| render_entry_row(&entry, palette_handle.clone(), cx))
-            }))
-            .placeholder(self.placeholder.clone())
-            // Escape with a non-empty query clears it; once the query is
-            // empty gpui-component hands dismissal to us here.
-            .on_cancel({
-                let palette_handle = palette_handle.clone();
-                move |_, cx| {
-                    if let Some(palette) = palette_handle.upgrade() {
-                        palette.update(cx, |palette, cx| palette.hide(cx));
+        let theme = Theme::current(cx);
+        let layout = self.layout(cx);
+        let selected = self.selected.min(layout.visible.len().saturating_sub(1));
+        let palette = cx.entity().downgrade();
+        let has_query = !self.query(cx).trim().is_empty();
+
+        let mut list = div()
+            .id("palette-list")
+            .flex_1()
+            .min_h_0()
+            .max_h(px(380.0))
+            .overflow_y_scroll()
+            .track_scroll(&self.scroll)
+            .p(px(4.0))
+            .flex()
+            .flex_col();
+        for row in &layout.rows {
+            list = list.child(match row {
+                Row::Heading(label) => div()
+                    .flex_none()
+                    .px(px(10.0))
+                    .pt(px(10.0))
+                    .pb(px(3.0))
+                    .text_size(px(11.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text_tertiary)
+                    .child(label.clone())
+                    .into_any_element(),
+                Row::Item { entry, visible } => entry_row(
+                    &self.entries[*entry],
+                    *visible,
+                    *visible == selected,
+                    &theme,
+                    palette.clone(),
+                ),
+            });
+        }
+
+        let navigation_bar =
+            (!self.breadcrumbs.is_empty() || self.back_path.is_some()).then(|| {
+                let palette = palette.clone();
+                let back_path = self.back_path.clone();
+                let can_back = back_path.is_some();
+
+                let mut bar = div()
+                    .flex_none()
+                    .h(px(34.0))
+                    .px(px(12.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .border_b_1()
+                    .border_color(theme.border)
+                    .bg(theme.overlay.opacity(0.35))
+                    .text_size(px(12.0));
+
+                // Back button (←)
+                let back_palette = palette.clone();
+                bar = bar.child(
+                    div()
+                        .id("palette-nav-back")
+                        .size(px(22.0))
+                        .rounded(px(5.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .when(can_back, |btn| {
+                            btn.cursor_pointer()
+                                .text_color(theme.text_secondary)
+                                .hover(|btn| btn.bg(theme.overlay).text_color(theme.text))
+                                .on_click(move |_, window, cx| {
+                                    if let Some(path) = back_path.clone()
+                                        && let Some(palette) = back_palette.upgrade()
+                                    {
+                                        let callback = palette.read(cx).browse_callback.clone();
+                                        if let Some(callback) = callback {
+                                            let target_path = path;
+                                            window.defer(cx, move |window, cx| {
+                                                callback(&target_path, window, cx)
+                                            });
+                                        }
+                                    }
+                                })
+                        })
+                        .when(!can_back, |btn| {
+                            btn.text_color(theme.text_ghost.opacity(0.4))
+                        })
+                        .child(app_icon(
+                            IconName::ArrowLeft,
+                            13.0,
+                            if can_back {
+                                theme.text_secondary
+                            } else {
+                                theme.text_ghost.opacity(0.4)
+                            },
+                        )),
+                );
+
+                // Breadcrumb trail
+                let mut crumbs_container = div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap(px(4.0))
+                    .overflow_hidden();
+
+                let crumb_count = self.breadcrumbs.len();
+                for (i, crumb) in self.breadcrumbs.iter().enumerate() {
+                    let is_last = i + 1 == crumb_count;
+                    let crumb_path = crumb.path.clone();
+                    let crumb_palette = palette.clone();
+
+                    let crumb_el = div()
+                        .id(ElementId::from(("palette-crumb", i)))
+                        .flex_none()
+                        .max_w(px(140.0))
+                        .h(px(22.0))
+                        .px(px(5.0))
+                        .rounded(px(4.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(4.0))
+                        .text_size(px(11.5))
+                        .when(!is_last && crumb_path.is_some(), |el| {
+                            let path = crumb_path.clone().unwrap();
+                            let p = crumb_palette.clone();
+                            el.cursor_pointer()
+                                .text_color(theme.text_secondary)
+                                .hover(|el| el.bg(theme.overlay).text_color(theme.text))
+                                .on_click(move |_, window, cx| {
+                                    if let Some(palette) = p.upgrade() {
+                                        let callback = palette.read(cx).browse_callback.clone();
+                                        if let Some(callback) = callback {
+                                            let target_path = path.clone();
+                                            window.defer(cx, move |window, cx| {
+                                                callback(&target_path, window, cx)
+                                            });
+                                        }
+                                    }
+                                })
+                        })
+                        .when(is_last, |el| {
+                            el.font_weight(FontWeight::MEDIUM).text_color(theme.text)
+                        })
+                        .when_some(crumb.icon, |el, icon| {
+                            el.child(app_icon(
+                                icon,
+                                12.0,
+                                if is_last {
+                                    theme.text
+                                } else {
+                                    theme.text_secondary
+                                },
+                            ))
+                        })
+                        .child(div().truncate().child(crumb.label.clone()));
+
+                    crumbs_container = crumbs_container.child(crumb_el);
+
+                    if !is_last {
+                        crumbs_container = crumbs_container.child(
+                            div()
+                                .flex_none()
+                                .text_color(theme.text_ghost.opacity(0.6))
+                                .child(app_icon(
+                                    IconName::ChevronRight,
+                                    10.0,
+                                    theme.text_ghost.opacity(0.6),
+                                )),
+                        );
                     }
                 }
-            })
-            .on_query({
-                let palette_handle = palette_handle.clone();
-                move |query, window, cx| {
-                    if let Some(palette) = palette_handle.upgrade() {
-                        palette.update(cx, |palette, cx| {
-                            let handler = palette.query_handler.clone();
-                            if let Some(handler) = handler {
-                                handler(query, window, cx);
-                            }
-                        });
-                    }
-                }
-            })
-            .on_confirm(move |index, window, cx| {
-                let entry = entries.get(index.row).cloned();
-                if let Some(palette) = palette_handle.upgrade() {
-                    if let Some(entry) = entry {
-                        if entry.keep_open {
-                            // Navigation row: hand the id to the browse hook
-                            // and keep the palette up.
-                            if let Some(callback) = palette.read(cx).browse_callback.clone() {
-                                callback(entry.id.as_ref(), window, cx);
-                            }
-                        } else {
-                            palette.update(cx, |palette, cx| palette.hide(cx));
-                            (entry.handler)(window, cx);
-                        }
-                    }
-                }
+
+                bar.child(crumbs_container)
             });
 
-        // Modal overlay: dimmed backdrop, palette centered near the top like ⌘K menus.
+        let tabs = (self.show_tabs && layout.sections.len() >= 2).then(|| {
+            let mut bar = div()
+                .flex_none()
+                .px(px(8.0))
+                .pt(px(6.0))
+                .pb(px(2.0))
+                .flex()
+                .items_center()
+                .gap(px(2.0));
+            let labels: Vec<Option<SharedString>> = std::iter::once(None)
+                .chain(layout.sections.iter().cloned().map(Some))
+                .collect();
+            for (ix, label) in labels.into_iter().enumerate() {
+                let active = label == self.tab;
+                let text: SharedString = label.clone().unwrap_or_else(|| "All".into());
+                let palette = palette.clone();
+                bar = bar.child(
+                    div()
+                        .id(ElementId::from(("palette-tab", ix)))
+                        .h(px(24.0))
+                        .px(px(9.0))
+                        .rounded(px(6.0))
+                        .flex()
+                        .items_center()
+                        .text_size(px(12.0))
+                        .cursor_pointer()
+                        .when(active, |tab| {
+                            tab.bg(theme.overlay_strong).text_color(theme.text)
+                        })
+                        .when(!active, |tab| {
+                            tab.text_color(theme.text_tertiary)
+                                .hover(|tab| tab.bg(theme.overlay))
+                        })
+                        .on_click(move |_, _, cx| {
+                            if let Some(palette) = palette.upgrade() {
+                                palette.update(cx, |palette, cx| {
+                                    palette.select_tab(label.clone(), cx)
+                                });
+                            }
+                        })
+                        .child(text),
+                );
+            }
+            bar
+        });
+
+        let empty = layout.rows.is_empty() && has_query;
+        let card = div()
+            .occlude()
+            .key_context(CONTEXT)
+            .on_action(cx.listener(Self::on_confirm))
+            .on_action(cx.listener(Self::on_select_action))
+            .on_action(cx.listener(Self::on_nav_back))
+            .on_action(cx.listener(Self::on_cancel))
+            .on_action(cx.listener(|this, _: &PaletteNext, _, cx| this.move_selection(1, cx)))
+            .on_action(cx.listener(|this, _: &PalettePrev, _, cx| this.move_selection(-1, cx)))
+            .on_action(cx.listener(|this, _: &PaletteNextTab, _, cx| this.step_tab(1, cx)))
+            .on_action(cx.listener(|this, _: &PalettePrevTab, _, cx| this.step_tab(-1, cx)))
+            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .w(px(560.0))
+            .max_h(px(480.0))
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .rounded(px(10.0))
+            .border_1()
+            .border_color(theme.border_strong)
+            .bg(theme.menu)
+            .shadow_lg()
+            .child(
+                div()
+                    .flex_none()
+                    .h(px(40.0))
+                    .px(px(14.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .border_b_1()
+                    .border_color(theme.border)
+                    .text_size(px(14.0))
+                    .child(div().flex_none().child(app_icon(
+                        IconName::Search,
+                        15.0,
+                        theme.text_tertiary,
+                    )))
+                    .child(div().flex_1().min_w_0().child(self.input.clone())),
+            )
+            .children(navigation_bar)
+            .children(tabs)
+            .when(!layout.rows.is_empty(), |card| card.child(list))
+            .when(empty, |card| {
+                card.child(
+                    div()
+                        .py(px(28.0))
+                        .flex()
+                        .justify_center()
+                        .text_size(px(12.5))
+                        .text_color(theme.text_tertiary)
+                        .child("No results"),
+                )
+            });
+
+        // Modal overlay: dimmed backdrop, palette centered near the top.
         // Painted last inside app-root, so no explicit z-index is needed.
         div()
             .absolute()
             .inset_0()
-            .bg(gpui::black().opacity(0.35))
+            .bg(theme.backdrop)
             .flex()
             .justify_center()
             .items_start()
@@ -431,16 +1198,7 @@ impl Render for CommandPaletteModal {
                     }
                 }
             })
-            .child(
-                div()
-                    .occlude()
-                    .w(px(560.0))
-                    .max_h(px(480.0))
-                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
-                        cx.stop_propagation();
-                    })
-                    .child(command),
-            )
+            .child(card)
             .into_any_element()
     }
 }
@@ -474,6 +1232,29 @@ impl CommandPalette {
     ) {
         self.modal
             .update(cx, |modal, cx| modal.set_placeholder(placeholder, cx));
+    }
+
+    /// Run `handler` with the trimmed query whenever it changes. Replace it on
+    /// every open so it captures the latest context.
+    pub fn set_query_handler(
+        &mut self,
+        handler: impl Fn(&str, &mut Window, &mut App) + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.modal
+            .update(cx, |modal, cx| modal.set_query_handler(handler, cx));
+    }
+
+    /// Placeholder text per section tab; see
+    /// [`CommandPaletteModal::set_section_placeholders`].
+    pub fn set_section_placeholders(
+        &mut self,
+        placeholders: Vec<(SharedString, SharedString)>,
+        cx: &mut Context<Self>,
+    ) {
+        self.modal.update(cx, |modal, cx| {
+            modal.set_section_placeholders(placeholders, cx)
+        });
     }
 
     pub fn show(&mut self, window: &mut Window, cx: &mut Context<Self>) {

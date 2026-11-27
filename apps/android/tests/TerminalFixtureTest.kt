@@ -14,8 +14,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Golden-fixture tests for the terminal migration
- * (docs/plan/shared-protobuf-schema.md §8). Fixtures live in
+ * Golden-fixture tests for the terminal migration. Fixtures live in
  * proto/testdata/terminal and are shared by Go, Rust, and Kotlin.
  * Raw PTY bytes and the tag framing are untouched and untested here.
  */

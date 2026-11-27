@@ -29,6 +29,23 @@ class BackgroundWorkReducerTest {
     }
 
     @Test
+    fun backgroundWorkContinueDropsRunningShellsWhenCompleted() {
+        val started = ConsoleJson.decodeFromString<AgentSessionEvent>(
+            """{"type":"backgroundWorkStarted","work":{"id":"work_test","sessionId":"session-1","kind":"shell","status":"running","createdAt":"2026-10-13T09:45:44Z","metadata":{"job_id":"job_test","command":"cargo check"}}}""",
+        )
+        val afterStart = applyChatEvent(createChatSessionState(), started)
+        assertEquals(listOf("work_test"), runningBackgroundShells(afterStart.backgroundWork).map { it.id })
+
+        val continued = ConsoleJson.decodeFromString<AgentSessionEvent>(
+            """{"type":"backgroundWorkContinue","message":"Bash tool completed","work":[{"id":"work_test","sessionId":"session-1","kind":"shell","status":"completed","createdAt":"2026-10-13T09:45:44Z","metadata":{"job_id":"job_test","command":"cargo check"}}]}""",
+        )
+        val afterContinue = applyChatEvent(afterStart, continued)
+        assertEquals(1, afterContinue.backgroundWork.size)
+        assertEquals("completed", afterContinue.backgroundWork.single().status)
+        assertTrue(runningBackgroundShells(afterContinue.backgroundWork).isEmpty())
+    }
+
+    @Test
     fun decodesShellOutputPayload() {
         val output = ConsoleJson.decodeFromString<BackgroundWorkOutput>(
             """{"stdout":"hello\n","stderr":"warn\n","nextCursor":6,"truncated":false,"status":"exited","exitCode":0,"timedOut":false}""",

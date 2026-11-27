@@ -1,7 +1,13 @@
 package com.console.mobile.ui.components.common.new
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -14,15 +20,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,7 +62,6 @@ fun BaseSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = containerColor,
     ) {
         Column(
@@ -69,7 +78,12 @@ fun BaseSheet(
 /** Title of a [BaseSheet]. Public so a sheet that supplies its own layout can still match. */
 @Composable
 fun SheetTitle(title: String) {
-    Text(title, color = NewTheme.TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+    Text(
+        title,
+        color = NewTheme.TextPrimary,
+        style = MaterialTheme.typography.titleLarge,
+        modifier = Modifier.padding(start = 4.dp, bottom = 10.dp),
+    )
 }
 
 /**
@@ -85,6 +99,7 @@ fun OptionRow(
     selected: Boolean = false,
     monoSubtitle: Boolean = false,
     leading: (@Composable () -> Unit)? = null,
+    titleBadge: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
@@ -97,7 +112,20 @@ fun OptionRow(
             Spacer(modifier = Modifier.size(14.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    title,
+                    color = NewTheme.TextPrimary,
+                    fontSize = 17.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (titleBadge != null) titleBadge()
+            }
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     subtitle, color = NewTheme.TextMuted, fontSize = if (monoSubtitle) 12.sp else 13.sp,
@@ -119,6 +147,7 @@ fun OptionRow(
  * A pill in a horizontal tab row (the provider tabs). The selected one takes the
  * accent; [leading] is an optional glyph before the label.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun TabPill(
     label: String,
@@ -127,10 +156,34 @@ fun TabPill(
     leading: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(NewTheme.ChipRadius)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "tabPillScale",
+    )
+    val bg by animateColorAsState(
+        targetValue = if (selected) NewTheme.Accent.copy(alpha = 0.18f) else NewTheme.Card,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "tabPillBg",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) NewTheme.Accent.copy(alpha = 0.35f) else NewTheme.CardBorder,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "tabPillBorder",
+    )
     Row(
-        modifier = modifier.clip(RoundedCornerShape(NewTheme.ChipRadius))
-            .background(if (selected) NewTheme.Accent.copy(alpha = 0.18f) else NewTheme.Card)
-            .clickable(onClick = onClick)
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
+            .background(bg)
+            .border(1.dp, borderColor, shape)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -143,6 +196,7 @@ fun TabPill(
 }
 
 /** A square tab with just an icon (the favourites tab). */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun IconTabPill(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -151,10 +205,35 @@ fun IconTabPill(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(NewTheme.ChipRadius)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.93f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "iconTabPillScale",
+    )
+    val bg by animateColorAsState(
+        targetValue = if (selected) NewTheme.Accent.copy(alpha = 0.18f) else NewTheme.Card,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "iconTabPillBg",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) NewTheme.Accent.copy(alpha = 0.35f) else NewTheme.CardBorder,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "iconTabPillBorder",
+    )
     Box(
-        modifier = modifier.size(38.dp).clip(RoundedCornerShape(NewTheme.ChipRadius))
-            .background(if (selected) NewTheme.Accent.copy(alpha = 0.18f) else NewTheme.Card)
-            .clickable(onClick = onClick),
+        modifier = modifier
+            .size(38.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
+            .background(bg)
+            .border(1.dp, borderColor, shape)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = contentDescription, tint = if (selected) NewTheme.Accent else NewTheme.TextSecondary, modifier = Modifier.size(18.dp))

@@ -20,7 +20,7 @@ fn decodes_golden_attention_fixture() {
     assert_eq!(n.session_id, "s1");
     assert_eq!(n.title, "Needs Attention");
     assert_eq!(n.subtitle, "Fix the parser");
-    assert_eq!(n.body, "sh is requesting permission");
+    assert_eq!(n.body, "Which file should I edit?");
 }
 
 #[test]
@@ -51,4 +51,13 @@ fn ignores_unknown_fields() {
     )
     .expect("unknown fields must be ignored");
     assert_eq!(n.session_id, "s");
+}
+
+#[test]
+fn decodes_golden_suggestions_fixture() {
+    let n: NotificationEvent =
+        serde_json::from_str(fixture("suggestions.json").trim()).expect("decode suggestions");
+    assert_eq!(n.kind, "suggestions");
+    assert_eq!(n.session_id, "s1");
+    assert_eq!(n.items, vec!["Run the tests", "Commit this"]);
 }

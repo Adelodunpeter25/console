@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, App, Context, Div, ElementId, Entity, FocusHandle, Focusable, HitboxBehavior,
-    IntoElement, MouseButton, ObjectFit, ParentElement, Render, SharedString, Stateful, Styled,
-    Subscription, Window, canvas, div, img, prelude::*, px,
+    IntoElement, MouseButton, ParentElement, Render, SharedString, Stateful, Styled, Subscription,
+    Window, canvas, div, img, prelude::*, px,
 };
 
 use super::actions::*;
@@ -37,6 +37,7 @@ use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
 const TOOLBAR_HEIGHT: f32 = 42.0;
+const SUGGESTION_LIMIT: usize = 10;
 
 /// A script/driver result plus the live page identity at completion. The
 /// committed tab URL lags behind `pushState` routes, so callers should prefer
@@ -88,23 +89,25 @@ pub struct BrowserView {
     /// Whether the address input currently holds keyboard focus, tracked so
     /// the render can show the history suggestions under the omnibox.
     address_focused: bool,
+    /// Suggestion highlighted with the arrow keys; `None` means the typed text.
+    suggestion_index: Option<usize>,
     was_natively_focused: bool,
     last_window_focus: Option<FocusHandle>,
-    occluded: bool,
     /// Whether this view's tab is the visible one in its pane, as last pushed
     /// by the owner via `sync_native_state`. Every show/hide decision goes
     /// through it, so a navigation or load event on an inactive tab can never
     /// re-show the native view above other content (e.g. the chat).
     surface_visible: bool,
-    snapshot: Option<Arc<gpui::Image>>,
-    snapshot_pending: bool,
-    snapshot_epoch: u64,
     inspecting: bool,
     active_inspection: Option<BrowserElementInspection>,
     /// Comment input for the annotation popover, created once at `new`.
     annotation_input: Entity<ComposerInput>,
     /// Base64 PNG of the picked element, filled asynchronously after pick.
     annotation_screenshot: Option<String>,
+    /// Whether Attach sends the screenshot along. Off by default: the element's
+    /// selector and HTML already identify it, and the image costs tokens on
+    /// every turn it stays in history. Kept across picks.
+    annotation_include_screenshot: bool,
     /// Focus the annotation input on the next render after a pick.
     annotation_focus_pending: bool,
     /// Refocus the page itself on the next render after an Attach, so the
@@ -116,9 +119,15 @@ pub struct BrowserView {
     /// Last synced page-area size, for clamping the popover. Updated from
     /// the canvas in `render_page_area`.
     surface_size: std::rc::Rc<std::cell::Cell<Option<(f32, f32)>>>,
-    /// Owner callback: fired with the finished annotation on Attach.
-    annotation_handler:
-        Option<Rc<dyn Fn(console_core::BrowserElementAnnotation, &mut gpui::App) + 'static>>,
+    /// Owner callback: fired with the finished annotation on Attach. Returns
+    /// whether it landed on a chat composer (whose composer took keyboard
+    /// focus) — true suppresses the page refocus on the next render.
+    annotation_handler: Option<
+        Rc<dyn Fn(console_core::BrowserElementAnnotation, &mut gpui::App) -> bool + 'static>,
+    >,
+    /// Owner callback: the user clicked into the page. The native view paints
+    /// above the app, so the click never reaches the pane that hosts it.
+    on_user_focus: Option<Rc<dyn Fn(&mut gpui::App) + 'static>>,
     /// Results posted back by agent-run scripts, keyed by request id.
     script_results: HashMap<String, ScriptOutcome>,
     _subscriptions: Vec<Subscription>,
@@ -126,20 +135,10 @@ pub struct BrowserView {
 
 /// Whether a browser tab's native view should be shown.
 ///
-/// The native view is a sibling above GPUI's Metal layer, so whenever it is not
-/// hidden it paints over everything GPUI draws, including the chat. It is shown
-/// only when its tab is the visible one (`surface_visible`), it has a page, it
-/// is not in an error state, and it is not covered by an open GPUI overlay
-/// (unless a snapshot of it is already standing in, `snapshot_pending`).
-pub fn should_show_native(
-    surface_visible: bool,
-    has_page: bool,
-    occluded: bool,
-    snapshot_pending: bool,
-    has_error: bool,
-) -> bool {
-    let covered_by_overlay = occluded && !snapshot_pending;
-    surface_visible && has_page && !has_error && !covered_by_overlay
+/// It is shown only when its tab is the visible one (`surface_visible`), it
+/// has a page, and it is not in an error state.
+pub fn should_show_native(surface_visible: bool, has_page: bool, has_error: bool) -> bool {
+    surface_visible && has_page && !has_error
 }
 
 impl BrowserView {
@@ -151,22 +150,27 @@ impl BrowserView {
                 .placeholder("Search or enter website address (e.g. localhost:3000)")
         });
 
-        let annotation_input = cx.new(|cx| {
-            ComposerInput::new(window, cx).placeholder("Add a comment for the AI...")
-        });
+        let annotation_input =
+            cx.new(|cx| ComposerInput::new(window, cx).placeholder("Add a comment for the AI..."));
 
         let window_handle = window.window_handle();
         let submit_subscription = cx.subscribe(
             &address,
             move |this: &mut Self, address, event: &ComposerEvent, cx| match event {
                 ComposerEvent::Submit(text, _) => {
-                    this.navigate_to_input(text.clone(), cx);
+                    let picked = this
+                        .suggestion_index
+                        .take()
+                        .and_then(|index| this.suggestions(cx).into_iter().nth(index))
+                        .map(|suggestion| suggestion.url);
+                    this.navigate_to_input(picked.unwrap_or_else(|| text.clone()), cx);
                     let focus = this.focus_handle.clone();
                     let _ = window_handle.update(cx, |_, window, cx| {
                         window.focus(&focus, cx);
                     });
                 }
                 ComposerEvent::Edited => {
+                    this.suggestion_index = None;
                     let shown = this.current_url.as_deref().map(display_url).unwrap_or("");
                     this.address_dirty = address.read(cx).content() != shown;
                 }
@@ -176,11 +180,10 @@ impl BrowserView {
 
         let annotation_subscription = cx.subscribe(
             &annotation_input,
-            move |this: &mut Self, _input, event: &ComposerEvent, cx| match event {
-                ComposerEvent::Submit(text, _) => {
+            move |this: &mut Self, _input, event: &ComposerEvent, cx| {
+                if let ComposerEvent::Submit(text, _) = event {
                     this.commit_annotation(text.clone(), cx);
                 }
-                _ => {}
             },
         );
         let focus_handle = cx.focus_handle();
@@ -211,7 +214,8 @@ impl BrowserView {
             move |_, _, cx| {
                 let _ = view.update(cx, |this: &mut Self, cx| {
                     this.address_focused = false;
-                    cx.notify();
+                    // Abandoned edits must not freeze the bar on stale text.
+                    this.restore_address(cx);
                 });
             }
         });
@@ -221,12 +225,7 @@ impl BrowserView {
             move |_, window, cx| {
                 let focused_elsewhere = window.is_window_active() && window.focused(cx).is_some();
                 let _ = view.update(cx, |this: &mut Self, cx| {
-                    if focused_elsewhere
-                        && this
-                            .host
-                            .as_ref()
-                            .is_some_and(|host| host.native_focus_within())
-                    {
+                    if focused_elsewhere {
                         this.reclaim_native_keyboard(cx);
                     }
                 });
@@ -251,22 +250,21 @@ impl BrowserView {
             can_go_forward: false,
             address_dirty: false,
             address_focused: false,
+            suggestion_index: None,
             was_natively_focused: false,
             last_window_focus: None,
-            occluded: false,
             surface_visible: false,
-            snapshot: None,
-            snapshot_pending: false,
-            snapshot_epoch: 0,
             inspecting: false,
             active_inspection: None,
             annotation_input,
             annotation_screenshot: None,
+            annotation_include_screenshot: false,
             annotation_focus_pending: false,
             refocus_page_pending: false,
             annotation_capture_failed: false,
             surface_size: std::rc::Rc::new(std::cell::Cell::new(None)),
             annotation_handler: None,
+            on_user_focus: None,
             script_results: HashMap::new(),
             _subscriptions: vec![
                 submit_subscription,
@@ -361,7 +359,7 @@ impl BrowserView {
             })
         };
 
-        let on_ipc = deferred.clone();
+        let on_ipc = deferred;
 
         let content = HostContent {
             user_agent: Some(USER_AGENT.to_owned()),
@@ -403,6 +401,13 @@ impl BrowserView {
     }
 
     #[cfg(target_os = "macos")]
+    fn notify_user_focus(&self, cx: &mut Context<Self>) {
+        if let Some(handler) = self.on_user_focus.clone() {
+            handler(cx);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
     fn native_responder_changed(
         &mut self,
         user_gesture: bool,
@@ -414,8 +419,15 @@ impl BrowserView {
             .as_ref()
             .is_some_and(|host| host.native_focus_within());
         if natively_focused {
+            if user_gesture && !self.was_natively_focused {
+                self.notify_user_focus(cx);
+            }
             let address_focused = self.address.read(cx).focus().is_focused(window);
-            if address_focused && !user_gesture {
+            let focus_elsewhere =
+                !self.focus_handle.is_focused(window) && window.focused(cx).is_some();
+            // A page that grabs the responder on its own (load finishing,
+            // autofocus) must not pull the keyboard off the composer.
+            if !user_gesture && (address_focused || focus_elsewhere) {
                 self.reclaim_native_keyboard(cx);
             } else {
                 window.focus(&self.focus_handle, cx);
@@ -448,6 +460,7 @@ impl BrowserView {
                         );
                         self.start_element_screenshot(bounds, cx);
                     }
+                    self.apply_native_visibility();
                     cx.notify();
                 }
                 InspectorIpcMessage::InspectCancelled => {
@@ -505,9 +518,15 @@ impl BrowserView {
         cx.notify();
     }
 
+    /// Called when the user clicks into the page, so the owner can focus the
+    /// pane that holds this view.
+    pub fn set_user_focus_handler(&mut self, handler: impl Fn(&mut gpui::App) + 'static) {
+        self.on_user_focus = Some(Rc::new(handler));
+    }
+
     pub fn set_annotation_handler(
         &mut self,
-        handler: impl Fn(console_core::BrowserElementAnnotation, &mut gpui::App) + 'static,
+        handler: impl Fn(console_core::BrowserElementAnnotation, &mut gpui::App) -> bool + 'static,
     ) {
         self.annotation_handler = Some(Rc::new(handler));
     }
@@ -517,9 +536,11 @@ impl BrowserView {
             return;
         };
         let trimmed = comment.trim().to_string();
-        if trimmed.is_empty() || self.annotation_screenshot.is_none() {
-            // The screenshot has not landed yet (or failed): keep the
-            // popover open rather than staging a text-only annotation.
+        if trimmed.is_empty()
+            || (self.annotation_include_screenshot && self.annotation_screenshot.is_none())
+        {
+            // The screenshot was requested but has not landed yet (or failed):
+            // keep the popover open rather than staging it without the image.
             self.active_inspection = Some(inspection);
             return;
         }
@@ -540,26 +561,34 @@ impl BrowserView {
             }),
             role: inspection.role.clone(),
             accessible_name: inspection.accessible_name.clone(),
-            computed_styles: inspection.computed_styles.clone(),
+            computed_styles: inspection.computed_styles,
             user_comment: trimmed,
-            screenshot_base64: self.annotation_screenshot.clone(),
+            screenshot_base64: self
+                .annotation_include_screenshot
+                .then(|| self.annotation_screenshot.clone())
+                .flatten(),
         };
         self.annotation_screenshot = None;
         self.annotation_focus_pending = false;
         self.annotation_input.update(cx, |input, cx| {
             input.clear(cx);
         });
-        if let Some(handler) = &self.annotation_handler {
-            (handler)(annotation, cx);
-        }
-        self.refocus_page_pending = true;
+        // The handler answers whether the annotation landed on a chat
+        // composer: true means keyboard focus moved there, so refocusing the
+        // page would steal it straight back.
+        let routed_to_chat = if let Some(handler) = &self.annotation_handler {
+            handler(annotation, cx)
+        } else {
+            false
+        };
+        self.refocus_page_pending = !routed_to_chat;
         // Resume inspect so the next pick works.
-        if self.inspecting {
-            if let Some(host) = &self.host {
-                host.evaluate_script(
+        if self.inspecting
+            && let Some(host) = &self.host
+        {
+            host.evaluate_script(
                     "if (typeof window.__consoleSetInspectPaused === 'function') { window.__consoleSetInspectPaused(false); }",
                 );
-            }
         }
         cx.notify();
     }
@@ -575,12 +604,12 @@ impl BrowserView {
         self.annotation_input.update(cx, |input, cx| {
             input.clear(cx);
         });
-        if self.inspecting {
-            if let Some(host) = &self.host {
-                host.evaluate_script(
+        if self.inspecting
+            && let Some(host) = &self.host
+        {
+            host.evaluate_script(
                     "if (typeof window.__consoleSetInspectPaused === 'function') { window.__consoleSetInspectPaused(false); }",
                 );
-            }
         }
         cx.notify();
     }
@@ -594,12 +623,14 @@ impl BrowserView {
         let view = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
             for _ in 0..100 {
-                cx.background_executor().timer(std::time::Duration::from_millis(100)).await;
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(100))
+                    .await;
                 let done = slot.lock().unwrap().is_some();
                 if done {
                     let result = slot.lock().unwrap().take();
                     if matches!(result, Some(Err(_))) {
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             let _ = view.update(cx, |this, cx| {
                                 if this.active_inspection.is_some() {
                                     this.annotation_capture_failed = true;
@@ -610,23 +641,12 @@ impl BrowserView {
                     }
                     if let Some(Ok(captured)) = result {
                         use base64::Engine as _;
-                        let b64 =
-                            base64::engine::general_purpose::STANDARD.encode(&captured.png);
-                        let _ = cx.update(|cx| {
+                        let b64 = base64::engine::general_purpose::STANDARD.encode(&captured.png);
+                        cx.update(|cx| {
                             let _ = view.update(cx, |this, cx| {
                                 // Only fill the popover that asked for it.
                                 if this.active_inspection.is_some() {
                                     this.annotation_screenshot = Some(b64);
-                                    // The same capture's full frame stands
-                                    // in as the cover, so the annotation
-                                    // popover needs no second snapshot.
-                                    let image = gpui::Image::from_bytes(
-                                        gpui::ImageFormat::Png,
-                                        captured.full_png,
-                                    );
-                                    this.snapshot = Some(Arc::new(image));
-                                    this.snapshot_pending = false;
-                                    this.apply_native_visibility();
                                     cx.notify();
                                 }
                             });
@@ -634,18 +654,28 @@ impl BrowserView {
                     }
                     break;
                 }
-                let still_open = cx
-                    .update(|cx| {
-                        let mut flag = false;
-                        let _ = view.update(cx, |this, _| {
-                            flag = this.active_inspection.is_some();
-                        });
-                        flag
+                let still_open = cx.update(|cx| {
+                    let mut flag = false;
+                    let _ = view.update(cx, |this, _| {
+                        flag = this.active_inspection.is_some();
                     });
+                    flag
+                });
                 if !still_open {
                     break;
                 }
             }
+            cx.update(|cx| {
+                let _ = view.update(cx, |this, cx| {
+                    if this.active_inspection.is_some()
+                        && this.annotation_screenshot.is_none()
+                        && !this.annotation_capture_failed
+                    {
+                        this.annotation_capture_failed = true;
+                        cx.notify();
+                    }
+                });
+            });
         })
         .detach();
     }
@@ -679,9 +709,7 @@ impl BrowserView {
 
     /// Start a native PNG snapshot of the visible page. The returned slot
     /// fills once the webview finishes; `None` when there is no live webview.
-    pub fn start_snapshot(
-        &self,
-    ) -> Option<crate::browser::host::SnapshotSlot> {
+    pub fn start_snapshot(&self) -> Option<crate::browser::host::SnapshotSlot> {
         let host = self.host.as_ref()?;
         let slot = crate::browser::host::SnapshotSlot::default();
         host.take_snapshot(slot.clone());
@@ -710,6 +738,11 @@ impl BrowserView {
         if self.page_title != title {
             self.page_title = title;
             cx.notify();
+        }
+        // pushState routes never fire a load-finish, but they retitle the page.
+        if let Some(url) = self.host.as_ref().and_then(|host| host.current_url()) {
+            self.commit_navigated_url(url);
+            self.echo_page_url(cx);
         }
     }
 
@@ -749,10 +782,10 @@ impl BrowserView {
         if let Some(title) = self.page_title.as_deref().filter(|t| !t.trim().is_empty()) {
             return Some(title.to_owned());
         }
-        if let Some(url) = self.current_url.as_deref() {
-            if !url.is_empty() {
-                return Some(default_browser_title(url));
-            }
+        if let Some(url) = self.current_url.as_deref()
+            && !url.is_empty()
+        {
+            return Some(default_browser_title(url));
         }
         None
     }
@@ -835,9 +868,6 @@ impl BrowserView {
         self.can_go_back = false;
         self.can_go_forward = false;
         self.address_dirty = false;
-        self.snapshot = None;
-        self.snapshot_pending = false;
-        self.snapshot_epoch = self.snapshot_epoch.wrapping_add(1);
         self.address
             .update(cx, |address, cx| address.set_content(String::new(), cx));
         cx.notify();
@@ -920,7 +950,32 @@ impl BrowserView {
         cx.notify();
     }
 
+    /// The history matches shown under the omnibox while it holds edits.
+    fn suggestions(&self, cx: &App) -> Vec<super::browser_state::HistorySuggestion> {
+        if !self.address_focused || !self.address_dirty {
+            return Vec::new();
+        }
+        let query = self.address.read(cx).content().to_string();
+        super::browser_state::suggest(&query, SUGGESTION_LIMIT)
+    }
+
+    /// Up/Down walk the suggestions and wrap back to the typed text.
+    fn move_suggestion(&mut self, down: bool, cx: &mut Context<Self>) {
+        let count = self.suggestions(cx).len();
+        if count == 0 {
+            return;
+        }
+        self.suggestion_index = match (self.suggestion_index, down) {
+            (None, true) => Some(0),
+            (None, false) => Some(count - 1),
+            (Some(i), true) => (i + 1 < count).then_some(i + 1),
+            (Some(i), false) => i.checked_sub(1),
+        };
+        cx.notify();
+    }
+
     pub fn restore_address(&mut self, cx: &mut Context<Self>) {
+        self.suggestion_index = None;
         self.address_dirty = false;
         self.echo_page_url(cx);
         cx.notify();
@@ -932,94 +987,48 @@ impl BrowserView {
         should_show_native(
             self.surface_visible,
             self.navigation_requested,
-            self.occluded,
-            self.snapshot_pending,
             self.navigation_error.is_some() || self.host_error.is_some(),
         )
     }
 
     /// Push the current show/hide decision to the native view, if it exists.
+    ///
+    /// Only hiding happens here: showing is owned by the page-area canvas,
+    /// which syncs this frame's bounds first. Showing from an event would put
+    /// a stale frame on screen — the host is created 800x600 at the window
+    /// origin, so a tab re-shown before its first paint flashes there.
     fn apply_native_visibility(&self) {
-        if let Some(host) = &self.host {
-            host.set_visible(self.should_show());
+        if let Some(host) = &self.host
+            && !self.should_show()
+        {
+            host.set_visible(false);
         }
     }
 
     /// Push from the owner (`sync_workspace_webviews`, and the active tab's
-    /// render): whether this surface is the visible tab in its pane, and
-    /// whether a GPUI overlay is open above it. Event-driven, not per frame, so
-    /// the flag is stored and every later show/hide consults it.
-    pub fn sync_native_state(
-        &mut self,
-        surface_visible: bool,
-        occluded: bool,
-        cx: &mut Context<Self>,
-    ) {
-        let occlusion_started = occluded && !self.occluded;
-        self.occluded = occluded;
+    /// render): whether this surface is the visible tab in its pane.
+    /// Event-driven, not per frame, so the flag is stored and every later
+    /// show/hide consults it.
+    pub fn sync_native_state(&mut self, surface_visible: bool, cx: &mut Context<Self>) {
+        let was_visible = self.surface_visible;
         self.surface_visible = surface_visible;
 
         let Some(host) = self.host.clone() else {
             return;
         };
 
-        if !occluded {
-            if self.snapshot.is_some() || self.snapshot_pending {
-                self.snapshot = None;
-                self.snapshot_pending = false;
-                self.snapshot_epoch += 1;
-            }
-        } else if occlusion_started
-            && !self.snapshot_pending
-            && self.snapshot.is_none()
-            && self.active_inspection.is_none()
-        {
-            self.snapshot_pending = true;
-            let epoch = self.snapshot_epoch;
-            let slot = crate::browser::host::SnapshotSlot::default();
-            host.take_snapshot(slot.clone());
-            let view = cx.entity().downgrade();
-            cx.spawn(async move |_, cx| {
-                for _ in 0..30 {
-                    cx.background_executor().timer(std::time::Duration::from_millis(50)).await;
-                    if slot.lock().unwrap().is_some() {
-                        let result = slot.lock().unwrap().take();
-                        if let Some(Ok(bytes)) = result {
-                            let image = std::sync::Arc::new(gpui::Image::from_bytes(
-                                gpui::ImageFormat::Png,
-                                bytes,
-                            ));
-                            let _ = cx.update(|cx| {
-                                let _ = view.update(cx, |this, cx| {
-                                    if this.snapshot_epoch == epoch && this.occluded {
-                                        this.snapshot = Some(image);
-                                        this.snapshot_pending = false;
-                                        cx.notify();
-                                    }
-                                });
-                            });
-                        } else {
-                            let _ = cx.update(|cx| {
-                                let _ = view.update(cx, |this, cx| {
-                                    if this.snapshot_epoch == epoch {
-                                        this.snapshot_pending = false;
-                                        cx.notify();
-                                    }
-                                });
-                            });
-                        }
-                        break;
-                    }
-                }
-            })
-            .detach();
-        }
-
         let show = self.should_show();
-        if !show && host.native_focus_within() {
-            self.reclaim_native_keyboard(cx);
+        if !show {
+            if host.native_focus_within() {
+                self.reclaim_native_keyboard(cx);
+            }
+            host.set_visible(false);
+        } else if !was_visible {
+            // The canvas shows the native view after syncing bounds, so a tab
+            // returning from another workspace never flashes at its previous
+            // frame. Request the frame that paints it.
+            cx.notify();
         }
-        host.set_visible(show);
     }
 
     pub fn reclaim_native_keyboard(&mut self, cx: &mut Context<Self>) {
@@ -1079,22 +1088,22 @@ impl BrowserView {
     pub fn reload(&mut self, cx: &mut Context<Self>) {
         if let Some(url) = self.current_url.clone() {
             self.navigate_to_url(url, cx);
-        } else if let Some(host) = &self.host {
-            if self.navigation_requested {
-                host.reload();
-                self.loading = true;
-                cx.notify();
-            }
+        } else if let Some(host) = &self.host
+            && self.navigation_requested
+        {
+            host.reload();
+            self.loading = true;
+            cx.notify();
         }
     }
 
     pub fn hard_reload(&mut self, cx: &mut Context<Self>) {
-        if let Some(host) = &self.host {
-            if self.navigation_requested {
-                host.hard_reload();
-                self.loading = true;
-                cx.notify();
-            }
+        if let Some(host) = &self.host
+            && self.navigation_requested
+        {
+            host.hard_reload();
+            self.loading = true;
+            cx.notify();
         }
     }
 
@@ -1144,13 +1153,6 @@ impl BrowserView {
         if let Some(host) = &self.host {
             host.evaluate_script("document.execCommand('selectAll')");
         }
-    }
-
-    /// The address input's context menu or the annotation popover floats
-    /// above the native webview's area, so the app's occlusion sync needs
-    /// to know when either is open.
-    pub fn overlay_open(&self, cx: &App) -> bool {
-        self.address.read(cx).context_menu_open() || self.active_inspection.is_some()
     }
 
     fn toolbar_button(
@@ -1245,6 +1247,12 @@ impl BrowserView {
                 div()
                     .id("browser-address-container")
                     .key_context(BROWSER_ADDRESS_KEY_CONTEXT)
+                    .on_action(cx.listener(|this, _: &crate::common::input::Up, _, cx| {
+                        this.move_suggestion(false, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &crate::common::input::Down, _, cx| {
+                        this.move_suggestion(true, cx);
+                    }))
                     .on_action(cx.listener(|this, _: &BrowserAddressCancel, window, cx| {
                         this.restore_address(cx);
                         this.focus_default(window, cx);
@@ -1291,7 +1299,7 @@ impl BrowserView {
                         )
                     })
                     .when_some(self.render_history_suggestions(cx), |element, panel| {
-                        element.child(panel)
+                        element.child(gpui::deferred(panel))
                     }),
             )
             .child(self.toolbar_button(
@@ -1325,11 +1333,11 @@ impl BrowserView {
         if !self.address_focused || !self.address_dirty {
             return None;
         }
-        let query = self.address.read(cx).content().to_string();
-        let entries = super::browser_state::suggest(&query, 6);
+        let entries = self.suggestions(cx);
         if entries.is_empty() {
             return None;
         }
+        let selected = self.suggestion_index;
         let theme = Theme::current(cx);
         let weak = cx.entity().downgrade();
         Some(
@@ -1345,7 +1353,7 @@ impl BrowserView {
                 .border_color(theme.border)
                 .bg(theme.surface)
                 .overflow_hidden()
-                .children(entries.into_iter().map(|entry| {
+                .children(entries.into_iter().enumerate().map(|(index, entry)| {
                     let weak = weak.clone();
                     let url = entry.url.clone();
                     div()
@@ -1360,7 +1368,11 @@ impl BrowserView {
                         .px(px(10.0))
                         .py(px(6.0))
                         .hover(|s| s.bg(theme.overlay))
-                        .on_click(move |_event, window, cx| {
+                        .when(selected == Some(index), |s| s.bg(theme.overlay))
+                        // On press, not click: the press moves focus off the address
+                        // field, which hides this list before a click could finish.
+                        .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                            cx.stop_propagation();
                             let _ = weak.update(cx, |this, cx| {
                                 this.address.update(cx, |address, cx| {
                                     address.set_content(url.clone(), cx);
@@ -1512,48 +1524,28 @@ impl BrowserView {
     }
     fn render_page_area(&self, theme: Theme, cx: &mut Context<Self>) -> Div {
         let host = self.host.clone();
-        let occluded = self.occluded;
+        let show_native = self.should_show();
         let surface_size = self.surface_size.clone();
-        let mut area = div()
-            .flex_1()
-            .min_h_0()
-            .relative()
-            .bg(theme.surface)
-            .child(
-                canvas(
-                    move |bounds, window, _| {
-                        surface_size.set(Some((
-                            f32::from(bounds.size.width),
-                            f32::from(bounds.size.height),
-                        )));
-                        if let Some(host) = &host {
-                            host.sync_bounds(bounds, window.scale_factor());
-                            if !occluded {
-                                host.set_visible(true);
-                            } else {
-                                host.set_visible(false);
-                            }
-                        }
-                        window.insert_hitbox(bounds, HitboxBehavior::Normal)
-                    },
-                    move |_, _hitbox, _window, _| {},
-                )
-                .absolute()
-                .size_full(),
-            )
-            .when_some(
-                self.occluded.then(|| self.snapshot.clone()).flatten(),
-                |element, snapshot| {
-                    element.child(
-                        img(snapshot)
-                            .absolute()
-                            .size_full()
-                            .object_fit(ObjectFit::Fill),
-                    )
+        let mut area = div().flex_1().min_h_0().relative().bg(theme.surface).child(
+            canvas(
+                move |bounds, window, _| {
+                    surface_size.set(Some((
+                        f32::from(bounds.size.width),
+                        f32::from(bounds.size.height),
+                    )));
+                    if let Some(host) = &host {
+                        host.sync_bounds(bounds, window.scale_factor());
+                        host.set_visible(show_native);
+                    }
+                    window.insert_hitbox(bounds, HitboxBehavior::Normal)
                 },
-            );
+                move |_, _hitbox, _window, _| {},
+            )
+            .absolute()
+            .size_full(),
+        );
         if let Some(popover) = self.render_annotation_popover(theme, cx) {
-            area = area.child(popover);
+            area = area.child(gpui::deferred(popover));
         }
         area
     }
@@ -1586,12 +1578,10 @@ impl BrowserView {
             (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
             (Some(c), None) => format!("<{c} />"),
             (None, Some(s)) => s.clone(),
-            (None, None) => inspection.selector.clone(),
+            (None, None) => console_shared::format::format_selector_label(&inspection.selector),
         };
         let thumb = self.annotation_screenshot.as_ref().and_then(|b64| {
-            let bytes = base64::engine::general_purpose::STANDARD
-                .decode(b64)
-                .ok()?;
+            let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
             if bytes.is_empty() {
                 return None;
             }
@@ -1600,8 +1590,11 @@ impl BrowserView {
                 bytes,
             )))
         });
+        let include_screenshot = self.annotation_include_screenshot;
+        let can_attach = !include_screenshot || self.annotation_screenshot.is_some();
         let entity = cx.entity().downgrade();
         let entity2 = entity.clone();
+        let entity3 = entity.clone();
         let popover = div()
             .absolute()
             .left(px(left))
@@ -1633,10 +1626,60 @@ impl BrowserView {
                         .border_1()
                         .border_color(theme.border)
                         .bg(theme.inset)
-                        .child(img(image).size_full()),
+                        .child(
+                            img(image)
+                                .size_full()
+                                .object_fit(gpui::ObjectFit::ScaleDown),
+                        ),
                 )
             })
             .child(div().mt_2().child(self.annotation_input.clone()))
+            .child(
+                div()
+                    .id("browser-annotation-include-screenshot")
+                    .mt_2()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .cursor_default()
+                    .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                        if let Some(view) = entity3.upgrade() {
+                            view.update(cx, |this, cx| {
+                                this.annotation_include_screenshot =
+                                    !this.annotation_include_screenshot;
+                                cx.notify();
+                            });
+                        }
+                    })
+                    .child(
+                        div()
+                            .size(px(14.0))
+                            .rounded(px(4.0))
+                            .border_1()
+                            .border_color(if include_screenshot {
+                                theme.accent
+                            } else {
+                                theme.text_ghost
+                            })
+                            .bg(if include_screenshot {
+                                theme.accent
+                            } else {
+                                gpui::transparent_black()
+                            })
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .when(include_screenshot, |box_| {
+                                box_.child(app_icon(IconName::Check, 9.0, theme.on_inverse))
+                            }),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(theme.text_secondary)
+                            .child("Send with screenshot"),
+                    ),
+            )
             .child(
                 div()
                     .mt_2()
@@ -1656,14 +1699,11 @@ impl BrowserView {
                             .text_color(theme.text_secondary)
                             .cursor_default()
                             .hover(|s| s.bg(theme.overlay))
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                move |_, _, cx| {
-                                    if let Some(view) = entity.upgrade() {
-                                        view.update(cx, |this, cx| this.cancel_annotation(cx));
-                                    }
-                                },
-                            )
+                            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                                if let Some(view) = entity.upgrade() {
+                                    view.update(cx, |this, cx| this.cancel_annotation(cx));
+                                }
+                            })
                             .child("Esc to Cancel"),
                     )
                     .child(
@@ -1672,7 +1712,7 @@ impl BrowserView {
                             .px(px(10.0))
                             .py(px(5.0))
                             .rounded(px(6.0))
-                            .bg(if self.annotation_screenshot.is_some() {
+                            .bg(if can_attach {
                                 theme.accent
                             } else {
                                 theme.text_tertiary
@@ -1680,29 +1720,17 @@ impl BrowserView {
                             .text_size(px(12.0))
                             .text_color(theme.on_inverse)
                             .cursor_default()
-                            .hover(|s| {
-                                if self.annotation_screenshot.is_some() {
-                                    s.opacity(0.9)
-                                } else {
-                                    s
+                            .hover(|s| if can_attach { s.opacity(0.9) } else { s })
+                            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                                if let Some(view) = entity2.upgrade() {
+                                    view.update(cx, |this, cx| {
+                                        let text =
+                                            this.annotation_input.read(cx).content().to_string();
+                                        this.commit_annotation(text, cx);
+                                    });
                                 }
                             })
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                move |_, _, cx| {
-                                    if let Some(view) = entity2.upgrade() {
-                                        view.update(cx, |this, cx| {
-                                            let text = this
-                                                .annotation_input
-                                                .read(cx)
-                                                .content()
-                                                .to_string();
-                                            this.commit_annotation(text, cx);
-                                        });
-                                    }
-                                },
-                            )
-                            .child(if self.annotation_screenshot.is_some() {
+                            .child(if can_attach {
                                 "Attach to Chat"
                             } else if self.annotation_capture_failed {
                                 "Capture failed — Esc"
@@ -1730,6 +1758,9 @@ impl Render for BrowserView {
         }
         if self.annotation_focus_pending {
             self.annotation_focus_pending = false;
+            // The pick click leaves the webview as first responder; take
+            // the keyboard back so the composer can type.
+            self.reclaim_native_keyboard(cx);
             let input = self.annotation_input.clone();
             window.on_next_frame(move |window, cx| {
                 window.focus(&input.read(cx).focus(), cx);

@@ -5,22 +5,51 @@
 //! is a compact left-aligned summary that opens the surface holding the full
 //! list; multiple kinds sit side by side, never stacked.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
-use console_core::{SubagentInfo, TodoItem};
+use console_core::{Automation, SubagentInfo, TodoItem, WebhookSubscription};
 use gpui::{
-    App, Div, ElementId, FontWeight, ParentElement, Stateful,
-    StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
+    Anchor, App, Bounds, Div, ElementId, Entity, FontWeight, ParentElement, Pixels, ScrollHandle,
+    Stateful, StatefulInteractiveElement, Styled, Window, anchored, canvas, deferred, div,
+    linear_color_stop, linear_gradient, prelude::*, px,
 };
 
 use crate::chat::change_chips::ChangesSummary;
-use crate::common::pill_popovers::{shells_popover, subagents_popover, tasks_popover};
-use crate::primitives::menu::{ContextMenuHandle, MenuAlign, popover};
-use crate::primitives::{IconName, app_icon};
+use crate::common::pill_popovers::{
+    automations_popover, shells_popover, subagents_popover, tasks_popover,
+};
+use crate::primitives::menu::{ContextMenuHandle, MenuAlign, MenuItem, context_menu, popover};
+use crate::primitives::tooltip::Tooltip;
+use crate::primitives::{IconName, RingArc, app_icon, ring_chart, split_arcs};
 use crate::theme::Theme;
+use crate::utils::format_compact_count;
 
 type ClickHandler = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
 pub(crate) type StopHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
+pub(crate) type ActionHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
+/// Every pill in the row, status and suggestion alike, is this tall so they
+/// read as one set and match the 31px scroll controls.
+const PILL_HEIGHT: f32 = 31.0;
+/// The changed-files ring: 16px with a 2.5px stroke, gaps and minimum arcs in
+/// fractions of the circle so a small share of either side stays visible.
+const CHANGES_RING_SIZE: f32 = 16.0;
+const CHANGES_RING_STROKE: f32 = 2.5;
+const CHANGES_RING_GAP: f32 = 0.06;
+const CHANGES_RING_MIN: f32 = 0.06;
+/// A suggestion chip truncates at this width; hovering it floats an identical
+/// chip over it that extends to the right to show more of the text, so nothing
+/// in the row shifts or needs scrolling.
+const SUGGESTION_COLLAPSED_WIDTH: f32 = 260.0;
+const SUGGESTION_EXPANDED_MAX_WIDTH: f32 = 560.0;
+type PickHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
+
+/// Follow-up prompts that fill the rest of the row and scroll sideways.
+pub struct SuggestionsPill {
+    pub items: Vec<String>,
+    pub on_pick: PickHandler,
+    pub on_edit: PickHandler,
+}
 
 /// The active task list plus the menu handle that anchors its popover to the
 /// leading pill.
@@ -28,14 +57,14 @@ pub struct TasksPill {
     pub completed: usize,
     pub total: usize,
     pub menu: ContextMenuHandle,
-    pub items: Rc<Vec<TodoItem>>,
+    pub items: Rc<[TodoItem]>,
 }
 
 /// The session's subagents plus the menu handle that anchors their popover.
 pub struct SubagentsPill {
     pub running: bool,
     pub menu: ContextMenuHandle,
-    pub items: Rc<Vec<SubagentInfo>>,
+    pub items: Rc<[SubagentInfo]>,
 }
 
 /// One running detached shell in the shells popover.
@@ -47,35 +76,63 @@ pub struct ShellEntry {
 /// The session's running shells, their popover anchor, and the stop action.
 pub struct ShellsPill {
     pub menu: ContextMenuHandle,
-    pub shells: Rc<Vec<ShellEntry>>,
+    pub shells: Rc<[ShellEntry]>,
     pub on_stop: StopHandler,
+}
+
+/// The session's active automations and webhook subscriptions.
+pub struct AutomationsPill {
+    pub menu: ContextMenuHandle,
+    pub automations: Rc<[Automation]>,
+    pub webhooks: Rc<[WebhookSubscription]>,
+    pub on_pause: ActionHandler,
+    pub on_resume: ActionHandler,
+    pub on_delete_automation: ActionHandler,
+    pub on_delete_webhook: ActionHandler,
 }
 
 /// The pills row, or `None` when the session has nothing to summarise.
 ///
 /// `changes` carries the session's change totals plus the handler that opens
-/// the changes view. The subagents and shells pills open their own popovers,
-/// the way the tasks pill does.
+/// the changes view. The subagents, shells, and automations pills open their
+/// own popovers, the way the tasks pill does.
 #[allow(clippy::type_complexity)]
 pub fn composer_pills(
     key: &str,
     tasks: Option<TasksPill>,
     subagents: Option<SubagentsPill>,
     shells: Option<ShellsPill>,
+    automations: Option<AutomationsPill>,
     changes: Option<(ChangesSummary, ClickHandler)>,
+    suggestions: Option<SuggestionsPill>,
+    scroll: &ScrollHandle,
     theme: Theme,
+    window: &mut Window,
+    cx: &mut App,
 ) -> Option<Div> {
-    if tasks.is_none() && subagents.is_none() && shells.is_none() && changes.is_none() {
+    if tasks.is_none()
+        && subagents.is_none()
+        && shells.is_none()
+        && automations.is_none()
+        && changes.is_none()
+        && suggestions.is_none()
+    {
         return None;
     }
 
+    // One sideways scroller holds every pill, so a narrow pane scrolls
+    // instead of cutting anything off. Popovers draw deferred, outside this
+    // scroller's clip, so they still open above their pill.
     let mut row = div()
+        .id(ElementId::Name(format!("{key}-scroll").into()))
         .w_full()
-        .max_w(px(768.0))
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(8.0));
+        .gap(px(8.0))
+        .overflow_x_scroll()
+        .restrict_scroll_to_axis()
+        .track_scroll(scroll);
 
     if let Some((summary, on_changes)) = changes {
         row = row.child(changes_pill(
@@ -150,70 +207,255 @@ pub fn composer_pills(
         ));
     }
 
+    if let Some(automations) = automations {
+        let auto_count = automations.automations.len();
+        let hook_count = automations.webhooks.len();
+        let label = match (auto_count, hook_count) {
+            (a, 0) => format!("{a} {}", if a == 1 { "schedule" } else { "schedules" }),
+            (0, w) => format!("{w} {}", if w == 1 { "webhook" } else { "webhooks" }),
+            (a, w) => format!("{a} sched · {w} hook"),
+        };
+        let active = automations.automations.iter().any(|a| a.status == "active")
+            || automations.webhooks.iter().any(|w| w.status == "active");
+        let icon = if auto_count > 0 {
+            IconName::Calendar
+        } else {
+            IconName::Zap
+        };
+        let trigger = pill(
+            format!("{key}-automations"),
+            icon,
+            label,
+            active,
+            None,
+            theme,
+        );
+        let autos = automations.automations;
+        let hooks = automations.webhooks;
+        let on_pause = automations.on_pause;
+        let on_resume = automations.on_resume;
+        let on_del_auto = automations.on_delete_automation;
+        let on_del_hook = automations.on_delete_webhook;
+        row = row.child(popover(
+            trigger,
+            &automations.menu,
+            MenuAlign::AboveLeft,
+            move |_handle, _window, cx| {
+                automations_popover(
+                    autos.clone(),
+                    hooks.clone(),
+                    on_pause.clone(),
+                    on_resume.clone(),
+                    on_del_auto.clone(),
+                    on_del_hook.clone(),
+                    Theme::current(cx),
+                )
+            },
+        ));
+    }
+
+    if let Some(suggestions) = suggestions {
+        let on_pick = suggestions.on_pick;
+        row = row.children(
+            suggestions
+                .items
+                .into_iter()
+                .enumerate()
+                .map(|(index, text)| {
+                    let menu_id = format!("{key}-suggestion-menu-{index}");
+                    let hover = window.use_keyed_state(
+                        ElementId::Name(format!("{key}-suggestion-hover-{index}").into()),
+                        cx,
+                        |_, _| Cell::new(false),
+                    );
+                    let bounds = window.use_keyed_state(
+                        ElementId::Name(format!("{key}-suggestion-bounds-{index}").into()),
+                        cx,
+                        |_, _| Cell::new(None),
+                    );
+                    let chip = suggestion_pill(
+                        format!("{key}-suggestion-{index}"),
+                        text.clone(),
+                        on_pick.clone(),
+                        hover,
+                        bounds,
+                        theme,
+                        cx,
+                    );
+                    let menu_handle = window
+                        .use_keyed_state(ElementId::Name(menu_id.clone().into()), cx, |_, cx| {
+                            ContextMenuHandle::new(cx)
+                        })
+                        .read(cx)
+                        .clone();
+                    let on_send = on_pick.clone();
+                    let on_edit = suggestions.on_edit.clone();
+                    let send_text = text.clone();
+                    let edit_text = text;
+                    context_menu(
+                        chip,
+                        ElementId::Name(menu_id.into()),
+                        &menu_handle,
+                        move |_| {
+                            let on_send = on_send.clone();
+                            let on_edit = on_edit.clone();
+                            let send_text = send_text.clone();
+                            let edit_text = edit_text.clone();
+                            vec![
+                                MenuItem::new("Send", move |window, cx| {
+                                    on_send(send_text.clone(), window, cx)
+                                })
+                                .icon(IconName::ArrowUp.path()),
+                                MenuItem::new("Edit Before Sending", move |window, cx| {
+                                    on_edit(edit_text.clone(), window, cx)
+                                })
+                                .icon(IconName::Pencil.path()),
+                            ]
+                        },
+                    )
+                    .into_any_element()
+                }),
+        );
+    }
+
+    let offset = scroll.offset().x;
+    let max = scroll.max_offset().x;
+    // Offsets run negative as the row scrolls right.
+    let more_left = offset < px(-0.5);
+    let more_right = max > px(0.5) && -offset < max - px(0.5);
+    let clear = theme.chat_canvas.opacity(0.0);
+    let fade = |angle: f32| {
+        linear_gradient(
+            angle,
+            linear_color_stop(theme.chat_canvas, 0.0),
+            linear_color_stop(clear, 1.0),
+        )
+    };
+
     Some(
         div()
             .absolute()
             .left_0()
             .right_0()
-            .bottom(px(8.0))
+            // Same vertical alignment as the transcript's jump / scroll-to-bottom
+            // pill (31px tall, 10px up), centred on the transcript column.
+            .bottom(px(10.0))
+            .h(px(31.0))
             .w_full()
             .px(px(20.0))
             .flex()
+            .items_center()
             .justify_center()
-            .child(row),
+            .child(
+                div()
+                    .relative()
+                    .w_full()
+                    .max_w(px(768.0))
+                    .h(px(31.0))
+                    .flex()
+                    .items_center()
+                    // The transcript's jump / scroll-to-bottom pill floats at the
+                    // bottom right (~67px wide, 16px in); keep pills inside the
+                    // max-w column from sliding under it.
+                    .pr(px(96.0))
+                    .child(row)
+                    // Soft edges so a pill fades out instead of being sliced;
+                    // shown only where there is more to scroll to.
+                    .when(more_left, |el| {
+                        el.child(
+                            div()
+                                .absolute()
+                                .left_0()
+                                .top_0()
+                                .bottom_0()
+                                .w(px(28.0))
+                                .bg(fade(90.0)),
+                        )
+                    })
+                    .when(more_right, |el| {
+                        el.child(
+                            div()
+                                .absolute()
+                                .right_0()
+                                .top_0()
+                                .bottom_0()
+                                .w(px(28.0))
+                                .bg(fade(270.0)),
+                        )
+                    }),
+            ),
     )
 }
 
-/// The changed-files pill: icon, "N files changed", and the colored `+N -N`
-/// totals. Clicking opens the changes review for the session.
+/// The changed-files pill: a ring split by lines added and removed, then the
+/// compact `+N -N` totals. The file count is in the tooltip. Clicking opens
+/// the changes review for the session.
 fn changes_pill(
     id: String,
     summary: ChangesSummary,
     on_click: Option<ClickHandler>,
     theme: Theme,
 ) -> Stateful<Div> {
+    let tooltip = format!(
+        "{} file{} changed, +{} -{}",
+        summary.files,
+        if summary.files == 1 { "" } else { "s" },
+        summary.additions,
+        summary.deletions
+    );
+    let spans = split_arcs(
+        &[summary.additions as f32, summary.deletions as f32],
+        CHANGES_RING_GAP,
+        CHANGES_RING_MIN,
+    );
+    let arcs = [theme.success, theme.danger]
+        .into_iter()
+        .zip(spans)
+        .map(|(color, (start, len))| RingArc { start, len, color })
+        .collect::<Vec<_>>();
+
     div()
         .id(ElementId::Name(id.into()))
         .flex_none()
         .flex()
         .items_center()
-        .gap(px(6.0))
-        .px(px(10.0))
-        .py(px(5.0))
+        .gap(px(7.0))
+        .h(px(PILL_HEIGHT))
+        .pl(px(9.0))
+        .pr(px(11.0))
         .rounded_full()
         .bg(theme.raised)
         .cursor_pointer()
+        // Same hover tint as the suggestion chips: overlay is a ~5% tint
+        // meant to sit on a surface, so blend it onto raised.
+        .hover(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
+        .active(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
+        .tooltip(Tooltip::text(tooltip))
         .when_some(on_click, |element, handler| {
             element.on_click(move |_, window, cx| (handler)(window, cx))
         })
-        .child(app_icon(IconName::FileDiff, 13.0, theme.text_tertiary))
-        .child(
-            div()
-                .text_size(px(12.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(theme.text_secondary)
-                .child(format!(
-                    "{} file{} changed",
-                    summary.files,
-                    if summary.files == 1 { "" } else { "s" }
-                )),
-        )
+        .child(ring_chart(
+            CHANGES_RING_SIZE,
+            CHANGES_RING_STROKE,
+            None,
+            arcs,
+        ))
         .when(summary.additions > 0, |element| {
             element.child(
                 div()
-                    .text_size(px(12.0))
+                    .text_size(px(12.5))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.success)
-                    .child(format!("+{}", summary.additions)),
+                    .child(format!("+{}", format_compact_count(summary.additions))),
             )
         })
         .when(summary.deletions > 0, |element| {
             element.child(
                 div()
-                    .text_size(px(12.0))
+                    .text_size(px(12.5))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.danger)
-                    .child(format!("-{}", summary.deletions)),
+                    .child(format!("-{}", format_compact_count(summary.deletions))),
             )
         })
 }
@@ -232,11 +474,15 @@ fn pill(
         .flex()
         .items_center()
         .gap(px(6.0))
+        .h(px(PILL_HEIGHT))
         .px(px(10.0))
-        .py(px(5.0))
         .rounded_full()
         .bg(theme.raised)
         .cursor_pointer()
+        // Same hover tint as the suggestion chips: overlay is a ~5% tint
+        // meant to sit on a surface, so blend it onto raised.
+        .hover(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
+        .active(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
         .when_some(on_click, |element, handler| {
             element.on_click(move |_, window, cx| (handler)(window, cx))
         })
@@ -254,6 +500,119 @@ fn pill(
                 .text_size(px(12.0))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme.text_secondary)
+                .child(text),
+        )
+}
+
+/// One follow-up chip: the pill shape of the status row, with an accent
+/// send button so it reads as clickable rather than informational.
+fn suggestion_pill(
+    id: String,
+    text: String,
+    on_pick: PickHandler,
+    hover: Entity<Cell<bool>>,
+    bounds: Entity<Cell<Option<Bounds<Pixels>>>>,
+    theme: Theme,
+    cx: &App,
+) -> Stateful<Div> {
+    let picked = text.clone();
+    let hovered = hover.read(cx).get();
+    let chip_bounds = bounds.read(cx).get();
+    let set_hover = hover;
+    let overlay = chip_bounds.filter(|_| hovered).map(|chip| {
+        // No id or handlers, so it takes no hit-test: the chip underneath stays
+        // hovered and keeps its click and right-click behaviour.
+        let full = div()
+            .min_w(chip.size.width)
+            .max_w(px(SUGGESTION_EXPANDED_MAX_WIDTH))
+            .h(px(PILL_HEIGHT))
+            .flex()
+            .items_center()
+            .gap(px(7.0))
+            .pl(px(4.0))
+            .pr(px(10.0))
+            .rounded_full()
+            .bg(theme.raised.blend(theme.overlay_strong))
+            .child(
+                div()
+                    .flex_none()
+                    .size(px(20.0))
+                    .rounded_full()
+                    .bg(theme.accent)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(app_icon(IconName::ArrowUp, 12.0, theme.on_inverse)),
+            )
+            .child(
+                div()
+                    .min_w(px(0.0))
+                    .text_size(px(12.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text_secondary)
+                    .truncate()
+                    .child(text.clone()),
+            );
+        deferred(
+            anchored()
+                .position(chip.origin)
+                .anchor(Anchor::TopLeft)
+                .snap_to_window_with_margin(px(8.0))
+                .child(full),
+        )
+        .with_priority(2)
+    });
+    div()
+        .id(ElementId::Name(id.into()))
+        .flex_none()
+        .relative()
+        .max_w(px(SUGGESTION_COLLAPSED_WIDTH))
+        .child(
+            canvas(
+                move |chip: Bounds<Pixels>, _, cx| bounds.update(cx, |cell, _| cell.set(Some(chip))),
+                |_, _, _, _| (),
+            )
+            .absolute()
+            .inset_0(),
+        )
+        .children(overlay)
+        .flex()
+        .items_center()
+        .gap(px(7.0))
+        .h(px(PILL_HEIGHT))
+        .pl(px(4.0))
+        .pr(px(10.0))
+        .rounded_full()
+        .bg(theme.raised)
+        .cursor_pointer()
+        // `overlay` is a ~5% tint meant to sit on top of a surface, so it has
+        // to be blended onto `raised` or the chip turns see-through on hover.
+        .hover(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
+        .active(|style| style.bg(theme.raised.blend(theme.overlay_strong)))
+        .on_hover(move |is_hovered, _, cx| {
+            set_hover.update(cx, |cell, _| {
+                cell.set(*is_hovered);
+            });
+        })
+        .on_click(move |_, window, cx| (on_pick)(picked.clone(), window, cx))
+        .child(
+            div()
+                .flex_none()
+                .size(px(20.0))
+                .rounded_full()
+                .bg(theme.accent)
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(app_icon(IconName::ArrowUp, 12.0, theme.on_inverse)),
+        )
+        .child(
+            div()
+                .min_w(px(0.0))
+                .text_size(px(12.0))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(theme.text_secondary)
+                .truncate()
                 .child(text),
         )
 }

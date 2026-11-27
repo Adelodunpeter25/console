@@ -5,8 +5,8 @@
 //! desktop app registers its top-level menus during startup.
 
 use crate::keybindings::{
-    AddProject, NewBrowser, NewChat, NewProject, NewTerminal, NewWindow, OpenSettings,
-    QuickOpenFile, ToggleLeftSidebar, ToggleRightSidebar,
+    AddProject, CheckForUpdates, NewBrowser, NewChat, NewProject, NewTerminal, NewWindow,
+    OpenSettings, QuickOpenFile, ToggleLeftSidebar,
 };
 use gpui::{App, KeyBinding, Menu, MenuItem, OsAction, SystemMenuType, actions};
 
@@ -67,16 +67,6 @@ fn with_key_window(body: impl FnOnce(&objc2_app_kit::NSWindow)) {
 /// Register the native application menu bar and its application-level actions.
 pub fn init(cx: &mut App) {
     cx.on_action(|_: &Quit, cx| {
-        if crate::window::any_agent_running(cx) {
-            if let Some(handle) = cx.active_window() {
-                handle
-                    .update(cx, |_, window, cx| {
-                        crate::window::confirm_then(window, cx, "Quit Console?", |_, cx| cx.quit());
-                    })
-                    .ok();
-                return;
-            }
-        }
         cx.quit();
     });
 
@@ -100,14 +90,16 @@ pub fn init(cx: &mut App) {
     cx.on_action(|_: &HideOthers, _| {
         #[cfg(target_os = "macos")]
         with_ns_app(|app| unsafe {
-            let _: () = objc2::msg_send![app, hideOtherApplications: None::<&objc2::runtime::AnyObject>];
+            let _: () =
+                objc2::msg_send![app, hideOtherApplications: None::<&objc2::runtime::AnyObject>];
         });
     });
 
     cx.on_action(|_: &UnhideAll, _| {
         #[cfg(target_os = "macos")]
         with_ns_app(|app| unsafe {
-            let _: () = objc2::msg_send![app, unhideAllApplications: None::<&objc2::runtime::AnyObject>];
+            let _: () =
+                objc2::msg_send![app, unhideAllApplications: None::<&objc2::runtime::AnyObject>];
         });
     });
 
@@ -135,7 +127,8 @@ pub fn init(cx: &mut App) {
     cx.on_action(|_: &ShowPreviousTab, _| {
         #[cfg(target_os = "macos")]
         with_key_window(|window| unsafe {
-            let _: () = objc2::msg_send![window, selectPreviousTab: None::<&objc2::runtime::AnyObject>];
+            let _: () =
+                objc2::msg_send![window, selectPreviousTab: None::<&objc2::runtime::AnyObject>];
         });
     });
 
@@ -149,14 +142,16 @@ pub fn init(cx: &mut App) {
     cx.on_action(|_: &MoveTabToNewWindow, _| {
         #[cfg(target_os = "macos")]
         with_key_window(|window| unsafe {
-            let _: () = objc2::msg_send![window, moveTabToNewWindow: None::<&objc2::runtime::AnyObject>];
+            let _: () =
+                objc2::msg_send![window, moveTabToNewWindow: None::<&objc2::runtime::AnyObject>];
         });
     });
 
     cx.on_action(|_: &MergeAllWindows, _| {
         #[cfg(target_os = "macos")]
         with_key_window(|window| unsafe {
-            let _: () = objc2::msg_send![window, mergeAllWindows: None::<&objc2::runtime::AnyObject>];
+            let _: () =
+                objc2::msg_send![window, mergeAllWindows: None::<&objc2::runtime::AnyObject>];
         });
     });
 
@@ -185,12 +180,12 @@ pub fn init(cx: &mut App) {
     // cmd-q — the standard macOS quit shortcut. Binding it here also gives
     // the "Quit" menu item its ⌘Q key equivalent (GPUI menu items derive
     // their displayed keystroke from the keymap).
-    cx.bind_keys([KeyBinding::new("secondary-q", Quit, None)]);
+    cx.bind_keys([console_ui::key_binding("secondary-q", Quit, None, cx)]);
     // Standard app/window keystrokes; each also labels its menu item.
     cx.bind_keys([
-        KeyBinding::new("secondary-h", HideApp, None),
-        KeyBinding::new("alt-secondary-h", HideOthers, None),
-        KeyBinding::new("secondary-m", Minimize, None),
+        console_ui::key_binding("secondary-h", HideApp, None, cx),
+        console_ui::key_binding("alt-secondary-h", HideOthers, None, cx),
+        console_ui::key_binding("secondary-m", Minimize, None, cx),
         KeyBinding::new("ctrl-shift-tab", ShowPreviousTab, None),
         KeyBinding::new("ctrl-tab", ShowNextTab, None),
     ]);
@@ -198,6 +193,7 @@ pub fn init(cx: &mut App) {
     cx.set_menus(vec![
         Menu::new("Console").items([
             MenuItem::action("About Console", About),
+            MenuItem::action("Check for Updates…", CheckForUpdates),
             MenuItem::Separator,
             MenuItem::action("Settings...", OpenSettings),
             MenuItem::Separator,
@@ -245,10 +241,7 @@ pub fn init(cx: &mut App) {
         ]),
         // View menu owns ⌘B / ⌥B key equivalents so AppKit routes them
         // to our actions (same pattern as File for ⌘O / ⌘P).
-        Menu::new("View").items([
-            MenuItem::action("Toggle Left Sidebar", ToggleLeftSidebar),
-            MenuItem::action("Toggle Right Sidebar", ToggleRightSidebar),
-        ]),
+        Menu::new("View").items([MenuItem::action("Toggle Left Sidebar", ToggleLeftSidebar)]),
         // GPUI's mac backend makes any menu named "Window" the app's windows
         // menu, so open windows (and tab items) list under ours.
         Menu::new("Window").items([

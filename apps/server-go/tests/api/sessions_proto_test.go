@@ -4,8 +4,8 @@
 package tests
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -92,6 +92,19 @@ func TestSessionHeaderProtoMatchesFixtures(t *testing.T) {
 	}
 	if settledHeader.SettledAt == nil || *settledHeader.SettledAt != 1700000000005 {
 		t.Fatalf("header_settled decoded wrong: %#v", settledHeader.SettledAt)
+	}
+
+	// The unread header decodes with the flag set, and a header without it
+	// reads as read: the field is absent from every older fixture.
+	var unreadHeader consolev1.SessionHeader
+	if err := unmarshal.Unmarshal([]byte(sessionFixture(t, "header_unread.json")), &unreadHeader); err != nil {
+		t.Fatal(err)
+	}
+	if !unreadHeader.GetUnread() {
+		t.Fatal("header_unread decoded without the unread flag")
+	}
+	if decoded.GetUnread() {
+		t.Fatal("a header with no unread field must read as read")
 	}
 }
 
@@ -200,5 +213,91 @@ func TestSessionHeaderRoutes(t *testing.T) {
 	missing := httptest.NewRequest("GET", "/api/sessions/nope", nil)
 	if resp, err := app.Test(missing, 10000); err != nil || resp.StatusCode != 404 {
 		t.Fatalf("missing session must 404: %v", resp)
+	}
+}
+
+func TestSessionListQueryFilter(t *testing.T) {
+	app, _ := sessionRoutesApp(t)
+
+	create := func(title string) string {
+		body := strings.NewReader(fmt.Sprintf(`{"title":%q,"cwd":%q}`, title, t.TempDir()))
+		req := httptest.NewRequest("POST", "/api/sessions/", body)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req, 10000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var env struct {
+			Success bool `json:"success"`
+			Data    struct {
+				Id string `json:"id"`
+			} `json:"data"`
+		}
+		raw, _ := io.ReadAll(resp.Body)
+		if err := json.Unmarshal(raw, &env); err != nil || !env.Success {
+			t.Fatalf("create %s: %s", title, raw)
+		}
+		return env.Data.Id
+	}
+
+	settle := func(id string) {
+		req := httptest.NewRequest("POST", "/api/sessions/"+id+"/settle", nil)
+		resp, err := app.Test(req, 10000)
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("settle %s: %v", id, err)
+		}
+	}
+
+	listQuery := func(query string) []string {
+		target := "/api/sessions/"
+		if query != "" {
+			target += "?query=" + query
+		}
+		req := httptest.NewRequest("GET", target, nil)
+		resp, err := app.Test(req, 10000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := io.ReadAll(resp.Body)
+		var env struct {
+			Success bool `json:"success"`
+			Data    []struct {
+				Id    string `json:"id"`
+				Title string `json:"title"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(raw, &env); err != nil || !env.Success {
+			t.Fatalf("list %s: %s", query, raw)
+		}
+		titles := make([]string, len(env.Data))
+		for i, item := range env.Data {
+			titles[i] = item.Title
+		}
+		return titles
+	}
+
+	id1 := create("Fix frontend navbar")
+	id2 := create("Refactor backend auth")
+	id3 := create("Archive frontend release notes")
+	settle(id3)
+	_ = id1
+	_ = id2
+
+	// Query "frontend" matches id1 (active) and id3 (settled)
+	frontendHits := listQuery("frontend")
+	if len(frontendHits) != 2 {
+		t.Fatalf("expected 2 frontend hits, got %v", frontendHits)
+	}
+
+	// Case-insensitive query "AUTH" matches id2
+	authHits := listQuery("AUTH")
+	if len(authHits) != 1 || authHits[0] != "Refactor backend auth" {
+		t.Fatalf("expected auth hit, got %v", authHits)
+	}
+
+	// Query with no match returns empty
+	emptyHits := listQuery("nonexistent-topic")
+	if len(emptyHits) != 0 {
+		t.Fatalf("expected 0 hits, got %v", emptyHits)
 	}
 }

@@ -10,26 +10,33 @@ import (
 	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
 )
 
 // Manager hands out per-session console kernels.
 type Manager struct {
-	mu       sync.Mutex
-	js       *jskernel.Cache[*Runtime]
-	stopped  bool
-	ports    *terminalsvc.PortRegistry
-	scripts  *projectssvc.ProjectScriptsService
-	sessions *services.SessionService
-	projects *projectssvc.ProjectService
-	pulls    *services.PullRequestService
-	mcp      *mcp.Manager
-	active   func(string) bool
-	start    func(string, string, string, string, string, string) error
-	abort    func(string) bool
-	prompt   PromptFunc
-	queue    QueueControl
+	mu             sync.Mutex
+	js             *jskernel.Cache[*Runtime]
+	stopped        bool
+	ports          *terminalsvc.PortRegistry
+	scripts        *projectssvc.ProjectScriptsService
+	sessions       *services.SessionService
+	projects       *projectssvc.ProjectService
+	pulls          *services.PullRequestService
+	mcp            *mcp.Manager
+	automations    *automations.Service
+	webhooks       *webhooks.Service
+	webhookBaseURL func() string
+	active         func(string) bool
+	start          func(string, string, string, string, string, string) error
+	abort          func(string) bool
+	prompt         PromptFunc
+	queue          QueueControl
+	work           func() *background.Manager
 }
 
 // maxConsoleRuntimes caps live session kernels.
@@ -86,6 +93,46 @@ func (m *Manager) pullRequestService() *services.PullRequestService {
 	return m.pulls
 }
 
+// SetAutomations attaches the store behind console.automation.*. Nil (never
+// set, or tests) leaves the methods reporting unavailable.
+func (m *Manager) SetAutomations(store *automations.Service) {
+	m.mu.Lock()
+	m.automations = store
+	m.mu.Unlock()
+}
+
+func (m *Manager) automationStore() *automations.Service {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.automations
+}
+
+// SetWebhooks attaches the store behind console.webhooks.*.
+func (m *Manager) SetWebhooks(store *webhooks.Service) {
+	m.mu.Lock()
+	m.webhooks = store
+	m.mu.Unlock()
+}
+
+func (m *Manager) webhookStore() *webhooks.Service {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.webhooks
+}
+
+// SetWebhookBaseURL attaches a resolver for the server's public webhook base URL.
+func (m *Manager) SetWebhookBaseURL(fn func() string) {
+	m.mu.Lock()
+	m.webhookBaseURL = fn
+	m.mu.Unlock()
+}
+
+func (m *Manager) webhookBaseURLFn() func() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.webhookBaseURL
+}
+
 func (m *Manager) mcpManager() *mcp.Manager {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -106,6 +153,21 @@ func (m *Manager) sessionConfig() (*services.SessionService, *projectssvc.Projec
 	return m.sessions, m.projects, m.active, m.abort, m.start, m.prompt, m.queue
 }
 
+// SetBackgroundWork attaches the background-work manager used by
+// console.sessions.wait({background: true}). It takes a getter because the
+// run service can swap its manager.
+func (m *Manager) SetBackgroundWork(work func() *background.Manager) {
+	m.mu.Lock()
+	m.work = work
+	m.mu.Unlock()
+}
+
+func (m *Manager) backgroundWork() func() *background.Manager {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.work
+}
+
 // sessionRuntime returns the session's console kernel, creating it on first use.
 func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, error) {
 	return m.js.Get(sessionID, func() (*Runtime, error) {
@@ -121,6 +183,10 @@ func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, er
 			runtime.SetPullRequests(pulls)
 		}
 		runtime.sessionID = sessionID
+		runtime.work = m.backgroundWork()
+		runtime.automations = m.automationStore()
+		runtime.webhooks = m.webhookStore()
+		runtime.webhookBaseURL = m.webhookBaseURLFn()
 		runtime.SetCancel(m.Stopped)
 		return runtime, nil
 	})

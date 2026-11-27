@@ -3,7 +3,7 @@ use console_ui::input::ComposerInput;
 use console_ui::settings::{
     BrowserPage, BrowserProfileRow, DeletedChatsPage, IntegrationsPage, KeybindingsPage,
     ModelsPage, ProbeState, ProjectsPage, ProvidersPage, ServersPage, SettingsShell, SettingsTab,
-    UsagePage,
+    UpdatesPage, UsagePage,
 };
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -36,6 +36,14 @@ pub struct SettingsWindow {
     pub(crate) model_error: Option<String>,
     pub(crate) mcp: crate::settings::mcp::McpTabState,
     github_token_input: Entity<ComposerInput>,
+    /// Cloudflare account ID for the speech-to-text form. Created up front
+    /// like the other settings inputs, so entity identity is stable across
+    /// renders and a half-typed id survives keystrokes.
+    stt_account_input: Entity<ComposerInput>,
+    /// Cloudflare API token for the speech-to-text form. Cleared the moment
+    /// the pair is submitted (see on_stt_submit), which is what keeps the
+    /// credential from lingering client-side.
+    stt_token_input: Entity<ComposerInput>,
     rename_input: Entity<ComposerInput>,
     /// One key field per key-taking provider, created lazily: the catalog
     /// arrives from the server, so the set is not known when the window is
@@ -46,6 +54,8 @@ pub struct SettingsWindow {
     /// (where the form lives) by the observe above, because `modal_open`
     /// must not read the app entity from inside app-keyed event callbacks.
     rename_form_open: bool,
+    /// Same mirror for the speech-to-text Connect dialog.
+    stt_form_open: bool,
     _subscriptions: Vec<gpui::Subscription>,
 }
 
@@ -59,23 +69,26 @@ impl SettingsWindow {
     ) -> Self {
         let subscription = app.upgrade().map(|app_entity| {
             cx.observe(&app_entity, |this, app, cx| {
-                // Snapshot the rename-dialog open state: `modal_open`
-                // runs inside event callbacks keyed to the app entity,
-                // where reading the app entity through the map would
+                // Snapshot the rename-dialog and STT-dialog open states:
+                // `modal_open` runs inside event callbacks keyed to the app
+                // entity, where reading the app entity through the map would
                 // panic with "already being updated".
                 this.rename_form_open = app.read(cx).rename_form.is_some();
+                this.stt_form_open = app.read(cx).stt_form_open;
                 cx.notify();
             })
         });
 
         let new_env_name_input = cx.new(|cx| {
-            let mut input = ComposerInput::new(window, cx);
+            let mut input = ComposerInput::new(window, cx).search_field();
             input.set_placeholder("e.g. Production Daemon", cx);
             input
         });
 
+        // Search mode keeps these fields one line: a long host or node ID
+        // slides horizontally instead of wrapping to three rows.
         let new_env_url_input = cx.new(|cx| {
-            let mut input = ComposerInput::new(window, cx);
+            let mut input = ComposerInput::new(window, cx).search_field();
             input.set_placeholder("e.g. 192.168.1.50:3000", cx);
             input
         });
@@ -84,23 +97,21 @@ impl SettingsWindow {
         // inputs so its entity identity is stable across renders — rebuilding
         // it each render would drop focus and any half-typed code.
         let new_env_code_input = cx.new(|cx| {
-            let mut input = ComposerInput::new(window, cx);
+            let mut input = ComposerInput::new(window, cx).search_field();
             input.set_placeholder("e.g. abc-123-xyz", cx);
             input
         });
 
         let model_vision_input = cx.new(|cx| {
-            ComposerInput::new(window, cx)
-                .placeholder("provider/model or leave blank for chat model")
+            ComposerInput::new(window, cx).placeholder("provider/model or leave blank to not set")
         });
         let model_smol_input = cx.new(|cx| {
-            ComposerInput::new(window, cx)
-                .placeholder("provider/model or leave blank for chat model")
+            ComposerInput::new(window, cx).placeholder("provider/model or leave blank to not set")
         });
 
         let vision_for_load = model_vision_input.clone();
         let smol_for_load = model_smol_input.clone();
-        let client_for_load = client.clone();
+        let client_for_load = client;
         cx.spawn(async move |_, cx| {
             if let Ok(settings) = client_for_load.settings.get().await {
                 cx.update(|cx| {
@@ -160,14 +171,13 @@ impl SettingsWindow {
         // the user pastes one line and the two fields fill themselves.
         {
             let code_input = new_env_code_input.clone();
-            let url_input = new_env_url_input.clone();
             subscriptions.push(cx.subscribe(
-                &url_input,
+                &new_env_url_input,
                 move |_this, input, event: &console_ui::input::ComposerEvent, cx| match event {
                     console_ui::input::ComposerEvent::Edited
                     | console_ui::input::ComposerEvent::Focus => {
                         let text = input.read(cx).content();
-                        let (address, code) = console_core::utils::split_pairing_line(&text);
+                        let (address, code) = console_core::utils::split_pairing_line(text);
                         if code.is_empty() {
                             return;
                         }
@@ -218,6 +228,28 @@ impl SettingsWindow {
             },
         ));
 
+        // Speech-to-text pair fields, created up front for the same reason:
+        // stable entities keep focus and half-typed values across renders.
+        let stt_account_input =
+            cx.new(|cx| ComposerInput::new(window, cx).placeholder("Cloudflare account ID"));
+        subscriptions.push(cx.subscribe(
+            &stt_account_input,
+            |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
+                console_ui::input::ComposerEvent::Edited
+                | console_ui::input::ComposerEvent::Focus => cx.notify(),
+                _ => {}
+            },
+        ));
+        let stt_token_input = cx.new(|cx| ComposerInput::new(window, cx).placeholder("API token"));
+        subscriptions.push(cx.subscribe(
+            &stt_token_input,
+            |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
+                console_ui::input::ComposerEvent::Edited
+                | console_ui::input::ComposerEvent::Focus => cx.notify(),
+                _ => {}
+            },
+        ));
+
         // Account rename field. Created up front for the same reason as the
         // others: a stable entity keeps focus and half-typed names across
         // renders. Seeded with the account's display name when the form opens.
@@ -239,9 +271,12 @@ impl SettingsWindow {
             editing_env_id: None,
             new_env_name_input,
             github_token_input,
+            stt_account_input,
+            stt_token_input,
             rename_input,
             api_key_inputs: std::collections::HashMap::new(),
             rename_form_open: false,
+            stt_form_open: false,
             new_env_url_input,
             new_env_code_input,
             new_env_probe: ProbeState::Unknown,
@@ -289,10 +324,15 @@ impl SettingsWindow {
         });
     }
 
-    pub fn set_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
+    pub fn set_tab(
+        &mut self,
+        tab: SettingsTab,
+        client: console_core::ConsoleClient,
+        cx: &mut Context<Self>,
+    ) {
         self.active_tab = tab;
         if tab == SettingsTab::Mcp {
-            self.mcp.fetch_mcp_servers(cx);
+            self.mcp.fetch_mcp_servers_with_client(client, cx);
         }
         cx.notify();
     }
@@ -331,10 +371,11 @@ impl SettingsWindow {
         if self.is_adding_env || self.pair_modal_open || self.mcp.is_modal_open {
             return true;
         }
-        // The rename dialog's state lives on the app, but its open flag is
-        // mirrored here by the observe callback: reading the app entity here
-        // can panic while a listener keyed to the app entity is running.
-        self.rename_form_open
+        // Rename and speech-to-text dialogs keep their state on the app, so
+        // their open flags are mirrored here by the observe callback:
+        // reading the app entity here can panic while a listener keyed to
+        // the app entity is running.
+        self.rename_form_open || self.stt_form_open
     }
 
     /// Close any modal open on top of the settings.
@@ -348,6 +389,7 @@ impl SettingsWindow {
                 if app_state.rename_form.take().is_some() {
                     cx.notify();
                 }
+                app_state.set_stt_form_open(false, cx);
             });
         }
         cx.notify();
@@ -504,44 +546,46 @@ impl Render for SettingsWindow {
         let app = app_entity.read(cx);
 
         let on_select_tab: Rc<dyn Fn(SettingsTab, &mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let app_handle = self.app.clone();
             Rc::new(move |tab: SettingsTab, _w: &mut Window, cx: &mut App| {
-                if tab == SettingsTab::Usage {
-                    if let Some(app) = app_handle.upgrade() {
-                        app.update(cx, |app_state, cx| {
-                            app_state.fetch_usage(cx);
-                        });
-                    }
+                if tab == SettingsTab::Usage
+                    && let Some(app) = app_handle.upgrade()
+                {
+                    app.update(cx, |app_state, cx| {
+                        app_state.fetch_usage(cx);
+                    });
                 }
                 if tab == SettingsTab::Mcp {
                     entity.update(cx, |this, cx| {
                         this.fetch_mcp_servers(cx);
                     });
                 }
-                if tab == SettingsTab::Browser {
-                    if let Some(app) = app_handle.upgrade() {
-                        app.update(cx, |app_state, cx| {
-                            app_state.fetch_chrome_profiles(cx);
-                        });
-                    }
+                if tab == SettingsTab::Browser
+                    && let Some(app) = app_handle.upgrade()
+                {
+                    app.update(cx, |app_state, cx| {
+                        app_state.fetch_chrome_profiles(cx);
+                    });
                 }
                 // Sidebar clicks bypass set_tab, and without this the GitHub
                 // row never re-reads: one failed load stuck it on
                 // "Not connected" until the whole window reopened.
-                if tab == SettingsTab::Providers {
-                    if let Some(app) = app_handle.upgrade() {
-                        app.update(cx, |app_state, cx| {
-                            app_state.refresh_github_status(cx);
-                        });
-                    }
+                if tab == SettingsTab::Providers
+                    && let Some(app) = app_handle.upgrade()
+                {
+                    app.update(cx, |app_state, cx| {
+                        app_state.refresh_github_status(cx);
+                        app_state.refresh_provider_credentials(cx);
+                        app_state.refresh_stt_status(cx);
+                    });
                 }
-                if tab == SettingsTab::Integrations {
-                    if let Some(app) = app_handle.upgrade() {
-                        app.update(cx, |app_state, cx| {
-                            app_state.refresh_integrations(cx);
-                        });
-                    }
+                if tab == SettingsTab::Integrations
+                    && let Some(app) = app_handle.upgrade()
+                {
+                    app.update(cx, |app_state, cx| {
+                        app_state.refresh_integrations(cx);
+                    });
                 }
                 entity.update(cx, |this, cx| {
                     this.active_tab = tab;
@@ -555,14 +599,14 @@ impl Render for SettingsWindow {
                     }
                     // The rename dialog belongs to the providers tab the
                     // same way.
-                    if tab != SettingsTab::Providers {
-                        if let Some(app) = app_handle.upgrade() {
-                            app.update(cx, |app_state, cx| {
-                                if app_state.rename_form.take().is_some() {
-                                    cx.notify();
-                                }
-                            });
-                        }
+                    if tab != SettingsTab::Providers
+                        && let Some(app) = app_handle.upgrade()
+                    {
+                        app.update(cx, |app_state, cx| {
+                            if app_state.rename_form.take().is_some() {
+                                cx.notify();
+                            }
+                        });
                     }
                     cx.notify();
                 });
@@ -570,7 +614,7 @@ impl Render for SettingsWindow {
         };
 
         let on_probe_new: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let url_input = self.new_env_url_input.clone();
             Rc::new(move |_w: &mut Window, cx: &mut App| {
                 let url = url_input.read(cx).content().trim().to_string();
@@ -583,7 +627,7 @@ impl Render for SettingsWindow {
                 });
                 let ent = entity.clone();
                 cx.spawn(async move |cx| {
-                    let ok = console_core::utils::probe_backend(&url, Duration::from_secs(3)).await;
+                    let ok = console_core::utils::probe_backend(&url, Duration::from_secs(6)).await;
                     let _ = cx.update(|cx| {
                         ent.update(cx, |this, cx| {
                             this.new_env_probe = if ok.is_ok() {
@@ -601,7 +645,7 @@ impl Render for SettingsWindow {
 
         let on_save_new: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let app_handle = self.app.clone();
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             let name_input = self.new_env_name_input.clone();
             let url_input = self.new_env_url_input.clone();
             let code_input = self.new_env_code_input.clone();
@@ -674,7 +718,7 @@ impl Render for SettingsWindow {
         // one-time code to show in it.
         let on_pair_device: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let app_handle = self.app.clone();
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             Rc::new(move |_w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     this.pair_modal_open = true;
@@ -697,7 +741,6 @@ impl Render for SettingsWindow {
         let pairing_grant = app.server_pairing_grant.clone();
         let pairing_error = app.server_auth_error.clone();
         let this_device = app.server_device.clone();
-        let paired_devices = app.server_devices.clone();
 
         let content = match active_tab {
             SettingsTab::Providers => {
@@ -744,6 +787,25 @@ impl Render for SettingsWindow {
                     Rc::new(move |_w: &mut Window, cx: &mut App| {
                         if let Some(app) = app_handle.upgrade() {
                             app.update(cx, |app_state, cx| app_state.disconnect_github(cx));
+                        }
+                    })
+                };
+
+                let on_stt_connect: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                app_state.set_stt_form_open(true, cx);
+                            });
+                        }
+                    })
+                };
+                let on_stt_disconnect: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| app_state.disconnect_stt(cx));
                         }
                     })
                 };
@@ -820,6 +882,13 @@ impl Render for SettingsWindow {
                         on_submit: on_github_submit,
                         on_disconnect: on_github_disconnect,
                     }),
+                    stt: Some(console_ui::settings::SttSection {
+                        status: app.stt_status.clone(),
+                        busy: app.stt_busy,
+                        error: app.stt_error.clone(),
+                        on_connect: on_stt_connect,
+                        on_disconnect: on_stt_disconnect,
+                    }),
                 }
                 .into_any_element()
             }
@@ -858,7 +927,7 @@ impl Render for SettingsWindow {
                 };
 
                 let on_toggle_add: Rc<dyn Fn(bool, &mut Window, &mut App) + 'static> = {
-                    let entity = cx.entity().clone();
+                    let entity = cx.entity();
                     let name_input = self.new_env_name_input.clone();
                     let url_input = self.new_env_url_input.clone();
                     let code_input = self.new_env_code_input.clone();
@@ -886,7 +955,7 @@ impl Render for SettingsWindow {
                 };
 
                 let on_edit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-                    let entity = cx.entity().clone();
+                    let entity = cx.entity();
                     let app_handle = self.app.clone();
                     let name_input = self.new_env_name_input.clone();
                     let url_input = self.new_env_url_input.clone();
@@ -971,6 +1040,7 @@ impl Render for SettingsWindow {
                         do_save(cx);
                     })
                 };
+                let do_save_on_clear = do_save.clone();
                 let on_select: Rc<
                     dyn Fn(String, String, String, Entity<ComposerInput>, &mut Window, &mut App)
                         + 'static,
@@ -985,6 +1055,7 @@ impl Render for SettingsWindow {
                         input.update(cx, |input, cx| {
                             input.clear(cx);
                         });
+                        do_save_on_clear(cx);
                     });
                 let self_entity = cx.entity().downgrade();
                 let on_tab: Rc<
@@ -1038,12 +1109,12 @@ impl Render for SettingsWindow {
                         }
                     })
                 };
-                let on_install: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                let on_install: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
                     let app_handle = self.app.clone();
-                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                    Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
                         if let Some(app) = app_handle.upgrade() {
                             app.update(cx, |app_state, cx| {
-                                app_state.install_gh(cx);
+                                app_state.install_integration(&id, cx);
                             });
                         }
                     })
@@ -1159,6 +1230,29 @@ impl Render for SettingsWindow {
                 search_input: Some(self.keybindings_search.clone()),
             }
             .into_any_element(),
+            SettingsTab::Updates => {
+                let app_handle = self.app.clone();
+                let on_check: Rc<dyn Fn(&mut Window, &mut App) + 'static> =
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| app_state.check_for_update(cx));
+                        }
+                    });
+                let app_handle = self.app.clone();
+                let on_install: Rc<dyn Fn(&mut Window, &mut App) + 'static> =
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| app_state.install_update(cx));
+                        }
+                    });
+                UpdatesPage {
+                    installed_build: crate::state::updates::installed_build(),
+                    status: app.update_status.clone(),
+                    on_check,
+                    on_install,
+                }
+                .into_any_element()
+            }
             SettingsTab::Browser => {
                 let app_handle = self.app.clone();
                 let on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static> =
@@ -1284,7 +1378,7 @@ impl Render for SettingsWindow {
         };
 
         let on_modal_close: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-            let entity = cx.entity().clone();
+            let entity = cx.entity();
             Rc::new(move |_w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     this.is_adding_env = false;
@@ -1307,28 +1401,68 @@ impl Render for SettingsWindow {
             on_save: on_save_new.clone(),
         };
 
+        // The speech-to-text Connect dialog: same shell, same snapshot
+        // discipline as rename.
+        let (stt_busy, stt_error, stt_open) = self
+            .app
+            .upgrade()
+            .map(|app| {
+                let app = app.read(cx);
+                (app.stt_busy, app.stt_error.clone(), app.stt_form_open)
+            })
+            .unwrap_or((false, None, false));
+        let show_stt_modal = active_tab == SettingsTab::Providers && stt_open;
+        let stt_modal = console_ui::settings::SttConfigModal {
+            account_input: Some(self.stt_account_input.clone()),
+            token_input: Some(self.stt_token_input.clone()),
+            busy: stt_busy,
+            error: stt_error,
+            on_close: {
+                let app_handle = self.app.clone();
+                Rc::new(move |_w: &mut Window, cx: &mut App| {
+                    if let Some(app) = app_handle.upgrade() {
+                        app.update(cx, |app_state, cx| {
+                            app_state.set_stt_form_open(false, cx);
+                        });
+                    }
+                })
+            },
+            on_save: {
+                let app_handle = self.app.clone();
+                let account_input = self.stt_account_input.clone();
+                let token_input = self.stt_token_input.clone();
+                Rc::new(move |_w: &mut Window, cx: &mut App| {
+                    if let Some(app) = app_handle.upgrade() {
+                        let account_id = account_input.read(cx).content().trim().to_string();
+                        let token = token_input.read(cx).content().trim().to_string();
+                        if account_id.is_empty() || token.is_empty() {
+                            return;
+                        }
+                        // Clear both fields as soon as the pair is handed
+                        // off: the token is a credential, and nothing
+                        // should keep a copy client-side.
+                        account_input.update(cx, |input, cx| input.set_content("", cx));
+                        token_input.update(cx, |input, cx| input.set_content("", cx));
+                        app.update(cx, |app_state, cx| {
+                            app_state.save_stt_config(account_id, token, cx);
+                            app_state.set_stt_form_open(false, cx);
+                        });
+                    }
+                })
+            },
+        };
+
         let pair_modal = console_ui::settings::PairDeviceModal {
             grant: pairing_grant,
             this_device,
-            devices: paired_devices,
             error: pairing_error,
             on_close: {
-                let entity = cx.entity().clone();
+                let entity = cx.entity();
                 Rc::new(move |_w: &mut Window, cx: &mut App| {
                     entity.update(cx, |this, cx| {
                         this.pair_modal_open = false;
                         cx.notify();
                     });
-                })
-            },
-            on_revoke: {
-                let app_handle = self.app.clone();
-                Rc::new(move |device_id: String, _w: &mut Window, cx: &mut App| {
-                    if let Some(app) = app_handle.upgrade() {
-                        app.update(cx, |app_state, cx| {
-                            app_state.revoke_server_device(device_id, cx);
-                        });
-                    }
                 })
             },
             on_unpair: {
@@ -1362,6 +1496,24 @@ impl Render for SettingsWindow {
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                 if event.keystroke.key == "escape" {
+                    // The speech-to-text dialog's state lives on the app, not
+                    // on this window, so it is checked first the same way as
+                    // rename.
+                    if this
+                        .app
+                        .upgrade()
+                        .map(|app| app.read(cx).stt_form_open)
+                        .unwrap_or(false)
+                    {
+                        if let Some(app) = this.app.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                app_state.set_stt_form_open(false, cx);
+                            });
+                        }
+                        cx.stop_propagation();
+                        cx.notify();
+                        return;
+                    }
                     // The rename dialog's state lives on the app, not on
                     // this window, so it is checked first the same way.
                     if this
@@ -1390,7 +1542,6 @@ impl Render for SettingsWindow {
                         this.editing_env_id = None;
                         cx.stop_propagation();
                         cx.notify();
-                        return;
                     }
                     // Otherwise the event is left to bubble: the window root
                     // closes the settings and gives the workspace back.
@@ -1403,6 +1554,7 @@ impl Render for SettingsWindow {
             .when(show_pair_modal, |el| el.child(pair_modal))
             .when(show_mcp_modal, |el| el.child(mcp_modal))
             .when(show_rename_modal, |el| el.child(rename_modal))
+            .when(show_stt_modal, |el| el.child(stt_modal))
             .into_any_element()
     }
 }
