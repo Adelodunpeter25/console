@@ -7,7 +7,7 @@ require (
 	github.com/Adelodunpeter25/sim-go v0.0.0-20261113115339-d943d8632ca3
 	github.com/BurntSushi/toml v1.6.0
 	github.com/MoeForge/moego v0.1.0-alpha.5
-	github.com/MoeForge/moejs v0.1.0
+	github.com/MoeForge/moejs v0.1.1
 	github.com/creack/pty v1.1.24
 	github.com/fasthttp/websocket v1.5.12
 	github.com/fsnotify/fsnotify v1.10.1
