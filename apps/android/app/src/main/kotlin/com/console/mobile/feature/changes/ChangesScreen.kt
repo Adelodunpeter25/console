@@ -2,6 +2,7 @@ package com.console.mobile.feature.changes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -25,7 +25,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,7 +34,6 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
-import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
 import io.github.lyxnx.compose.ui.tablericons.outline.GitBranch
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
@@ -110,7 +108,6 @@ fun ChangesScreen(onBack: () -> Unit) {
 
     val totals = changeSummary(files)
     val rows = buildRows(files, repoPath)
-    val allPaths = files.distinctBy { it.path }.map { it.path }
 
     Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         when {
@@ -123,17 +120,13 @@ fun ChangesScreen(onBack: () -> Unit) {
                     .fillMaxSize()
                     .verticalScroll(listScroll)
                     .padding(horizontal = 16.dp)
-                    .padding(top = PageHeaderHeight, bottom = 24.dp),
+                    .padding(top = PageHeaderHeight + 12.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // Flat, borderless list: a soft surface with one line per file.
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(NewTheme.CardRadius))
-                        .background(NewTheme.Card),
-                ) {
-                    rows.forEach { row ->
-                        val isOpen = expanded.contains(row.path)
+                // Flat list: one line per file, spaced apart, no card or rounding.
+                rows.forEach { row ->
+                    val isOpen = expanded.contains(row.path)
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         FileChangeRow(
                             row = row,
                             open = isOpen,
@@ -152,17 +145,7 @@ fun ChangesScreen(onBack: () -> Unit) {
             subtitle = "${totals.files} files  +${totals.additions} -${totals.deletions}",
             blurred = true,
             onBack = onBack,
-            actions = {
-                if (rows.isNotEmpty()) {
-                    val anyOpen = expanded.isNotEmpty()
-                    HeaderIconButton(
-                        icon = if (anyOpen) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown,
-                        contentDescription = if (anyOpen) "Collapse all" else "Expand all",
-                        onClick = { expanded = if (anyOpen) emptySet() else allPaths.toSet() },
-                    )
-                }
-                HeaderIconButton(TablerIcons.Outline.Refresh, "Refresh", onClick = ::refresh)
-            },
+            actions = { HeaderIconButton(TablerIcons.Outline.Refresh, "Refresh", onClick = ::refresh) },
             modifier = Modifier.align(Alignment.TopCenter),
         )
     }
@@ -176,8 +159,7 @@ private fun FileChangeRow(row: ChangesRow, open: Boolean, onToggle: () -> Unit) 
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 40.dp)
-            .clickable(onClick = onToggle)
-            .padding(start = 12.dp, end = 10.dp),
+            .clickable(onClick = onToggle),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(statusLetter(row.status), color = gitBadgeColor(row.status), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(14.dp))
