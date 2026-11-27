@@ -35,6 +35,60 @@ fun changeSummary(changes: List<SessionFileChange>): ChangeTotals =
         deletions = changes.sumOf { it.deletions },
     )
 
+/** 999 -> "999", 4279 -> "4.3k", 1_250_000 -> "1.3M"; one decimal, half up, no trailing ".0". */
+fun formatCompactCount(n: Int): String {
+    if (n < 1_000) return n.toString()
+    var tenths: Int
+    var suffix: String
+    if (n < 1_000_000) {
+        tenths = (n + 50) / 100
+        suffix = "k"
+    } else {
+        tenths = ((n.toLong() + 50_000L) / 100_000L).toInt()
+        suffix = "M"
+    }
+    // 999_950 rounds up to 1000.0k, which reads better as 1M.
+    if (suffix == "k" && tenths >= 10_000) {
+        tenths = 10
+        suffix = "M"
+    }
+    val whole = tenths / 10
+    val frac = tenths % 10
+    return if (frac == 0) "$whole$suffix" else "$whole.$frac$suffix"
+}
+
+/** One arc of a ring: start and length as fractions of the circle, 0.0 at 12 o'clock. */
+data class RingSpan(val start: Float, val len: Float)
+
+/**
+ * Splits a circle between parts sized by weights, one span per weight in order.
+ * A zero weight gets an empty span. With two or more non-zero parts a gap
+ * separates them and each keeps at least [min], so a tiny share stays visible;
+ * a single part fills the whole circle.
+ */
+fun splitRing(weights: List<Float>, gap: Float, min: Float): List<RingSpan> {
+    val live = weights.count { it > 0f }
+    val spans = MutableList(weights.size) { RingSpan(0f, 0f) }
+    if (live == 0) return spans
+    if (live == 1) {
+        spans[weights.indexOfFirst { it > 0f }] = RingSpan(0f, 1f)
+        return spans
+    }
+    val total = weights.filter { it > 0f }.sum()
+    val usable = 1f - gap * live
+    val lens = weights.map { if (it > 0f) maxOf(it / total * usable, min) else 0f }
+    val scale = usable / lens.sum()
+    var cursor = gap / 2f
+    lens.forEachIndexed { i, len ->
+        if (len > 0f) {
+            val scaled = len * scale
+            spans[i] = RingSpan(cursor, scaled)
+            cursor += scaled + gap
+        }
+    }
+    return spans
+}
+
 fun buildRows(files: List<SessionFileChange>, collapsed: Set<String>, repoPath: String?): List<ChangesRow> {
     // One row per file across the whole session: the server returns rows
     // newest-first, so keeping the first for a path shows the latest turn's

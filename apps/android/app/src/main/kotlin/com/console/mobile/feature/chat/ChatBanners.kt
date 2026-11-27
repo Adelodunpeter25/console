@@ -1,5 +1,6 @@
 package com.console.mobile.feature.chat
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -44,10 +45,13 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.ChangeTotals
+import com.console.mobile.core.util.formatCompactCount
+import com.console.mobile.core.util.splitRing
 import com.console.mobile.data.model.Automation
 import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.BackgroundWorkOutput
@@ -257,51 +263,56 @@ fun ComposerPills(
     }
 }
 
-/** Session change totals: "2 files changed +8 -4". Tapping opens the Changes tab. */
+/**
+ * Session change totals: a ring split by lines added and removed, then the
+ * compact "+4.3k -1.6k". The file count rides in the accessibility label.
+ * Tapping opens the Changes tab.
+ */
 @Composable
 private fun ChangesPill(changes: ChangeTotals, onClick: () -> Unit) {
+    val label = "${changes.files} ${if (changes.files == 1) "file" else "files"} changed, +${changes.additions} -${changes.deletions}"
+    val spans = splitRing(listOf(changes.additions.toFloat(), changes.deletions.toFloat()), gap = 0.06f, min = 0.06f)
+    val addColor = NewTheme.Success
+    val delColor = NewTheme.Danger
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
             .background(NewTheme.Raised)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .semantics { contentDescription = label }
+            .padding(start = 11.dp, end = 13.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            TablerIcons.Outline.FileDiff,
-            contentDescription = null,
-            tint = NewTheme.TextMuted,
-            modifier = Modifier.size(15.dp),
-        )
-        Text(
-            text = "${changes.files} ${if (changes.files == 1) "file" else "files"} changed",
-            color = NewTheme.TextSecondary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            modifier = Modifier.padding(start = 7.dp),
-        )
+        Canvas(modifier = Modifier.size(17.dp)) {
+            val stroke = 3.dp.toPx()
+            val inset = stroke / 2
+            val arcSize = Size(size.width - stroke, size.height - stroke)
+            listOf(addColor, delColor).zip(spans).forEach { (color, span) ->
+                if (span.len > 0f) {
+                    drawArc(color, -90f + 360f * span.start, 360f * span.len, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
+                }
+            }
+        }
         if (changes.additions > 0) {
             Text(
-                text = "+${changes.additions}",
-                color = NewTheme.Success,
+                text = "+${formatCompactCount(changes.additions)}",
+                color = addColor,
                 fontSize = 13.sp,
                 fontFamily = ConsoleMonoFamily,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
-                modifier = Modifier.padding(start = 7.dp),
+                modifier = Modifier.padding(start = 8.dp),
             )
         }
         if (changes.deletions > 0) {
             Text(
-                text = "-${changes.deletions}",
-                color = NewTheme.Danger,
+                text = "-${formatCompactCount(changes.deletions)}",
+                color = delColor,
                 fontSize = 13.sp,
                 fontFamily = ConsoleMonoFamily,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
-                modifier = Modifier.padding(start = 5.dp),
+                modifier = Modifier.padding(start = 6.dp),
             )
         }
     }
