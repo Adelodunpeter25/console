@@ -5,6 +5,7 @@ pub mod session_item;
 
 pub use group_header::{
     pinned_group_header, project_header, search_results_group_header, settled_group_header,
+    workspaces_label,
 };
 pub use session_card::{
     SidebarHoverManager, dismiss_card, on_card_hover, on_row_hover, render_session_card_content,
@@ -40,8 +41,8 @@ pub fn init_sidebar_search_keybindings(cx: &mut App) {
 
 use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
 use gpui::{
-    Animation, AnimationExt, App, Entity, FontWeight, InteractiveElement, IntoElement, ListOffset,
-    ListState, MouseButton, ParentElement, RenderOnce, SpringAnimation, SpringConfig,
+    Animation, AnimationExt, App, Entity, InteractiveElement, IntoElement, ListOffset, ListState,
+    MouseButton, ParentElement, RenderOnce, SpringAnimation, SpringConfig,
     StatefulInteractiveElement, Styled, Window, div, list, prelude::FluentBuilder, px,
 };
 use std::cell::RefCell;
@@ -128,6 +129,8 @@ enum SidebarRow {
     EmptySearch,
     /// Pinned section header, shown above the pinned rows.
     PinnedHeader,
+    /// "My workspaces" label that heads Pinned and the project cards.
+    WorkspacesLabel,
     /// Project section header: display name plus the collapse key (project id
     /// or [`NO_PROJECT_KEY`]).
     ProjectHeader {
@@ -140,6 +143,7 @@ enum SidebarRow {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum SidebarRowKey {
     PinnedHeader,
+    WorkspacesLabel,
     ProjectHeader(String),
     SettledHeader,
     EmptySearch,
@@ -154,6 +158,7 @@ impl SidebarRow {
             SidebarRow::SettledHeader => SidebarRowKey::SettledHeader,
             SidebarRow::EmptySearch => SidebarRowKey::EmptySearch,
             SidebarRow::PinnedHeader => SidebarRowKey::PinnedHeader,
+            SidebarRow::WorkspacesLabel => SidebarRowKey::WorkspacesLabel,
         }
     }
 }
@@ -234,6 +239,7 @@ pub struct SidebarView {
     /// Whether the Pinned section is collapsed (rows hidden, sticky header
     /// chevron flipped).
     pub pinned_collapsed: bool,
+    pub workspaces_collapsed: bool,
     /// Whether the Settled section at the bottom of the list is collapsed.
     /// Settled chats hide behind it; the section is omitted when empty.
     pub settled_collapsed: bool,
@@ -247,6 +253,7 @@ pub struct SidebarView {
     on_search: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_toggle_pinned: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_toggle_workspaces: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_settled: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_rename_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_commit_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -285,6 +292,7 @@ impl SidebarView {
         waiting_sessions: HashSet<String>,
         draft_summaries: Vec<DraftSummary>,
         pinned_collapsed: bool,
+        workspaces_collapsed: bool,
         settled_collapsed: bool,
         sidebar_list_state: ListState,
         environments: Vec<EnvironmentRow>,
@@ -296,6 +304,7 @@ impl SidebarView {
         on_search: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_project: impl Fn(String, &mut Window, &mut App) + 'static,
         on_toggle_pinned: impl Fn(&mut Window, &mut App) + 'static,
+        on_toggle_workspaces: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_settled: impl Fn(&mut Window, &mut App) + 'static,
         on_rename_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_commit_rename: impl Fn(&mut Window, &mut App) + 'static,
@@ -325,6 +334,7 @@ impl SidebarView {
             automation_sessions: HashSet::new(),
             webhook_sessions: HashSet::new(),
             pinned_collapsed,
+            workspaces_collapsed,
             settled_collapsed,
             sidebar_list_state,
             on_select_session: Rc::new(on_select_session),
@@ -334,6 +344,7 @@ impl SidebarView {
             on_search: Rc::new(on_search),
             on_toggle_project: Rc::new(on_toggle_project),
             on_toggle_pinned: Rc::new(on_toggle_pinned),
+            on_toggle_workspaces: Rc::new(on_toggle_workspaces),
             on_toggle_settled: Rc::new(on_toggle_settled),
             on_rename_session: Rc::new(on_rename_session),
             on_commit_rename: Rc::new(on_commit_rename),
@@ -489,6 +500,7 @@ impl RenderOnce for SidebarView {
 
         let has_pinned = !pinned_positions.is_empty();
         let pinned_collapsed = self.pinned_collapsed;
+        let workspaces_collapsed = self.workspaces_collapsed;
 
         // While searching, a single Search Results header replaces all section headers.
         let is_searching = self.search_active && !self.search_query.trim().is_empty();
@@ -533,22 +545,27 @@ impl RenderOnce for SidebarView {
                 list_rows.extend(matching_positions.into_iter().map(SidebarRow::Session));
             }
         } else {
-            if has_pinned {
-                list_rows.push(SidebarRow::PinnedHeader);
-                if !pinned_collapsed {
-                    list_rows.extend(pinned_positions.iter().copied().map(SidebarRow::Session));
-                }
+            if has_pinned || !project_sections.is_empty() {
+                list_rows.push(SidebarRow::WorkspacesLabel);
             }
-            for (key, name, positions) in project_sections {
-                let key = collapse_key(&key);
-                let collapsed = collapsed_projects.contains(&key);
-                list_rows.push(SidebarRow::ProjectHeader {
-                    name,
-                    key,
-                    collapsed,
-                });
-                if !collapsed {
-                    list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+            if !workspaces_collapsed {
+                if has_pinned {
+                    list_rows.push(SidebarRow::PinnedHeader);
+                    if !pinned_collapsed {
+                        list_rows.extend(pinned_positions.iter().copied().map(SidebarRow::Session));
+                    }
+                }
+                for (key, name, positions) in project_sections {
+                    let key = collapse_key(&key);
+                    let collapsed = collapsed_projects.contains(&key);
+                    list_rows.push(SidebarRow::ProjectHeader {
+                        name,
+                        key,
+                        collapsed,
+                    });
+                    if !collapsed {
+                        list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                    }
                 }
             }
             // Settled chats always come last, in their own collapsed-by-default
@@ -606,6 +623,8 @@ impl RenderOnce for SidebarView {
         let list_renaming_session_id = renaming_session_id;
         let list_rename_input = rename_input;
         let list_pinned_collapsed = pinned_collapsed;
+        let list_workspaces_collapsed = workspaces_collapsed;
+        let list_on_toggle_workspaces = self.on_toggle_workspaces.clone();
         let list_on_toggle_pinned = self.on_toggle_pinned.clone();
         let list_is_searching = is_searching;
         let list_on_toggle_project = on_toggle_project.clone();
@@ -668,6 +687,12 @@ impl RenderOnce for SidebarView {
                     list_on_toggle_settled.clone(),
                 )
                 .into_any_element(),
+                SidebarRow::WorkspacesLabel => workspaces_label(
+                    theme,
+                    list_workspaces_collapsed,
+                    list_on_toggle_workspaces.clone(),
+                )
+                .into_any_element(),
                 SidebarRow::PinnedHeader => {
                     pinned_group_header(theme, list_pinned_collapsed, list_on_toggle_pinned.clone())
                         .into_any_element()
@@ -724,6 +749,22 @@ impl RenderOnce for SidebarView {
         let target_width = if self.visible { px(width) } else { px(0.0) };
         let full_width = width.max(1.0);
 
+        let compose_button = div()
+            .id("btn-new-chat")
+            .tab_index(0)
+            .size(px(32.0))
+            .flex_none()
+            .rounded(px(7.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_default()
+            .hover(|s| s.bg(theme.sidebar_item_background))
+            .active(|s| s.bg(theme.overlay_strong))
+            .tooltip(Tooltip::text("New task"))
+            .on_click(move |_, window, cx| (on_new)(window, cx))
+            .child(app_icon(IconName::Compose, 16.0, theme.text_secondary));
+
         let content = div()
             .id("console-sidebar")
             .w(px(width))
@@ -747,49 +788,10 @@ impl RenderOnce for SidebarView {
             .child(
                 div()
                     .pt(px(4.0))
-                    .pb(px(6.0))
-                    .border_b_1()
-                    .border_color(theme.sidebar_border)
+                    .pb(px(4.0))
                     .flex()
-                    .flex_col()
-                    .gap_y(px(4.0))
-                    // New Chat Row
-                    .child(
-                        div()
-                            .id("btn-new-chat")
-                            .tab_index(0)
-                            .w_full()
-                            .h(px(32.0))
-                            .px(px(6.0))
-                            .rounded(px(7.0))
-                            .flex()
-                            .items_center()
-                            .gap(px(10.0))
-                            .cursor_default()
-                            .hover(|s| s.bg(theme.sidebar_item_background))
-                            .active(|s| s.bg(theme.overlay_strong))
-                            .on_click(move |_, window, cx| {
-                                (on_new)(window, cx);
-                            })
-                            .child(
-                                div()
-                                    .size(px(20.0))
-                                    .flex_none()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(app_icon(IconName::Compose, 16.0, theme.text_secondary)),
-                            )
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_size(px(13.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme.text_secondary)
-                                    .child("New Task"),
-                            ),
-                    )
+                    .items_center()
+                    .gap_x(px(4.0))
                     // Search Row
                     .child(if self.search_active {
                         let on_cancel = self.on_clear_search.clone();
@@ -803,7 +805,8 @@ impl RenderOnce for SidebarView {
                         div()
                             .id("sidebar-search-active")
                             .key_context(SIDEBAR_SEARCH_PARENT_CONTEXT)
-                            .w_full()
+                            .flex_1()
+                            .min_w_0()
                             .h(px(32.0))
                             .px(px(6.0))
                             .rounded(px(7.0))
@@ -858,7 +861,8 @@ impl RenderOnce for SidebarView {
                         div()
                             .id("btn-search")
                             .tab_index(0)
-                            .w_full()
+                            .flex_1()
+                            .min_w_0()
                             .h(px(32.0))
                             .px(px(6.0))
                             .rounded(px(7.0))
@@ -897,7 +901,8 @@ impl RenderOnce for SidebarView {
                                             .child("Search"),
                                     ),
                             )
-                    }),
+                    })
+                    .when(!self.search_active, |el| el.child(compose_button)),
             )
             .children(search_header)
             // Session List Container: the remaining groups' headers and all

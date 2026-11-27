@@ -673,6 +673,7 @@ pub struct ConsoleDesktopApp {
     /// so the sidebar stays frozen while a tab is open.
     pub sidebar_draft_ids: std::collections::HashSet<String>,
     pub pinned_collapsed: bool,
+    pub workspaces_collapsed: bool,
     pub settled_collapsed: bool,
     pub is_window_active: bool,
     pub _subscriptions: Vec<Subscription>,

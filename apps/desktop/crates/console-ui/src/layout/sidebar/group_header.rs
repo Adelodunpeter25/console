@@ -78,6 +78,46 @@ fn section_header(
     )
 }
 
+/// "My workspaces" label above Pinned and the project cards. The whole row
+/// toggles the section; its chevron shows on hover.
+pub fn workspaces_label(theme: Theme, collapsed: bool, on_toggle: ToggleFn) -> impl IntoElement {
+    let toggle_on_key = on_toggle.clone();
+    div()
+        .id("sidebar-workspaces-toggle")
+        .group("sidebar-workspaces-header")
+        .tab_index(0)
+        .w_full()
+        .h(px(28.0))
+        .mt(px(6.0))
+        .px(px(8.0))
+        .flex()
+        .items_center()
+        .justify_between()
+        .cursor_default()
+        .on_click(move |_, window, cx| (on_toggle)(window, cx))
+        .on_key_down(move |event: &KeyDownEvent, window, cx| {
+            if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                (toggle_on_key)(window, cx);
+                cx.stop_propagation();
+            }
+        })
+        .child(
+            div()
+                .text_size(px(12.5))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.text_tertiary)
+                .child("My workspaces"),
+        )
+        .child(
+            app_icon(IconName::ChevronDown, 13.0, theme.text_tertiary)
+                .when(collapsed, |icon| {
+                    icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
+                })
+                .invisible()
+                .group_hover("sidebar-workspaces-header", |icon| icon.visible()),
+        )
+}
+
 /// A project card: chevron, the project name, and a plain `+` on the right
 /// that starts a new chat in that project. Clicking the card collapses or
 /// expands it.

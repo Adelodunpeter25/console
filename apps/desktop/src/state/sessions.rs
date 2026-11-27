@@ -1368,7 +1368,7 @@ impl ConsoleDesktopApp {
             return ids;
         }
         let mut ids = Vec::new();
-        if !self.pinned_collapsed {
+        if !self.pinned_collapsed && !self.workspaces_collapsed {
             for (index, session) in self.sessions.iter().enumerate() {
                 // Settled chats are hidden from the sidebar, so they take no
                 // slot in the cmd+1-9 mapping either.
@@ -1396,6 +1396,9 @@ impl ConsoleDesktopApp {
             },
         );
         for (key, positions) in grouped {
+            if self.workspaces_collapsed {
+                break;
+            }
             let collapse_key = key.unwrap_or_else(|| "none".to_string());
             if self.collapsed_projects.contains(&collapse_key) {
                 continue;
