@@ -3,7 +3,7 @@
 // merge_blocker, status_label. No client or agent re-derives any of it —
 // the apps only render, and the agent is told *why* a merge cannot proceed
 // rather than retrying.
-package services
+package pullrequest
 
 import (
 	"fmt"

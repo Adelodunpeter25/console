@@ -3,7 +3,7 @@
 // transports: a merge always carries the head SHA the caller last read and
 // is refused on a draft; creating never implies merging; every write
 // invalidates the cached reads it makes stale.
-package services
+package pullrequest
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 // Create opens a pull request. Repo resolution: explicit owner/repo, or the
 // project's origin when project_id is given. Draft defaults to true — a PR
 // starts as a draft until marked ready. Merging is never implied.
-func (s *PullRequestService) Create(ctx context.Context, req *consolev1.CreatePullRequestRequest) (*consolev1.CreatePullRequestResponse, error) {
+func (s *Service) Create(ctx context.Context, req *consolev1.CreatePullRequestRequest) (*consolev1.CreatePullRequestResponse, error) {
 	owner, repo := req.GetOwner(), req.GetRepo()
 	if owner == "" || repo == "" {
 		if req.GetProjectId() == "" {
@@ -54,7 +54,7 @@ func (s *PullRequestService) Create(ctx context.Context, req *consolev1.CreatePu
 // Update patches title/body/base, changes state (open/closed), or flips
 // ready/draft — whichever fields are set. The refreshed detail comes back so
 // a client re-renders from one response.
-func (s *PullRequestService) Update(ctx context.Context, req *consolev1.UpdatePullRequestRequest) (*consolev1.UpdatePullRequestResponse, error) {
+func (s *Service) Update(ctx context.Context, req *consolev1.UpdatePullRequestRequest) (*consolev1.UpdatePullRequestResponse, error) {
 	token, err := prToken()
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func (s *PullRequestService) Update(ctx context.Context, req *consolev1.UpdatePu
 // Merge merges with a method the repository allows, refusing a draft, and
 // carrying expected_head so GitHub refuses a moved branch (409) instead of
 // landing code nobody reviewed.
-func (s *PullRequestService) Merge(ctx context.Context, req *consolev1.MergePullRequestRequest) (*consolev1.MergePullRequestResponse, error) {
+func (s *Service) Merge(ctx context.Context, req *consolev1.MergePullRequestRequest) (*consolev1.MergePullRequestResponse, error) {
 	owner, repo, number := req.GetOwner(), req.GetRepo(), req.GetNumber()
 	if number == 0 {
 		return nil, errors.New("Pull request number is required.")
@@ -138,7 +138,7 @@ func (s *PullRequestService) Merge(ctx context.Context, req *consolev1.MergePull
 }
 
 // Comment adds one top-level comment and returns it.
-func (s *PullRequestService) Comment(ctx context.Context, req *consolev1.CreateCommentRequest) (*consolev1.CreateCommentResponse, error) {
+func (s *Service) Comment(ctx context.Context, req *consolev1.CreateCommentRequest) (*consolev1.CreateCommentResponse, error) {
 	if strings.TrimSpace(req.GetBody()) == "" {
 		return nil, errors.New("Comment body is empty.")
 	}
@@ -169,7 +169,7 @@ func mergeMethodAllowed(allowed []string, method string) bool {
 // invalidate drops the cached reads a write makes stale: this PR's detail
 // and files, and every list (the cross-repo scopes span all repos, so a
 // targeted invalidation cannot know which lists this PR appears in).
-func (s *PullRequestService) invalidate(owner, repo string) {
+func (s *Service) invalidate(owner, repo string) {
 	prefix := fmt.Sprintf("%s/%s|", owner, repo)
 	s.mu.Lock()
 	for key := range s.cache {

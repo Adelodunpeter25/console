@@ -7,8 +7,9 @@
 package routes
 
 import (
-	"github.com/MoeForge/moego/json"
 	"errors"
+	pullrequest "github.com/Adelodunpeter25/console/apps/server-go/internal/services/pull_request"
+	"github.com/MoeForge/moego/json"
 	"net/http"
 	"strconv"
 
@@ -17,10 +18,9 @@ import (
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	prv "github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
-func RegisterPullRequestRoutes(app *fiber.App, svc *services.PullRequestService) {
+func RegisterPullRequestRoutes(app *fiber.App, svc *pullrequest.Service) {
 	fail := func(c *fiber.Ctx, err error) error {
 		return c.Status(prStatusFor(err)).JSON(fiber.Map{"success": false, "error": err.Error()})
 	}

@@ -1,7 +1,7 @@
 // Repo resolution for pull requests: a project's PR repo is its origin
 // remote, parsed to owner/repo. Origin only, no base_repo argument —
 // the author does not work from forks.
-package services
+package pullrequest
 
 import (
 	"errors"
@@ -14,7 +14,7 @@ import (
 // origin remote. A worktree shares its repo's remote, so it resolves the
 // same way. Non-github.com remotes are a clear error, not a silent
 // fallthrough.
-func (s *PullRequestService) ResolveRepo(projectID string) (string, string, error) {
+func (s *Service) ResolveRepo(projectID string) (string, string, error) {
 	if strings.TrimSpace(projectID) == "" {
 		return "", "", errors.New("project_id is required for scope=repo.")
 	}

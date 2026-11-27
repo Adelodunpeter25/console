@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"errors"
+	pullrequest "github.com/Adelodunpeter25/console/apps/server-go/internal/services/pull_request"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
@@ -25,7 +26,7 @@ type Runtime struct {
 	scripts        *projectssvc.ProjectScriptsService
 	sessions       *services.SessionService
 	projects       *projectssvc.ProjectService
-	pulls          *services.PullRequestService
+	pulls          *pullrequest.Service
 	mcp            *mcp.Manager
 	automations    *automations.Service
 	webhooks       *webhooks.Service

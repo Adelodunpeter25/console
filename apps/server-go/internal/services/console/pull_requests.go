@@ -9,24 +9,24 @@ package console
 
 import (
 	"context"
-	"github.com/MoeForge/moego/json"
 	"fmt"
+	pullrequest "github.com/Adelodunpeter25/console/apps/server-go/internal/services/pull_request"
+	"github.com/MoeForge/moego/json"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 )
 
 // SetPullRequests attaches the pull-request service the pr.* methods serve.
-func (r *Runtime) SetPullRequests(pulls *services.PullRequestService) {
+func (r *Runtime) SetPullRequests(pulls *pullrequest.Service) {
 	r.pulls = pulls
 }
 
 // prService returns the attached service or a clear error.
-func (r *Runtime) prService() (*services.PullRequestService, error) {
+func (r *Runtime) prService() (*pullrequest.Service, error) {
 	if r.pulls == nil {
 		return nil, fmt.Errorf("pull-request service is unavailable")
 	}

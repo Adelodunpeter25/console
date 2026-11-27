@@ -15,8 +15,8 @@ var errUnsupported = errors.New("computer: desktop streaming is not supported on
 // Service is a stub: libvoxl ships for Linux and macOS only.
 type Service struct{}
 
-func New() *Service      { return &Service{} }
-func Default() *Service  { return &Service{} }
+func New() *Service     { return &Service{} }
+func Default() *Service { return &Service{} }
 func (s *Service) Subscribe(context.Context, FrameHandler) (func(), error) {
 	return nil, errUnsupported
 }

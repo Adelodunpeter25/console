@@ -6,6 +6,7 @@ package console
 
 import (
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
+	pullrequest "github.com/Adelodunpeter25/console/apps/server-go/internal/services/pull_request"
 	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"sync"
 
@@ -26,7 +27,7 @@ type Manager struct {
 	scripts        *projectssvc.ProjectScriptsService
 	sessions       *services.SessionService
 	projects       *projectssvc.ProjectService
-	pulls          *services.PullRequestService
+	pulls          *pullrequest.Service
 	mcp            *mcp.Manager
 	automations    *automations.Service
 	webhooks       *webhooks.Service
@@ -81,13 +82,13 @@ func (m *Manager) SetMCP(manager *mcp.Manager) {
 }
 
 // SetPullRequests attaches the pull-request service used by console.pr.*.
-func (m *Manager) SetPullRequests(pulls *services.PullRequestService) {
+func (m *Manager) SetPullRequests(pulls *pullrequest.Service) {
 	m.mu.Lock()
 	m.pulls = pulls
 	m.mu.Unlock()
 }
 
-func (m *Manager) pullRequestService() *services.PullRequestService {
+func (m *Manager) pullRequestService() *pullrequest.Service {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.pulls

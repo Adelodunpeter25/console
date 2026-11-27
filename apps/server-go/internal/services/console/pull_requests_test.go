@@ -5,6 +5,7 @@
 package console
 
 import (
+	pullrequest "github.com/Adelodunpeter25/console/apps/server-go/internal/services/pull_request"
 	"github.com/MoeForge/moego/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	prv "github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 )
 
@@ -107,7 +107,7 @@ func newPRRuntime(t *testing.T, fake *prFakeGitHub) *Runtime {
 		t.Fatal(err)
 	}
 
-	pulls := services.NewPullRequestService(projectsSvc)
+	pulls := pullrequest.NewService(projectsSvc)
 	pulls.RetryDelay = time.Millisecond
 	runtime, err := NewRuntime(nil, nil, nil, projectsSvc, nil, nil, nil, nil, nil, QueueControl{}, "p-hello", repoDir)
 	if err != nil {

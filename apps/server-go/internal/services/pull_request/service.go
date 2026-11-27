@@ -4,7 +4,7 @@
 // providers/usage/service.go, and the UNKNOWN-mergeability retry. The
 // presentation fields it computes live in pull_requests_presentation.go;
 // repo resolution in pull_requests_repo.go.
-package services
+package pullrequest
 
 import (
 	"context"
@@ -34,9 +34,9 @@ type prCall struct {
 	err   error
 }
 
-// PullRequestService serves pull-request reads and writes to the HTTP
+// Service serves pull-request reads and writes to the HTTP
 // routes and the console.pr.* agent methods, which call the same service.
-type PullRequestService struct {
+type Service struct {
 	projects *projectssvc.ProjectService
 
 	mu       sync.Mutex
@@ -49,8 +49,8 @@ type PullRequestService struct {
 	RetryDelay time.Duration
 }
 
-func NewPullRequestService(projects *projectssvc.ProjectService) *PullRequestService {
-	return &PullRequestService{
+func NewService(projects *projectssvc.ProjectService) *Service {
+	return &Service{
 		projects:   projects,
 		cache:      map[string]prCacheEntry{},
 		inflight:   map[string]*prCall{},
@@ -60,7 +60,7 @@ func NewPullRequestService(projects *projectssvc.ProjectService) *PullRequestSer
 
 // List returns trimmed PR rows. scope is mine | review | repo; repo requires
 // project_id and resolves it to the project's origin remote.
-func (s *PullRequestService) List(ctx context.Context, scope, state, projectID, draft string) (*consolev1.PullRequestListResponse, error) {
+func (s *Service) List(ctx context.Context, scope, state, projectID, draft string) (*consolev1.PullRequestListResponse, error) {
 	var owner, repo string
 	switch scope {
 	case "mine", "review":
@@ -82,7 +82,7 @@ func (s *PullRequestService) List(ctx context.Context, scope, state, projectID, 
 	return value.(*consolev1.PullRequestListResponse), nil
 }
 
-func (s *PullRequestService) listUncached(ctx context.Context, scope, state, draft, owner, repo string) (*consolev1.PullRequestListResponse, error) {
+func (s *Service) listUncached(ctx context.Context, scope, state, draft, owner, repo string) (*consolev1.PullRequestListResponse, error) {
 	token, err := prToken()
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (s *PullRequestService) listUncached(ctx context.Context, scope, state, dra
 // merge readiness. GitHub computes mergeability lazily — the first read
 // after a push can come back UNKNOWN — so a checking result is re-read once
 // after a short delay and otherwise reported as checking, never mergeable.
-func (s *PullRequestService) Detail(ctx context.Context, owner, repo string, number uint32) (*consolev1.PullRequestDetail, error) {
+func (s *Service) Detail(ctx context.Context, owner, repo string, number uint32) (*consolev1.PullRequestDetail, error) {
 	key := fmt.Sprintf("detail|%s/%s|%d", owner, repo, number)
 	value, err := s.cachedAny(key, func() (any, error) {
 		return s.detailUncached(ctx, owner, repo, number)
@@ -119,7 +119,7 @@ func (s *PullRequestService) Detail(ctx context.Context, owner, repo string, num
 	return value.(*consolev1.PullRequestDetail), nil
 }
 
-func (s *PullRequestService) detailUncached(ctx context.Context, owner, repo string, number uint32) (*consolev1.PullRequestDetail, error) {
+func (s *Service) detailUncached(ctx context.Context, owner, repo string, number uint32) (*consolev1.PullRequestDetail, error) {
 	token, err := prToken()
 	if err != nil {
 		return nil, err
@@ -160,7 +160,7 @@ func prIsChecking(value any) bool {
 }
 
 // Files lists a PR's changed files without patches (paths, status, +/−).
-func (s *PullRequestService) Files(ctx context.Context, owner, repo string, number uint32) (*consolev1.PullRequestFilesResponse, error) {
+func (s *Service) Files(ctx context.Context, owner, repo string, number uint32) (*consolev1.PullRequestFilesResponse, error) {
 	full, err := s.filesFull(ctx, owner, repo, number)
 	if err != nil {
 		return nil, err
@@ -178,7 +178,7 @@ func (s *PullRequestService) Files(ctx context.Context, owner, repo string, numb
 
 // FileDiff converts one changed file's GitHub patch into the unified-diff
 // text the existing desktop and Android diff viewers render unchanged.
-func (s *PullRequestService) FileDiff(ctx context.Context, owner, repo string, number uint32, path string) (*consolev1.PullRequestFileDiffResponse, error) {
+func (s *Service) FileDiff(ctx context.Context, owner, repo string, number uint32, path string) (*consolev1.PullRequestFileDiffResponse, error) {
 	full, err := s.filesFull(ctx, owner, repo, number)
 	if err != nil {
 		return nil, err
@@ -204,7 +204,7 @@ func (s *PullRequestService) FileDiff(ctx context.Context, owner, repo string, n
 // filesFull fetches every changed file, patches included, through the shared
 // cache. Patches stay server-side: the file list strips them, and a single
 // file's patch leaves only when that file is opened.
-func (s *PullRequestService) filesFull(ctx context.Context, owner, repo string, number uint32) ([]github.FileData, error) {
+func (s *Service) filesFull(ctx context.Context, owner, repo string, number uint32) ([]github.FileData, error) {
 	key := fmt.Sprintf("files|%s/%s|%d", owner, repo, number)
 	value, err := s.cachedAny(key, func() (any, error) {
 		token, err := prToken()
@@ -221,7 +221,7 @@ func (s *PullRequestService) filesFull(ctx context.Context, owner, repo string, 
 
 // cachedAny serves a 30s-cached response, coalescing concurrent identical
 // reads into one upstream call (the providers/usage pattern).
-func (s *PullRequestService) cachedAny(key string, fetch func() (any, error)) (any, error) {
+func (s *Service) cachedAny(key string, fetch func() (any, error)) (any, error) {
 	s.mu.Lock()
 	if entry, ok := s.cache[key]; ok && time.Since(entry.fetchedAt) < prCacheTTL {
 		s.mu.Unlock()

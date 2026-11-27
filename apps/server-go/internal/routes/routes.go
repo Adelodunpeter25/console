@@ -3,6 +3,7 @@ package routes
 
 import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
+	pullrequest "github.com/Adelodunpeter25/console/apps/server-go/internal/services/pull_request"
 	"log/slog"
 	"strings"
 	"time"
@@ -127,7 +128,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	// the same cache the usage routes read from.
 	usageSvc := usage.NewService()
 	RegisterUsageRoutes(app, usageSvc)
-	prSvc := services.NewPullRequestService(projects)
+	prSvc := pullrequest.NewService(projects)
 	RegisterPullRequestRoutes(app, prSvc)
 	authSvc := auth.NewAuthService()
 	authSvc.Usage = usageSvc

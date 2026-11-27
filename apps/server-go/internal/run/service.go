@@ -6,6 +6,7 @@ package run
 import (
 	"context"
 	"errors"
+	pullrequest "github.com/Adelodunpeter25/console/apps/server-go/internal/services/pull_request"
 	"log/slog"
 	"sync"
 	"time"
@@ -22,9 +23,9 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/webhooks"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -89,10 +90,10 @@ type Service struct {
 	automations *automations.Service
 	// webhooks backs the console.webhooks.* tools and public webhook ingress.
 	webhooks *webhooks.Service
-	ports       *terminalsvc.PortRegistry
-	scripts     *projectssvc.ProjectScriptsService
-	mcp         *mcp.Manager
-	prompts     promptCache
+	ports    *terminalsvc.PortRegistry
+	scripts  *projectssvc.ProjectScriptsService
+	mcp      *mcp.Manager
+	prompts  promptCache
 	// compactions holds each session's compaction checkpoint so a compacted
 	// prefix is reused across turns and runs instead of recomputed.
 	compactions compactionStore
@@ -292,7 +293,7 @@ func (s *Service) SetMCP(m *mcp.Manager) {
 
 // SetPullRequests attaches the pull-request service backing the console
 // kernel's pr methods (the HTTP routes serve the same service).
-func (s *Service) SetPullRequests(pulls *services.PullRequestService) {
+func (s *Service) SetPullRequests(pulls *pullrequest.Service) {
 	s.mu.Lock()
 	manager := s.consoleManager
 	s.mu.Unlock()
