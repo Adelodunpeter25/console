@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -263,6 +264,9 @@ fun ComposerPills(
     }
 }
 
+/** Every pill in the row is this tall so status and suggestion pills line up. */
+private val PillHeight = 36.dp
+
 /**
  * Session change totals: a ring split by lines added and removed, then the
  * compact "+4.3k -1.6k". The file count rides in the accessibility label.
@@ -280,7 +284,8 @@ private fun ChangesPill(changes: ChangeTotals, onClick: () -> Unit) {
             .background(NewTheme.Raised)
             .clickable(onClick = onClick)
             .semantics { contentDescription = label }
-            .padding(start = 11.dp, end = 13.dp, top = 9.dp, bottom = 9.dp),
+            .height(PillHeight)
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Canvas(modifier = Modifier.size(16.dp)) {
@@ -298,7 +303,6 @@ private fun ChangesPill(changes: ChangeTotals, onClick: () -> Unit) {
                 text = "+${formatCompactCount(changes.additions)}",
                 color = addColor,
                 fontSize = 13.sp,
-                fontFamily = ConsoleMonoFamily,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 modifier = Modifier.padding(start = 8.dp),
@@ -309,7 +313,6 @@ private fun ChangesPill(changes: ChangeTotals, onClick: () -> Unit) {
                 text = "-${formatCompactCount(changes.deletions)}",
                 color = delColor,
                 fontSize = 13.sp,
-                fontFamily = ConsoleMonoFamily,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 modifier = Modifier.padding(start = 6.dp),
@@ -361,7 +364,8 @@ private fun SuggestionPill(text: String, onClick: () -> Unit, onLongClick: () ->
             .clip(RoundedCornerShape(999.dp))
             .background(NewTheme.Raised)
             .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
-            .padding(start = 5.dp, end = 13.dp, top = 5.dp, bottom = 5.dp),
+            .height(PillHeight)
+            .padding(start = 7.dp, end = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -403,7 +407,8 @@ private fun ContextPill(icon: ImageVector, text: String, running: Boolean, onCli
             .clip(RoundedCornerShape(999.dp))
             .background(NewTheme.Raised)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .height(PillHeight)
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
