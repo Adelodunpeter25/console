@@ -78,7 +78,7 @@ fun ChatDiffSheet(
                 DiffView(
                     diff = SharedNative.parseDiff(diffText ?: ""),
                     filePath = change.path,
-                    maxCollapsedLines = 120,
+                    maxCollapsedLines = DIFF_PREVIEW_LINES,
                     showFileHeader = false,
                 )
             }

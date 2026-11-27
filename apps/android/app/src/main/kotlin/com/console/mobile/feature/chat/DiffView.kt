@@ -43,6 +43,9 @@ import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
+/** Lines a diff shows before "Show more": the chat sheet and the Changes screen share it. */
+const val DIFF_PREVIEW_LINES = 120
+
 /** Visible row wash matching ConsoleColors for added/removed diff lines */
 private val AddedLineBg = ConsoleColors.Syntax.DiffAddedBg
 private val RemovedLineBg = ConsoleColors.Syntax.DiffRemovedBg

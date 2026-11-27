@@ -45,6 +45,7 @@ import com.console.mobile.core.util.changeSummary
 import com.console.mobile.core.util.gitBadgeColor
 import com.console.mobile.core.util.parentLabel
 import com.console.mobile.core.util.statusLetter
+import com.console.mobile.feature.chat.DIFF_PREVIEW_LINES
 import com.console.mobile.feature.chat.DiffSummaryBadge
 import com.console.mobile.feature.chat.DiffView
 import com.console.mobile.ui.components.FileIcon
@@ -182,8 +183,9 @@ private fun FileChangeRow(row: ChangesRow, open: Boolean, onToggle: () -> Unit) 
 }
 
 /**
- * The open file's whole diff, laid out in line under its row: no cap and no
- * inner vertical scroll, so the screen's own scroll carries you through it.
+ * The open file's diff, laid out in line under its row: the first
+ * [DIFF_PREVIEW_LINES] lines with a "Show more" for the rest, and no inner
+ * vertical scroll, so the screen's own scroll carries you through it.
  * Uses the diff the changes list already carried, else fetches it once.
  */
 @Composable
@@ -207,7 +209,7 @@ private fun FileDiffBody(sessionId: String, row: ChangesRow, inlineDiff: String?
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().background(NewTheme.Black)) {
+    Column(modifier = Modifier.fillMaxWidth().background(NewTheme.Card)) {
         val body = text
         when {
             loading -> Text("Loading diff…", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
@@ -218,7 +220,7 @@ private fun FileDiffBody(sessionId: String, row: ChangesRow, inlineDiff: String?
                 DiffView(
                     diff = diff,
                     filePath = row.path,
-                    maxCollapsedLines = Int.MAX_VALUE,
+                    maxCollapsedLines = DIFF_PREVIEW_LINES,
                     showFileHeader = false,
                 )
             }
