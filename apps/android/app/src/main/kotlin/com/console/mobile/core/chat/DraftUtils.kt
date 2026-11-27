@@ -116,6 +116,21 @@ fun buildGroupedProjectSections(
         }
     }
 
+    // While searching, a single "Search Results" section replaces all group
+    // headers and surfaces matching sessions across pinned, active, and settled.
+    if (q.isNotEmpty()) {
+        if (allSessions.isEmpty()) return emptyList()
+        val sorted = allSessions.sortedByDescending { it.updated_at }
+        return listOf(
+            GroupedProjectSection(
+                projectId = "search",
+                projectName = "Search Results",
+                data = sorted,
+                latestAt = sorted.firstOrNull()?.updated_at ?: 0L,
+            ),
+        )
+    }
+
     // Settled chats leave every active section and gather in their own
     // Settled section at the bottom, most recently settled first.
     val settledSessions = allSessions.filter { (it.settled_at ?: 0L) > 0 }

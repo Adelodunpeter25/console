@@ -243,15 +243,16 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).hideKeyboardOnScroll(),
                     ) {
                         sections.forEachIndexed { sIdx, section ->
+                            val isSearchSection = section.projectId == "search"
                             val sectionKey = sectionCollapseKey(section)
-                            val collapsed = sectionKey in collapsedSections
+                            val collapsed = !isSearchSection && sectionKey in collapsedSections
                             item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
                                 SessionSectionHeader(
                                     section = section,
                                     isFirst = sIdx == 0,
                                     collapsed = collapsed,
-                                    onToggle = { toggleSection(sectionKey) },
-                                    onNewChat = if (section.projectId != null && section.projectId != "pinned" && section.projectId != "settled") {
+                                    onToggle = { if (!isSearchSection) toggleSection(sectionKey) },
+                                    onNewChat = if (!isSearchSection && section.projectId != null && section.projectId != "pinned" && section.projectId != "settled") {
                                         { startChat(section.projectId) }
                                     } else {
                                         null
