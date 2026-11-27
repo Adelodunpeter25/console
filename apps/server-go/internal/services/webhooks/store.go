@@ -2,9 +2,9 @@ package webhooks
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"strings"
 	"time"
 

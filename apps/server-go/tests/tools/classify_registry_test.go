@@ -4,8 +4,8 @@
 package tests
 
 import (
+	"github.com/MoeForge/moego/regexp"
 	"os"
-	"regexp"
 	"sort"
 	"strings"
 	"testing"

@@ -9,8 +9,8 @@ package opencode
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"time"

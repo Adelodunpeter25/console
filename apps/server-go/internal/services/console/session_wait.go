@@ -2,8 +2,8 @@ package console
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"strings"
 	"time"
 

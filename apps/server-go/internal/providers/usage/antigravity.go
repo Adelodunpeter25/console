@@ -6,7 +6,7 @@ package usage
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"math"
 	"net/http"

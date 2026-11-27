@@ -15,10 +15,10 @@ package browseruse
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
+	"github.com/MoeForge/moego/json"
+	"github.com/MoeForge/moego/regexp"
 	"strings"
 	"sync"
 	"time"

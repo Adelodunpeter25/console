@@ -5,7 +5,7 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"strings"
 	"sync"

@@ -3,7 +3,7 @@
 package systemprompt
 
 import (
-	"regexp"
+	"github.com/MoeForge/moego/regexp"
 	"strings"
 )
 

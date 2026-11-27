@@ -4,7 +4,7 @@
 package routes
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"time"
 
 	"github.com/gofiber/fiber/v2"

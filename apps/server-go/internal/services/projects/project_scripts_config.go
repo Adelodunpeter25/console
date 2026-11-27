@@ -3,7 +3,7 @@ package projects
 
 import (
 	"fmt"
-	"regexp"
+	"github.com/MoeForge/moego/regexp"
 	"sort"
 	"time"
 

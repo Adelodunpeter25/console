@@ -4,8 +4,8 @@ package session
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 	"strings"

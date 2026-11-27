@@ -4,8 +4,8 @@
 package tests
 
 import (
-	"encoding/json"
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
+	"github.com/MoeForge/moego/json"
 	"net/http/httptest"
 	"os"
 	"path/filepath"

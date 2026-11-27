@@ -12,7 +12,7 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 	"strings"

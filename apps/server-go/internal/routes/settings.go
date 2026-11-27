@@ -10,8 +10,8 @@
 package routes
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 
 	"github.com/gofiber/fiber/v2"
 

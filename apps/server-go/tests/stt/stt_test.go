@@ -5,9 +5,9 @@ package stt_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"mime/multipart"
 	"net/http"

@@ -3,8 +3,8 @@
 package antigravity
 
 import (
-	"encoding/json"
-	"regexp"
+	"github.com/MoeForge/moego/json"
+	"github.com/MoeForge/moego/regexp"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"

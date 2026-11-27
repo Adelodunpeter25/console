@@ -12,8 +12,8 @@ package gitconfig
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"os/exec"
 	"strings"

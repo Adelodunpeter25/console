@@ -2,8 +2,8 @@
 package tests
 
 import (
-	"encoding/json"
 	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -319,4 +319,3 @@ func TestResolvePath(t *testing.T) {
 		t.Errorf("ResolvePath(relative/path) = %q, want relative/path", got)
 	}
 }
-

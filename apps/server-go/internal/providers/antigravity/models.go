@@ -3,7 +3,7 @@ package antigravity
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"sort"

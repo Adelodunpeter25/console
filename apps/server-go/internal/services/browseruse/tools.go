@@ -6,7 +6,7 @@ package browseruse
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"sync"
 	"time"
 

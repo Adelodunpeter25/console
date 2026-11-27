@@ -5,7 +5,7 @@
 package tests
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 	"strings"

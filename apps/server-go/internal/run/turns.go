@@ -5,9 +5,9 @@ package run
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"log/slog"
 	"slices"
 	"strings"

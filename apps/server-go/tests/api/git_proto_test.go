@@ -3,8 +3,8 @@
 package tests
 
 import (
-	"encoding/json"
 	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http/httptest"
 	"os"
@@ -19,8 +19,8 @@ import (
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 func gitFixture(t *testing.T, name string) string {

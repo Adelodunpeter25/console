@@ -15,9 +15,9 @@ package cua
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"regexp"
+	"github.com/MoeForge/moego/json"
+	"github.com/MoeForge/moego/regexp"
 	"strings"
 	"time"
 )

@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"html"
 	"os"
 	"path/filepath"

@@ -4,8 +4,8 @@ github.com/Adelodunpeter25/sim-go v0.0.0-20261113115339-d943d8632ca3 h1:vkfV1M0b
 github.com/Adelodunpeter25/sim-go v0.0.0-20261113115339-d943d8632ca3/go.mod h1:FDOXO4efJHkjCcl+arWTrk7DxTfXc3qNd6hSTPXeCf0=
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
-github.com/MoeForge/moego v0.1.0-alpha.1 h1:d+asBZu+2oKnBj1kzdvdANMStbIKw9BLCpknuWjiR28=
-github.com/MoeForge/moego v0.1.0-alpha.1/go.mod h1:SBNiQjCpWC3IEBMKFBOwOyhhQ3jywMrISqCwJTdr4aA=
+github.com/MoeForge/moego v0.1.0-alpha.5 h1:/pFyEhm0GYdOGfwawNjzLx+DoDQVoCI0dLsu8Sbpac8=
+github.com/MoeForge/moego v0.1.0-alpha.5/go.mod h1:SBNiQjCpWC3IEBMKFBOwOyhhQ3jywMrISqCwJTdr4aA=
 github.com/MoeForge/moejs v0.1.0 h1:w5/bM4wVRrnMdLbQG32BM+yVcoA9wjQqdGlX3XekzG4=
 github.com/MoeForge/moejs v0.1.0/go.mod h1:GDaH0vQSxKDN7FCyBaLEZgqsGKRyIYBfje/p74aZQ3k=
 github.com/andybalholm/brotli v1.1.1 h1:PR2pgnyFznKEugtsUo0xLdDop5SKXd5Qf5ysW+7XdTA=

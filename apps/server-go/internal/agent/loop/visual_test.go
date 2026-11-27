@@ -2,7 +2,7 @@ package loop
 
 import (
 	"bytes"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 	"testing"

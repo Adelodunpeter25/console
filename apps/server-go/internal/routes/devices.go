@@ -4,8 +4,8 @@
 package routes
 
 import (
-	"encoding/json"
 	"errors"
+	"github.com/MoeForge/moego/json"
 	"log/slog"
 	"time"
 

@@ -1,9 +1,9 @@
 package tests
 
 import (
+	"github.com/MoeForge/moego/regexp"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 

@@ -3,9 +3,9 @@
 package loop
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/base64"
+	"github.com/MoeForge/moego/json"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"

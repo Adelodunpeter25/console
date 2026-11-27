@@ -11,8 +11,8 @@
 package loop
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 
 	"google.golang.org/protobuf/encoding/protojson"
 

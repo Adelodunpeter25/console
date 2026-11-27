@@ -2,7 +2,7 @@
 package tests
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"net/http/httptest"

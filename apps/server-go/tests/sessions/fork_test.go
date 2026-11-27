@@ -3,7 +3,7 @@
 package tests
 
 import (
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"

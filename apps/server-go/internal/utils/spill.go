@@ -8,10 +8,10 @@ package utils
 
 import (
 	"fmt"
+	"github.com/MoeForge/moego/regexp"
 	"hash/fnv"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 )

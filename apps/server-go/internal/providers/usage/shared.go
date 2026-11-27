@@ -5,8 +5,8 @@
 package usage
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"math"
 	"strings"
 )

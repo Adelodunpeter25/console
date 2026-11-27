@@ -5,7 +5,7 @@ package titles
 
 import (
 	"context"
-	"regexp"
+	"github.com/MoeForge/moego/regexp"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"

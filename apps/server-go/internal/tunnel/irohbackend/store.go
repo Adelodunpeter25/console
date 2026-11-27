@@ -3,8 +3,8 @@ package irohbackend
 import (
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"os"
 	"path/filepath"
 )

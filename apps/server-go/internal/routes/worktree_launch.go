@@ -12,8 +12,8 @@
 package routes
 
 import (
-	"encoding/json"
 	"errors"
+	"github.com/MoeForge/moego/json"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"

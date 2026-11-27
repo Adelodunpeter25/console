@@ -4,7 +4,7 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"net/http/httptest"
 	"os"
 	"path/filepath"

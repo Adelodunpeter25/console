@@ -6,7 +6,7 @@ package htmlrender
 
 import (
 	"fmt"
-	"regexp"
+	"github.com/MoeForge/moego/regexp"
 	"strings"
 )
 

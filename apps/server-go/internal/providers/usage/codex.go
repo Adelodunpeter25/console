@@ -4,7 +4,7 @@ package usage
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"net/http"
 	"net/url"

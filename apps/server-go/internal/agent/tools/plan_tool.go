@@ -12,9 +12,9 @@ package tools
 import (
 	"context"
 	"fmt"
+	"github.com/MoeForge/moego/regexp"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"

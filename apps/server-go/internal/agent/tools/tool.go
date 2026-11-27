@@ -4,8 +4,8 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"strings"
 
 	"github.com/invopop/jsonschema"
@@ -56,7 +56,7 @@ type ToolResult struct {
 	IsError    bool            `json:"isError,omitempty"`
 	Args       json.RawMessage `json:"args,omitempty"`
 	Visual     *VisualArtifact `json:"visual,omitempty"`
-	Html       *HtmlArtifact    `json:"html,omitempty"`
+	Html       *HtmlArtifact   `json:"html,omitempty"`
 }
 
 // ToolError signals a tool failure back to the harness (result carries it

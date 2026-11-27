@@ -1,8 +1,8 @@
 package htmlrender
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"net/url"
 	"strings"
 )
@@ -36,7 +36,7 @@ var DefaultThemes = map[string]Theme{
 			"--chart-1": "#e2795b", "--chart-2": "#3b82f6", "--chart-3": "#62c987",
 			"--chart-4": "#e0b36a", "--chart-5": "#b583e8", "--chart-6": "#4fc3c7",
 			"--chart-7": "#e86fa6", "--chart-8": "#9aa64b",
-			"--radius": "0.625rem",
+			"--radius":    "0.625rem",
 			"--font-sans": "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
 			"--font-mono": "'SF Mono', 'SFMono-Regular', Menlo, Consolas, monospace",
 		},
@@ -60,7 +60,7 @@ var DefaultThemes = map[string]Theme{
 			"--chart-1": "#c85f44", "--chart-2": "#2563eb", "--chart-3": "#2f9e5b",
 			"--chart-4": "#b8862f", "--chart-5": "#8b5cc6", "--chart-6": "#1f9aa0",
 			"--chart-7": "#c8407f", "--chart-8": "#6e7a2a",
-			"--radius": "0.625rem",
+			"--radius":    "0.625rem",
 			"--font-sans": "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
 			"--font-mono": "'SF Mono', 'SFMono-Regular', Menlo, Consolas, monospace",
 		},

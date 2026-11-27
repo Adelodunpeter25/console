@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"encoding/json"
+	"github.com/MoeForge/moego/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"

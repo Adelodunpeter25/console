@@ -9,8 +9,8 @@
 package routes
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"net"
 	"strconv"
 	"strings"

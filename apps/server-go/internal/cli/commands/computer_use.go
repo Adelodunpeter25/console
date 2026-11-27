@@ -5,8 +5,8 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/MoeForge/moego/json"
 	"io"
 	"os"
 	"os/exec"
