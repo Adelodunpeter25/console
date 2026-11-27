@@ -10,9 +10,9 @@ use std::rc::Rc;
 
 use console_core::{Automation, SubagentInfo, TodoItem, WebhookSubscription};
 use gpui::{
-    App, Div, ElementId, Entity, FontWeight, ParentElement, ScrollHandle, Stateful,
-    StatefulInteractiveElement, Styled, Window, div, linear_color_stop, linear_gradient,
-    prelude::*, px,
+    Anchor, App, Bounds, Div, ElementId, Entity, FontWeight, ParentElement, Pixels, ScrollHandle,
+    Stateful, StatefulInteractiveElement, Styled, Window, anchored, canvas, deferred, div,
+    linear_color_stop, linear_gradient, prelude::*, px,
 };
 
 use crate::chat::change_chips::ChangesSummary;
@@ -37,9 +37,11 @@ const CHANGES_RING_SIZE: f32 = 16.0;
 const CHANGES_RING_STROKE: f32 = 2.0;
 const CHANGES_RING_GAP: f32 = 0.06;
 const CHANGES_RING_MIN: f32 = 0.06;
-/// Hover widens a suggestion chip so its full text is readable.
+/// A suggestion chip truncates at this width; hovering it floats a wrapped
+/// copy of the full text over the chip, growing upward, so nothing in the row
+/// shifts or needs scrolling.
 const SUGGESTION_COLLAPSED_WIDTH: f32 = 260.0;
-const SUGGESTION_EXPANDED_WIDTH: f32 = 420.0;
+const SUGGESTION_EXPANDED_MAX_WIDTH: f32 = 480.0;
 type PickHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 
 /// Follow-up prompts that fill the rest of the row and scroll sideways.
@@ -266,11 +268,17 @@ pub fn composer_pills(
                         cx,
                         |_, _| Cell::new(false),
                     );
+                    let bounds = window.use_keyed_state(
+                        ElementId::Name(format!("{key}-suggestion-bounds-{index}").into()),
+                        cx,
+                        |_, _| Cell::new(None),
+                    );
                     let chip = suggestion_pill(
                         format!("{key}-suggestion-{index}"),
                         text.clone(),
                         on_pick.clone(),
                         hover,
+                        bounds,
                         theme,
                         cx,
                     );
@@ -503,20 +511,74 @@ fn suggestion_pill(
     text: String,
     on_pick: PickHandler,
     hover: Entity<Cell<bool>>,
+    bounds: Entity<Cell<Option<Bounds<Pixels>>>>,
     theme: Theme,
     cx: &App,
 ) -> Stateful<Div> {
     let picked = text.clone();
-    let width_for_hover = hover.clone();
+    let hovered = hover.read(cx).get();
+    let chip_bounds = bounds.read(cx).get();
     let set_hover = hover;
+    let overlay = chip_bounds.filter(|_| hovered).map(|chip| {
+        // No id or handlers, so it takes no hit-test: the chip underneath stays
+        // hovered and keeps its click and right-click behaviour.
+        let full = div()
+            .min_w(chip.size.width)
+            .max_w(px(SUGGESTION_EXPANDED_MAX_WIDTH))
+            .min_h(px(PILL_HEIGHT))
+            .flex()
+            .items_start()
+            .gap(px(7.0))
+            .pl(px(4.0))
+            .pr(px(12.0))
+            .py(px(5.5))
+            .rounded(px(16.0))
+            .border_1()
+            .border_color(theme.border_strong)
+            .bg(theme.raised.blend(theme.overlay_strong))
+            .child(
+                div()
+                    .flex_none()
+                    .size(px(20.0))
+                    .rounded_full()
+                    .bg(theme.accent)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(app_icon(IconName::ArrowUp, 12.0, theme.on_inverse)),
+            )
+            .child(
+                div()
+                    .min_w(px(0.0))
+                    .pt(px(2.0))
+                    .text_size(px(12.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text)
+                    .child(text.clone()),
+            );
+        deferred(
+            anchored()
+                .position(chip.bottom_left())
+                .anchor(Anchor::BottomLeft)
+                .snap_to_window_with_margin(px(8.0))
+                .child(full),
+        )
+        .with_priority(2)
+    });
     div()
         .id(ElementId::Name(id.into()))
         .flex_none()
-        .max_w(px(if width_for_hover.read(cx).get() {
-            SUGGESTION_EXPANDED_WIDTH
-        } else {
-            SUGGESTION_COLLAPSED_WIDTH
-        }))
+        .relative()
+        .max_w(px(SUGGESTION_COLLAPSED_WIDTH))
+        .child(
+            canvas(
+                move |chip: Bounds<Pixels>, _, cx| bounds.update(cx, |cell, _| cell.set(Some(chip))),
+                |_, _, _, _| (),
+            )
+            .absolute()
+            .inset_0(),
+        )
+        .children(overlay)
         .flex()
         .items_center()
         .gap(px(7.0))
