@@ -84,19 +84,19 @@ internal fun ChatHeader(
                         },
                     )
                     OverflowMenuItem(
-                        label = "Open computer",
-                        icon = TablerIcons.Outline.DeviceDesktop,
-                        onClick = {
-                            overflowMenu = false
-                            onOpenComputer()
-                        },
-                    )
-                    OverflowMenuItem(
                         label = "Open terminal",
                         icon = TablerIcons.Outline.Terminal2,
                         onClick = {
                             overflowMenu = false
                             onOpenTerminal()
+                        },
+                    )
+                    OverflowMenuItem(
+                        label = "Open computer",
+                        icon = TablerIcons.Outline.DeviceDesktop,
+                        onClick = {
+                            overflowMenu = false
+                            onOpenComputer()
                         },
                     )
                 }
