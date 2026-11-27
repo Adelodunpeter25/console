@@ -313,13 +313,13 @@ fun HomeScreen(
                         blurred = true,
                         showSettings = false,
                         actions = {
-                            EnvironmentSwitcher()
                             HeaderIconButton(
                                 icon = TablerIcons.Outline.Search,
                                 contentDescription = "Search threads",
                                 onClick = { searchOpen = true },
-                                modifier = Modifier.padding(start = 4.dp),
+                                modifier = Modifier.padding(end = 4.dp),
                             )
+                            EnvironmentSwitcher()
                         },
                     )
                 }
