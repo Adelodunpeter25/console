@@ -147,11 +147,12 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val serverDevicesAdapter by lazy { wireMoshi.adapter(console.v1.ServerDevicesResponse::class.java) }
     private fun enc(v: String): String = URLEncoder.encode(v, "UTF-8")
 
-    override suspend fun getSessions(cwd: String?, projectId: String?, onlyDeleted: Boolean): List<SessionHeader> {
+    override suspend fun getSessions(cwd: String?, projectId: String?, onlyDeleted: Boolean, query: String?): List<SessionHeader> {
         val params = mutableMapOf<String, String?>()
         if (cwd != null) params["cwd"] = cwd
         if (projectId != null) params["projectId"] = projectId
         if (onlyDeleted) params["onlyDeleted"] = "true"
+        if (!query.isNullOrBlank()) params["query"] = query
         val raw = http.get("/api/sessions", params)
         val element = http.unwrap(raw, JsonElement.serializer(), "list sessions")
         val array = element as? JsonArray ?: throw ApiException("Failed to list sessions")

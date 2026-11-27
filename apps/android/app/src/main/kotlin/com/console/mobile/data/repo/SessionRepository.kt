@@ -70,6 +70,21 @@ class SessionRepository(
         }
     }
 
+    suspend fun searchSessions(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return
+        try {
+            val list = withContext(Dispatchers.IO) { api.getSessions(query = trimmed) }
+            withContext(Dispatchers.Main.immediate) {
+                projectState.mergeSessions(list)
+                list.forEach { h ->
+                    sessions.setStatus(h.id, com.console.mobile.data.model.SessionStatus.fromValue(h.status))
+                }
+            }
+        } catch (_: Exception) {
+        }
+    }
+
     fun loadDeletedSessions() {
         scope.launch {
             projectState.patchDeletedLoading(true)

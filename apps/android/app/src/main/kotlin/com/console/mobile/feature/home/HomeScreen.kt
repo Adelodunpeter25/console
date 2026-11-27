@@ -126,6 +126,12 @@ fun HomeScreen(
         AppContainer.projectRepository.loadProjects()
         AppContainer.sessionRepository.loadSessions()
     }
+    LaunchedEffect(searchQuery) {
+        val trimmed = searchQuery.trim()
+        if (trimmed.isEmpty()) return@LaunchedEffect
+        kotlinx.coroutines.delay(150)
+        AppContainer.sessionRepository.searchSessions(trimmed)
+    }
     LaunchedEffect(projectState.projects) {
         val projs = projectState.projects
         if (projs.isNotEmpty()) {

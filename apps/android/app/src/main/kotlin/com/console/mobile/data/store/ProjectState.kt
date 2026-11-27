@@ -37,6 +37,14 @@ class ProjectStateHolder(initial: ProjectState = ProjectState()) {
         _state.update { it.copy(sessions = v, sessionsLoading = false, error = null) }
     }
     fun prependSession(s: SessionHeader) { _state.update { it.copy(sessions = listOf(s) + it.sessions) } }
+    fun mergeSessions(incoming: List<SessionHeader>) {
+        if (incoming.isEmpty()) return
+        _state.update { current ->
+            val existingIds = current.sessions.mapTo(HashSet()) { it.id }
+            val fresh = incoming.filterNot { it.id in existingIds }
+            if (fresh.isEmpty()) current else current.copy(sessions = current.sessions + fresh)
+        }
+    }
     fun patchSession(id: String, patch: SessionHeader) {
         _state.update { it.copy(sessions = it.sessions.map { s -> if (s.id == id) patch else s }) }
     }
