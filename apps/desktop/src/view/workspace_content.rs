@@ -1561,8 +1561,9 @@ impl ConsoleDesktopApp {
         let comments = self.composer_comments_for_pane(pane_id, cx);
         let annotations = self.composer_annotations_for_pane(pane_id, cx);
         let attachments = self.attachments_for_pane(pane_id);
-        self.composer_for_pane(pane_id)
-            .update(cx, |input, _| input.set_image_attachments(attachments.clone()));
+        self.composer_for_pane(pane_id).update(cx, |input, _| {
+            input.set_image_attachments(attachments.clone())
+        });
 
         let entity = cx.entity().downgrade();
         let client = self.client.clone();
