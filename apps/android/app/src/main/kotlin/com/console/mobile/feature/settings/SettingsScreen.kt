@@ -107,7 +107,7 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .padding(top = PageHeaderHeight, bottom = 32.dp),
+                .padding(top = PageHeaderHeight, bottom = 96.dp),
         ) {
             Section("Connections") {
                 NavRow(icon = TablerIcons.Outline.Wifi, title = "Servers") { onOpen(SettingsSection.Servers) }

@@ -51,6 +51,8 @@ import com.console.mobile.feature.settings.AddProjectScreen
 import com.console.mobile.feature.settings.SettingsScreen
 import com.console.mobile.feature.terminal.TerminalScreen
 import com.console.mobile.ui.components.common.new.ConfirmPromptHost
+import com.console.mobile.ui.components.common.new.FloatingNavBar
+import com.console.mobile.ui.components.common.new.FloatingNavTab
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.X
@@ -169,13 +171,23 @@ fun AppNavGraph() {
         ) { url -> navController.navigate(RouteBrowser(url)) { launchSingleTop = true } }
     }
     CompositionLocalProvider(LocalUriHandler provides linkHandler) {
+    val currentRoute = backStackEntry?.destination?.route.orEmpty()
+    val activeNavTab = when {
+        currentRoute.contains("RouteSettingsUsage", ignoreCase = true) -> FloatingNavTab.Usage
+        currentRoute.contains("RouteSettings", ignoreCase = true) &&
+            !currentRoute.contains("RouteSettingsFromSetup", ignoreCase = true) &&
+            !currentRoute.contains("RouteSettingsProviders", ignoreCase = true) -> FloatingNavTab.Settings
+        currentRoute.contains("RouteHome", ignoreCase = true) -> FloatingNavTab.Chats
+        else -> null
+    }
     Scaffold(
         containerColor = NewTheme.Background,
     ) { padding ->
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            modifier = Modifier.padding(padding),
+            modifier = Modifier.fillMaxSize(),
             // Forward pushes the new screen in from the right while the old
             // one drifts left; back is the same motion reversed.
             enterTransition = {
@@ -331,6 +343,19 @@ fun AppNavGraph() {
                     onAddProject = { navController.navigate(RouteAddProject) },
                 )
             }
+            composable<RouteSettingsUsage> {
+                SettingsScreen(
+                    onBackToHome = {
+                        AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
+                        navController.navigate(RouteHome) {
+                            launchSingleTop = true
+                            popUpTo(RouteHome)
+                        }
+                    },
+                    onAddProject = { navController.navigate(RouteAddProject) },
+                    startSection = com.console.mobile.feature.settings.SettingsSection.Usage,
+                )
+            }
             // Same screen, but it knows the first-run panel sent it here, so
             // back returns to that panel instead of the Settings landing list.
             composable<RouteSettingsFromSetup> {
@@ -388,6 +413,39 @@ fun AppNavGraph() {
                     },
                 )
             }
+        }
+        if (activeNavTab != null) {
+            FloatingNavBar(
+                activeTab = activeNavTab,
+                onSelectTab = { tab ->
+                    when (tab) {
+                        FloatingNavTab.Chats -> {
+                            AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
+                            navController.navigate(RouteHome) {
+                                launchSingleTop = true
+                                popUpTo(RouteHome)
+                            }
+                        }
+                        FloatingNavTab.PullRequests -> {
+                            // No-op for now.
+                        }
+                        FloatingNavTab.Usage -> {
+                            navController.navigate(RouteSettingsUsage) { launchSingleTop = true }
+                        }
+                        FloatingNavTab.Settings -> {
+                            navController.navigate(RouteSettings) { launchSingleTop = true }
+                        }
+                    }
+                },
+                onNewChat = {
+                    val proj = AppContainer.projectStateHolder.state.value.projects.firstOrNull()
+                    val id = AppContainer.sessionRepository.startNewChat(proj?.id, proj?.path)
+                    AppContainer.appStateHolder.openChatSession(id)
+                    navController.navigate(RouteChat) { launchSingleTop = true }
+                },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
         }
         ConfirmPromptHost()
     }

@@ -41,11 +41,10 @@ import com.console.mobile.core.util.folderName
 import com.console.mobile.feature.home.EnvironmentSwitcher
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.ui.components.confirmAlert
-import com.console.mobile.ui.components.common.new.BlurredBottomBar
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.common.new.PageHeaderHeight
-import com.console.mobile.ui.components.common.new.SearchBar
+import com.console.mobile.ui.components.common.new.SearchInput
 import com.console.mobile.ui.components.common.new.SectionCard
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.hideKeyboardOnScroll
@@ -214,9 +213,17 @@ fun HomeScreen(
                     }
                     LazyColumn(
                         state = listState,
-                        contentPadding = PaddingValues(top = PageHeaderHeight, bottom = 96.dp),
+                        contentPadding = PaddingValues(top = PageHeaderHeight + 4.dp, bottom = 96.dp),
                         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).hideKeyboardOnScroll(),
                     ) {
+                        item(key = "home-search") {
+                            SearchInput(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                placeholder = "Search threads",
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                            )
+                        }
                         sections.forEachIndexed { sIdx, section ->
                             val sectionKey = sectionCollapseKey(section)
                             val collapsed = sectionKey in collapsedSections
@@ -270,25 +277,10 @@ fun HomeScreen(
             PageHeader(
                 title = "Console",
                 blurred = true,
-                showSettings = true,
-                onSettingsPress = onOpenSettings,
+                showSettings = false,
                 actions = { EnvironmentSwitcher() },
                 modifier = Modifier.align(Alignment.TopCenter),
             )
-            // The search bar rides over the list rather than sitting below it:
-            // the rows scroll underneath it and the frosted bar fades them out
-            // instead of being cut off at a hard edge.
-            BlurredBottomBar(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
-            ) {
-                SearchBar(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    onComposePress = { startChat(projectState.projects.firstOrNull()?.id) },
-                )
-            }
         }
     }
 
