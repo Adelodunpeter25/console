@@ -124,6 +124,7 @@ fun ChangesScreen(onBack: () -> Unit) {
                     .padding(top = PageHeaderHeight + 12.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                ChangesSummary(files = totals.files, additions = totals.additions, deletions = totals.deletions)
                 // Flat list: one line per file, spaced apart, no card or rounding.
                 rows.forEach { row ->
                     val isOpen = expanded.contains(row.path)
@@ -143,12 +144,29 @@ fun ChangesScreen(onBack: () -> Unit) {
         }
         PageHeader(
             title = "Changes",
-            subtitle = "${totals.files} files  +${totals.additions} -${totals.deletions}",
             blurred = true,
             onBack = onBack,
             actions = { HeaderIconButton(TablerIcons.Outline.Refresh, "Refresh", onClick = ::refresh) },
             modifier = Modifier.align(Alignment.TopCenter),
         )
+    }
+}
+
+/** "6 files  +218 -16": the first line of the list, so it scrolls away instead of living in the header. */
+@Composable
+private fun ChangesSummary(files: Int, additions: Int, deletions: Int) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 11.dp, top = 2.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (files == 1) "1 file" else "$files files",
+            color = NewTheme.TextSecondary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(end = 10.dp),
+        )
+        DiffSummaryBadge(addedCount = additions, removedCount = deletions)
     }
 }
 
