@@ -32,6 +32,7 @@ pub fn asset_name(os: &str, arch: &str) -> Option<&'static str> {
         ("macos", "aarch64") => Some("Console-macos-arm64.zip"),
         ("macos", "x86_64") => Some("Console-macos-x64.zip"),
         ("windows", "x86_64") => Some("Console-windows-x64.zip"),
+        ("linux", "x86_64") => Some("Console-linux-x64.tar.gz"),
         _ => None,
     }
 }
@@ -150,7 +151,33 @@ pub fn install_and_relaunch(zip: &Path) -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(target_os = "linux")]
+pub fn install_and_relaunch(archive: &Path) -> Result<()> {
+    let exe = std::env::current_exe()?;
+    let dir = unpack_dir()?;
+    run(std::process::Command::new("tar")
+        .args(["-xzf"])
+        .arg(archive)
+        .arg("-C")
+        .arg(&dir))?;
+    let fresh = dir.join("console");
+    if !fresh.is_file() {
+        return Err(anyhow!("the update did not contain a console binary"));
+    }
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(
+            r#"while kill -0 "$3" 2>/dev/null; do sleep 0.2; done; mv -f "$2" "$1" && chmod +x "$1" && "$1" &"#,
+        )
+        .arg("sh")
+        .arg(&exe)
+        .arg(&fresh)
+        .arg(std::process::id().to_string())
+        .spawn()?;
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub fn install_and_relaunch(_zip: &Path) -> Result<()> {
     Err(anyhow!("in-app updates are not available on this platform"))
 }

@@ -19,5 +19,9 @@ fn asset_matches_the_published_zips() {
         asset_name("windows", "x86_64"),
         Some("Console-windows-x64.zip")
     );
-    assert_eq!(asset_name("linux", "x86_64"), None);
+    assert_eq!(
+        asset_name("linux", "x86_64"),
+        Some("Console-linux-x64.tar.gz")
+    );
+    assert_eq!(asset_name("freebsd", "x86_64"), None);
 }

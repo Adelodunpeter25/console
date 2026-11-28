@@ -4,8 +4,11 @@ use gpui::Context;
 use console_core::types::notification::{
     NotificationDecision, decide_notification, normalize_notification_title,
 };
+#[cfg(not(target_os = "macos"))]
+use console_core::types::notification::{notification_ident, parse_session_id_from_ident};
 
 use super::ConsoleDesktopApp;
+#[cfg(target_os = "macos")]
 use super::macos_notifications;
 
 impl ConsoleDesktopApp {
@@ -14,24 +17,41 @@ impl ConsoleDesktopApp {
         let transport = self.transport;
         let entity = cx.entity().downgrade();
 
-        // Native center delegate + authorization. Clicks arrive as session ids.
-        let mut click_rx = macos_notifications::ensure_initialized();
-        let click_entity = entity.clone();
+        #[cfg(target_os = "macos")]
+        {
+            // Native center delegate + authorization. Clicks arrive as session ids.
+            let mut click_rx = macos_notifications::ensure_initialized();
+            let click_entity = entity.clone();
 
-        // Banner clicks → focus app + open the session + clear its banner.
-        cx.spawn(async move |_entity, cx| {
-            while let Some(session_id) = click_rx.recv().await {
-                macos_notifications::clear_for_session(&session_id);
-                let _ = cx.update(|cx| {
-                    if let Some(app) = click_entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.select_and_open_session(session_id, cx);
-                        });
-                    }
-                });
-            }
-        })
-        .detach();
+            // Banner clicks → focus app + open the session + clear its banner.
+            cx.spawn(async move |_entity, cx| {
+                while let Some(session_id) = click_rx.recv().await {
+                    macos_notifications::clear_for_session(&session_id);
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = click_entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.select_and_open_session(session_id, cx);
+                            });
+                        }
+                    });
+                }
+            })
+            .detach();
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            let click_entity = entity.clone();
+            cx.on_system_notification_response(move |response, cx| {
+                if let Some(session_id) = parse_session_id_from_ident(&response.tag)
+                    && let Some(app) = click_entity.upgrade()
+                {
+                    app.update(cx, |this, cx| {
+                        this.select_and_open_session(session_id, cx);
+                    });
+                }
+            });
+        }
 
         // SSE event stream → native banner (or silent in-app update).
         cx.spawn(async move |_entity, cx| {
@@ -154,7 +174,7 @@ impl ConsoleDesktopApp {
                                 let body = event.body.clone();
                                 let _ = cx.update(|cx| {
                                     if let Some(app) = entity.upgrade() {
-                                        app.update(cx, |this, _cx| {
+                                        app.update(cx, |this, cx| {
                                             // Suppress the banner when the user is already
                                             // viewing this session and the window is active —
                                             // silent in-app update, matching mobile. If the window
@@ -177,17 +197,44 @@ impl ConsoleDesktopApp {
                                                 &session_id,
                                             ) {
                                                 NotificationDecision::SuppressViewing => {
+                                                    #[cfg(target_os = "macos")]
                                                     macos_notifications::clear_for_session(
                                                         &session_id,
                                                     );
+                                                    #[cfg(not(target_os = "macos"))]
+                                                    cx.dismiss_system_notification(
+                                                        &notification_ident(&session_id),
+                                                    );
                                                 }
                                                 NotificationDecision::Notify => {
+                                                    #[cfg(target_os = "macos")]
                                                     macos_notifications::notify_session(
                                                         &session_id,
                                                         &title,
                                                         &subtitle,
                                                         &body,
                                                     );
+                                                    #[cfg(not(target_os = "macos"))]
+                                                    {
+                                                        let full_body = if subtitle.is_empty() {
+                                                            body
+                                                        } else if body.is_empty() {
+                                                            subtitle
+                                                        } else {
+                                                            format!("{subtitle}\n{body}")
+                                                        };
+                                                        cx.show_system_notification(
+                                                            gpui::SystemNotification {
+                                                                tag: notification_ident(
+                                                                    &session_id,
+                                                                )
+                                                                .into(),
+                                                                title: title.into(),
+                                                                body: full_body.into(),
+                                                                actions: Vec::new(),
+                                                            },
+                                                        );
+                                                    }
                                                 }
                                                 NotificationDecision::SkipEmpty => {}
                                             }

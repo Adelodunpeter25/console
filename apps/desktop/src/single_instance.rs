@@ -15,10 +15,12 @@
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::HANDLE;
 
-/// Keeps the single-instance mutex alive for the process lifetime on Windows.
+/// Keeps the single-instance lock alive for the process lifetime.
 pub struct InstanceGuard {
     #[cfg(windows)]
     handle: HANDLE,
+    #[cfg(target_os = "linux")]
+    _lock_file: Option<std::fs::File>,
 }
 
 impl Drop for InstanceGuard {
@@ -40,9 +42,67 @@ pub fn acquire() -> Option<InstanceGuard> {
         imp::acquire()
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux_imp::acquire()
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         Some(InstanceGuard {})
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod linux_imp {
+    use super::InstanceGuard;
+    use std::os::unix::io::AsRawFd;
+    use std::path::PathBuf;
+
+    fn lock_path() -> PathBuf {
+        let dir = std::env::var_os("XDG_RUNTIME_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
+        let name = format!("{}.lock", console_shared::path::unix_folder_name());
+        dir.join(name)
+    }
+
+    pub fn acquire() -> Option<InstanceGuard> {
+        let path = lock_path();
+        let file = match std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(err) => {
+                log::warn!(
+                    "Could not open single-instance lock {}: {err}; continuing without it",
+                    path.display()
+                );
+                return Some(InstanceGuard { _lock_file: None });
+            }
+        };
+
+        let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+        if rc != 0 {
+            let err = std::io::Error::last_os_error();
+            if err.raw_os_error() == Some(libc::EWOULDBLOCK) {
+                log::info!("Console is already running (lock held at {})", path.display());
+                return None;
+            }
+            log::warn!(
+                "Could not lock {}: {err}; continuing without single-instance guard",
+                path.display()
+            );
+            return Some(InstanceGuard { _lock_file: None });
+        }
+
+        Some(InstanceGuard {
+            _lock_file: Some(file),
+        })
     }
 }
 
